@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 from collections.abc import Awaitable, Callable, Generator, Sequence
+from pathlib import Path
 from typing import Any
 
 os.environ.setdefault("OTEL_SDK_DISABLED", "true")
@@ -13,7 +15,7 @@ from fastmcp import FastMCP
 from fastmcp.tools import Tool, ToolResult
 from mcp.types import TextContent
 
-from contracts import DEFAULT_HOST, DEFAULT_PORT
+from contracts import DEFAULT_HOST, DEFAULT_PORT, DEFAULT_WS_PORT
 
 from . import models
 from .client import Client
@@ -59,6 +61,20 @@ PUBLIC_TOOL_NAMES = (
     "add_notes_to_clip",
     "fire_clip",
     "create_clip",
+    # v0.3.0 — composition diagnostics
+    "get_composition_structure",
+    "diagnose_midi_clip",
+    # v0.3.0 — guarded mutations
+    "create_midi_track",
+    "rename_track",
+    # v0.3.0 — warp bridge
+    "get_warp_state",
+    "set_warp_state",
+    # v0.3.0 — device loading
+    "load_device_to_track",
+    # v0.3.0 — extension tooling
+    "scaffold_extension",
+    "build_extension",
 )
 
 
@@ -101,7 +117,8 @@ def get_client() -> Client:
     if _client is None:
         host = os.environ.get("ABLETON_MCP_SERVER_HOST", DEFAULT_HOST)
         port = int(os.environ.get("ABLETON_MCP_SERVER_PORT", str(DEFAULT_PORT)))
-        _client = Client(host=host, port=port, reconnect=True)
+        ws_port = int(os.environ.get("ABLETON_MCP_SERVER_WS_PORT", str(DEFAULT_WS_PORT)))
+        _client = Client(host=host, port=port, ws_port=ws_port, reconnect=True)
     return _client
 
 
@@ -134,6 +151,11 @@ def _remote(command: str, request: models.RequestModel) -> Any:
     if isinstance(result, list) and not result:
         return _explicit_json_result(result, unwrap_result=True)
     return result
+
+
+async def _remote_ws(method: str, params: dict[str, Any] | None = None) -> Any:
+    """Route a command to the Extension Host WebSocket bridge."""
+    return await get_client().call_ws(method, params)
 
 
 @mcp.tool()
@@ -586,6 +608,276 @@ def create_clip(track_index: int, clip_index: int, length_beats: float) -> Any:
     )
 
 
+# ---------------------------------------------------------------------------
+# v0.3.0 — Composition Diagnostics
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def get_composition_structure() -> Any:
+    """Retrieve the full track layout, scene count, and composition properties.
+
+    Side effects: none.
+    Example: ``get_composition_structure()`` returns tracks, scenes, unnamed tracks.
+    Edge cases: large Sets produce correspondingly large JSON results.
+    """
+    return _remote("get_composition_structure", models.GetCompositionStructureRequest())
+
+
+@mcp.tool()
+def diagnose_midi_clip(
+    track_index: int,
+    clip_index: int,
+    scale_root: str | None = None,
+    scale_type: str | None = None,
+) -> Any:
+    """Scan a MIDI clip for overlapping notes, notes outside scale, and quantization issues.
+
+    Side effects: none.
+    Example: ``diagnose_midi_clip(0, 0, "C", "major")`` checks scale conformance.
+    Edge cases: audio clips return ``WRONG_TYPE``; omitting scale skips pitch analysis.
+    """
+    return _remote(
+        "diagnose_midi_clip",
+        models.DiagnoseMidiClipRequest(
+            track_index=track_index,
+            clip_index=clip_index,
+            scale_root=scale_root,
+            scale_type=scale_type,
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# v0.3.0 — Guarded Creative Mutations
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def create_midi_track(name: str = "MIDI Track", index: int | None = None) -> Any:
+    """Create a new MIDI track inside Ableton Live under safe constraints.
+
+    Side effects: mutates the Set by adding a track in one undo step.
+    Example: ``create_midi_track("Bass")`` appends a named MIDI track.
+    Edge cases: fails with ``TRACK_LIMIT_REACHED`` when ≥ 96 tracks exist.
+    """
+    return _remote(
+        "create_midi_track",
+        models.CreateMidiTrackRequest(name=name, index=index),
+    )
+
+
+@mcp.tool()
+def rename_track(track_index: int, new_name: str) -> Any:
+    """Rename a track in the Live Set.
+
+    Side effects: mutates the track name in one undo step.
+    Example: ``rename_track(0, "Drums")`` renames the first track.
+    Edge cases: an out-of-range index returns ``INVALID_PARAMS``.
+    """
+    return _remote(
+        "rename_track",
+        models.RenameTrackRequest(track_index=track_index, new_name=new_name),
+    )
+
+
+# ---------------------------------------------------------------------------
+# v0.3.0 — WebSocket Bridge: Warp & Devices
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def get_warp_state(track_index: int, clip_index: int) -> str:
+    """Retrieve warping status, warp mode, and warp markers of an audio clip.
+
+    Side effects: none. Routed via the Extension Host WebSocket bridge.
+    Example: ``get_warp_state(1, 0)`` reads warp data from track 1, clip 0.
+    Edge cases: requires the AbletonMCPServer Extension to be installed.
+    """
+    models.GetWarpStateRequest(track_index=track_index, clip_index=clip_index)
+    result = await _remote_ws(
+        "get_warp_state",
+        {"track_index": track_index, "clip_index": clip_index},
+    )
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def set_warp_state(
+    track_index: int,
+    clip_index: int,
+    warping: bool | None = None,
+    warp_mode: str | None = None,
+) -> str:
+    """Modify warp parameters on an audio clip.
+
+    Side effects: mutates warp state via the Extension Host.
+    Example: ``set_warp_state(1, 0, warping=True, warp_mode="complex")``
+    Edge cases: requires the AbletonMCPServer Extension to be installed.
+    """
+    request = models.SetWarpStateRequest(
+        track_index=track_index,
+        clip_index=clip_index,
+        warping=warping,
+        warp_mode=warp_mode,
+    )
+    result = await _remote_ws(
+        "set_warp_state",
+        request.model_dump(mode="json", exclude_none=True),
+    )
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def load_device_to_track(track_index: int, device_uri: str) -> str:
+    """Load a device onto a track using the Extensions SDK browser API.
+
+    Side effects: mutates the track device chain via the Extension Host.
+    Example: ``load_device_to_track(0, "Operator")`` loads Operator on track 0.
+    Edge cases: requires the AbletonMCPServer Extension to be installed.
+    """
+    models.LoadDeviceToTrackRequest(track_index=track_index, device_uri=device_uri)
+    result = await _remote_ws(
+        "load_device_to_track",
+        {"track_index": track_index, "device_uri": device_uri},
+    )
+    return json.dumps(result, indent=2)
+
+
+# ---------------------------------------------------------------------------
+# v0.3.0 — Extension Scaffolding & Building
+# ---------------------------------------------------------------------------
+
+_EXTENSION_TEMPLATE_PACKAGE = {
+    "name": "",
+    "version": "1.0.0",
+    "private": True,
+    "scripts": {"build": "tsc", "package": "npx @anthropic/ableton-package-extension"},
+    "devDependencies": {
+        "typescript": "^5.0.0",
+    },
+}
+
+_EXTENSION_TEMPLATE_TSCONFIG = {
+    "compilerOptions": {
+        "target": "ES2022",
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
+        "strict": True,
+        "outDir": "./dist",
+        "declaration": True,
+        "sourceMap": True,
+    },
+    "include": ["src"],
+}
+
+_EXTENSION_TEMPLATE_INDEX_TS = '''\
+/**
+ * {name} — Ableton Live Extension
+ * Auto-scaffolded by ableton-mcp-server v0.3.0
+ */
+
+import {{ Ableton }} from "ableton-js";
+
+const ableton = new Ableton();
+
+async function main() {{
+  // Your extension logic goes here.
+  console.log("{name} extension loaded");
+}}
+
+main().catch(console.error);
+'''
+
+
+@mcp.tool()
+def scaffold_extension(name: str, author: str = "ntworm", output_directory: str = ".") -> str:
+    """Create a template Ableton Extension project folder.
+
+    Side effects: creates files on disk. No Ableton connection required.
+    Example: ``scaffold_extension("MyEffect", output_directory="/tmp/ext")``
+    Edge cases: fails if output_directory is not writable.
+    """
+    request = models.ScaffoldExtensionRequest(
+        name=name, author=author, output_directory=output_directory
+    )
+    project_dir = Path(request.output_directory) / request.name
+    project_dir.mkdir(parents=True, exist_ok=True)
+    src_dir = project_dir / "src"
+    src_dir.mkdir(exist_ok=True)
+
+    # package.json
+    pkg = {**_EXTENSION_TEMPLATE_PACKAGE, "name": request.name.lower().replace(" ", "-")}
+    (project_dir / "package.json").write_text(json.dumps(pkg, indent=2), encoding="utf-8")
+
+    # tsconfig.json
+    (project_dir / "tsconfig.json").write_text(
+        json.dumps(_EXTENSION_TEMPLATE_TSCONFIG, indent=2), encoding="utf-8"
+    )
+
+    # extension.json
+    ext_manifest = {
+        "name": request.name,
+        "author": request.author,
+        "description": f"{request.name} extension for Ableton Live",
+        "actions": [],
+    }
+    (project_dir / "extension.json").write_text(
+        json.dumps(ext_manifest, indent=2), encoding="utf-8"
+    )
+
+    # src/index.ts
+    (src_dir / "index.ts").write_text(
+        _EXTENSION_TEMPLATE_INDEX_TS.format(name=request.name), encoding="utf-8"
+    )
+
+    return json.dumps(
+        {
+            "status": "scaffolded",
+            "project_path": str(project_dir),
+            "files": ["package.json", "tsconfig.json", "extension.json", "src/index.ts"],
+        },
+        indent=2,
+    )
+
+
+@mcp.tool()
+def build_extension(project_path: str) -> str:
+    """Run a build of an Ableton Extension project.
+
+    Side effects: runs npm install and tsc via subprocess.
+    Example: ``build_extension("/path/to/my-extension")``
+    Edge cases: requires Node.js and npm to be installed on the host machine.
+    """
+    request = models.BuildExtensionRequest(project_path=project_path)
+    project = Path(request.project_path)
+    if not (project / "package.json").is_file():
+        return json.dumps({"status": "error", "message": "No package.json found"})
+
+    steps: list[dict[str, Any]] = []
+    for step_name, cmd in [("install", "npm install"), ("build", "npm run build")]:
+        result = subprocess.run(
+            cmd,
+            cwd=str(project),
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        steps.append(
+            {
+                "step": step_name,
+                "returncode": result.returncode,
+                "stdout": result.stdout[-2000:] if result.stdout else "",
+                "stderr": result.stderr[-2000:] if result.stderr else "",
+            }
+        )
+        if result.returncode != 0:
+            return json.dumps({"status": "error", "steps": steps}, indent=2)
+
+    return json.dumps({"status": "built", "steps": steps}, indent=2)
+
+
 PUBLIC_TOOL_FUNCTIONS = (
     get_session_info,
     get_bridge_status,
@@ -624,6 +916,16 @@ PUBLIC_TOOL_FUNCTIONS = (
     add_notes_to_clip,
     fire_clip,
     create_clip,
+    # v0.3.0
+    get_composition_structure,
+    diagnose_midi_clip,
+    create_midi_track,
+    rename_track,
+    get_warp_state,
+    set_warp_state,
+    load_device_to_track,
+    scaffold_extension,
+    build_extension,
 )
 
 

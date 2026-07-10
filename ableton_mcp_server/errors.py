@@ -72,6 +72,30 @@ class BadInputError(BridgeError):
     default_code = "BAD_INPUT"
 
 
+class ExtensionUnavailableError(BridgeError):
+    """The Extension Host WebSocket bridge is not reachable."""
+
+    default_code = "EXTENSION_UNAVAILABLE"
+
+    def __init__(self, port: int = 9889) -> None:
+        super().__init__(
+            f"Extension Host WebSocket bridge is not reachable on 127.0.0.1:{port}.",
+            "Ensure the AbletonMCPServer Extension is installed and Ableton Live is open.",
+        )
+
+
+class TrackLimitError(BridgeError):
+    """Track count safety limit has been reached."""
+
+    default_code = "TRACK_LIMIT_REACHED"
+
+    def __init__(self, current_count: int, limit: int = 96) -> None:
+        super().__init__(
+            f"Cannot create track: set already has {current_count} tracks (limit={limit}).",
+            "Remove unused tracks before creating new ones.",
+        )
+
+
 class PlayheadNotMovedError(BridgeError):
     default_code = "PLAYHEAD_NOT_MOVED"
 
@@ -104,6 +128,8 @@ _ERROR_TYPES: dict[str, type[BridgeError]] = {
         StaleReferenceError,
         WrongTypeError,
         BadInputError,
+        ExtensionUnavailableError,
+        TrackLimitError,
     )
 }
 

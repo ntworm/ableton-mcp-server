@@ -2,6 +2,7 @@
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 9888
+DEFAULT_WS_PORT = 9889
 
 REQUEST_TYPE_FIELD = "type"
 REQUEST_PARAMS_FIELD = "params"
@@ -82,6 +83,11 @@ READ_COMMANDS = frozenset(
         "get_song_length",
         "live_find_track",
         "list_device_params",
+        # v0.3.0 — composition diagnostics
+        "get_composition_structure",
+        "diagnose_midi_clip",
+        # v0.3.0 — warp read (routed via WebSocket)
+        "get_warp_state",
     }
 )
 
@@ -101,18 +107,33 @@ ALLOWED_MUTATIONS = frozenset(
         "create_clip",
         "fire_clip",
         "add_notes_to_clip",
+        # v0.3.0 — guarded creative mutations
+        "create_midi_track",
+        "rename_track",
+        # v0.3.0 — warp write (routed via WebSocket)
+        "set_warp_state",
+        # v0.3.0 — device loading (routed via WebSocket)
+        "load_device_to_track",
     }
 )
 
 READ_ONLY_COMMANDS = frozenset(
     {
-        "create_midi_track",
         "delete_track",
-        "set_track_name",
         "duplicate_session_clip_to_arrangement",
         "switch_to_arrangement_view",
         "load_instrument_or_effect",
         "load_browser_item",
+    }
+)
+
+# v0.3.0 — Commands routed to the Extension Host WebSocket bridge (port 9889)
+# instead of the Remote Script TCP bridge (port 9888).
+WEBSOCKET_TARGET_COMMANDS = frozenset(
+    {
+        "get_warp_state",
+        "set_warp_state",
+        "load_device_to_track",
     }
 )
 

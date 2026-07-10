@@ -6,6 +6,7 @@
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 9888
+DEFAULT_WS_PORT = 9889
 
 REQUEST_TYPE_FIELD = "type"
 REQUEST_PARAMS_FIELD = "params"
@@ -23,6 +24,8 @@ ERROR_CUE_SNAPPED_TO_GRID = "CUE_SNAPPED_TO_GRID"
 ERROR_STALE_REFERENCE = "STALE_REFERENCE"
 ERROR_WRONG_TYPE = "WRONG_TYPE"
 ERROR_BAD_INPUT = "BAD_INPUT"
+ERROR_EXTENSION_UNAVAILABLE = "EXTENSION_UNAVAILABLE"
+ERROR_TRACK_LIMIT_REACHED = "TRACK_LIMIT_REACHED"
 
 CUE_TIME_TOLERANCE = 0.01
 CUE_OPERATION_VERIFY_TICKS = 10
@@ -86,6 +89,9 @@ READ_COMMANDS = frozenset(
         "get_song_length",
         "live_find_track",
         "list_device_params",
+        # v0.3.0 — composition diagnostics
+        "get_composition_structure",
+        "diagnose_midi_clip",
     }
 )
 
@@ -105,14 +111,15 @@ ALLOWED_MUTATIONS = frozenset(
         "create_clip",
         "fire_clip",
         "add_notes_to_clip",
+        # v0.3.0 — guarded creative mutations
+        "create_midi_track",
+        "rename_track",
     }
 )
 
 READ_ONLY_COMMANDS = frozenset(
     {
-        "create_midi_track",
         "delete_track",
-        "set_track_name",
         "duplicate_session_clip_to_arrangement",
         "switch_to_arrangement_view",
         "load_instrument_or_effect",

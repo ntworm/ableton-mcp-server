@@ -7,20 +7,34 @@ from collections.abc import Mapping
 from contextlib import suppress
 from typing import Any
 
-from contracts import ALLOWED_MUTATIONS, DEFAULT_HOST, DEFAULT_PORT, request_timeout_seconds
+from contracts import (
+    ALLOWED_MUTATIONS,
+    DEFAULT_HOST,
+    DEFAULT_PORT,
+    DEFAULT_WS_PORT,
+    WEBSOCKET_TARGET_COMMANDS,
+    request_timeout_seconds,
+)
 
 from .errors import BridgeTimeoutError, LiveUnavailableError, error_from_envelope
 from .protocol import decode_response, encode_request
+from .ws_client import WSClient
 
 
 class Client:
-    """Synchronous JSONL TCP client for the Live-side Remote Script."""
+    """Hybrid JSONL TCP + WebSocket client for the Live-side bridges.
+
+    Commands listed in ``WEBSOCKET_TARGET_COMMANDS`` are routed to the
+    Extension Host WebSocket bridge on ``ws_port``.  All other commands
+    use the synchronous TCP JSONL bridge on ``tcp_port``.
+    """
 
     def __init__(
         self,
         host: str = DEFAULT_HOST,
         port: int = DEFAULT_PORT,
         *,
+        ws_port: int = DEFAULT_WS_PORT,
         reconnect: bool = True,
         max_retries: int = 3,
         backoff_factor: float = 0.05,
@@ -29,6 +43,7 @@ class Client:
             raise ValueError("Ableton bridge host must be loopback 127.0.0.1")
         self.host = host
         self.port = port
+        self.ws_port = ws_port
         self.reconnect = reconnect
         self.max_retries = max_retries
         self.backoff_factor = backoff_factor
@@ -36,10 +51,15 @@ class Client:
         self._connected = False
         self._recv_buffer = bytearray()
         self._lock = threading.Lock()
+        self._ws_client = WSClient(host=host, port=ws_port)
 
     @property
     def connected(self) -> bool:
         return self._connected
+
+    def is_ws_command(self, command_type: str) -> bool:
+        """Return True if the command should be routed over WebSocket."""
+        return command_type.strip().lower() in WEBSOCKET_TARGET_COMMANDS
 
     def connect(self) -> None:
         if not self._connected:
@@ -87,6 +107,7 @@ class Client:
         *,
         timeout: float | None = None,
     ) -> Any:
+        """Synchronous TCP call to the Remote Script bridge (port 9888)."""
         retries = 0
         may_retry = command_type not in ALLOWED_MUTATIONS
         request_params = dict(params or {})
@@ -131,3 +152,13 @@ class Client:
                         f"Command {command_type!r} failed at {self.host}:{self.port}: {exc}",
                         hint,
                     ) from exc
+
+    async def call_ws(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        *,
+        timeout: float = 10.0,
+    ) -> Any:
+        """Async WebSocket call to the Extension Host bridge (port 9889)."""
+        return await self._ws_client.call(method, params, timeout=timeout)
