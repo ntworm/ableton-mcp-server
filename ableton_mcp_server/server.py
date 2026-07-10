@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from collections.abc import Awaitable, Callable, Generator, Sequence
 from typing import Any
@@ -9,7 +10,8 @@ os.environ.setdefault("FASTMCP_TELEMETRY_DISABLED", "true")
 os.environ.setdefault("MCP_TELEMETRY_DISABLED", "true")
 
 from fastmcp import FastMCP
-from fastmcp.tools import Tool
+from fastmcp.tools import Tool, ToolResult
+from mcp.types import TextContent
 
 from contracts import DEFAULT_HOST, DEFAULT_PORT
 
@@ -102,8 +104,31 @@ def get_client() -> Client:
     return _client
 
 
+def _explicit_json_result(
+    value: Any, *, unwrap_result: bool = False
+) -> ToolResult:
+    """Keep empty arrays visible to every MCP client."""
+
+    content = [
+        TextContent(
+            type="text",
+            text=json.dumps(value, ensure_ascii=False, separators=(",", ":")),
+        )
+    ]
+    structured = {"result": value} if unwrap_result else value
+    meta = {"fastmcp": {"wrap_result": True}} if unwrap_result else None
+    return ToolResult(
+        content=content,
+        structured_content=structured,
+        meta=meta,
+    )
+
+
 def _remote(command: str, request: models.RequestModel) -> Any:
-    return get_client().call(command, request.model_dump(mode="json"))
+    result = get_client().call(command, request.model_dump(mode="json"))
+    if isinstance(result, list) and not result:
+        return _explicit_json_result(result, unwrap_result=True)
+    return result
 
 
 @mcp.tool()

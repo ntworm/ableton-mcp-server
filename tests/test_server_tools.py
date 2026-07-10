@@ -5,6 +5,7 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+from fastmcp import Client as FastMCPClient
 
 import ableton_mcp_server.server as server
 
@@ -139,6 +140,25 @@ def test_diff_tool_is_local_and_deterministic() -> None:
         "removed": [],
         "changed": [{"path": "tempo", "before": 120.0, "after": 128.0}],
     }
+
+
+@pytest.mark.asyncio
+@patch("ableton_mcp_server.server.get_client")
+async def test_empty_remote_list_remains_an_explicit_json_array_over_mcp(
+    mock_get_client: MagicMock,
+) -> None:
+    mock_get_client.return_value.call.return_value = []
+
+    async with FastMCPClient(server.mcp) as client:
+        result = await client.call_tool(
+            "get_clip_notes",
+            {"track_index": 0, "clip_index": 0},
+            raise_on_error=False,
+        )
+
+    assert result.is_error is False
+    assert result.data == []
+    assert [block.text for block in result.content if block.type == "text"] == ["[]"]
 
 
 @patch("ableton_mcp_server.server.find_ableton_log_path")
