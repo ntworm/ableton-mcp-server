@@ -1,0 +1,40 @@
+[project]
+name = "ableton-mcp-server"
+version = "0.2.0"
+description = "Debug-grade MCP server and MIDI Remote Script for Ableton Live"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "ntworm" }]
+dependencies = [
+    "mcp>=1.28,<2",
+    "fastmcp>=3.4,<4",
+    "pydantic>=2.12,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9,<10",
+    "pytest-asyncio>=1,<2",
+    "ruff>=0.15,<1",
+    "mypy>=2,<3",
+]
+
+[project.scripts]
+ableton-mcp-server = "ableton_mcp_server.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["UP031"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_unused_configs = true
