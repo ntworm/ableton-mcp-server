@@ -328,6 +328,13 @@ class FakeSong:
         else:
             self._is_playing = False
 
+    def create_midi_track(self, index: int = -1) -> None:
+        track = FakeTrack("MIDI Track", midi=True)
+        if index == -1:
+            self.tracks.append(track)
+        else:
+            self.tracks.insert(index, track)
+
 
 class FakeBrowser:
     sounds = object()
