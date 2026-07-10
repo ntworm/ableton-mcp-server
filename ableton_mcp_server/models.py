@@ -242,6 +242,143 @@ class CreateClipRequest(RequestModel):
     length_beats: PositiveBeat
 
 
+# ---------------------------------------------------------------------------
+# v0.3.0 — Composition Diagnostics
+# ---------------------------------------------------------------------------
+
+
+class GetCompositionStructureRequest(EmptyRequest):
+    pass
+
+
+class DiagnoseMidiClipRequest(RequestModel):
+    track_index: NonNegativeInt
+    clip_index: NonNegativeInt
+    scale_root: Annotated[str, Field(max_length=3)] | None = None
+    scale_type: Annotated[str, Field(max_length=32)] | None = None
+
+    @field_validator("scale_root")
+    @classmethod
+    def normalize_scale_root(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip().upper()
+        if value not in (
+            "C", "C#", "Db", "D", "D#", "Eb", "E", "F",
+            "F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B",
+        ):
+            raise ValueError(f"Invalid scale root: {value!r}")
+        return value
+
+    @field_validator("scale_type")
+    @classmethod
+    def normalize_scale_type(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip().lower()
+        if value not in (
+            "major", "minor", "dorian", "phrygian", "lydian",
+            "mixolydian", "aeolian", "locrian", "harmonic_minor",
+            "melodic_minor", "pentatonic_major", "pentatonic_minor",
+            "blues", "chromatic",
+        ):
+            raise ValueError(f"Invalid scale type: {value!r}")
+        return value
+
+
+# ---------------------------------------------------------------------------
+# v0.3.0 — Guarded Creative Mutations
+# ---------------------------------------------------------------------------
+
+
+class CreateMidiTrackRequest(RequestModel):
+    name: Annotated[str, Field(min_length=1, max_length=128)] = "MIDI Track"
+    index: int | None = None
+
+    @field_validator("name")
+    @classmethod
+    def strip_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("name must be non-empty")
+        return value
+
+
+class RenameTrackRequest(RequestModel):
+    track_index: NonNegativeInt
+    new_name: Annotated[str, Field(min_length=1, max_length=128)]
+
+    @field_validator("new_name")
+    @classmethod
+    def strip_new_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("new_name must be non-empty")
+        return value
+
+
+# ---------------------------------------------------------------------------
+# v0.3.0 — WebSocket Bridge (Warp & Devices)
+# ---------------------------------------------------------------------------
+
+
+class GetWarpStateRequest(RequestModel):
+    track_index: NonNegativeInt
+    clip_index: NonNegativeInt
+
+
+class WarpMarkerSpec(RequestModel):
+    sample_time: Annotated[float, Field(ge=0)]
+    beat_time: Annotated[float, Field(ge=0)]
+
+
+class SetWarpStateRequest(RequestModel):
+    track_index: NonNegativeInt
+    clip_index: NonNegativeInt
+    warping: bool | None = None
+    warp_mode: Annotated[str, Field(max_length=32)] | None = None
+    warp_markers: list[WarpMarkerSpec] | None = None
+
+    @field_validator("warp_mode")
+    @classmethod
+    def validate_warp_mode(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        valid = ("beats", "tones", "texture", "re-pitch", "complex", "complex_pro")
+        normalized = value.strip().lower().replace(" ", "_")
+        if normalized not in valid:
+            raise ValueError(f"Invalid warp mode: {value!r}. Valid: {valid}")
+        return normalized
+
+
+class LoadDeviceToTrackRequest(RequestModel):
+    track_index: NonNegativeInt
+    device_uri: Annotated[str, Field(min_length=1, max_length=512)]
+
+    @field_validator("device_uri")
+    @classmethod
+    def strip_device_uri(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("device_uri must be non-empty")
+        return value
+
+
+# ---------------------------------------------------------------------------
+# v0.3.0 — Extension Scaffolding
+# ---------------------------------------------------------------------------
+
+
+class ScaffoldExtensionRequest(RequestModel):
+    name: Annotated[str, Field(min_length=1, max_length=128)]
+    author: Annotated[str, Field(min_length=1, max_length=128)] = "ntworm"
+    output_directory: Annotated[str, Field(min_length=1, max_length=1024)]
+
+
+class BuildExtensionRequest(RequestModel):
+    project_path: Annotated[str, Field(min_length=1, max_length=1024)]
+
+
 TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "get_session_info": GetSessionInfoRequest,
     "get_bridge_status": GetBridgeStatusRequest,
@@ -280,4 +417,14 @@ TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "add_notes_to_clip": AddNotesToClipRequest,
     "fire_clip": FireClipRequest,
     "create_clip": CreateClipRequest,
+    # v0.3.0
+    "get_composition_structure": GetCompositionStructureRequest,
+    "diagnose_midi_clip": DiagnoseMidiClipRequest,
+    "create_midi_track": CreateMidiTrackRequest,
+    "rename_track": RenameTrackRequest,
+    "get_warp_state": GetWarpStateRequest,
+    "set_warp_state": SetWarpStateRequest,
+    "load_device_to_track": LoadDeviceToTrackRequest,
+    "scaffold_extension": ScaffoldExtensionRequest,
+    "build_extension": BuildExtensionRequest,
 }

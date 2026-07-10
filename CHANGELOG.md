@@ -2,6 +2,42 @@
 
 All notable changes to this project are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-07-10
+
+### Added
+- Hybrid Dual-Bridge Architecture: support for routing transport/MIDI commands to Remote Script (TCP `9888`) and warping/device commands to Extension Host (WebSocket `9889`).
+- Node.js/TypeScript Extension Host bridge component (`AbletonMCPServer_Extension`).
+- Pydantic models and FastMCP tool interfaces for 9 new tools:
+  - `get_composition_structure` (full track layout metadata).
+  - `diagnose_midi_clip` (note overlap detection, C-major scale matching, and grid timing drift analysis).
+  - `create_midi_track` (guarded with 96-track safety limit).
+  - `rename_track` (renaming tracks/clips).
+  - `get_warp_state` & `set_warp_state` (reading and writing audio clip warping properties via WebSocket).
+  - `load_device_to_track` (loading native instruments/devices via WebSocket).
+  - `scaffold_extension` & `build_extension` (scaffolding and compiling native Ableton Extensions).
+- `ExtensionUnavailableError` and `TrackLimitError` error classes.
+- Unit tests for WSClient, composition queries, track mutations, and MIDI diagnostics.
+
+## [0.2.2] - 2026-07-10
+
+### Changed
+
+- Cue toggles and cue renames are observed across up to ten Live UI ticks before a result is reported.
+- Playhead and state writes now tolerate up to ten transitional UI ticks.
+- JSONL deadlines use a shared 20-second base and scale with bulk/batch work instead of using conflicting client/server constants.
+- Bulk cue creation holds the working cursor and restores the original cursor once after all items.
+
+### Fixed
+
+- Empty list results retain structured `[]` data and an explicit text fallback across FastMCP clients.
+- Expected bridge errors become typed MCP error results instead of escaping as framework exceptions and tracebacks.
+- Idle persistent JSONL connections stay open; the socket timeout now polls for shutdown rather than closing a healthy client.
+- Windows socket failures become typed `LIVE_UNAVAILABLE` errors and keep mutation retry decisions explicit.
+- Delayed cue toggles no longer race cursor restoration and leave default-name markers at the restored position.
+- Cue names are verified and idempotently retried when Live drops a name write.
+- Cue operations no longer write `Song.start_time`; the official LOM defines it as the playback start position rather than the cue cursor.
+- Live 12 Beta Arrangement-grid snapping is detected transactionally. An unintended off-grid cue creation or deletion is reversed and returned as `CUE_SNAPPED_TO_GRID` instead of leaking or corrupting a locator.
+
 ## [0.2.1] - 2026-07-09
 
 ### Added

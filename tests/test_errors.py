@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from ableton_mcp_server.errors import (
     BridgeError,
+    CueSnappedToGridError,
     PlayheadNotMovedError,
     StaleReferenceError,
     error_from_envelope,
@@ -35,6 +36,16 @@ def test_error_factory_maps_known_code_and_retains_remote_hint() -> None:
     assert isinstance(error, StaleReferenceError)
     assert str(error) == "track:4 disappeared"
     assert error.hint == "Refresh the snapshot."
+
+
+def test_error_factory_maps_cue_grid_snap() -> None:
+    error = error_from_envelope(
+        "CUE_SNAPPED_TO_GRID",
+        "Live snapped requested 24.0 to 32.0.",
+        "Disable Arrangement Snap-to-Grid.",
+    )
+    assert isinstance(error, CueSnappedToGridError)
+    assert error.code == "CUE_SNAPPED_TO_GRID"
 
 
 def test_error_factory_keeps_unknown_code_machine_readable() -> None:

@@ -20,6 +20,8 @@ Launch Live with `ABLETON_MCP_SERVER_VERBOSE=1` to enable `[MCP-Server]` records
 
 - No LOM access occurs from socket threads.
 - Deferred mutations advance one step per `update_display` tick and never sleep on Live's UI thread.
+- Persistent JSONL clients are not disconnected for idleness, and command deadlines scale with serialized bulk/batch work.
+- Cue toggles execute once, are observed across UI ticks, and are named before the working cursor is restored.
 - The listener is loopback-only.
 - Unknown commands return `UNKNOWN_COMMAND`.
 - Explicitly blocked creative mutations return `READ_ONLY_VIOLATION`.

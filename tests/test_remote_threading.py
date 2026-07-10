@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import queue
 
-from AbletonMCPServer_RemoteScript import QueuedRequest, RequestProcessor
+from AbletonMCPServer_RemoteScript import (
+    PLAYHEAD_MOVE_RETRIES,
+    QueuedRequest,
+    RequestProcessor,
+)
 from tests.remote_fakes import FakeApplication, FakeSong
 
 
@@ -95,7 +99,7 @@ def test_playhead_failure_is_reported_only_after_tick_retries() -> None:
     response_queue: queue.Queue[dict[str, object]] = queue.Queue(maxsize=1)
     processor.enqueue(QueuedRequest("set_current_song_time", {"time": 8.0}, response_queue))
 
-    for _attempt in range(3):
+    for _attempt in range(PLAYHEAD_MOVE_RETRIES):
         processor.process_pending(max_requests=1)
         assert response_queue.empty()
         song.tick()
@@ -104,5 +108,24 @@ def test_playhead_failure_is_reported_only_after_tick_retries() -> None:
     response = response_queue.get_nowait()
     assert response["status"] == "error"
     assert response["code"] == "PLAYHEAD_NOT_MOVED"
-    assert song.transport_write_attempts == 3
+    assert song.transport_write_attempts == PLAYHEAD_MOVE_RETRIES
     assert (app.begin_count, app.end_count) == (1, 1)
+
+
+def test_playhead_recovers_from_a_six_tick_live_transition() -> None:
+    song = FakeSong(stuck_writes=6, deferred_writes=True)
+    processor = RequestProcessor(song, FakeApplication())
+    response_queue: queue.Queue[dict[str, object]] = queue.Queue(maxsize=1)
+    processor.enqueue(QueuedRequest("set_current_song_time", {"time": 8.0}, response_queue))
+
+    for _tick in range(12):
+        processor.process_pending(max_requests=1)
+        if not response_queue.empty():
+            break
+        song.tick()
+
+    assert response_queue.get_nowait() == {
+        "status": "ok",
+        "result": {"current_song_time": 8.0},
+    }
+    assert song.transport_write_attempts == 7

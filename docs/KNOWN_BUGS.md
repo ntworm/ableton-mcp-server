@@ -10,13 +10,13 @@ The categories below describe recurring Live API failure shapes rather than one 
 
 **Mitigation:** mutations are generators advanced by `update_display`. They write, yield to Live, read back on a later tick, and retry without blocking. Failure raises a typed error; playhead quantization is restored in `finally`.
 
-## Category B — Toggle operations and dual cue cursors
+## Category B — Toggle operations and Arrangement playback position
 
 **Symptom:** calling `Song.set_or_delete_cue()` deletes a cue when one already exists at the playhead.
 
-**Root cause:** it is a toggle, not a create-only operation. In the Python Remote Script runtime the toggle also follows the Arrangement insert/start cursor, which can differ from `current_song_time` after stopping playback.
+**Root cause:** it is a toggle, not a create-only operation. The official [Song LOM reference](https://docs.cycling74.com/apiref/lom/song/#set_or_delete_cue) states that it acts at `current_song_time`. Hardware-in-loop testing on Live 12.4.5b7 additionally shows that the call can snap that position to the Arrangement editing grid even while `clip_trigger_quantization` is `None`. `Song.start_time` controls where playback will begin and is not the cue cursor.
 
-**Mitigation:** enumerate cue points first. Existing cues are renamed idempotently. New operations move and verify both `current_song_time` and `start_time`, toggle on a later tick, verify the exact cue, and restore both cursors.
+**Mitigation:** enumerate cue points first. Existing cues are renamed idempotently. New operations move and verify only `current_song_time`, snapshot locators, invoke the toggle once, and observe the exact state change. Exact placement is verified before naming. If Live snaps to another time, the script reverses the unintended creation or deletion, restores the original cue name when needed, and returns `CUE_SNAPPED_TO_GRID`. Disable Arrangement Snap-to-Grid or use a grid-aligned time. The public LOM does not expose the Arrangement grid switch, so the MCP does not fake exact placement. `start_time` is never written by cue tools.
 
 ## Category C — Read-only properties that look writable
 
@@ -78,7 +78,23 @@ The categories below describe recurring Live API failure shapes rather than one 
 
 ## Additional limitation — Ambiguous network failure
 
-If a connection fails after a mutation was sent, the client cannot know whether Live executed it. Reads may reconnect and retry. Mutations fail without automatic replay; inspect current state before deciding to retry.
+If a connection fails after a mutation was sent, the client cannot know whether Live executed it. Reads may reconnect and retry. Mutations fail without automatic replay; inspect current state before deciding to retry. Socket failures are returned as typed `LIVE_UNAVAILABLE` results. Client and server share a deadline scaled to bulk/batch size, and idle connections are not closed merely because no request arrived for ten seconds.
+
+## Category M — Empty arrays in MCP content
+
+**Symptom:** a valid empty result such as `get_clip_notes` on an empty MIDI clip appears as `""` in a content-only MCP client.
+
+**Root cause:** FastMCP interprets a raw empty Python list as zero content blocks.
+
+**Mitigation:** the MCP boundary emits structured `[]` plus an explicit textual `[]` fallback. The JSONL bridge contract remains an ordinary list.
+
+## Category N — Expected errors mistaken for server crashes
+
+**Symptom:** repeated `WRONG_TYPE` or `INVALID_PARAMS` calls make a supervising agent report the MCP subprocess as unreachable even though stdio is still alive.
+
+**Root cause:** typed bridge exceptions were escaping into FastMCP, which logged framework tracebacks and returned generic tool failures.
+
+**Mitigation:** expected bridge errors are converted to structured MCP error results with `isError=true`. They remain errors, but no longer look like unhandled server exceptions. A stdio reproduction confirms subsequent calls remain available.
 
 ## Category J — Max LOM and Python Remote Script note APIs differ
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from scripts.coverage_check import create_tracer
+from scripts.coverage_check import create_tracer, executable_lines
 
 
 def test_trace_does_not_drop_project_init_after_ignored_init_name_collision() -> None:
@@ -15,3 +15,10 @@ def test_trace_does_not_drop_project_init_after_ignored_init_name_collision() ->
     )
     assert tracer.ignore.names(fake_ignored_init, "__init__") == 1
     assert tracer.ignore.names(project_init, "__init__") == 0
+
+
+def test_executable_lines_ignores_python_314_none_line_entries() -> None:
+    server = Path(__file__).resolve().parents[1] / "ableton_mcp_server" / "server.py"
+    lines = executable_lines(server)
+    assert lines
+    assert all(isinstance(line, int) and line > 0 for line in lines)

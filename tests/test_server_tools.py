@@ -5,6 +5,7 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+from fastmcp import Client as FastMCPClient
 
 import ableton_mcp_server.server as server
 
@@ -141,6 +142,53 @@ def test_diff_tool_is_local_and_deterministic() -> None:
     }
 
 
+@pytest.mark.asyncio
+@patch("ableton_mcp_server.server.get_client")
+async def test_empty_remote_list_remains_an_explicit_json_array_over_mcp(
+    mock_get_client: MagicMock,
+) -> None:
+    mock_get_client.return_value.call.return_value = []
+
+    async with FastMCPClient(server.mcp) as client:
+        result = await client.call_tool(
+            "get_clip_notes",
+            {"track_index": 0, "clip_index": 0},
+            raise_on_error=False,
+        )
+
+    assert result.is_error is False
+    assert result.data == []
+    assert [block.text for block in result.content if block.type == "text"] == ["[]"]
+
+
+@pytest.mark.asyncio
+@patch("ableton_mcp_server.server.get_client")
+async def test_expected_bridge_error_is_a_typed_mcp_result_not_framework_failure(
+    mock_get_client: MagicMock,
+) -> None:
+    from ableton_mcp_server.errors import WrongTypeError
+
+    mock_get_client.return_value.call.side_effect = [
+        WrongTypeError("Track has no Session clip slots."),
+        {"tempo": 120.0},
+    ]
+
+    async with FastMCPClient(server.mcp) as client:
+        rejected = await client.call_tool(
+            "get_clip_summary", {"track_index": 3}, raise_on_error=False
+        )
+        recovered = await client.call_tool("get_session_info", {}, raise_on_error=False)
+
+    assert rejected.is_error is True
+    assert rejected.structured_content == {
+        "status": "error",
+        "code": "WRONG_TYPE",
+        "message": "Track has no Session clip slots.",
+    }
+    assert recovered.is_error is False
+    assert recovered.data == {"tempo": 120.0}
+
+
 @patch("ableton_mcp_server.server.find_ableton_log_path")
 def test_log_tool_limits_lines_and_reads_locally(mock_find: MagicMock, tmp_path: Any) -> None:
     log = tmp_path / "Log.txt"
@@ -150,7 +198,7 @@ def test_log_tool_limits_lines_and_reads_locally(mock_find: MagicMock, tmp_path:
 
 
 def test_every_tool_docstring_has_contract_sections() -> None:
-    assert len(server.PUBLIC_TOOL_FUNCTIONS) == 37
+    assert len(server.PUBLIC_TOOL_FUNCTIONS) == 46
     for function in server.PUBLIC_TOOL_FUNCTIONS:
         docstring = function.__doc__ or ""
         assert "Side effects:" in docstring, function.__name__

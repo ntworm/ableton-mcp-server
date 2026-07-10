@@ -6,6 +6,7 @@
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 9888
+DEFAULT_WS_PORT = 9889
 
 REQUEST_TYPE_FIELD = "type"
 REQUEST_PARAMS_FIELD = "params"
@@ -19,14 +20,52 @@ ERROR_TIMEOUT = "TIMEOUT"
 ERROR_LIVE_UNAVAILABLE = "LIVE_UNAVAILABLE"
 ERROR_INTERNAL_ERROR = "INTERNAL_ERROR"
 ERROR_PLAYHEAD_NOT_MOVED = "PLAYHEAD_NOT_MOVED"
+ERROR_CUE_SNAPPED_TO_GRID = "CUE_SNAPPED_TO_GRID"
 ERROR_STALE_REFERENCE = "STALE_REFERENCE"
 ERROR_WRONG_TYPE = "WRONG_TYPE"
 ERROR_BAD_INPUT = "BAD_INPUT"
+ERROR_EXTENSION_UNAVAILABLE = "EXTENSION_UNAVAILABLE"
+ERROR_TRACK_LIMIT_REACHED = "TRACK_LIMIT_REACHED"
 
 CUE_TIME_TOLERANCE = 0.01
-PLAYHEAD_MOVE_RETRIES = 3
+CUE_OPERATION_VERIFY_TICKS = 10
+PLAYHEAD_MOVE_RETRIES = 10
 SNAPSHOT_REFRESH_INTERVAL_MS = 100
-REQUEST_TIMEOUT_SECONDS = 6.0
+REQUEST_TIMEOUT_SECONDS = 20.0
+REQUEST_TIMEOUT_PER_WORK_UNIT_SECONDS = 2.0
+
+
+def _request_work_units(command_name: str, params: object) -> int:
+    if not isinstance(params, dict):
+        return 1
+    normalized = command_name.strip().lower()
+    if normalized == "bulk_create_cue_points":
+        items = params.get("items")
+        return max(1, len(items)) if isinstance(items, list) else 1
+    if normalized == "run_batch":
+        commands = params.get("commands")
+        if not isinstance(commands, list):
+            return 1
+        units = 0
+        for command in commands:
+            if not isinstance(command, dict):
+                units += 1
+                continue
+            command_type = command.get("type")
+            command_params = command.get("params", {})
+            units += _request_work_units(
+                command_type if isinstance(command_type, str) else "",
+                command_params,
+            )
+        return max(1, units)
+    return 1
+
+
+def request_timeout_seconds(command_name: str, params: object) -> float:
+    """Return a shared client/server deadline scaled to serialized UI work."""
+
+    work_units = _request_work_units(command_name, params)
+    return REQUEST_TIMEOUT_SECONDS + (work_units - 1) * REQUEST_TIMEOUT_PER_WORK_UNIT_SECONDS
 
 READ_COMMANDS = frozenset(
     {
@@ -50,6 +89,11 @@ READ_COMMANDS = frozenset(
         "get_song_length",
         "live_find_track",
         "list_device_params",
+        # v0.3.0 — composition diagnostics
+        "get_composition_structure",
+        "diagnose_midi_clip",
+        # v0.3.0 — warp read (routed via WebSocket)
+        "get_warp_state",
     }
 )
 
@@ -69,18 +113,33 @@ ALLOWED_MUTATIONS = frozenset(
         "create_clip",
         "fire_clip",
         "add_notes_to_clip",
+        # v0.3.0 — guarded creative mutations
+        "create_midi_track",
+        "rename_track",
+        # v0.3.0 — warp write (routed via WebSocket)
+        "set_warp_state",
+        # v0.3.0 — device loading (routed via WebSocket)
+        "load_device_to_track",
     }
 )
 
 READ_ONLY_COMMANDS = frozenset(
     {
-        "create_midi_track",
         "delete_track",
-        "set_track_name",
         "duplicate_session_clip_to_arrangement",
         "switch_to_arrangement_view",
         "load_instrument_or_effect",
         "load_browser_item",
+    }
+)
+
+# v0.3.0 — Commands routed to the Extension Host WebSocket bridge (port 9889)
+# instead of the Remote Script TCP bridge (port 9888).
+WEBSOCKET_TARGET_COMMANDS = frozenset(
+    {
+        "get_warp_state",
+        "set_warp_state",
+        "load_device_to_track",
     }
 )
 

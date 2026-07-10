@@ -2,26 +2,32 @@
 
 ## Components
 
-The repository contains two cooperating components:
+The repository contains three cooperating components:
 
 1. `ableton_mcp_server/` is the stdio FastMCP server. It owns Pydantic validation, JSONL encoding, reconnect policy, local log reading, and snapshot diffing. It imports no Ableton module.
 2. `AbletonMCPServer_RemoteScript/` runs inside Live. It owns the loopback socket, the main-thread request queue, command handlers, Live Object Model access, and undo grouping.
-
-The shape follows the SDK-free port/adapter boundary demonstrated by [Loophole](https://github.com/OthmanAdi/loophole), adapted to a Python MIDI Remote Script host.
+3. `AbletonMCPServer_Extension/` is the TypeScript Ableton Live Extension. It compiles into a `.ablx` file running inside the Node.js Extension Host, hosting a WebSocket server on `127.0.0.1:9889` to expose warping properties and device insertion.
 
 ## Data Flow and Thread Safety
 
 ```mermaid
-flowchart LR
-    Agent["MCP client"] -->|stdio MCP| Server["FastMCP tools + Pydantic"]
-    Server -->|"TCP JSONL 127.0.0.1:9888"| Socket["Remote Script socket thread"]
-    Socket -->|enqueue| Queue["serialized request queue"]
+flowchart TD
+    Agent["MCP client"] -->|stdio MCP| Server["FastMCP Server (Python)"]
+    Server -->|"TCP JSONL (port 9888)"| SocketPy["Remote Script socket thread"]
+    Server -->|"WebSockets JSON-RPC (port 9889)"| SocketNode["Extension Host WS Server"]
+    
+    SocketPy -->|enqueue| Queue["serialized request queue"]
     Queue -->|"advance once per update_display"| Task["UI-tick command state machine"]
-    Task -->|Live UI thread only| LOM["Live Object Model"]
-    Task -->|verified result queue| Socket
+    Task -->|Live UI thread only| LOM1["Live Object Model (Python)"]
+    Task -->|verified result queue| SocketPy
+    
+    SocketNode -->|async LOM access| LOM2["Live Object Model (Node.js)"]
+    LOM2 -->|json response| SocketNode
 ```
 
-The socket thread parses JSON and waits for a response queue. It never reads or writes a Live object. Reads and synchronous mutations can complete in one tick. Deferred mutations yield, let Live process its UI cycle, then read back state on a later tick. Requests are serialized while one deferred command is active, preserving command order and avoiding competing transport writes.
+The socket thread for the Python Remote Script parses JSON and waits for a response queue. It never reads or writes a Live object. Reads and synchronous mutations can complete in one tick. Deferred mutations yield, let Live process its UI cycle, then read back state on a later tick. Requests are serialized while one deferred command is active, preserving command order and avoiding competing transport writes. Persistent connections remain open while idle; a one-second receive timeout only lets the thread observe shutdown.
+
+The Node.js Extension Host operates asynchronously and concurrently, so requests can resolve natively using Javascript `async/await` without requiring a tick queue.
 
 ## Windows and WSL Process Topology
 
@@ -72,8 +78,12 @@ The listener binds the literal `127.0.0.1`. It has no LAN mode.
 | `STALE_REFERENCE` | A path-id no longer resolves. | Re-list and use a fresh id. |
 | `WRONG_TYPE` | The target exists but cannot perform that operation. | Select a matching track/clip type. |
 | `BAD_INPUT` | A well-shaped argument is outside a safe domain. | Correct its value. |
+| `EXTENSION_UNAVAILABLE` | Extension Host WebSocket bridge is not reachable. | Ensure the AbletonMCPServer extension is compiled and loaded. |
+| `TRACK_LIMIT_REACHED` | The 96 track safety limit has been hit. | Remove unused tracks. |
 
-`Client` maps remote errors to typed Python exceptions. It automatically retries reads after connection failure. It never automatically retries a mutation: a broken connection does not prove that Live failed to apply the write.
+`Client` maps remote errors and socket failures to typed Python exceptions. At the FastMCP boundary, expected bridge exceptions become typed MCP error results rather than internal framework failures. Empty arrays receive both structured `[]` data and a textual `[]` fallback for clients that ignore structured content.
+
+The client automatically retries reads after connection failure. It never automatically retries a mutation: a broken connection does not prove that Live failed to apply the write. Client and Remote Script compute the same deadline from `contracts.request_timeout_seconds`; the 20-second base scales by serialized bulk/batch work units.
 
 ## Mutation Allowlist
 
@@ -112,12 +122,12 @@ Transport setters return step generators. Each attempt:
 2. yields without sleeping or responding to the socket;
 3. reads the observed property on a later `update_display` tick;
 4. compares numeric state with `0.01` tolerance or boolean state exactly;
-5. retries for at most three UI ticks;
+5. retries for at most ten UI ticks;
 6. returns only the observed value, or raises a typed error.
 
 Playhead writes suspend and restore clip-trigger quantization in `finally`. Start/stop playback, tempo, loop enablement, loop start, and loop length use the same deferred confirmation model.
 
-Cue operations are multiphase. They move and verify both `current_song_time` and `start_time`, yield, toggle, yield again, verify the exact locator, then restore both prior cursor values before closing the undo step. Existing cues are renamed without toggling.
+Cue operations are multiphase. They move and verify `current_song_time`, the official LOM's “current Arrangement playback position”, snapshot locator state, invoke the toggle exactly once, and observe the resulting delta across UI ticks. Live 12.4.5b7 can snap this call to the Arrangement editing grid independently of clip-trigger quantization. An off-grid toggle is reversed before returning `CUE_SNAPPED_TO_GRID`; if it temporarily removed an existing locator, that locator and its name are restored. `Song.start_time` is intentionally untouched because it controls where playback will start. Names are read back and idempotently retried before success. Single operations finally restore the prior playback position. Bulk creation shares one position scope and restores once after all items, reducing UI writes and timeout pressure.
 
 Python MIDI Remote Scripts do not use the Max LOM dictionary binding for `Clip.add_new_notes`. The handler creates a tuple of `Live.Clip.MidiNoteSpecification` objects and passes that tuple to the Python LOM method.
 

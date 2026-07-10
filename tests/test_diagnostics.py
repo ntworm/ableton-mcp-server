@@ -2,11 +2,16 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
+
+import pytest
 
 from ableton_mcp_server.diagnostics import (
     RuntimeInfo,
     bridge_status,
     bundled_remote_script_path,
+    default_remote_scripts_root,
+    detect_runtime,
     find_ableton_log_path,
     install_remote_script,
     remote_script_status,
@@ -126,3 +131,41 @@ def test_bundled_remote_script_path_supports_checkout_and_wheel_layout(tmp_path:
     wheel_source = package / "_remote_script"
     wheel_source.mkdir()
     assert bundled_remote_script_path(package) == wheel_source
+
+
+def test_runtime_and_remote_script_defaults_cover_wsl_windows_and_macos(tmp_path: Path) -> None:
+    assert detect_runtime({"WSL_DISTRO_NAME": "Ubuntu"}).is_wsl is True
+    explicit = tmp_path / "explicit-scripts"
+    assert (
+        default_remote_scripts_root(
+            {"ABLETON_MCP_REMOTE_SCRIPTS_DIR": str(explicit)}, home=tmp_path
+        )
+        == explicit
+    )
+    profile = tmp_path / "WindowsUser"
+    assert default_remote_scripts_root({"USERPROFILE": str(profile)}, home=tmp_path) == (
+        profile / "Documents" / "Ableton" / "User Library" / "Remote Scripts"
+    )
+    with patch("ableton_mcp_server.diagnostics.sys.platform", "darwin"):
+        assert default_remote_scripts_root({}, home=tmp_path) == (
+            tmp_path / "Music" / "Ableton" / "User Library" / "Remote Scripts"
+        )
+
+
+def test_missing_bundled_or_installed_remote_script_files_are_explicit(tmp_path: Path) -> None:
+    package = tmp_path / "ableton_mcp_server"
+    package.mkdir()
+    with pytest.raises(FileNotFoundError, match="could not be found"):
+        bundled_remote_script_path(package)
+
+    source = tmp_path / "source"
+    source.mkdir()
+    for name in ("__init__.py", "_contracts.py", "README.md"):
+        (source / name).write_text(name, encoding="utf-8")
+    status = remote_script_status(source, tmp_path / "Remote Scripts")
+    assert status["status"] == "missing"
+    assert status["missing_files"] == ["__init__.py", "_contracts.py", "README.md"]
+
+    (source / "README.md").unlink()
+    with pytest.raises(FileNotFoundError, match="Bundled Remote Script file is missing"):
+        install_remote_script(source, tmp_path / "Remote Scripts")

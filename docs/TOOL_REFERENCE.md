@@ -122,7 +122,7 @@ The FastMCP server exposes 37 snake_case tools. Remote examples below show the J
 - Returns: MIDI note pitch, start, duration, velocity, and mute state.
 - Request: `{"type":"get_clip_notes","params":{"track_index":0,"clip_index":0}}`
 - Response: `{"status":"ok","result":[{"pitch":60,"start_time":0.0,"duration":1.0,"velocity":100,"mute":false}]}`
-- Edge cases / side effects: pure read; empty slots return `[]`, audio clips return `WRONG_TYPE`.
+- Edge cases / side effects: pure read; empty slots return structured `[]` with a textual `[]` fallback, while audio clips return typed `WRONG_TYPE`.
 
 ### `get_device_list(track_index: int)`
 
@@ -196,7 +196,7 @@ The FastMCP server exposes 37 snake_case tools. Remote examples below show the J
 - Returns: name, observed time, and action `created` or `renamed`.
 - Request: `{"type":"create_cue_point","params":{"name":"Verse","time":8.0}}`
 - Response: `{"status":"ok","result":{"name":"Verse","time":8.0,"action":"created"}}`
-- Edge cases / side effects: one undo step; moves/restores both Live cursor properties over UI ticks and never toggles before verified movement.
+- Edge cases / side effects: one undo step; moves only `current_song_time`, toggles exactly once, verifies creation and naming across UI ticks, then restores playback position without changing `start_time`. If Live's Arrangement grid snaps the toggle to another time, the unintended state change is reversed and the call returns `CUE_SNAPPED_TO_GRID`.
 
 ### `bulk_create_cue_points(items: list[CuePointSpec])`
 
@@ -204,7 +204,7 @@ The FastMCP server exposes 37 snake_case tools. Remote examples below show the J
 - Returns: per-item status/result or typed error.
 - Request: `{"type":"bulk_create_cue_points","params":{"items":[{"name":"Verse","time":8.0}]}}`
 - Response: `{"status":"ok","result":{"results":[{"index":0,"status":"ok","result":{"action":"created"}}]}}`
-- Edge cases / side effects: one undo step for the command; item failures do not stop later items.
+- Edge cases / side effects: one undo step for the command; item failures do not stop later items; off-grid snaps are reversed per item and reported as `CUE_SNAPPED_TO_GRID`; one shared cursor scope is restored after the bulk finishes; the transport deadline scales with item count.
 
 ### `delete_cue_point(time: float)`
 
@@ -212,7 +212,7 @@ The FastMCP server exposes 37 snake_case tools. Remote examples below show the J
 - Returns: `deleted`, and the actual cue time when found.
 - Request: `{"type":"delete_cue_point","params":{"time":8.0}}`
 - Response: `{"status":"ok","result":{"deleted":true,"time":8.0}}`
-- Edge cases / side effects: one undo step; move-and-toggle; no match returns `deleted:false`.
+- Edge cases / side effects: one undo step; move-and-toggle; no match returns `deleted:false`. An off-grid snap is reversed—including restoration of a different locator temporarily removed by Live—and returns `CUE_SNAPPED_TO_GRID`.
 
 ### `set_current_song_time(time: float)`
 
@@ -220,7 +220,7 @@ The FastMCP server exposes 37 snake_case tools. Remote examples below show the J
 - Returns: observed `current_song_time`.
 - Request: `{"type":"set_current_song_time","params":{"time":32.0}}`
 - Response: `{"status":"ok","result":{"current_song_time":32.0}}`
-- Edge cases / side effects: one undo step; set/yield/read/retry across Live UI ticks; exhaustion returns `PLAYHEAD_NOT_MOVED`.
+- Edge cases / side effects: one undo step; set/yield/read/retry across up to ten Live UI ticks; exhaustion returns `PLAYHEAD_NOT_MOVED`.
 
 ### `set_tempo(tempo: float)`
 

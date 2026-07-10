@@ -22,10 +22,12 @@ from typing import Any
 
 from ._contracts import (
     ALLOWED_MUTATIONS,
+    CUE_OPERATION_VERIFY_TICKS,
     CUE_TIME_TOLERANCE,
     DEFAULT_HOST,
     DEFAULT_PORT,
     ERROR_BAD_INPUT,
+    ERROR_CUE_SNAPPED_TO_GRID,
     ERROR_INTERNAL_ERROR,
     ERROR_INVALID_PARAMS,
     ERROR_LIVE_UNAVAILABLE,
@@ -33,11 +35,12 @@ from ._contracts import (
     ERROR_READ_ONLY_VIOLATION,
     ERROR_STALE_REFERENCE,
     ERROR_TIMEOUT,
+    ERROR_TRACK_LIMIT_REACHED,
     ERROR_UNKNOWN_COMMAND,
     ERROR_WRONG_TYPE,
     PLAYHEAD_MOVE_RETRIES,
     READ_ONLY_COMMANDS,
-    REQUEST_TIMEOUT_SECONDS,
+    request_timeout_seconds,
 )
 
 try:  # These modules only exist inside Ableton Live.
@@ -100,6 +103,18 @@ class PlayheadNotMovedError(RemoteError):
             "Transport setter did not reach the requested value "
             "(asked=%s, got=%s after %s attempts)." % (requested, actual, attempts),
             "Live may be in a transitional state; retry after it settles.",
+        )
+
+
+class CueSnappedToGridError(RemoteError):
+    def __init__(self, requested: float, actual: float) -> None:
+        self.requested = requested
+        self.actual = actual
+        super().__init__(
+            ERROR_CUE_SNAPPED_TO_GRID,
+            "Live snapped the cue operation from requested %s to %s. "
+            "The unintended grid operation was reversed." % (requested, actual),
+            "Disable Arrangement Snap-to-Grid (Ctrl/Cmd+4) or use a grid-aligned time.",
         )
 
 
@@ -701,45 +716,238 @@ def _find_cue(song: Any, target_time: float) -> Any:
     return None
 
 
-def _verified_cue_cursor_steps(
+def _cue_snapshot(song: Any) -> dict[float, str]:
+    return {float(cue.time): str(_safe(lambda cue=cue: cue.name, "")) for cue in song.cue_points}
+
+
+def _snapshot_has_time(snapshot: dict[float, str], target_time: float) -> bool:
+    return any(
+        abs(cue_time - target_time) < CUE_TIME_TOLERANCE for cue_time in snapshot
+    )
+
+
+def _cue_snapshot_delta(
+    before: dict[float, str], after: dict[float, str]
+) -> tuple[list[float], list[float]]:
+    added = [time for time in after if not _snapshot_has_time(before, time)]
+    removed = [time for time in before if not _snapshot_has_time(after, time)]
+    return added, removed
+
+
+def _wait_for_cue_state_steps(
+    song: Any,
+    target_time: float,
+    *,
+    should_exist: bool,
+    ticks: int = CUE_OPERATION_VERIFY_TICKS,
+) -> Generator[None, None, Any]:
+    """Wait for Live to apply one cue toggle without toggling a second time."""
+
+    cue = _find_cue(song, target_time)
+    for attempt in range(ticks):
+        yield
+        cue = _find_cue(song, target_time)
+        _dbg(
+            "cue_state time=%s expected=%s observed=%s tick_attempt=%s"
+            % (target_time, should_exist, cue is not None, attempt + 1)
+        )
+        if (cue is not None) is should_exist:
+            return cue
+    action = "create" if should_exist else "delete"
+    raise RemoteError(
+        ERROR_LIVE_UNAVAILABLE,
+        "set_or_delete_cue() did not %s the cue near %s after %s UI ticks."
+        % (action, target_time, ticks),
+    )
+
+
+def _reverse_snapped_cue_toggle_steps(
     song: Any,
     *,
-    current_target: float,
-    start_target: float,
+    requested_time: float,
+    before: dict[float, str],
+    after: dict[float, str],
+) -> Generator[None, None, None]:
+    """Reverse the one off-grid toggle before reporting a typed failure."""
+
+    added, removed = _cue_snapshot_delta(before, after)
+    if len(added) == 1 and not removed:
+        actual_time = added[0]
+        yield from _verified_cue_position_steps(song, target=actual_time)
+        song.set_or_delete_cue()
+        yield from _wait_for_cue_state_steps(song, actual_time, should_exist=False)
+        raise CueSnappedToGridError(requested_time, actual_time)
+    if len(removed) == 1 and not added:
+        actual_time = removed[0]
+        original_name = before[actual_time]
+        yield from _verified_cue_position_steps(song, target=actual_time)
+        song.set_or_delete_cue()
+        restored = yield from _wait_for_cue_state_steps(
+            song, actual_time, should_exist=True
+        )
+        yield from _verified_cue_name_steps(restored, original_name)
+        raise CueSnappedToGridError(requested_time, actual_time)
+    raise RemoteError(
+        ERROR_LIVE_UNAVAILABLE,
+        "Cue state changed unexpectedly after an off-grid toggle; automatic reversal "
+        "was not safe.",
+        "Inspect Arrangement locators before retrying.",
+    )
+
+
+def _wait_for_created_cue_steps(
+    song: Any,
+    target_time: float,
+    *,
+    before: dict[float, str],
+    ticks: int = CUE_OPERATION_VERIFY_TICKS,
+) -> Generator[None, None, Any]:
+    """Observe exact creation or reverse a grid-snapped toggle."""
+
+    for attempt in range(ticks):
+        yield
+        cue = _find_cue(song, target_time)
+        if cue is not None:
+            return cue
+        after = _cue_snapshot(song)
+        added, removed = _cue_snapshot_delta(before, after)
+        _dbg(
+            "cue_create time=%s observed=False added=%r removed=%r tick_attempt=%s"
+            % (target_time, added, removed, attempt + 1)
+        )
+        if added or removed:
+            yield from _reverse_snapped_cue_toggle_steps(
+                song,
+                requested_time=target_time,
+                before=before,
+                after=after,
+            )
+    raise RemoteError(
+        ERROR_LIVE_UNAVAILABLE,
+        "set_or_delete_cue() did not create the cue near %s after %s UI ticks."
+        % (target_time, ticks),
+    )
+
+
+def _wait_for_deleted_cue_steps(
+    song: Any,
+    target_time: float,
+    *,
+    before: dict[float, str],
+    ticks: int = CUE_OPERATION_VERIFY_TICKS,
+) -> Generator[None, None, None]:
+    """Observe exact deletion or reverse a grid-snapped toggle."""
+
+    for attempt in range(ticks):
+        yield
+        cue = _find_cue(song, target_time)
+        after = _cue_snapshot(song)
+        added, removed = _cue_snapshot_delta(before, after)
+        if cue is None:
+            unexpected_removed = [
+                time
+                for time in removed
+                if abs(time - target_time) >= CUE_TIME_TOLERANCE
+            ]
+            if not added and not unexpected_removed:
+                return
+            raise RemoteError(
+                ERROR_LIVE_UNAVAILABLE,
+                "Cue deletion changed additional locator state; automatic reversal "
+                "was not safe.",
+                "Inspect Arrangement locators before retrying.",
+            )
+        _dbg(
+            "cue_delete time=%s observed=False added=%r removed=%r tick_attempt=%s"
+            % (target_time, added, removed, attempt + 1)
+        )
+        if added or removed:
+            yield from _reverse_snapped_cue_toggle_steps(
+                song,
+                requested_time=target_time,
+                before=before,
+                after=after,
+            )
+    raise RemoteError(
+        ERROR_LIVE_UNAVAILABLE,
+        "set_or_delete_cue() did not delete the cue near %s after %s UI ticks."
+        % (target_time, ticks),
+    )
+
+
+def _verified_cue_name_steps(
+    cue: Any,
+    name: str,
+    *,
+    ticks: int = CUE_OPERATION_VERIFY_TICKS,
+) -> Generator[None, None, None]:
+    """Confirm a cue rename before reporting creation success."""
+
+    cue.name = name
+    actual = str(_safe(lambda: cue.name, ""))
+    if actual == name:
+        return
+    for attempt in range(ticks):
+        yield
+        actual = str(_safe(lambda: cue.name, ""))
+        _dbg(
+            "cue_name asked=%r got=%r tick_attempt=%s" % (name, actual, attempt + 1)
+        )
+        if actual == name:
+            return
+        cue.name = name
+    raise RemoteError(
+        ERROR_LIVE_UNAVAILABLE,
+        "Cue near %s was created but its name did not reach %r after %s UI ticks."
+        % (float(cue.time), name, ticks),
+    )
+
+
+def _verified_cue_position_steps(
+    song: Any,
+    *,
+    target: float,
     retries: int = PLAYHEAD_MOVE_RETRIES,
 ) -> Generator[None, None, None]:
-    """Move both Live cursors used by cue toggling, yielding between attempts."""
+    """Move the Arrangement playback position used by cue toggling."""
 
-    actual_current = float(song.current_song_time)
-    actual_start = float(song.start_time)
-    if (
-        abs(actual_current - current_target) < CUE_TIME_TOLERANCE
-        and abs(actual_start - start_target) < CUE_TIME_TOLERANCE
-    ):
+    actual = float(song.current_song_time)
+    if abs(actual - target) < CUE_TIME_TOLERANCE:
         return
     for attempt in range(retries):
-        song.current_song_time = current_target
-        song.start_time = start_target
+        song.current_song_time = target
         yield
-        actual_current = float(song.current_song_time)
-        actual_start = float(song.start_time)
+        actual = float(song.current_song_time)
         _dbg(
-            "cue_cursor current=%s/%s start=%s/%s tick_attempt=%s"
-            % (current_target, actual_current, start_target, actual_start, attempt + 1)
+            "cue_position asked=%s got=%s tick_attempt=%s"
+            % (target, actual, attempt + 1)
         )
-        if (
-            abs(actual_current - current_target) < CUE_TIME_TOLERANCE
-            and abs(actual_start - start_target) < CUE_TIME_TOLERANCE
-        ):
+        if abs(actual - target) < CUE_TIME_TOLERANCE:
             return
-    if abs(actual_current - current_target) >= CUE_TIME_TOLERANCE:
-        raise PlayheadNotMovedError(current_target, actual_current, retries)
-    raise RemoteError(
-        ERROR_PLAYHEAD_NOT_MOVED,
-        "Cue insert marker did not reach the requested value "
-        "(asked=%s, got=%s after %s UI ticks)." % (start_target, actual_start, retries),
-        "Live may be in a transitional state; retry after it settles.",
+    raise PlayheadNotMovedError(target, actual, retries)
+
+
+def _create_cue_at_cursor_steps(
+    song: Any, name: str, target_time: float
+) -> Generator[None, None, dict[str, Any]]:
+    existing = _find_cue(song, target_time)
+    if existing is not None:
+        yield from _verified_cue_name_steps(existing, name)
+        return {"name": name, "time": float(existing.time), "action": "renamed"}
+
+    before = _cue_snapshot(song)
+    yield from _verified_cue_position_steps(
+        song,
+        target=target_time,
     )
+    song.set_or_delete_cue()
+    created = yield from _wait_for_created_cue_steps(
+        song,
+        target_time,
+        before=before,
+    )
+    yield from _verified_cue_name_steps(created, name)
+    return {"name": name, "time": float(created.time), "action": "created"}
 
 
 def _create_cue_point_steps(
@@ -747,36 +955,16 @@ def _create_cue_point_steps(
 ) -> Generator[None, None, dict[str, Any]]:
     name = _string_param(params, "name")
     target_time = _float_param(params, "time", 0.0, 100000.0)
-    existing = _find_cue(song, target_time)
-    if existing is not None:
-        existing.name = name
-        return {"name": name, "time": float(existing.time), "action": "renamed"}
 
     previous_time = float(song.current_song_time)
-    previous_start = float(song.start_time)
     previous_quantization = song.clip_trigger_quantization
     try:
         song.clip_trigger_quantization = _no_quantization_value()
-        yield from _verified_cue_cursor_steps(
-            song,
-            current_target=target_time,
-            start_target=target_time,
-        )
-        song.set_or_delete_cue()
-        yield
-        created = _find_cue(song, target_time)
-        if created is None:
-            raise RemoteError(
-                ERROR_LIVE_UNAVAILABLE,
-                "set_or_delete_cue() did not create a cue near %s." % target_time,
-            )
-        created.name = name
-        return {"name": name, "time": float(created.time), "action": "created"}
+        return (yield from _create_cue_at_cursor_steps(song, name, target_time))
     finally:
-        yield from _verified_cue_cursor_steps(
+        yield from _verified_cue_position_steps(
             song,
-            current_target=previous_time,
-            start_target=previous_start,
+            target=previous_time,
         )
         song.clip_trigger_quantization = previous_quantization
 
@@ -789,29 +977,22 @@ def _delete_cue_point_steps(
     if cue is None:
         return {"deleted": False, "reason": "no cue at time"}
     cue_time = float(cue.time)
+    before = _cue_snapshot(song)
     previous_time = float(song.current_song_time)
-    previous_start = float(song.start_time)
     previous_quantization = song.clip_trigger_quantization
     try:
         song.clip_trigger_quantization = _no_quantization_value()
-        yield from _verified_cue_cursor_steps(
+        yield from _verified_cue_position_steps(
             song,
-            current_target=cue_time,
-            start_target=cue_time,
+            target=cue_time,
         )
         song.set_or_delete_cue()
-        yield
-        if _find_cue(song, cue_time) is not None:
-            raise RemoteError(
-                ERROR_LIVE_UNAVAILABLE,
-                "set_or_delete_cue() did not delete the cue near %s." % cue_time,
-            )
+        yield from _wait_for_deleted_cue_steps(song, cue_time, before=before)
         return {"deleted": True, "time": cue_time}
     finally:
-        yield from _verified_cue_cursor_steps(
+        yield from _verified_cue_position_steps(
             song,
-            current_target=previous_time,
-            start_target=previous_start,
+            target=previous_time,
         )
         song.clip_trigger_quantization = previous_quantization
 
@@ -823,16 +1004,28 @@ def _bulk_create_cue_points_steps(
     if not isinstance(items, list) or not items:
         raise RemoteError(ERROR_INVALID_PARAMS, "Parameter 'items' must be a non-empty list.")
     results = []
-    for index, item in enumerate(items):
-        if not isinstance(item, dict):
-            error = RemoteError(ERROR_INVALID_PARAMS, "Cue item must be an object.")
-            results.append({"index": index, **error.to_envelope()})
-            continue
-        try:
-            result = yield from _create_cue_point_steps(song, item)
-            results.append({"index": index, "status": "ok", "result": result})
-        except RemoteError as error:
-            results.append({"index": index, **error.to_envelope()})
+    previous_time = float(song.current_song_time)
+    previous_quantization = song.clip_trigger_quantization
+    try:
+        song.clip_trigger_quantization = _no_quantization_value()
+        for index, item in enumerate(items):
+            if not isinstance(item, dict):
+                error = RemoteError(ERROR_INVALID_PARAMS, "Cue item must be an object.")
+                results.append({"index": index, **error.to_envelope()})
+                continue
+            try:
+                name = _string_param(item, "name")
+                target_time = _float_param(item, "time", 0.0, 100000.0)
+                result = yield from _create_cue_at_cursor_steps(song, name, target_time)
+                results.append({"index": index, "status": "ok", "result": result})
+            except RemoteError as error:
+                results.append({"index": index, **error.to_envelope()})
+    finally:
+        yield from _verified_cue_position_steps(
+            song,
+            target=previous_time,
+        )
+        song.clip_trigger_quantization = previous_quantization
     return {"results": results}
 
 
@@ -899,6 +1092,237 @@ def cmd_add_notes_to_clip(song: Any, _application: Any, params: dict[str, Any]) 
     }
 
 
+# ---------------------------------------------------------------------------
+# v0.3.0 — Composition Diagnostics
+# ---------------------------------------------------------------------------
+
+_SCALE_INTERVALS = {
+    "major": [0, 2, 4, 5, 7, 9, 11],
+    "minor": [0, 2, 3, 5, 7, 8, 10],
+    "aeolian": [0, 2, 3, 5, 7, 8, 10],
+    "dorian": [0, 2, 3, 5, 7, 9, 10],
+    "phrygian": [0, 1, 3, 5, 7, 8, 10],
+    "lydian": [0, 2, 4, 6, 7, 9, 11],
+    "mixolydian": [0, 2, 4, 5, 7, 9, 10],
+    "locrian": [0, 1, 3, 5, 6, 8, 10],
+    "harmonic_minor": [0, 2, 3, 5, 7, 8, 11],
+    "melodic_minor": [0, 2, 3, 5, 7, 9, 11],
+    "pentatonic_major": [0, 2, 4, 7, 9],
+    "pentatonic_minor": [0, 3, 5, 7, 10],
+    "blues": [0, 3, 5, 6, 7, 10],
+    "chromatic": list(range(12)),
+}
+
+_NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+_ENHARMONIC = {"Db": "C#", "Eb": "D#", "Gb": "F#", "Ab": "G#", "Bb": "A#"}
+
+
+def _note_name_to_number(name):
+    # type: (str) -> int
+    resolved = _ENHARMONIC.get(name, name)
+    return _NOTE_NAMES.index(resolved)
+
+
+def cmd_get_composition_structure(
+    song, _application, _params,
+):
+    # type: (Any, Any, dict[str, Any]) -> dict[str, Any]
+    tracks = []
+    unnamed_tracks = []
+    for index, track in enumerate(_all_tracks(song)):
+        kind = _track_type(song, track)
+        name = str(_safe(lambda track=track: track.name, ""))
+        has_clips = False
+        clip_count = 0
+        if kind in ("midi", "audio"):
+            for slot in _safe(lambda track=track: track.clip_slots, []):
+                if bool(_safe(lambda slot=slot: slot.has_clip, False)):
+                    has_clips = True
+                    clip_count += 1
+        entry = {
+            "id": "track:%s" % index,
+            "index": index,
+            "name": name,
+            "type": kind,
+            "color": int(_safe(lambda track=track: track.color, 0)),
+            "has_clips": has_clips,
+            "clip_count": clip_count,
+            "device_count": len(list(_safe(lambda track=track: track.devices, []))),
+        }
+        tracks.append(entry)
+        default_names = ("", "MIDI", "Audio", "Master", "A-Return", "B-Return")
+        if not name or name.startswith("Track ") or name in default_names:
+            unnamed_tracks.append("track:%s" % index)
+
+    return {
+        "tracks": tracks,
+        "track_count": len(tracks),
+        "scenes_count": len(list(song.scenes)),
+        "tempo": float(song.tempo),
+        "unnamed_tracks": unnamed_tracks,
+        "unnamed_tracks_count": len(unnamed_tracks),
+    }
+
+
+def cmd_diagnose_midi_clip(
+    song, _application, params,
+):
+    # type: (Any, Any, dict[str, Any]) -> dict[str, Any]
+    track_index = _integer_param(params, "track_index")
+    clip_index = _integer_param(params, "clip_index")
+    scale_root = params.get("scale_root")  # optional
+    scale_type = params.get("scale_type")  # optional
+
+    _track, slot = _clip_slot(song, track_index, clip_index)
+    clip = _safe(lambda: slot.clip, None)
+    if clip is None:
+        return {"has_overlaps": False, "overlaps_count": 0,
+                "notes_outside_scale": [], "timing_drift_detected": False,
+                "recommendations": ["Clip slot is empty."], "note_count": 0}
+
+    if not bool(_safe(lambda: clip.is_midi_clip, False)):
+        raise RemoteError(ERROR_WRONG_TYPE, "Clip is not a MIDI clip.")
+
+    raw_notes = clip.get_notes_extended(0, 128, -8192.0, 16384.0)
+    notes = []
+    for note in raw_notes:
+        notes.append({
+            "pitch": int(_note_value(note, "pitch", 0)),
+            "start_time": float(_note_value(note, "start_time", 0.0)),
+            "duration": float(_note_value(note, "duration", 0.0)),
+            "velocity": int(_note_value(note, "velocity", 100)),
+            "mute": bool(_note_value(note, "mute", False)),
+        })
+
+    # --- Overlap Detection ---
+    overlaps_count = 0
+    by_pitch = {}  # type: dict[int, list[dict[str, Any]]]
+    for note in notes:
+        by_pitch.setdefault(note["pitch"], []).append(note)
+    for pitch_notes in by_pitch.values():
+        sorted_notes = sorted(pitch_notes, key=lambda n: n["start_time"])
+        for i in range(len(sorted_notes) - 1):
+            cur = sorted_notes[i]
+            nxt = sorted_notes[i + 1]
+            if nxt["start_time"] < cur["start_time"] + cur["duration"]:
+                overlaps_count += 1
+
+    # --- Scale Conformance ---
+    notes_outside_scale = []  # type: list[dict[str, Any]]
+    if scale_root and scale_type:
+        try:
+            root_num = _note_name_to_number(scale_root)
+        except (ValueError, IndexError):
+            root_num = None
+        intervals = _SCALE_INTERVALS.get(scale_type.lower())
+        if root_num is not None and intervals is not None:
+            scale_pitches = set((root_num + i) % 12 for i in intervals)
+            for note in notes:
+                pc = note["pitch"] % 12
+                if pc not in scale_pitches:
+                    notes_outside_scale.append({
+                        "pitch": note["pitch"],
+                        "start_time": note["start_time"],
+                        "note_name": _NOTE_NAMES[pc],
+                    })
+
+    # --- Timing Drift Detection ---
+    timing_drift_detected = False
+    grid_values = [0.25, 0.5, 1.0]  # 1/16, 1/8, 1/4 beats
+    drift_threshold = 0.01
+    if notes:
+        drift_count = 0
+        for note in notes:
+            t = note["start_time"]
+            aligned_to_any = False
+            for grid in grid_values:
+                remainder = t % grid
+                if remainder < drift_threshold or (grid - remainder) < drift_threshold:
+                    aligned_to_any = True
+                    break
+            if not aligned_to_any:
+                drift_count += 1
+        timing_drift_detected = drift_count > len(notes) * 0.15
+
+    # --- Recommendations ---
+    recommendations = []
+    if overlaps_count > 0:
+        recommendations.append(
+            "%s overlapping note pair(s) found. Consider quantizing or removing duplicates."
+            % overlaps_count
+        )
+    if notes_outside_scale:
+        recommendations.append(
+            "%s note(s) outside the %s %s scale."
+            % (len(notes_outside_scale), scale_root, scale_type)
+        )
+    if timing_drift_detected:
+        recommendations.append(
+            "Timing drift detected; some notes are not aligned to standard grid values."
+        )
+    if not recommendations:
+        recommendations.append("No issues found.")
+
+    return {
+        "note_count": len(notes),
+        "has_overlaps": overlaps_count > 0,
+        "overlaps_count": overlaps_count,
+        "notes_outside_scale": notes_outside_scale,
+        "timing_drift_detected": timing_drift_detected,
+        "recommendations": recommendations,
+    }
+
+
+# ---------------------------------------------------------------------------
+# v0.3.0 — Guarded Creative Mutations
+# ---------------------------------------------------------------------------
+
+_MAX_TRACKS = 96
+
+
+def cmd_create_midi_track(
+    song, _application, params,
+):
+    # type: (Any, Any, dict[str, Any]) -> dict[str, Any]
+    name = params.get("name", "MIDI Track")
+    index = params.get("index")  # None means append
+    current_count = len(list(song.tracks))
+    if current_count >= _MAX_TRACKS:
+        raise RemoteError(
+            ERROR_TRACK_LIMIT_REACHED,
+            "Cannot create track: set already has %s tracks (limit=%s)." % (current_count, _MAX_TRACKS),
+            "Remove unused tracks before creating new ones.",
+        )
+    insert_at = index if index is not None else -1
+    song.create_midi_track(insert_at)
+    new_track = song.tracks[-1] if insert_at == -1 else song.tracks[insert_at]
+    if name:
+        new_track.name = str(name)
+    new_index = list(song.tracks).index(new_track)
+    return {
+        "status": "created",
+        "track_id": "track:%s" % new_index,
+        "track_index": new_index,
+        "name": str(new_track.name),
+    }
+
+
+def cmd_rename_track(
+    song, _application, params,
+):
+    # type: (Any, Any, dict[str, Any]) -> dict[str, Any]
+    track_index = _integer_param(params, "track_index")
+    new_name = _string_param(params, "new_name")
+    track = _track_at(song, track_index)
+    old_name = str(_safe(lambda: track.name, ""))
+    track.name = new_name
+    return {
+        "track_id": "track:%s" % track_index,
+        "old_name": old_name,
+        "new_name": str(track.name),
+    }
+
+
 CommandHandler = Callable[[Any, Any, dict[str, Any]], Any]
 
 COMMAND_HANDLERS: dict[str, CommandHandler] = {
@@ -925,6 +1349,11 @@ COMMAND_HANDLERS: dict[str, CommandHandler] = {
     "create_clip": cmd_create_clip,
     "fire_clip": cmd_fire_clip,
     "add_notes_to_clip": cmd_add_notes_to_clip,
+    # v0.3.0
+    "get_composition_structure": cmd_get_composition_structure,
+    "diagnose_midi_clip": cmd_diagnose_midi_clip,
+    "create_midi_track": cmd_create_midi_track,
+    "rename_track": cmd_rename_track,
 }
 
 
@@ -1283,10 +1712,13 @@ class JsonlSocketServer:
 
     def _serve_client(self, connection: socket.socket) -> None:
         buffer = bytearray()
-        connection.settimeout(10.0)
+        connection.settimeout(1.0)
         try:
             while not self.shutdown_event.is_set():
-                chunk = connection.recv(4096)
+                try:
+                    chunk = connection.recv(4096)
+                except TimeoutError:
+                    continue
                 if not chunk:
                     break
                 buffer.extend(chunk)
@@ -1328,7 +1760,7 @@ class JsonlSocketServer:
         response_queue: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=1)
         self.processor.enqueue(QueuedRequest(command, params, response_queue))
         try:
-            return response_queue.get(timeout=REQUEST_TIMEOUT_SECONDS)
+            return response_queue.get(timeout=request_timeout_seconds(command, params))
         except queue.Empty:
             return RemoteError(
                 ERROR_TIMEOUT,

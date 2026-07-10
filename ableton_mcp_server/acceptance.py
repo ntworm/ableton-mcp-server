@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from collections.abc import Mapping
 from contextlib import suppress
 from typing import Any, Protocol
@@ -12,7 +11,7 @@ class AcceptanceClient(Protocol):
         command_type: str,
         params: Mapping[str, Any] | None = None,
         *,
-        timeout: float = 5.0,
+        timeout: float | None = None,
     ) -> Any: ...
 
 
@@ -27,6 +26,17 @@ def _test_tempo(original: float, offset: float) -> float:
     return original - offset
 
 
+def _acceptance_cue_time(locators: list[Mapping[str, Any]]) -> float:
+    """Choose a free coarse-grid beat for a disposable cue round trip."""
+
+    candidate = 256.0
+    while any(
+        abs(float(item.get("time", -1.0)) - candidate) < 0.01 for item in locators
+    ):
+        candidate += 256.0
+    return candidate
+
+
 def run_live_acceptance(
     client: AcceptanceClient,
     *,
@@ -38,7 +48,7 @@ def run_live_acceptance(
     """Exercise the real bridge after exact disposable-project confirmation."""
 
     def call(command: str, params: Mapping[str, Any] | None = None) -> Any:
-        return client.call(command, params or {}, timeout=5.0)
+        return client.call(command, params or {}, timeout=None)
 
     metadata = call("get_project_metadata")
     actual_name = str(metadata.get("song_name", ""))
@@ -66,10 +76,7 @@ def run_live_acceptance(
     original_locators = call("get_locators")
     original_tempo = float(original_session["tempo"])
     original_time = float(original_session["current_song_time"])
-    cue_time = max(
-        32.0,
-        math.ceil(max((float(item["time"]) for item in original_locators), default=0.0) + 8.0),
-    )
+    cue_time = _acceptance_cue_time(original_locators)
     tempo_one = _test_tempo(original_tempo, 1.0)
     tempo_two = _test_tempo(original_tempo, 2.0)
     cue_name = "ABLETON_MCP_ACCEPTANCE"

@@ -7,7 +7,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from ableton_mcp_server.client import Client
-from ableton_mcp_server.errors import BridgeTimeoutError, StaleReferenceError
+from ableton_mcp_server.errors import (
+    BridgeTimeoutError,
+    LiveUnavailableError,
+    StaleReferenceError,
+)
 
 
 class FakeSocket:
@@ -93,6 +97,30 @@ def test_read_reconnects_once_after_connection_failure() -> None:
     client._connect_socket = MagicMock(side_effect=reconnect)
     assert client.call("get_track_list") == [1]
     client._connect_socket.assert_called_once_with()
+
+
+def test_mutation_connection_failure_is_typed_live_unavailable() -> None:
+    client = Client(reconnect=True, max_retries=3, backoff_factor=0)
+    failing = MagicMock()
+    failing.sendall.side_effect = OSError(10053, "connection aborted")
+    client._socket = failing
+    client._connected = True
+
+    with pytest.raises(LiveUnavailableError) as exc_info:
+        client.call("set_tempo", {"tempo": 128.0})
+
+    assert exc_info.value.code == "LIVE_UNAVAILABLE"
+    assert "127.0.0.1:9888" in str(exc_info.value)
+    assert exc_info.value.hint == "For mutations, inspect current Live state before retrying."
+
+
+def test_bulk_uses_a_timeout_budget_scaled_to_its_item_count() -> None:
+    client, fake = connected_client(b'{"status": "ok", "result": {"results": []}}\n')
+    params = {"items": [{"name": f"M{index}", "time": index * 8} for index in range(15)]}
+
+    assert client.call("bulk_create_cue_points", params) == {"results": []}
+
+    assert fake.timeout > 6.0
 
 
 def test_client_rejects_non_loopback_host() -> None:

@@ -77,6 +77,46 @@ def test_serve_client_reads_jsonl_and_writes_response() -> None:
     worker.join(timeout=1.0)
 
 
+def test_serve_client_keeps_an_idle_persistent_connection_open() -> None:
+    class TimeoutThenFrameSocket:
+        def __init__(self) -> None:
+            self.recv_count = 0
+            self.sent = bytearray()
+            self.closed = False
+
+        def settimeout(self, _timeout: float) -> None:
+            return None
+
+        def recv(self, _size: int) -> bytes:
+            self.recv_count += 1
+            if self.recv_count == 1:
+                raise TimeoutError("idle")
+            if self.recv_count == 2:
+                return b'{"type":"get_session_info","params":{}}\n'
+            return b""
+
+        def sendall(self, data: bytes) -> None:
+            self.sent.extend(data)
+
+        def close(self) -> None:
+            self.closed = True
+
+    processor = RequestProcessor(FakeSong(), FakeApplication())
+    server = JsonlSocketServer(processor)
+    connection = TimeoutThenFrameSocket()
+    worker = threading.Thread(target=server._serve_client, args=(connection,))  # type: ignore[arg-type]
+    worker.start()
+
+    wait_for_request(processor)
+    processor.process_pending()
+    worker.join(timeout=1.0)
+
+    response = json.loads(connection.sent.decode("utf-8"))
+    assert response["status"] == "ok"
+    assert response["result"]["tempo"] == 120.0
+    assert connection.closed is True
+
+
 def test_processor_maps_unexpected_lom_exception_to_live_unavailable() -> None:
     processor = RequestProcessor(FakeSong(), FakeApplication())
     response_queue: Any = __import__("queue").Queue(maxsize=1)
