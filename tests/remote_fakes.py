@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -52,7 +53,7 @@ class FakeClip:
         self.is_midi_clip = midi
         self.is_playing = False
         self.notes = [FakeNote(60, 0.0, 1.0, 100)] if midi else []
-        self.add_payloads: list[dict[str, Any]] = []
+        self.add_payloads: list[tuple[Any, ...]] = []
         self.fire_count = 0
 
     def get_notes_extended(
@@ -60,17 +61,18 @@ class FakeClip:
     ) -> list[FakeNote]:
         return list(self.notes)
 
-    def add_new_notes(self, payload: dict[str, Any]) -> list[int]:
-        self.add_payloads.append(payload)
+    def add_new_notes(self, payload: Iterable[Any]) -> list[int]:
+        specifications = tuple(payload)
+        self.add_payloads.append(specifications)
         ids = []
-        for index, note in enumerate(payload["notes"], start=len(self.notes) + 1):
+        for index, note in enumerate(specifications, start=len(self.notes) + 1):
             self.notes.append(
                 FakeNote(
-                    int(note["pitch"]),
-                    float(note["start_time"]),
-                    float(note["duration"]),
-                    int(note.get("velocity", 100)),
-                    bool(note.get("mute", False)),
+                    int(note.pitch),
+                    float(note.start_time),
+                    float(note.duration),
+                    int(note.velocity),
+                    bool(note.mute),
                 )
             )
             ids.append(index)

@@ -104,6 +104,23 @@ class PlayheadNotMovedError(RemoteError):
         )
 
 
+@dataclass(frozen=True)
+class _FallbackMidiNoteSpecification:
+    """Test-only stand-in for ``Live.Clip.MidiNoteSpecification``."""
+
+    pitch: int
+    start_time: float
+    duration: float
+    velocity: int
+    mute: bool
+
+
+def _midi_note_specification(**values: Any) -> Any:
+    if Live is None:
+        return _FallbackMidiNoteSpecification(**values)
+    return Live.Clip.MidiNoteSpecification(**values)
+
+
 def _safe(getter: Callable[[], Any], default: Any) -> Any:
     try:
         return getter()
@@ -783,15 +800,17 @@ def cmd_add_notes_to_clip(song: Any, _application: Any, params: dict[str, Any]) 
         velocity = int(raw_note.get("velocity", 100))
         if pitch > 127 or velocity < 1 or velocity > 127:
             raise RemoteError(ERROR_BAD_INPUT, "MIDI pitch and velocity must be in range.")
-        note = {
-            "pitch": pitch,
-            "start_time": _float_param(raw_note, "start_time", 0.0, 100000.0),
-            "duration": _float_param(raw_note, "duration", 0.0, 100000.0, strictly_positive=True),
-            "velocity": velocity,
-            "mute": bool(raw_note.get("mute", False)),
-        }
+        note = _midi_note_specification(
+            pitch=pitch,
+            start_time=_float_param(raw_note, "start_time", 0.0, 100000.0),
+            duration=_float_param(
+                raw_note, "duration", 0.0, 100000.0, strictly_positive=True
+            ),
+            velocity=velocity,
+            mute=bool(raw_note.get("mute", False)),
+        )
         notes.append(note)
-    note_ids = clip.add_new_notes({"notes": notes})
+    note_ids = clip.add_new_notes(tuple(notes))
     return {
         "added": len(notes),
         "note_ids": [int(note_id) for note_id in note_ids],
