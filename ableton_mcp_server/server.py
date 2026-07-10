@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 from collections.abc import Awaitable, Callable, Generator, Sequence
-from pathlib import Path
 from typing import Any
 
 os.environ.setdefault("OTEL_SDK_DISABLED", "true")
@@ -16,10 +15,12 @@ from contracts import DEFAULT_HOST, DEFAULT_PORT
 
 from . import models
 from .client import Client
+from .diagnostics import bridge_status, find_ableton_log_path
 from .diff import diff_snapshots
 
 PUBLIC_TOOL_NAMES = (
     "get_session_info",
+    "get_bridge_status",
     "get_track_list",
     "get_track_state",
     "get_locators",
@@ -105,22 +106,6 @@ def _remote(command: str, request: models.RequestModel) -> Any:
     return get_client().call(command, request.model_dump(mode="json"))
 
 
-def find_ableton_log_path() -> Path | None:
-    appdata = os.environ.get("APPDATA")
-    if not appdata:
-        return None
-    ableton = Path(appdata) / "Ableton"
-    if not ableton.is_dir():
-        return None
-    candidates = list(ableton.glob("Live */Preferences/Log.txt"))
-    if not candidates:
-        return None
-    try:
-        return max(candidates, key=lambda path: path.stat().st_mtime)
-    except OSError:
-        return None
-
-
 @mcp.tool()
 def get_session_info() -> Any:
     """Read top-level transport and time-signature state.
@@ -130,6 +115,18 @@ def get_session_info() -> Any:
     Edge cases: fails when the Remote Script is unavailable.
     """
     return _remote("get_session_info", models.GetSessionInfoRequest())
+
+
+@mcp.tool()
+def get_bridge_status() -> dict[str, Any]:
+    """Probe the Live bridge and explain environment-specific connection failures.
+
+    Side effects: opens a loopback connection and performs one read-only session query.
+    Example: ``get_bridge_status()`` distinguishes MCP discovery from Live availability.
+    Edge cases: WSL NAT failures include a Windows-Python launcher hint.
+    """
+    models.GetBridgeStatusRequest()
+    return bridge_status(get_client())
 
 
 @mcp.tool()
@@ -558,6 +555,7 @@ def create_clip(track_index: int, clip_index: int, length_beats: float) -> Any:
 
 PUBLIC_TOOL_FUNCTIONS = (
     get_session_info,
+    get_bridge_status,
     get_track_list,
     get_track_state,
     get_locators,
