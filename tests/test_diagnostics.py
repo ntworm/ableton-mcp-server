@@ -1,0 +1,128 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+from ableton_mcp_server.diagnostics import (
+    RuntimeInfo,
+    bridge_status,
+    bundled_remote_script_path,
+    find_ableton_log_path,
+    install_remote_script,
+    remote_script_status,
+)
+
+
+class HealthyClient:
+    host = "127.0.0.1"
+    port = 9888
+
+    def call(self, command: str, params: dict[str, Any], *, timeout: float) -> Any:
+        assert command == "get_session_info"
+        assert params == {}
+        assert timeout == 2.0
+        return {"tempo": 120.0, "is_playing": False}
+
+
+class BrokenClient(HealthyClient):
+    def call(self, command: str, params: dict[str, Any], *, timeout: float) -> Any:
+        raise ConnectionError("connection refused")
+
+
+def test_bridge_status_probes_live_instead_of_tool_discovery() -> None:
+    result = bridge_status(
+        HealthyClient(),
+        runtime=RuntimeInfo(platform="win32", is_wsl=False, python_executable="python.exe"),
+    )
+    assert result["status"] == "ok"
+    assert result["bridge_available"] is True
+    assert result["endpoint"] == {"host": "127.0.0.1", "port": 9888}
+    assert result["live"] == {"tempo": 120.0, "is_playing": False}
+    assert result["runtime"]["is_wsl"] is False
+
+
+def test_bridge_status_explains_wsl_nat_failure_without_relaxing_loopback() -> None:
+    result = bridge_status(
+        BrokenClient(),
+        runtime=RuntimeInfo(
+            platform="linux", is_wsl=True, python_executable="/usr/bin/python3"
+        ),
+    )
+    assert result["status"] == "error"
+    assert result["bridge_available"] is False
+    assert result["endpoint"] == {"host": "127.0.0.1", "port": 9888}
+    assert "Windows Python" in result["hint"]
+    assert "0.0.0.0" not in result["hint"]
+
+
+def test_log_discovery_prefers_explicit_override(tmp_path: Path) -> None:
+    explicit = tmp_path / "explicit" / "Log.txt"
+    explicit.parent.mkdir()
+    explicit.write_text("explicit", encoding="utf-8")
+    fallback = tmp_path / "fallback" / "Live 12" / "Preferences" / "Log.txt"
+    fallback.parent.mkdir(parents=True)
+    fallback.write_text("fallback", encoding="utf-8")
+
+    assert (
+        find_ableton_log_path(
+            env={"ABLETON_MCP_LOG_PATH": str(explicit)},
+            ableton_roots=[tmp_path / "fallback"],
+        )
+        == explicit
+    )
+
+
+def test_log_discovery_uses_newest_candidate_across_roots(tmp_path: Path) -> None:
+    older = tmp_path / "user-a" / "Live 12.1" / "Preferences" / "Log.txt"
+    newer = tmp_path / "user-b" / "Live 12.2" / "Preferences" / "Log.txt"
+    older.parent.mkdir(parents=True)
+    newer.parent.mkdir(parents=True)
+    older.write_text("old", encoding="utf-8")
+    newer.write_text("new", encoding="utf-8")
+    older.touch()
+    newer.touch()
+    older_mtime = older.stat().st_mtime
+    newer_mtime = max(older_mtime + 10, newer.stat().st_mtime + 10)
+    import os
+
+    os.utime(newer, (newer_mtime, newer_mtime))
+
+    assert (
+        find_ableton_log_path(
+            env={}, ableton_roots=[tmp_path / "user-a", tmp_path / "user-b"]
+        )
+        == newer
+    )
+
+
+def test_remote_script_install_and_status_are_hash_verified(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "__init__.py").write_text("VERSION = 1\n", encoding="utf-8")
+    (source / "_contracts.py").write_text("PORT = 9888\n", encoding="utf-8")
+    (source / "README.md").write_text("remote\n", encoding="utf-8")
+    destination_root = tmp_path / "Remote Scripts"
+
+    installed = install_remote_script(source, destination_root)
+    assert installed["status"] == "installed"
+    assert installed["target"] == str(destination_root / "AbletonMCPServer_RemoteScript")
+    assert remote_script_status(source, destination_root)["status"] == "current"
+
+    target_init = destination_root / "AbletonMCPServer_RemoteScript" / "__init__.py"
+    target_init.write_text("VERSION = 0\n", encoding="utf-8")
+    status = remote_script_status(source, destination_root)
+    assert status["status"] == "stale"
+    assert status["mismatched_files"] == ["__init__.py"]
+
+
+def test_bundled_remote_script_path_supports_checkout_and_wheel_layout(tmp_path: Path) -> None:
+    package = tmp_path / "ableton_mcp_server"
+    package.mkdir()
+    checkout_source = tmp_path / "AbletonMCPServer_RemoteScript"
+    checkout_source.mkdir()
+    assert bundled_remote_script_path(package) == checkout_source
+
+    checkout_source.rmdir()
+    wheel_source = package / "_remote_script"
+    wheel_source.mkdir()
+    assert bundled_remote_script_path(package) == wheel_source

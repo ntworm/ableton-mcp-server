@@ -19,6 +19,7 @@ from ableton_mcp_server.models import (
 def test_every_public_tool_has_an_explicit_request_model() -> None:
     reads = {
         "get_session_info",
+        "get_bridge_status",
         "get_track_list",
         "get_track_state",
         "get_locators",
@@ -58,8 +59,8 @@ def test_every_public_tool_has_an_explicit_request_model() -> None:
         "create_clip",
     }
     assert set(TOOL_REQUEST_MODELS) == reads | mutations
-    assert len(TOOL_REQUEST_MODELS) == 36
-    assert len(set(TOOL_REQUEST_MODELS.values())) == 36
+    assert len(TOOL_REQUEST_MODELS) == 37
+    assert len(set(TOOL_REQUEST_MODELS.values())) == 37
 
 
 @pytest.mark.parametrize("tempo", [19.99, 999.01, math.nan, math.inf])
