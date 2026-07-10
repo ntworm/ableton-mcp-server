@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
 from AbletonMCPServer_RemoteScript import (
     RemoteError,
+    _dbg,
     _safe,
-    _set_transport_value,
     execute_command,
 )
 from tests.remote_fakes import FakeApplication, FakeClip, FakeClipSlot, FakeSong
@@ -21,6 +22,15 @@ def test_remote_error_envelope_includes_optional_hint() -> None:
         "message": "message",
         "hint": "recover",
     }
+
+
+def test_verbose_logging_uses_stable_mcp_server_prefix() -> None:
+    with (
+        patch("AbletonMCPServer_RemoteScript._VERBOSE", True),
+        patch("AbletonMCPServer_RemoteScript.logger.info") as info,
+    ):
+        _dbg("startup endpoint=127.0.0.1:9888")
+    info.assert_called_once_with("[MCP-Server] %s", "startup endpoint=127.0.0.1:9888")
     assert RemoteError("CODE", "message").to_envelope() == {
         "status": "error",
         "code": "CODE",
@@ -110,7 +120,7 @@ def test_audio_clip_note_read_and_write_are_wrong_type() -> None:
         )
 
 
-def test_cue_delete_miss_bulk_bad_item_and_invalid_retry_count() -> None:
+def test_cue_delete_miss_and_bulk_bad_item() -> None:
     song = FakeSong()
     app = FakeApplication()
     assert execute_command(song, app, "delete_cue_point", {"time": 8}) == {
@@ -119,8 +129,6 @@ def test_cue_delete_miss_bulk_bad_item_and_invalid_retry_count() -> None:
     }
     bulk = execute_command(song, app, "bulk_create_cue_points", {"items": ["bad"]})
     assert bulk["results"][0]["code"] == "INVALID_PARAMS"
-    with pytest.raises(ValueError, match="at least 1"):
-        _set_transport_value(song, "current_song_time", 2.0, retries=0)
 
 
 def test_batch_rejects_nested_and_non_object_subcommands() -> None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -52,7 +53,7 @@ class FakeClip:
         self.is_midi_clip = midi
         self.is_playing = False
         self.notes = [FakeNote(60, 0.0, 1.0, 100)] if midi else []
-        self.add_payloads: list[dict[str, Any]] = []
+        self.add_payloads: list[tuple[Any, ...]] = []
         self.fire_count = 0
 
     def get_notes_extended(
@@ -60,17 +61,18 @@ class FakeClip:
     ) -> list[FakeNote]:
         return list(self.notes)
 
-    def add_new_notes(self, payload: dict[str, Any]) -> list[int]:
-        self.add_payloads.append(payload)
+    def add_new_notes(self, payload: Iterable[Any]) -> list[int]:
+        specifications = tuple(payload)
+        self.add_payloads.append(specifications)
         ids = []
-        for index, note in enumerate(payload["notes"], start=len(self.notes) + 1):
+        for index, note in enumerate(specifications, start=len(self.notes) + 1):
             self.notes.append(
                 FakeNote(
-                    int(note["pitch"]),
-                    float(note["start_time"]),
-                    float(note["duration"]),
-                    int(note.get("velocity", 100)),
-                    bool(note.get("mute", False)),
+                    int(note.pitch),
+                    float(note.start_time),
+                    float(note.duration),
+                    int(note.velocity),
+                    bool(note.mute),
                 )
             )
             ids.append(index)
@@ -167,17 +169,26 @@ class FakeSongView:
 
 
 class FakeSong:
-    def __init__(self, *, stuck_writes: int = 0) -> None:
-        self.tempo = 120.0
+    def __init__(self, *, stuck_writes: int = 0, deferred_writes: bool = False) -> None:
+        self._tempo = 120.0
+        self._pending_tempo: float | None = None
         self.signature_numerator = 4
         self.signature_denominator = 4
-        self.is_playing = False
+        self.deferred_writes = deferred_writes
+        self._is_playing = False
+        self._pending_is_playing: bool | None = None
         self._current_song_time = 0.0
+        self._pending_song_time: float | None = None
         self.stuck_writes = stuck_writes
         self.transport_write_attempts = 0
-        self.loop = False
-        self.loop_start = 0.0
-        self.loop_length = 4.0
+        self._loop = False
+        self._pending_loop: bool | None = None
+        self._loop_start = 0.0
+        self._pending_loop_start: float | None = None
+        self._loop_length = 4.0
+        self._pending_loop_length: float | None = None
+        self._start_time = 0.0
+        self._pending_start_time: float | None = None
         self.start_marker = 0.0
         self.end_marker = 64.0
         self.song_length = 64.25
@@ -201,7 +212,92 @@ class FakeSong:
     def current_song_time(self, value: float) -> None:
         self.transport_write_attempts += 1
         if self.transport_write_attempts > self.stuck_writes:
-            self._current_song_time = float(value)
+            if self.deferred_writes:
+                self._pending_song_time = float(value)
+            else:
+                self._current_song_time = float(value)
+
+    @property
+    def is_playing(self) -> bool:
+        return self._is_playing
+
+    @property
+    def tempo(self) -> float:
+        return self._tempo
+
+    @tempo.setter
+    def tempo(self, value: float) -> None:
+        if self.deferred_writes:
+            self._pending_tempo = float(value)
+        else:
+            self._tempo = float(value)
+
+    @property
+    def loop(self) -> bool:
+        return self._loop
+
+    @loop.setter
+    def loop(self, value: bool) -> None:
+        if self.deferred_writes:
+            self._pending_loop = value
+        else:
+            self._loop = value
+
+    @property
+    def loop_start(self) -> float:
+        return self._loop_start
+
+    @loop_start.setter
+    def loop_start(self, value: float) -> None:
+        if self.deferred_writes:
+            self._pending_loop_start = float(value)
+        else:
+            self._loop_start = float(value)
+
+    @property
+    def loop_length(self) -> float:
+        return self._loop_length
+
+    @loop_length.setter
+    def loop_length(self, value: float) -> None:
+        if self.deferred_writes:
+            self._pending_loop_length = float(value)
+        else:
+            self._loop_length = float(value)
+
+    @property
+    def start_time(self) -> float:
+        return self._start_time
+
+    @start_time.setter
+    def start_time(self, value: float) -> None:
+        if self.deferred_writes:
+            self._pending_start_time = float(value)
+        else:
+            self._start_time = float(value)
+
+    def tick(self) -> None:
+        if self._pending_song_time is not None:
+            self._current_song_time = self._pending_song_time
+            self._pending_song_time = None
+        if self._pending_is_playing is not None:
+            self._is_playing = self._pending_is_playing
+            self._pending_is_playing = None
+        if self._pending_loop is not None:
+            self._loop = self._pending_loop
+            self._pending_loop = None
+        if self._pending_tempo is not None:
+            self._tempo = self._pending_tempo
+            self._pending_tempo = None
+        if self._pending_loop_start is not None:
+            self._loop_start = self._pending_loop_start
+            self._pending_loop_start = None
+        if self._pending_loop_length is not None:
+            self._loop_length = self._pending_loop_length
+            self._pending_loop_length = None
+        if self._pending_start_time is not None:
+            self._start_time = self._pending_start_time
+            self._pending_start_time = None
 
     def set_or_delete_cue(self) -> None:
         self.toggle_count += 1
@@ -209,20 +305,26 @@ class FakeSong:
             (
                 cue
                 for cue in self.cue_points
-                if abs(float(cue.time) - self.current_song_time) < 0.01
+                if abs(float(cue.time) - self.start_time) < 0.01
             ),
             None,
         )
         if existing is None:
-            self.cue_points.append(FakeCuePoint("", BeatTime(self.current_song_time)))
+            self.cue_points.append(FakeCuePoint("", BeatTime(self.start_time)))
         else:
             self.cue_points.remove(existing)
 
     def start_playing(self) -> None:
-        self.is_playing = True
+        if self.deferred_writes:
+            self._pending_is_playing = True
+        else:
+            self._is_playing = True
 
     def stop_playing(self) -> None:
-        self.is_playing = False
+        if self.deferred_writes:
+            self._pending_is_playing = False
+        else:
+            self._is_playing = False
 
 
 class FakeBrowser:

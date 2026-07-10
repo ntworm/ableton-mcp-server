@@ -17,4 +17,4 @@ async def test_real_fastmcp_listing_matches_models_and_count_proxy() -> None:
     names = {tool.name for tool in tools}
     assert names == set(PUBLIC_TOOL_NAMES)
     assert names == set(TOOL_REQUEST_MODELS)
-    assert len(tools) == len(mcp.list_tools()) == 36
+    assert len(tools) == len(mcp.list_tools()) == 37

@@ -98,6 +98,7 @@ def test_fallback_control_surface_lifecycle_delegates_to_socket_server() -> None
     with (
         patch.object(JsonlSocketServer, "start") as start,
         patch.object(JsonlSocketServer, "stop") as stop,
+        patch("AbletonMCPServer_RemoteScript._dbg") as debug,
     ):
         surface = create_instance(CInstance())
         assert isinstance(surface, AbletonMCPServer)
@@ -105,3 +106,4 @@ def test_fallback_control_surface_lifecycle_delegates_to_socket_server() -> None
         surface.update_display()
         surface.disconnect()
         stop.assert_called_once_with()
+        debug.assert_any_call("startup endpoint=127.0.0.1:9888")

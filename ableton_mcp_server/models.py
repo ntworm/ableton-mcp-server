@@ -24,6 +24,10 @@ class GetSessionInfoRequest(EmptyRequest):
     pass
 
 
+class GetBridgeStatusRequest(EmptyRequest):
+    pass
+
+
 class GetTrackListRequest(EmptyRequest):
     pass
 
@@ -240,6 +244,7 @@ class CreateClipRequest(RequestModel):
 
 TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "get_session_info": GetSessionInfoRequest,
+    "get_bridge_status": GetBridgeStatusRequest,
     "get_track_list": GetTrackListRequest,
     "get_track_state": GetTrackStateRequest,
     "get_locators": GetLocatorsRequest,
