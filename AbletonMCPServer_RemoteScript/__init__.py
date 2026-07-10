@@ -15,7 +15,7 @@ import re
 import socket
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Generator
 from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any
@@ -36,7 +36,6 @@ from ._contracts import (
     ERROR_UNKNOWN_COMMAND,
     ERROR_WRONG_TYPE,
     PLAYHEAD_MOVE_RETRIES,
-    PLAYHEAD_MOVE_SLEEP,
     READ_ONLY_COMMANDS,
     REQUEST_TIMEOUT_SECONDS,
 )
@@ -611,40 +610,88 @@ def _no_quantization_value() -> Any:
     return Live.Song.Quantization.q_no_q
 
 
-def _set_transport_value(
+def _verified_playhead_steps(
     song: Any,
-    attribute: str,
-    value: float,
+    target: float,
     *,
     retries: int = PLAYHEAD_MOVE_RETRIES,
-    sleep_fn: Callable[[float], None] = time.sleep,
-) -> float:
-    """Set, read, compare, and retry a transport property by explicit attribute name."""
+) -> Generator[None, None, dict[str, float]]:
+    """Advance a verified playhead write across Live UI ticks."""
 
-    if retries < 1:
-        raise ValueError("retries must be at least 1")
     previous_quantization = song.clip_trigger_quantization
-    actual = float(_safe(lambda: getattr(song, attribute), -1.0))
+    actual = float(_safe(lambda: song.current_song_time, -1.0))
     try:
         song.clip_trigger_quantization = _no_quantization_value()
         for attempt in range(retries):
-            setattr(song, attribute, value)
-            actual = float(getattr(song, attribute))
+            song.current_song_time = target
+            yield
+            actual = float(song.current_song_time)
             _dbg(
-                "transport attribute=%s asked=%s got=%s attempt=%s"
-                % (attribute, value, actual, attempt + 1)
+                "transport attribute=current_song_time asked=%s got=%s tick_attempt=%s"
+                % (target, actual, attempt + 1)
             )
-            if abs(actual - value) < CUE_TIME_TOLERANCE:
-                return actual
-            if attempt + 1 < retries:
-                sleep_fn(PLAYHEAD_MOVE_SLEEP)
-        raise PlayheadNotMovedError(value, actual, retries)
+            if abs(actual - target) < CUE_TIME_TOLERANCE:
+                return {"current_song_time": actual}
+        raise PlayheadNotMovedError(target, actual, retries)
     finally:
         song.clip_trigger_quantization = previous_quantization
 
 
-def _restore_transport(song: Any, attribute: str, value: float) -> None:
-    _set_transport_value(song, attribute, float(value))
+def _verified_boolean_steps(
+    song: Any,
+    *,
+    attribute: str,
+    expected: bool,
+    setter: Callable[[], None],
+    result_key: str,
+    retries: int = PLAYHEAD_MOVE_RETRIES,
+) -> Generator[None, None, dict[str, bool]]:
+    """Apply and confirm a deferred boolean state change on later UI ticks."""
+
+    actual = bool(_safe(lambda: getattr(song, attribute), not expected))
+    for attempt in range(retries):
+        setter()
+        yield
+        actual = bool(getattr(song, attribute))
+        _dbg(
+            "state attribute=%s asked=%s got=%s tick_attempt=%s"
+            % (attribute, expected, actual, attempt + 1)
+        )
+        if actual is expected:
+            return {result_key: actual}
+    raise RemoteError(
+        ERROR_LIVE_UNAVAILABLE,
+        "State setter for %s did not reach %s after %s UI ticks."
+        % (attribute, expected, retries),
+    )
+
+
+def _verified_numeric_steps(
+    song: Any,
+    *,
+    attribute: str,
+    expected: float,
+    result_key: str,
+    retries: int = PLAYHEAD_MOVE_RETRIES,
+) -> Generator[None, None, dict[str, float]]:
+    """Apply and confirm a numeric state change on later UI ticks."""
+
+    actual = float(_safe(lambda: getattr(song, attribute), -1.0))
+    for attempt in range(retries):
+        setattr(song, attribute, expected)
+        yield
+        actual = float(getattr(song, attribute))
+        _dbg(
+            "state attribute=%s asked=%s got=%s tick_attempt=%s"
+            % (attribute, expected, actual, attempt + 1)
+        )
+        if abs(actual - expected) < CUE_TIME_TOLERANCE:
+            return {result_key: actual}
+    raise RemoteError(
+        ERROR_LIVE_UNAVAILABLE,
+        "State setter for %s did not reach %s after %s UI ticks."
+        % (attribute, expected, retries),
+    )
 
 
 def _find_cue(song: Any, target_time: float) -> Any:
@@ -654,7 +701,50 @@ def _find_cue(song: Any, target_time: float) -> Any:
     return None
 
 
-def cmd_create_cue_point(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, Any]:
+def _verified_cue_cursor_steps(
+    song: Any,
+    *,
+    current_target: float,
+    start_target: float,
+    retries: int = PLAYHEAD_MOVE_RETRIES,
+) -> Generator[None, None, None]:
+    """Move both Live cursors used by cue toggling, yielding between attempts."""
+
+    actual_current = float(song.current_song_time)
+    actual_start = float(song.start_time)
+    if (
+        abs(actual_current - current_target) < CUE_TIME_TOLERANCE
+        and abs(actual_start - start_target) < CUE_TIME_TOLERANCE
+    ):
+        return
+    for attempt in range(retries):
+        song.current_song_time = current_target
+        song.start_time = start_target
+        yield
+        actual_current = float(song.current_song_time)
+        actual_start = float(song.start_time)
+        _dbg(
+            "cue_cursor current=%s/%s start=%s/%s tick_attempt=%s"
+            % (current_target, actual_current, start_target, actual_start, attempt + 1)
+        )
+        if (
+            abs(actual_current - current_target) < CUE_TIME_TOLERANCE
+            and abs(actual_start - start_target) < CUE_TIME_TOLERANCE
+        ):
+            return
+    if abs(actual_current - current_target) >= CUE_TIME_TOLERANCE:
+        raise PlayheadNotMovedError(current_target, actual_current, retries)
+    raise RemoteError(
+        ERROR_PLAYHEAD_NOT_MOVED,
+        "Cue insert marker did not reach the requested value "
+        "(asked=%s, got=%s after %s UI ticks)." % (start_target, actual_start, retries),
+        "Live may be in a transitional state; retry after it settles.",
+    )
+
+
+def _create_cue_point_steps(
+    song: Any, params: dict[str, Any]
+) -> Generator[None, None, dict[str, Any]]:
     name = _string_param(params, "name")
     target_time = _float_param(params, "time", 0.0, 100000.0)
     existing = _find_cue(song, target_time)
@@ -663,10 +753,17 @@ def cmd_create_cue_point(song: Any, _application: Any, params: dict[str, Any]) -
         return {"name": name, "time": float(existing.time), "action": "renamed"}
 
     previous_time = float(song.current_song_time)
-    _dbg("create_cue_point name=%r time=%s prev=%s" % (name, target_time, previous_time))
+    previous_start = float(song.start_time)
+    previous_quantization = song.clip_trigger_quantization
     try:
-        _set_transport_value(song, "current_song_time", target_time)
+        song.clip_trigger_quantization = _no_quantization_value()
+        yield from _verified_cue_cursor_steps(
+            song,
+            current_target=target_time,
+            start_target=target_time,
+        )
         song.set_or_delete_cue()
+        yield
         created = _find_cue(song, target_time)
         if created is None:
             raise RemoteError(
@@ -676,12 +773,52 @@ def cmd_create_cue_point(song: Any, _application: Any, params: dict[str, Any]) -
         created.name = name
         return {"name": name, "time": float(created.time), "action": "created"}
     finally:
-        _restore_transport(song, "current_song_time", previous_time)
+        yield from _verified_cue_cursor_steps(
+            song,
+            current_target=previous_time,
+            start_target=previous_start,
+        )
+        song.clip_trigger_quantization = previous_quantization
 
 
-def cmd_bulk_create_cue_points(
-    song: Any, application: Any, params: dict[str, Any]
-) -> dict[str, Any]:
+def _delete_cue_point_steps(
+    song: Any, params: dict[str, Any]
+) -> Generator[None, None, dict[str, Any]]:
+    target_time = _float_param(params, "time", 0.0, 100000.0)
+    cue = _find_cue(song, target_time)
+    if cue is None:
+        return {"deleted": False, "reason": "no cue at time"}
+    cue_time = float(cue.time)
+    previous_time = float(song.current_song_time)
+    previous_start = float(song.start_time)
+    previous_quantization = song.clip_trigger_quantization
+    try:
+        song.clip_trigger_quantization = _no_quantization_value()
+        yield from _verified_cue_cursor_steps(
+            song,
+            current_target=cue_time,
+            start_target=cue_time,
+        )
+        song.set_or_delete_cue()
+        yield
+        if _find_cue(song, cue_time) is not None:
+            raise RemoteError(
+                ERROR_LIVE_UNAVAILABLE,
+                "set_or_delete_cue() did not delete the cue near %s." % cue_time,
+            )
+        return {"deleted": True, "time": cue_time}
+    finally:
+        yield from _verified_cue_cursor_steps(
+            song,
+            current_target=previous_time,
+            start_target=previous_start,
+        )
+        song.clip_trigger_quantization = previous_quantization
+
+
+def _bulk_create_cue_points_steps(
+    song: Any, params: dict[str, Any]
+) -> Generator[None, None, dict[str, Any]]:
     items = _required(params, "items")
     if not isinstance(items, list) or not items:
         raise RemoteError(ERROR_INVALID_PARAMS, "Parameter 'items' must be a non-empty list.")
@@ -692,67 +829,11 @@ def cmd_bulk_create_cue_points(
             results.append({"index": index, **error.to_envelope()})
             continue
         try:
-            result = cmd_create_cue_point(song, application, item)
+            result = yield from _create_cue_point_steps(song, item)
             results.append({"index": index, "status": "ok", "result": result})
         except RemoteError as error:
             results.append({"index": index, **error.to_envelope()})
     return {"results": results}
-
-
-def cmd_delete_cue_point(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, Any]:
-    target_time = _float_param(params, "time", 0.0, 100000.0)
-    cue = _find_cue(song, target_time)
-    if cue is None:
-        return {"deleted": False, "reason": "no cue at time"}
-    cue_time = float(cue.time)
-    previous_time = float(song.current_song_time)
-    try:
-        _set_transport_value(song, "current_song_time", cue_time)
-        song.set_or_delete_cue()
-    finally:
-        _restore_transport(song, "current_song_time", previous_time)
-    return {"deleted": True, "time": cue_time}
-
-
-def cmd_set_current_song_time(
-    song: Any, _application: Any, params: dict[str, Any]
-) -> dict[str, float]:
-    target = _float_param(params, "time", 0.0, 100000.0)
-    return {"current_song_time": _set_transport_value(song, "current_song_time", target)}
-
-
-def cmd_set_tempo(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, float]:
-    tempo = _float_param(params, "tempo", 20.0, 999.0)
-    song.tempo = tempo
-    return {"tempo": float(song.tempo)}
-
-
-def cmd_start_playback(song: Any, _application: Any, _params: dict[str, Any]) -> dict[str, bool]:
-    song.start_playing()
-    return {"is_playing": bool(song.is_playing)}
-
-
-def cmd_stop_playback(song: Any, _application: Any, _params: dict[str, Any]) -> dict[str, bool]:
-    song.stop_playing()
-    return {"is_playing": bool(song.is_playing)}
-
-
-def cmd_set_loop(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, bool]:
-    enabled = _required(params, "enabled")
-    if not isinstance(enabled, bool):
-        raise RemoteError(ERROR_INVALID_PARAMS, "Parameter 'enabled' must be boolean.")
-    song.loop = enabled
-    return {"loop": bool(song.loop)}
-
-
-def cmd_set_loop_start(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, float]:
-    start = _float_param(params, "start_beat", 0.0, 100000.0)
-    return {"loop_start": _set_transport_value(song, "loop_start", start)}
-
-
-def cmd_set_loop_length(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, float]:
-    length = _float_param(params, "length_beats", 0.0, 100000.0, strictly_positive=True)
-    return {"loop_length": _set_transport_value(song, "loop_length", length)}
 
 
 def cmd_create_clip(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, Any]:
@@ -841,16 +922,6 @@ COMMAND_HANDLERS: dict[str, CommandHandler] = {
     "get_song_length": cmd_get_song_length,
     "live_find_track": cmd_live_find_track,
     "list_device_params": cmd_list_device_params,
-    "create_cue_point": cmd_create_cue_point,
-    "bulk_create_cue_points": cmd_bulk_create_cue_points,
-    "delete_cue_point": cmd_delete_cue_point,
-    "set_current_song_time": cmd_set_current_song_time,
-    "set_tempo": cmd_set_tempo,
-    "start_playback": cmd_start_playback,
-    "stop_playback": cmd_stop_playback,
-    "set_loop": cmd_set_loop,
-    "set_loop_start": cmd_set_loop_start,
-    "set_loop_length": cmd_set_loop_length,
     "create_clip": cmd_create_clip,
     "fire_clip": cmd_fire_clip,
     "add_notes_to_clip": cmd_add_notes_to_clip,
@@ -877,64 +948,180 @@ def _end_undo(target: Any) -> None:
     method()
 
 
-def cmd_run_batch(
+def _run_batch_steps(
     song: Any,
     application: Any,
     params: dict[str, Any],
     undo_target: Any,
-) -> dict[str, Any]:
+) -> Generator[None, None, dict[str, Any]]:
     commands = _required(params, "commands")
     if not isinstance(commands, list) or not commands:
         raise RemoteError(ERROR_INVALID_PARAMS, "Parameter 'commands' must be a non-empty list.")
     results = []
     completed = 0
     aborted_at = None
-    _begin_undo(undo_target)
-    try:
-        for index, command in enumerate(commands):
-            try:
-                if not isinstance(command, dict):
-                    raise RemoteError(ERROR_INVALID_PARAMS, "Batch command must be an object.")
-                command_type = command.get("type")
-                command_params = command.get("params", {})
-                if command_type == "run_batch":
-                    raise RemoteError(ERROR_BAD_INPUT, "run_batch cannot contain run_batch.")
-                if command_type not in ALLOWED_MUTATIONS:
-                    raise RemoteError(
-                        ERROR_READ_ONLY_VIOLATION,
-                        "Batch command %r is not an allowed mutation." % command_type,
-                    )
-                if not isinstance(command_params, dict):
-                    raise RemoteError(
-                        ERROR_INVALID_PARAMS, "Batch command params must be an object."
-                    )
-                result = execute_command(
-                    song,
-                    application,
-                    str(command_type),
-                    command_params,
-                    manage_undo=False,
-                    undo_target=undo_target,
+    for index, command in enumerate(commands):
+        try:
+            if not isinstance(command, dict):
+                raise RemoteError(ERROR_INVALID_PARAMS, "Batch command must be an object.")
+            command_type = command.get("type")
+            command_params = command.get("params", {})
+            if command_type == "run_batch":
+                raise RemoteError(ERROR_BAD_INPUT, "run_batch cannot contain run_batch.")
+            if command_type not in ALLOWED_MUTATIONS:
+                raise RemoteError(
+                    ERROR_READ_ONLY_VIOLATION,
+                    "Batch command %r is not an allowed mutation." % command_type,
                 )
-                results.append({"index": index, "status": "ok", "result": result})
-                completed += 1
-            except RemoteError as error:
-                results.append({"index": index, **error.to_envelope()})
-                aborted_at = index
-                break
-            except Exception as error:
-                wrapped = RemoteError(ERROR_INTERNAL_ERROR, str(error))
-                results.append({"index": index, **wrapped.to_envelope()})
-                aborted_at = index
-                break
-    finally:
-        _end_undo(undo_target)
+            if not isinstance(command_params, dict):
+                raise RemoteError(ERROR_INVALID_PARAMS, "Batch command params must be an object.")
+            result = yield from _command_steps(
+                song,
+                application,
+                str(command_type),
+                command_params,
+                manage_undo=False,
+                undo_target=undo_target,
+            )
+            results.append({"index": index, "status": "ok", "result": result})
+            completed += 1
+        except RemoteError as error:
+            results.append({"index": index, **error.to_envelope()})
+            aborted_at = index
+            break
+        except Exception as error:
+            wrapped = RemoteError(ERROR_INTERNAL_ERROR, str(error))
+            results.append({"index": index, **wrapped.to_envelope()})
+            aborted_at = index
+            break
     return {
         "results": results,
         "completed": completed,
         "aborted_at": aborted_at,
         "rolled_back": False,
     }
+
+
+def _dispatch_command_steps(
+    song: Any,
+    application: Any,
+    normalized: str,
+    params: dict[str, Any],
+    undo_target: Any,
+) -> Generator[None, None, Any]:
+    if normalized == "run_batch":
+        return (yield from _run_batch_steps(song, application, params, undo_target))
+    if normalized == "create_cue_point":
+        return (yield from _create_cue_point_steps(song, params))
+    if normalized == "bulk_create_cue_points":
+        return (yield from _bulk_create_cue_points_steps(song, params))
+    if normalized == "delete_cue_point":
+        return (yield from _delete_cue_point_steps(song, params))
+    if normalized == "set_current_song_time":
+        target = _float_param(params, "time", 0.0, 100000.0)
+        return (yield from _verified_playhead_steps(song, target))
+    if normalized == "set_tempo":
+        tempo = _float_param(params, "tempo", 20.0, 999.0)
+        return (
+            yield from _verified_numeric_steps(
+                song,
+                attribute="tempo",
+                expected=tempo,
+                result_key="tempo",
+            )
+        )
+    if normalized == "start_playback":
+        return (
+            yield from _verified_boolean_steps(
+                song,
+                attribute="is_playing",
+                expected=True,
+                setter=song.start_playing,
+                result_key="is_playing",
+            )
+        )
+    if normalized == "stop_playback":
+        return (
+            yield from _verified_boolean_steps(
+                song,
+                attribute="is_playing",
+                expected=False,
+                setter=song.stop_playing,
+                result_key="is_playing",
+            )
+        )
+    if normalized == "set_loop_start":
+        start = _float_param(params, "start_beat", 0.0, 100000.0)
+        return (
+            yield from _verified_numeric_steps(
+                song,
+                attribute="loop_start",
+                expected=start,
+                result_key="loop_start",
+            )
+        )
+    if normalized == "set_loop_length":
+        length = _float_param(params, "length_beats", 0.0, 100000.0, strictly_positive=True)
+        return (
+            yield from _verified_numeric_steps(
+                song,
+                attribute="loop_length",
+                expected=length,
+                result_key="loop_length",
+            )
+        )
+    if normalized == "set_loop":
+        enabled = _required(params, "enabled")
+        if not isinstance(enabled, bool):
+            raise RemoteError(ERROR_INVALID_PARAMS, "Parameter 'enabled' must be boolean.")
+        return (
+            yield from _verified_boolean_steps(
+                song,
+                attribute="loop",
+                expected=enabled,
+                setter=lambda: setattr(song, "loop", enabled),
+                result_key="loop",
+            )
+        )
+    handler = COMMAND_HANDLERS.get(normalized)
+    if handler is None:
+        raise RemoteError(ERROR_UNKNOWN_COMMAND, "Unknown command %r." % normalized)
+    return handler(song, application, params)
+
+
+def _command_steps(
+    song: Any,
+    application: Any,
+    command: str,
+    params: dict[str, Any],
+    *,
+    manage_undo: bool,
+    undo_target: Any,
+) -> Generator[None, None, Any]:
+    normalized = command.strip().lower()
+    if normalized in READ_ONLY_COMMANDS:
+        raise RemoteError(
+            ERROR_READ_ONLY_VIOLATION,
+            "Command %r is blocked: creative mutation is not available." % command,
+        )
+    if not isinstance(params, dict):
+        raise RemoteError(ERROR_INVALID_PARAMS, "Request params must be an object.")
+    owns_undo = normalized in ALLOWED_MUTATIONS and manage_undo
+    if owns_undo:
+        _begin_undo(undo_target)
+    try:
+        return (
+            yield from _dispatch_command_steps(
+                song,
+                application,
+                normalized,
+                params,
+                undo_target,
+            )
+        )
+    finally:
+        if owns_undo:
+            _end_undo(undo_target)
 
 
 def execute_command(
@@ -946,27 +1133,43 @@ def execute_command(
     manage_undo: bool = True,
     undo_target: Any = None,
 ) -> Any:
-    normalized = command.strip().lower()
-    if normalized in READ_ONLY_COMMANDS:
-        raise RemoteError(
-            ERROR_READ_ONLY_VIOLATION,
-            "Command %r is blocked: creative mutation is not available." % command,
-        )
-    if not isinstance(params, dict):
-        raise RemoteError(ERROR_INVALID_PARAMS, "Request params must be an object.")
+    """Synchronously drive a command for unit tests and immediate host callers."""
+
     target = undo_target if undo_target is not None else application
-    if normalized == "run_batch":
-        return cmd_run_batch(song, application, params, target)
-    handler = COMMAND_HANDLERS.get(normalized)
-    if handler is None:
-        raise RemoteError(ERROR_UNKNOWN_COMMAND, "Unknown command %r." % command)
-    if normalized in ALLOWED_MUTATIONS and manage_undo:
-        _begin_undo(target)
+    steps = _command_steps(
+        song,
+        application,
+        command,
+        params,
+        manage_undo=manage_undo,
+        undo_target=target,
+    )
+    while True:
         try:
-            return handler(song, application, params)
-        finally:
-            _end_undo(target)
-    return handler(song, application, params)
+            next(steps)
+        except StopIteration as completed:
+            return completed.value
+
+
+def _request_steps(
+    song: Any,
+    application: Any,
+    command: str,
+    params: dict[str, Any],
+    undo_target: Any,
+) -> Generator[None, None, Any]:
+    """Build one request execution that may span multiple Live UI ticks."""
+
+    return (
+        yield from _command_steps(
+            song,
+            application,
+            command,
+            params,
+            manage_undo=True,
+            undo_target=undo_target,
+        )
+    )
 
 
 @dataclass
@@ -974,6 +1177,12 @@ class QueuedRequest:
     command: str
     params: dict[str, Any]
     response_queue: queue.Queue[dict[str, Any]]
+
+
+@dataclass
+class ActiveRequest:
+    request: QueuedRequest
+    steps: Generator[None, None, Any]
 
 
 class RequestProcessor:
@@ -984,6 +1193,7 @@ class RequestProcessor:
         self.application = application
         self.undo_target = undo_target if undo_target is not None else application
         self.request_queue: queue.Queue[QueuedRequest] = queue.Queue()
+        self.active_request: ActiveRequest | None = None
 
     def enqueue(self, request: QueuedRequest) -> None:
         self.request_queue.put(request)
@@ -991,25 +1201,34 @@ class RequestProcessor:
     def process_pending(self, max_requests: int = 16) -> int:
         processed = 0
         while processed < max_requests:
-            try:
-                request = self.request_queue.get_nowait()
-            except queue.Empty:
-                break
-            try:
-                result = execute_command(
-                    self.song,
-                    self.application,
-                    request.command,
-                    request.params,
-                    undo_target=self.undo_target,
+            if self.active_request is None:
+                try:
+                    request = self.request_queue.get_nowait()
+                except queue.Empty:
+                    break
+                self.active_request = ActiveRequest(
+                    request,
+                    _request_steps(
+                        self.song,
+                        self.application,
+                        request.command,
+                        request.params,
+                        self.undo_target,
+                    ),
                 )
-                response = {"status": "ok", "result": result}
+            active = self.active_request
+            try:
+                next(active.steps)
+                break
+            except StopIteration as completed:
+                response = {"status": "ok", "result": completed.value}
             except RemoteError as error:
                 response = error.to_envelope()
             except Exception as error:
-                logger.exception("Unhandled Remote Script error for %s", request.command)
+                logger.exception("Unhandled Remote Script error for %s", active.request.command)
                 response = RemoteError(ERROR_LIVE_UNAVAILABLE, str(error)).to_envelope()
-            request.response_queue.put(response)
+            active.request.response_queue.put(response)
+            self.active_request = None
             processed += 1
         return processed
 

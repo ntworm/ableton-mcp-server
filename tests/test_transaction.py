@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from AbletonMCPServer_RemoteScript import execute_command
-from tests.remote_fakes import FakeApplication, FakeSong
+import queue
+
+from AbletonMCPServer_RemoteScript import QueuedRequest, RequestProcessor, execute_command
+from tests.remote_fakes import FakeApplication, FakeClipSlot, FakeSong
 
 
 def test_standalone_mutation_is_one_undo_step() -> None:
@@ -48,4 +50,53 @@ def test_batch_closes_undo_step_when_unexpected_handler_error_occurs() -> None:
     )
     assert result["aborted_at"] == 0
     assert result["results"][0]["code"] == "INVALID_PARAMS"
+    assert (app.begin_count, app.end_count) == (1, 1)
+
+
+def test_batch_advances_deferred_children_with_one_outer_undo() -> None:
+    song = FakeSong(deferred_writes=True)
+    song.tracks[0].clip_slots = [FakeClipSlot()]
+    app = FakeApplication()
+    processor = RequestProcessor(song, app)
+    response_queue: queue.Queue[dict[str, object]] = queue.Queue(maxsize=1)
+    processor.enqueue(
+        QueuedRequest(
+            "run_batch",
+            {
+                "commands": [
+                    {"type": "set_tempo", "params": {"tempo": 128.0}},
+                    {"type": "set_loop", "params": {"enabled": True}},
+                    {
+                        "type": "create_clip",
+                        "params": {"track_index": 0, "clip_index": 0, "length_beats": 4.0},
+                    },
+                    {
+                        "type": "create_clip",
+                        "params": {"track_index": 0, "clip_index": 0, "length_beats": 4.0},
+                    },
+                    {"type": "set_tempo", "params": {"tempo": 130.0}},
+                ]
+            },
+            response_queue,
+        )
+    )
+
+    for _tick in range(12):
+        processor.process_pending(max_requests=1)
+        if not response_queue.empty():
+            break
+        assert (app.begin_count, app.end_count) == (1, 0)
+        song.tick()
+
+    response = response_queue.get_nowait()
+    assert response["status"] == "ok"
+    result = response["result"]
+    assert result["completed"] == 3  # type: ignore[index]
+    assert result["aborted_at"] == 3  # type: ignore[index]
+    assert result["rolled_back"] is False  # type: ignore[index]
+    assert result["results"][0]["result"] == {"tempo": 128.0}  # type: ignore[index]
+    assert result["results"][1]["result"] == {"loop": True}  # type: ignore[index]
+    assert song.tempo == 128.0
+    assert song.loop is True
+    assert song.tracks[0].clip_slots[0].has_clip is True
     assert (app.begin_count, app.end_count) == (1, 1)

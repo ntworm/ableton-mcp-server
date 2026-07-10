@@ -1,38 +1,25 @@
 from __future__ import annotations
 
-import pytest
+import ast
+from pathlib import Path
 
-from AbletonMCPServer_RemoteScript import (
-    PlayheadNotMovedError,
-    _set_transport_value,
-    execute_command,
-)
+from AbletonMCPServer_RemoteScript import execute_command
 from tests.remote_fakes import FakeApplication, FakeSong
 
 
-def test_transport_helper_reads_the_real_attribute_and_retries() -> None:
-    song = FakeSong(stuck_writes=2)
-    sleeps: list[float] = []
-    actual = _set_transport_value(
-        song,
-        "current_song_time",
-        8.0,
-        retries=3,
-        sleep_fn=sleeps.append,
-    )
-    assert actual == 8.0
-    assert song.transport_write_attempts == 3
-    assert sleeps == [0.01, 0.01]
-    assert song.clip_trigger_quantization == "quarter"
-
-
-def test_transport_helper_raises_after_verified_failure_and_restores_quantization() -> None:
-    song = FakeSong(stuck_writes=99)
-    with pytest.raises(PlayheadNotMovedError) as exc_info:
-        _set_transport_value(song, "current_song_time", 8.0, sleep_fn=lambda _: None)
-    assert exc_info.value.code == "PLAYHEAD_NOT_MOVED"
-    assert song.transport_write_attempts == 3
-    assert song.clip_trigger_quantization == "quarter"
+def test_remote_script_never_blocks_live_ui_with_sleep() -> None:
+    source = Path("AbletonMCPServer_RemoteScript/__init__.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    blocking_calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "time"
+        and node.func.attr == "sleep"
+    ]
+    assert blocking_calls == []
 
 
 def test_all_transport_mutations_return_observed_values() -> None:
