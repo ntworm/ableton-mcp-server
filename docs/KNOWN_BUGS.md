@@ -2,21 +2,21 @@
 
 The categories below describe recurring Live API failure shapes rather than one project-specific incident. The cited Live Object Model documentation currently describes Live 12.3.5; this project targets a Live 12.4 beta and therefore retains manual verification gates.
 
-## Category A — Non-deterministic transport setters
+## Category A — Deferred transport setters
 
 **Symptom:** a transport property accepts a write but reads back a different value.
 
-**Root cause:** Live can clamp, quantize, defer, or ignore transport changes while other state is transitioning.
+**Root cause:** Live can accept a write on one UI tick and expose the new value only after the handler returns. Sleeping on the UI thread prevents the tick that would apply the state.
 
-**Mitigation:** transport writes suspend clip-trigger quantization, set, read the named attribute, compare, sleep, and retry three times. Failure raises `PLAYHEAD_NOT_MOVED`; dependent operations do not run. Quantization is restored in `finally`.
+**Mitigation:** mutations are generators advanced by `update_display`. They write, yield to Live, read back on a later tick, and retry without blocking. Failure raises a typed error; playhead quantization is restored in `finally`.
 
-## Category B — Toggle operations masquerading as create
+## Category B — Toggle operations and dual cue cursors
 
 **Symptom:** calling `Song.set_or_delete_cue()` deletes a cue when one already exists at the playhead.
 
-**Root cause:** it is a toggle, not a create-only operation.
+**Root cause:** it is a toggle, not a create-only operation. In the Python Remote Script runtime the toggle also follows the Arrangement insert/start cursor, which can differ from `current_song_time` after stopping playback.
 
-**Mitigation:** enumerate cue points before the call. Existing cues are renamed idempotently. Creation toggles only after confirming the target is empty and the playhead reached it.
+**Mitigation:** enumerate cue points first. Existing cues are renamed idempotently. New operations move and verify both `current_song_time` and `start_time`, toggle on a later tick, verify the exact cue, and restore both cursors.
 
 ## Category C — Read-only properties that look writable
 
@@ -80,6 +80,28 @@ The categories below describe recurring Live API failure shapes rather than one 
 
 If a connection fails after a mutation was sent, the client cannot know whether Live executed it. Reads may reconnect and retry. Mutations fail without automatic replay; inspect current state before deciding to retry.
 
+## Category J — Max LOM and Python Remote Script note APIs differ
+
+**Symptom:** `Clip.add_new_notes({"notes": [...]})` raises a C++ conversion error referring to `TNoteSpecification`.
+
+**Root cause:** the public Max LOM documentation describes a dictionary argument. The embedded Python Remote Script binding expects an iterable of `Live.Clip.MidiNoteSpecification` objects.
+
+**Mitigation:** validate JSON/Pydantic note dictionaries at the MCP boundary, construct Python note specification objects inside Live, and pass them as a tuple.
+
+## Category K — WSL loopback is not Windows loopback under NAT
+
+**Symptom:** MCP tool discovery succeeds in WSL, but every Live call is refused at `127.0.0.1:9888`.
+
+**Root cause:** `tools/list` is local metadata discovery, and WSL2 NAT has a network namespace separate from the Windows process hosting Live.
+
+**Mitigation:** keep the Remote Script loopback-only and launch the Windows `.venv-win/Scripts/ableton-mcp-server.exe` from WSL. Use `ableton-mcp doctor` for an actual bridge probe. Do not bind the unauthenticated protocol to `0.0.0.0`.
+
+## Category L — Cross-platform log discovery
+
+**Symptom:** `get_ableton_logs` cannot find `APPDATA` when the MCP process is not a Windows process.
+
+**Mitigation:** prefer `ABLETON_MCP_LOG_PATH`, then search native Windows/macOS locations and mounted Windows profiles. The canonical WSL deployment uses Windows Python and therefore receives `APPDATA` normally.
+
 ## LOM calls used for clip debugging
 
-The implementation follows the official references for [`ClipSlot.create_clip` and `ClipSlot.fire`](https://docs.cycling74.com/apiref/lom/clipslot/) and [`Clip.add_new_notes` / `get_notes_extended`](https://docs.cycling74.com/apiref/lom/clip/).
+The implementation follows the official references for [`ClipSlot.create_clip` and `ClipSlot.fire`](https://docs.cycling74.com/apiref/lom/clipslot/) and adapts [`Clip.add_new_notes` / `get_notes_extended`](https://docs.cycling74.com/apiref/lom/clip/) to the embedded Python binding.

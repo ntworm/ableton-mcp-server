@@ -1,8 +1,19 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
+from ableton_mcp_server import __version__
+
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_release_version_is_aligned_across_package_metadata() -> None:
+    manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    assert __version__ == "0.2.1"
+    assert manifest["version"] == "0.2.1"
+    assert 'version = "0.2.1"' in pyproject
 
 
 def test_wheel_configuration_includes_contracts_and_remote_script() -> None:

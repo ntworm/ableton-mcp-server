@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
 from AbletonMCPServer_RemoteScript import (
     RemoteError,
+    _dbg,
     _safe,
     execute_command,
 )
@@ -20,6 +22,15 @@ def test_remote_error_envelope_includes_optional_hint() -> None:
         "message": "message",
         "hint": "recover",
     }
+
+
+def test_verbose_logging_uses_stable_mcp_server_prefix() -> None:
+    with (
+        patch("AbletonMCPServer_RemoteScript._VERBOSE", True),
+        patch("AbletonMCPServer_RemoteScript.logger.info") as info,
+    ):
+        _dbg("startup endpoint=127.0.0.1:9888")
+    info.assert_called_once_with("[MCP-Server] %s", "startup endpoint=127.0.0.1:9888")
     assert RemoteError("CODE", "message").to_envelope() == {
         "status": "error",
         "code": "CODE",

@@ -90,3 +90,37 @@ def test_cli_install_status_is_nonzero_for_stale_copy(tmp_path: Path, capsys: Ma
         == 1
     )
     assert json.loads(capsys.readouterr().out)["status"] == "stale"
+
+
+@patch("ableton_mcp_server.cli.run_live_acceptance")
+@patch("ableton_mcp_server.cli.Client")
+def test_cli_acceptance_requires_explicit_disposable_project_confirmation(
+    mock_client: MagicMock,
+    mock_acceptance: MagicMock,
+    capsys: MagicMock,
+) -> None:
+    mock_acceptance.return_value = {"status": "ok", "notes_added": 4}
+    assert (
+        main(
+            [
+                "acceptance",
+                "--confirm-project-name",
+                "TESTE_CODEX",
+                "--track-index",
+                "0",
+                "--clip-index",
+                "3",
+                "--fire-clip",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    assert json.loads(capsys.readouterr().out)["notes_added"] == 4
+    mock_acceptance.assert_called_once_with(
+        mock_client.return_value,
+        confirm_project_name="TESTE_CODEX",
+        track_index=0,
+        clip_index=3,
+        fire_clip=True,
+    )

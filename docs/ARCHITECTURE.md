@@ -15,13 +15,19 @@ The shape follows the SDK-free port/adapter boundary demonstrated by [Loophole](
 flowchart LR
     Agent["MCP client"] -->|stdio MCP| Server["FastMCP tools + Pydantic"]
     Server -->|"TCP JSONL 127.0.0.1:9888"| Socket["Remote Script socket thread"]
-    Socket -->|enqueue| Queue["per-surface request queue"]
-    Queue -->|"update_display, max 16/tick"| Handler["named command handler"]
-    Handler -->|Live UI thread only| LOM["Live Object Model"]
-    Handler -->|per-request response queue| Socket
+    Socket -->|enqueue| Queue["serialized request queue"]
+    Queue -->|"advance once per update_display"| Task["UI-tick command state machine"]
+    Task -->|Live UI thread only| LOM["Live Object Model"]
+    Task -->|verified result queue| Socket
 ```
 
-The socket thread parses JSON and waits for a response queue. It never reads or writes a Live object. `update_display` drains at most sixteen requests per tick to avoid monopolizing Live's UI thread.
+The socket thread parses JSON and waits for a response queue. It never reads or writes a Live object. Reads and synchronous mutations can complete in one tick. Deferred mutations yield, let Live process its UI cycle, then read back state on a later tick. Requests are serialized while one deferred command is active, preserving command order and avoiding competing transport writes.
+
+## Windows and WSL Process Topology
+
+The Remote Script always binds `127.0.0.1:9888`. On Windows, the MCP process must therefore run in the Windows network namespace. A WSL MCP client launches `.venv-win/Scripts/ableton-mcp-server.exe` through standard WSL interoperability; stdio crosses the boundary while TCP remains Windows-local.
+
+Native Linux Python inside WSL NAT is intentionally not made to work by binding Live to `0.0.0.0`. The JSONL protocol has no remote authentication or encryption, so LAN exposure would be unsafe. Mirrored WSL networking may make localhost work, but it is an optional environment configuration rather than the canonical deployment.
 
 ## Socket Protocol
 
@@ -100,17 +106,20 @@ These paths are session-local locators, not persistent identities. If a track in
 
 ## Transport Verification
 
-`_set_transport_value(song, attribute, value)` receives the actual attribute name. It:
+Transport setters return step generators. Each attempt:
 
-1. Saves and suspends clip-trigger quantization.
-2. Calls `setattr(song, attribute, value)`.
-3. Reads `float(getattr(song, attribute))`.
-4. Compares with `0.01` beat tolerance.
-5. Sleeps `0.01` seconds and retries, at most three writes.
-6. Raises `PLAYHEAD_NOT_MOVED` when verification never succeeds.
-7. Restores quantization in `finally`.
+1. writes the requested property on Live's UI thread;
+2. yields without sleeping or responding to the socket;
+3. reads the observed property on a later `update_display` tick;
+4. compares numeric state with `0.01` tolerance or boolean state exactly;
+5. retries for at most three UI ticks;
+6. returns only the observed value, or raises a typed error.
 
-No callable identity comparison is involved. Cue toggle operations occur only after verified movement.
+Playhead writes suspend and restore clip-trigger quantization in `finally`. Start/stop playback, tempo, loop enablement, loop start, and loop length use the same deferred confirmation model.
+
+Cue operations are multiphase. They move and verify both `current_song_time` and `start_time`, yield, toggle, yield again, verify the exact locator, then restore both prior cursor values before closing the undo step. Existing cues are renamed without toggling.
+
+Python MIDI Remote Scripts do not use the Max LOM dictionary binding for `Clip.add_new_notes`. The handler creates a tuple of `Live.Clip.MidiNoteSpecification` objects and passes that tuple to the Python LOM method.
 
 ## Undo and Batch Semantics
 
@@ -128,7 +137,7 @@ The selected runtime object must expose `begin_undo_step()` and `end_undo_step()
 - Socket receive buffer: one per TCP connection.
 - Mock state: one per mock server instance.
 - Snapshot time: Unix epoch milliseconds from `time.time()`.
-- Retry delays: duration seconds; never compared to epoch timestamps.
+- Deferred attempts: UI ticks, with no sleep or busy-wait on Live's main thread.
 
 ## FastMCP Tool Listing Compatibility
 
@@ -139,19 +148,16 @@ tools = await mcp.list_tools()
 count = len(mcp.list_tools())
 ```
 
-Tests assert both counts match the 36 registered tools.
+Tests assert both counts match the 37 registered tools.
 
-## Manual Live Verification
+`tools/list` remains deterministic metadata discovery. `get_bridge_status` and the `ableton-mcp doctor` CLI perform an actual `get_session_info` round trip and report WSL-specific topology hints when unavailable.
 
-Automated tests prove handlers with LOM-shaped fakes, not the real Ableton runtime. After installation:
+## Live Acceptance Verification
 
-1. Confirm the control-surface message reports `127.0.0.1:9888`.
-2. Run `python scripts\integration_check.py --port 9888`.
-3. Call `get_session_info`, `get_track_list`, `take_snapshot`, and `get_ableton_logs` from an MCP client.
-4. Enable verbose probes and create a cue at a known empty beat. Confirm the playhead is restored.
-5. Repeat creation at the same beat with a different name. Confirm rename without deletion.
-6. Create an empty MIDI clip, add one note, and fire it.
-7. Run a successful two-command batch and confirm one Ctrl+Z reverts both.
-8. Run a batch whose second command fails. Confirm the first mutation remains until one Ctrl+Z.
-9. Confirm blocked `delete_track` returns `READ_ONLY_VIOLATION`.
-10. Disable the Control Surface and confirm the port closes cleanly.
+Unit and socket tests are supplemented by a guarded real-Live runner. It refuses mutation unless `get_project_metadata.song_name` exactly matches `--confirm-project-name`, the selected track is MIDI, and the selected slot is empty. It then verifies transport, loop state, exact cue round trips, Python-LOM MIDI notes, clip firing, and partial-batch behavior before restoring transport and loop state.
+
+```powershell
+ableton-mcp acceptance --confirm-project-name TESTE_CODEX --track-index 0 --clip-index 3 --fire-clip --json
+```
+
+The created Session clip remains intentionally; run only against a disposable Set.

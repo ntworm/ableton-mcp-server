@@ -9,6 +9,7 @@ from typing import Any
 
 from contracts import DEFAULT_HOST, DEFAULT_PORT
 
+from .acceptance import run_live_acceptance
 from .client import Client
 from .diagnostics import (
     bridge_status,
@@ -40,6 +41,15 @@ def _parser() -> argparse.ArgumentParser:
     doctor = subparsers.add_parser("doctor", help="Probe the MCP-to-Live bridge")
     doctor.add_argument("--json", action="store_true")
 
+    acceptance = subparsers.add_parser(
+        "acceptance", help="Run guarded read/write checks against a disposable Live Set"
+    )
+    acceptance.add_argument("--confirm-project-name", required=True)
+    acceptance.add_argument("--track-index", required=True, type=int)
+    acceptance.add_argument("--clip-index", required=True, type=int)
+    acceptance.add_argument("--fire-clip", action="store_true")
+    acceptance.add_argument("--json", action="store_true")
+
     install = subparsers.add_parser("install-script", help="Install the MIDI Remote Script")
     _add_install_paths(install)
 
@@ -56,6 +66,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = bridge_status(Client(host=host, port=port, reconnect=False))
         _emit(result, as_json=bool(args.json))
         return 0 if result["bridge_available"] else 1
+
+    if args.command == "acceptance":
+        host = os.environ.get("ABLETON_MCP_SERVER_HOST", DEFAULT_HOST)
+        port = int(os.environ.get("ABLETON_MCP_SERVER_PORT", str(DEFAULT_PORT)))
+        result = run_live_acceptance(
+            Client(host=host, port=port, reconnect=False),
+            confirm_project_name=str(args.confirm_project_name),
+            track_index=int(args.track_index),
+            clip_index=int(args.clip_index),
+            fire_clip=bool(args.fire_clip),
+        )
+        _emit(result, as_json=bool(args.json))
+        return 0 if result["status"] == "ok" else 1
 
     source = bundled_remote_script_path() if args.source is None else args.source
     destination = (
