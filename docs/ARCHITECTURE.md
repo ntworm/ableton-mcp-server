@@ -2,26 +2,32 @@
 
 ## Components
 
-The repository contains two cooperating components:
+The repository contains three cooperating components:
 
 1. `ableton_mcp_server/` is the stdio FastMCP server. It owns Pydantic validation, JSONL encoding, reconnect policy, local log reading, and snapshot diffing. It imports no Ableton module.
 2. `AbletonMCPServer_RemoteScript/` runs inside Live. It owns the loopback socket, the main-thread request queue, command handlers, Live Object Model access, and undo grouping.
-
-The shape follows the SDK-free port/adapter boundary demonstrated by [Loophole](https://github.com/OthmanAdi/loophole), adapted to a Python MIDI Remote Script host.
+3. `AbletonMCPServer_Extension/` is the TypeScript Ableton Live Extension. It compiles into a `.ablx` file running inside the Node.js Extension Host, hosting a WebSocket server on `127.0.0.1:9889` to expose warping properties and device insertion.
 
 ## Data Flow and Thread Safety
 
 ```mermaid
-flowchart LR
-    Agent["MCP client"] -->|stdio MCP| Server["FastMCP tools + Pydantic"]
-    Server -->|"TCP JSONL 127.0.0.1:9888"| Socket["Remote Script socket thread"]
-    Socket -->|enqueue| Queue["serialized request queue"]
+flowchart TD
+    Agent["MCP client"] -->|stdio MCP| Server["FastMCP Server (Python)"]
+    Server -->|"TCP JSONL (port 9888)"| SocketPy["Remote Script socket thread"]
+    Server -->|"WebSockets JSON-RPC (port 9889)"| SocketNode["Extension Host WS Server"]
+    
+    SocketPy -->|enqueue| Queue["serialized request queue"]
     Queue -->|"advance once per update_display"| Task["UI-tick command state machine"]
-    Task -->|Live UI thread only| LOM["Live Object Model"]
-    Task -->|verified result queue| Socket
+    Task -->|Live UI thread only| LOM1["Live Object Model (Python)"]
+    Task -->|verified result queue| SocketPy
+    
+    SocketNode -->|async LOM access| LOM2["Live Object Model (Node.js)"]
+    LOM2 -->|json response| SocketNode
 ```
 
-The socket thread parses JSON and waits for a response queue. It never reads or writes a Live object. Reads and synchronous mutations can complete in one tick. Deferred mutations yield, let Live process its UI cycle, then read back state on a later tick. Requests are serialized while one deferred command is active, preserving command order and avoiding competing transport writes. Persistent connections remain open while idle; a one-second receive timeout only lets the thread observe shutdown.
+The socket thread for the Python Remote Script parses JSON and waits for a response queue. It never reads or writes a Live object. Reads and synchronous mutations can complete in one tick. Deferred mutations yield, let Live process its UI cycle, then read back state on a later tick. Requests are serialized while one deferred command is active, preserving command order and avoiding competing transport writes. Persistent connections remain open while idle; a one-second receive timeout only lets the thread observe shutdown.
+
+The Node.js Extension Host operates asynchronously and concurrently, so requests can resolve natively using Javascript `async/await` without requiring a tick queue.
 
 ## Windows and WSL Process Topology
 
@@ -72,6 +78,8 @@ The listener binds the literal `127.0.0.1`. It has no LAN mode.
 | `STALE_REFERENCE` | A path-id no longer resolves. | Re-list and use a fresh id. |
 | `WRONG_TYPE` | The target exists but cannot perform that operation. | Select a matching track/clip type. |
 | `BAD_INPUT` | A well-shaped argument is outside a safe domain. | Correct its value. |
+| `EXTENSION_UNAVAILABLE` | Extension Host WebSocket bridge is not reachable. | Ensure the AbletonMCPServer extension is compiled and loaded. |
+| `TRACK_LIMIT_REACHED` | The 96 track safety limit has been hit. | Remove unused tracks. |
 
 `Client` maps remote errors and socket failures to typed Python exceptions. At the FastMCP boundary, expected bridge exceptions become typed MCP error results rather than internal framework failures. Empty arrays receive both structured `[]` data and a textual `[]` fallback for clients that ignore structured content.
 

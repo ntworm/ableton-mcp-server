@@ -1,24 +1,26 @@
 # Ableton MCP Server
 
-`ableton-mcp-server` gives MCP-compatible agents debug-grade access to a running
+`ableton-mcp-server` gives MCP-compatible agents complete access to a running
 Ableton Live Set. A stdio FastMCP server communicates with a MIDI Remote Script
-over newline-delimited JSON on TCP `127.0.0.1:9888`.
+over newline-delimited JSON on TCP `127.0.0.1:9888`, and with an Extension Host
+bridge over WebSockets on `127.0.0.1:9889`.
 
-Version 0.2.2 exposes 37 tools: 23 reads/diagnostics and 14 constrained
-mutations for transport, loop state, cue points, Session clips, MIDI notes, and
-one-undo batch execution. Track deletion, Browser loading, and other creative or
-destructive operations remain blocked.
+Version 0.3.0 exposes 46 tools: reads/diagnostics (including composition diagnostics
+and scale mapping), and creative mutations for transport, loop state, cue points,
+Session clips, MIDI notes, track renaming, guarded MIDI track creation, audio warping control,
+plug-in device loading, and extension scaffolding/building.
 
 ## Architecture
 
 ```text
-MCP client -> FastMCP stdio server -> TCP JSONL -> Remote Script socket thread
-                                               -> UI-tick state machine -> LOM
+               /-> TCP JSONL (9888) ------> Remote Script (Python LOM)
+MCP client -> FastMCP Server (Python)
+               \-> WebSockets (9889) ------> Extension Host (Node.js LOM)
 ```
 
-Socket threads never touch the Live Object Model. Mutations execute and verify
-their read-back over successive `update_display` ticks, so the Live UI thread is
-never blocked by retry sleeps. See [Architecture](docs/ARCHITECTURE.md).
+Socket threads never touch the Live Object Model. Python mutations execute and verify
+their read-back over successive `update_display` ticks, while Node.js extension actions
+resolve concurrently via async/await. See [Architecture](docs/ARCHITECTURE.md).
 
 ## Windows installation
 
@@ -106,6 +108,14 @@ Mock socket smoke test:
 ```powershell
 python -m scripts.mock_remote_script --port 9889
 python -m scripts.integration_check --port 9889
+```
+
+Extension build:
+
+```powershell
+cd AbletonMCPServer_Extension
+npm install
+npm run build
 ```
 
 ## Safety and limitations
