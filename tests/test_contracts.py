@@ -26,6 +26,11 @@ def test_debug_mutations_are_explicitly_allowed() -> None:
         "create_clip",
         "fire_clip",
         "add_notes_to_clip",
+        # v0.3.0
+        "create_midi_track",
+        "rename_track",
+        "set_warp_state",
+        "load_device_to_track",
     }
     assert frozenset(expected) == contracts.ALLOWED_MUTATIONS
     assert expected.isdisjoint(contracts.READ_ONLY_COMMANDS)
@@ -35,9 +40,7 @@ def test_creative_mutations_remain_blocked_without_prefix_rules() -> None:
     assert (
         frozenset(
             {
-                "create_midi_track",
                 "delete_track",
-                "set_track_name",
                 "duplicate_session_clip_to_arrangement",
                 "switch_to_arrangement_view",
                 "load_instrument_or_effect",

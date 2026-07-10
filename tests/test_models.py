@@ -41,6 +41,10 @@ def test_every_public_tool_has_an_explicit_request_model() -> None:
         "get_song_length",
         "live_find_track",
         "list_device_params",
+        # v0.3.0
+        "get_composition_structure",
+        "diagnose_midi_clip",
+        "get_warp_state",
     }
     mutations = {
         "create_cue_point",
@@ -57,10 +61,17 @@ def test_every_public_tool_has_an_explicit_request_model() -> None:
         "add_notes_to_clip",
         "fire_clip",
         "create_clip",
+        # v0.3.0
+        "create_midi_track",
+        "rename_track",
+        "set_warp_state",
+        "load_device_to_track",
+        "scaffold_extension",
+        "build_extension",
     }
     assert set(TOOL_REQUEST_MODELS) == reads | mutations
-    assert len(TOOL_REQUEST_MODELS) == 37
-    assert len(set(TOOL_REQUEST_MODELS.values())) == 37
+    assert len(TOOL_REQUEST_MODELS) == 46
+    assert len(set(TOOL_REQUEST_MODELS.values())) == 46
 
 
 @pytest.mark.parametrize("tempo", [19.99, 999.01, math.nan, math.inf])

@@ -11,9 +11,9 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_release_version_is_aligned_across_package_metadata() -> None:
     manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    assert __version__ == "0.2.2"
-    assert manifest["version"] == "0.2.2"
-    assert 'version = "0.2.2"' in pyproject
+    assert __version__ == "0.3.0"
+    assert manifest["version"] == "0.3.0"
+    assert 'version = "0.3.0"' in pyproject
 
 
 def test_wheel_configuration_includes_contracts_and_remote_script() -> None:
