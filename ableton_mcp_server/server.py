@@ -19,6 +19,7 @@ from . import models
 from .client import Client
 from .diagnostics import bridge_status, find_ableton_log_path
 from .diff import diff_snapshots
+from .errors import BridgeError
 
 PUBLIC_TOOL_NAMES = (
     "get_session_info",
@@ -105,9 +106,9 @@ def get_client() -> Client:
 
 
 def _explicit_json_result(
-    value: Any, *, unwrap_result: bool = False
+    value: Any, *, is_error: bool = False, unwrap_result: bool = False
 ) -> ToolResult:
-    """Keep empty arrays visible to every MCP client."""
+    """Keep JSON values visible without leaking domain errors into FastMCP."""
 
     content = [
         TextContent(
@@ -121,11 +122,15 @@ def _explicit_json_result(
         content=content,
         structured_content=structured,
         meta=meta,
+        is_error=is_error,
     )
 
 
 def _remote(command: str, request: models.RequestModel) -> Any:
-    result = get_client().call(command, request.model_dump(mode="json"))
+    try:
+        result = get_client().call(command, request.model_dump(mode="json"))
+    except BridgeError as error:
+        return _explicit_json_result(error.to_envelope(), is_error=True)
     if isinstance(result, list) and not result:
         return _explicit_json_result(result, unwrap_result=True)
     return result

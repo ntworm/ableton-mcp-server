@@ -161,6 +161,34 @@ async def test_empty_remote_list_remains_an_explicit_json_array_over_mcp(
     assert [block.text for block in result.content if block.type == "text"] == ["[]"]
 
 
+@pytest.mark.asyncio
+@patch("ableton_mcp_server.server.get_client")
+async def test_expected_bridge_error_is_a_typed_mcp_result_not_framework_failure(
+    mock_get_client: MagicMock,
+) -> None:
+    from ableton_mcp_server.errors import WrongTypeError
+
+    mock_get_client.return_value.call.side_effect = [
+        WrongTypeError("Track has no Session clip slots."),
+        {"tempo": 120.0},
+    ]
+
+    async with FastMCPClient(server.mcp) as client:
+        rejected = await client.call_tool(
+            "get_clip_summary", {"track_index": 3}, raise_on_error=False
+        )
+        recovered = await client.call_tool("get_session_info", {}, raise_on_error=False)
+
+    assert rejected.is_error is True
+    assert rejected.structured_content == {
+        "status": "error",
+        "code": "WRONG_TYPE",
+        "message": "Track has no Session clip slots.",
+    }
+    assert recovered.is_error is False
+    assert recovered.data == {"tempo": 120.0}
+
+
 @patch("ableton_mcp_server.server.find_ableton_log_path")
 def test_log_tool_limits_lines_and_reads_locally(mock_find: MagicMock, tmp_path: Any) -> None:
     log = tmp_path / "Log.txt"
