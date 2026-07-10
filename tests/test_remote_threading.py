@@ -28,3 +28,81 @@ def test_processor_returns_typed_error_envelope_without_throwing_to_socket() -> 
     response = response_queue.get_nowait()
     assert response["status"] == "error"
     assert response["code"] == "READ_ONLY_VIOLATION"
+
+
+def test_deferred_transport_write_completes_on_later_ui_tick() -> None:
+    song = FakeSong(deferred_writes=True)
+    app = FakeApplication()
+    processor = RequestProcessor(song, app)
+    response_queue: queue.Queue[dict[str, object]] = queue.Queue(maxsize=1)
+    processor.enqueue(QueuedRequest("set_current_song_time", {"time": 8.0}, response_queue))
+
+    processor.process_pending(max_requests=1)
+    assert response_queue.empty()
+    assert song.current_song_time == 0.0
+    assert (app.begin_count, app.end_count) == (1, 0)
+
+    song.tick()
+    processor.process_pending(max_requests=1)
+    response = response_queue.get_nowait()
+    assert response == {"status": "ok", "result": {"current_song_time": 8.0}}
+    assert (app.begin_count, app.end_count) == (1, 1)
+
+
+def test_deferred_boolean_mutations_return_confirmed_state() -> None:
+    song = FakeSong(deferred_writes=True)
+    app = FakeApplication()
+    processor = RequestProcessor(song, app)
+
+    for command, params, expected in (
+        ("start_playback", {}, {"is_playing": True}),
+        ("stop_playback", {}, {"is_playing": False}),
+        ("set_loop", {"enabled": True}, {"loop": True}),
+    ):
+        response_queue: queue.Queue[dict[str, object]] = queue.Queue(maxsize=1)
+        processor.enqueue(QueuedRequest(command, params, response_queue))
+        processor.process_pending(max_requests=1)
+        assert response_queue.empty()
+        song.tick()
+        processor.process_pending(max_requests=1)
+        assert response_queue.get_nowait() == {"status": "ok", "result": expected}
+
+    assert (app.begin_count, app.end_count) == (3, 3)
+
+
+def test_all_numeric_transport_writes_wait_for_observed_state() -> None:
+    song = FakeSong(deferred_writes=True)
+    processor = RequestProcessor(song, FakeApplication())
+
+    for command, params, expected in (
+        ("set_tempo", {"tempo": 128.0}, {"tempo": 128.0}),
+        ("set_loop_start", {"start_beat": 4.0}, {"loop_start": 4.0}),
+        ("set_loop_length", {"length_beats": 8.0}, {"loop_length": 8.0}),
+    ):
+        response_queue: queue.Queue[dict[str, object]] = queue.Queue(maxsize=1)
+        processor.enqueue(QueuedRequest(command, params, response_queue))
+        processor.process_pending(max_requests=1)
+        assert response_queue.empty()
+        song.tick()
+        processor.process_pending(max_requests=1)
+        assert response_queue.get_nowait() == {"status": "ok", "result": expected}
+
+
+def test_playhead_failure_is_reported_only_after_tick_retries() -> None:
+    song = FakeSong(stuck_writes=99, deferred_writes=True)
+    app = FakeApplication()
+    processor = RequestProcessor(song, app)
+    response_queue: queue.Queue[dict[str, object]] = queue.Queue(maxsize=1)
+    processor.enqueue(QueuedRequest("set_current_song_time", {"time": 8.0}, response_queue))
+
+    for _attempt in range(3):
+        processor.process_pending(max_requests=1)
+        assert response_queue.empty()
+        song.tick()
+
+    processor.process_pending(max_requests=1)
+    response = response_queue.get_nowait()
+    assert response["status"] == "error"
+    assert response["code"] == "PLAYHEAD_NOT_MOVED"
+    assert song.transport_write_attempts == 3
+    assert (app.begin_count, app.end_count) == (1, 1)

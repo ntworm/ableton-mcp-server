@@ -7,7 +7,6 @@ import pytest
 from AbletonMCPServer_RemoteScript import (
     RemoteError,
     _safe,
-    _set_transport_value,
     execute_command,
 )
 from tests.remote_fakes import FakeApplication, FakeClip, FakeClipSlot, FakeSong
@@ -110,7 +109,7 @@ def test_audio_clip_note_read_and_write_are_wrong_type() -> None:
         )
 
 
-def test_cue_delete_miss_bulk_bad_item_and_invalid_retry_count() -> None:
+def test_cue_delete_miss_and_bulk_bad_item() -> None:
     song = FakeSong()
     app = FakeApplication()
     assert execute_command(song, app, "delete_cue_point", {"time": 8}) == {
@@ -119,8 +118,6 @@ def test_cue_delete_miss_bulk_bad_item_and_invalid_retry_count() -> None:
     }
     bulk = execute_command(song, app, "bulk_create_cue_points", {"items": ["bad"]})
     assert bulk["results"][0]["code"] == "INVALID_PARAMS"
-    with pytest.raises(ValueError, match="at least 1"):
-        _set_transport_value(song, "current_song_time", 2.0, retries=0)
 
 
 def test_batch_rejects_nested_and_non_object_subcommands() -> None:
