@@ -4,7 +4,7 @@
 Ableton Live Set. A stdio FastMCP server communicates with a MIDI Remote Script
 over newline-delimited JSON on TCP `127.0.0.1:9888`.
 
-Version 0.2.1 exposes 37 tools: 23 reads/diagnostics and 14 constrained
+Version 0.2.2 exposes 37 tools: 23 reads/diagnostics and 14 constrained
 mutations for transport, loop state, cue points, Session clips, MIDI notes, and
 one-undo batch execution. Track deletion, Browser loading, and other creative or
 destructive operations remain blocked.

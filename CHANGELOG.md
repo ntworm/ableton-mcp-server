@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.2] - 2026-07-10
+
+### Changed
+
+- Cue toggles and cue renames are observed across up to ten Live UI ticks before a result is reported.
+- Playhead and state writes now tolerate up to ten transitional UI ticks.
+- JSONL deadlines use a shared 20-second base and scale with bulk/batch work instead of using conflicting client/server constants.
+- Bulk cue creation holds the working cursor and restores the original cursor once after all items.
+
+### Fixed
+
+- Empty list results retain structured `[]` data and an explicit text fallback across FastMCP clients.
+- Expected bridge errors become typed MCP error results instead of escaping as framework exceptions and tracebacks.
+- Idle persistent JSONL connections stay open; the socket timeout now polls for shutdown rather than closing a healthy client.
+- Windows socket failures become typed `LIVE_UNAVAILABLE` errors and keep mutation retry decisions explicit.
+- Delayed cue toggles no longer race cursor restoration and leave default-name markers at the restored position.
+- Cue names are verified and idempotently retried when Live drops a name write.
+
 ## [0.2.1] - 2026-07-09
 
 ### Added

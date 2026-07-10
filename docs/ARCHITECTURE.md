@@ -21,7 +21,7 @@ flowchart LR
     Task -->|verified result queue| Socket
 ```
 
-The socket thread parses JSON and waits for a response queue. It never reads or writes a Live object. Reads and synchronous mutations can complete in one tick. Deferred mutations yield, let Live process its UI cycle, then read back state on a later tick. Requests are serialized while one deferred command is active, preserving command order and avoiding competing transport writes.
+The socket thread parses JSON and waits for a response queue. It never reads or writes a Live object. Reads and synchronous mutations can complete in one tick. Deferred mutations yield, let Live process its UI cycle, then read back state on a later tick. Requests are serialized while one deferred command is active, preserving command order and avoiding competing transport writes. Persistent connections remain open while idle; a one-second receive timeout only lets the thread observe shutdown.
 
 ## Windows and WSL Process Topology
 
@@ -73,7 +73,9 @@ The listener binds the literal `127.0.0.1`. It has no LAN mode.
 | `WRONG_TYPE` | The target exists but cannot perform that operation. | Select a matching track/clip type. |
 | `BAD_INPUT` | A well-shaped argument is outside a safe domain. | Correct its value. |
 
-`Client` maps remote errors to typed Python exceptions. It automatically retries reads after connection failure. It never automatically retries a mutation: a broken connection does not prove that Live failed to apply the write.
+`Client` maps remote errors and socket failures to typed Python exceptions. At the FastMCP boundary, expected bridge exceptions become typed MCP error results rather than internal framework failures. Empty arrays receive both structured `[]` data and a textual `[]` fallback for clients that ignore structured content.
+
+The client automatically retries reads after connection failure. It never automatically retries a mutation: a broken connection does not prove that Live failed to apply the write. Client and Remote Script compute the same deadline from `contracts.request_timeout_seconds`; the 20-second base scales by serialized bulk/batch work units.
 
 ## Mutation Allowlist
 
@@ -112,12 +114,12 @@ Transport setters return step generators. Each attempt:
 2. yields without sleeping or responding to the socket;
 3. reads the observed property on a later `update_display` tick;
 4. compares numeric state with `0.01` tolerance or boolean state exactly;
-5. retries for at most three UI ticks;
+5. retries for at most ten UI ticks;
 6. returns only the observed value, or raises a typed error.
 
 Playhead writes suspend and restore clip-trigger quantization in `finally`. Start/stop playback, tempo, loop enablement, loop start, and loop length use the same deferred confirmation model.
 
-Cue operations are multiphase. They move and verify both `current_song_time` and `start_time`, yield, toggle, yield again, verify the exact locator, then restore both prior cursor values before closing the undo step. Existing cues are renamed without toggling.
+Cue operations are multiphase. They move and verify both `current_song_time` and `start_time`, invoke the toggle exactly once, then hold the target cursor while polling for the locator across UI ticks. Names are read back and idempotently retried before success. Single operations finally restore both prior cursor values. Bulk creation shares one cursor scope and restores once after all items, reducing UI writes and timeout pressure.
 
 Python MIDI Remote Scripts do not use the Max LOM dictionary binding for `Clip.add_new_notes`. The handler creates a tuple of `Live.Clip.MidiNoteSpecification` objects and passes that tuple to the Python LOM method.
 

@@ -16,7 +16,7 @@ The categories below describe recurring Live API failure shapes rather than one 
 
 **Root cause:** it is a toggle, not a create-only operation. In the Python Remote Script runtime the toggle also follows the Arrangement insert/start cursor, which can differ from `current_song_time` after stopping playback.
 
-**Mitigation:** enumerate cue points first. Existing cues are renamed idempotently. New operations move and verify both `current_song_time` and `start_time`, toggle on a later tick, verify the exact cue, and restore both cursors.
+**Mitigation:** enumerate cue points first. Existing cues are renamed idempotently. New operations move and verify both `current_song_time` and `start_time`, invoke the toggle once, hold the target while observing the result for up to ten UI ticks, verify/retry the name, and only then restore both cursors.
 
 ## Category C — Read-only properties that look writable
 
@@ -78,7 +78,23 @@ The categories below describe recurring Live API failure shapes rather than one 
 
 ## Additional limitation — Ambiguous network failure
 
-If a connection fails after a mutation was sent, the client cannot know whether Live executed it. Reads may reconnect and retry. Mutations fail without automatic replay; inspect current state before deciding to retry.
+If a connection fails after a mutation was sent, the client cannot know whether Live executed it. Reads may reconnect and retry. Mutations fail without automatic replay; inspect current state before deciding to retry. Socket failures are returned as typed `LIVE_UNAVAILABLE` results. Client and server share a deadline scaled to bulk/batch size, and idle connections are not closed merely because no request arrived for ten seconds.
+
+## Category M — Empty arrays in MCP content
+
+**Symptom:** a valid empty result such as `get_clip_notes` on an empty MIDI clip appears as `""` in a content-only MCP client.
+
+**Root cause:** FastMCP interprets a raw empty Python list as zero content blocks.
+
+**Mitigation:** the MCP boundary emits structured `[]` plus an explicit textual `[]` fallback. The JSONL bridge contract remains an ordinary list.
+
+## Category N — Expected errors mistaken for server crashes
+
+**Symptom:** repeated `WRONG_TYPE` or `INVALID_PARAMS` calls make a supervising agent report the MCP subprocess as unreachable even though stdio is still alive.
+
+**Root cause:** typed bridge exceptions were escaping into FastMCP, which logged framework tracebacks and returned generic tool failures.
+
+**Mitigation:** expected bridge errors are converted to structured MCP error results with `isError=true`. They remain errors, but no longer look like unhandled server exceptions. A stdio reproduction confirms subsequent calls remain available.
 
 ## Category J — Max LOM and Python Remote Script note APIs differ
 
