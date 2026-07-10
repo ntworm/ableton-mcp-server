@@ -757,45 +757,28 @@ def _verified_cue_name_steps(
     )
 
 
-def _verified_cue_cursor_steps(
+def _verified_cue_position_steps(
     song: Any,
     *,
-    current_target: float,
-    start_target: float,
+    target: float,
     retries: int = PLAYHEAD_MOVE_RETRIES,
 ) -> Generator[None, None, None]:
-    """Move both Live cursors used by cue toggling, yielding between attempts."""
+    """Move the Arrangement playback position used by cue toggling."""
 
-    actual_current = float(song.current_song_time)
-    actual_start = float(song.start_time)
-    if (
-        abs(actual_current - current_target) < CUE_TIME_TOLERANCE
-        and abs(actual_start - start_target) < CUE_TIME_TOLERANCE
-    ):
+    actual = float(song.current_song_time)
+    if abs(actual - target) < CUE_TIME_TOLERANCE:
         return
     for attempt in range(retries):
-        song.current_song_time = current_target
-        song.start_time = start_target
+        song.current_song_time = target
         yield
-        actual_current = float(song.current_song_time)
-        actual_start = float(song.start_time)
+        actual = float(song.current_song_time)
         _dbg(
-            "cue_cursor current=%s/%s start=%s/%s tick_attempt=%s"
-            % (current_target, actual_current, start_target, actual_start, attempt + 1)
+            "cue_position asked=%s got=%s tick_attempt=%s"
+            % (target, actual, attempt + 1)
         )
-        if (
-            abs(actual_current - current_target) < CUE_TIME_TOLERANCE
-            and abs(actual_start - start_target) < CUE_TIME_TOLERANCE
-        ):
+        if abs(actual - target) < CUE_TIME_TOLERANCE:
             return
-    if abs(actual_current - current_target) >= CUE_TIME_TOLERANCE:
-        raise PlayheadNotMovedError(current_target, actual_current, retries)
-    raise RemoteError(
-        ERROR_PLAYHEAD_NOT_MOVED,
-        "Cue insert marker did not reach the requested value "
-        "(asked=%s, got=%s after %s UI ticks)." % (start_target, actual_start, retries),
-        "Live may be in a transitional state; retry after it settles.",
-    )
+    raise PlayheadNotMovedError(target, actual, retries)
 
 
 def _create_cue_at_cursor_steps(
@@ -806,10 +789,9 @@ def _create_cue_at_cursor_steps(
         yield from _verified_cue_name_steps(existing, name)
         return {"name": name, "time": float(existing.time), "action": "renamed"}
 
-    yield from _verified_cue_cursor_steps(
+    yield from _verified_cue_position_steps(
         song,
-        current_target=target_time,
-        start_target=target_time,
+        target=target_time,
     )
     song.set_or_delete_cue()
     created = yield from _wait_for_cue_state_steps(
@@ -826,16 +808,14 @@ def _create_cue_point_steps(
     target_time = _float_param(params, "time", 0.0, 100000.0)
 
     previous_time = float(song.current_song_time)
-    previous_start = float(song.start_time)
     previous_quantization = song.clip_trigger_quantization
     try:
         song.clip_trigger_quantization = _no_quantization_value()
         return (yield from _create_cue_at_cursor_steps(song, name, target_time))
     finally:
-        yield from _verified_cue_cursor_steps(
+        yield from _verified_cue_position_steps(
             song,
-            current_target=previous_time,
-            start_target=previous_start,
+            target=previous_time,
         )
         song.clip_trigger_quantization = previous_quantization
 
@@ -849,23 +829,20 @@ def _delete_cue_point_steps(
         return {"deleted": False, "reason": "no cue at time"}
     cue_time = float(cue.time)
     previous_time = float(song.current_song_time)
-    previous_start = float(song.start_time)
     previous_quantization = song.clip_trigger_quantization
     try:
         song.clip_trigger_quantization = _no_quantization_value()
-        yield from _verified_cue_cursor_steps(
+        yield from _verified_cue_position_steps(
             song,
-            current_target=cue_time,
-            start_target=cue_time,
+            target=cue_time,
         )
         song.set_or_delete_cue()
         yield from _wait_for_cue_state_steps(song, cue_time, should_exist=False)
         return {"deleted": True, "time": cue_time}
     finally:
-        yield from _verified_cue_cursor_steps(
+        yield from _verified_cue_position_steps(
             song,
-            current_target=previous_time,
-            start_target=previous_start,
+            target=previous_time,
         )
         song.clip_trigger_quantization = previous_quantization
 
@@ -878,7 +855,6 @@ def _bulk_create_cue_points_steps(
         raise RemoteError(ERROR_INVALID_PARAMS, "Parameter 'items' must be a non-empty list.")
     results = []
     previous_time = float(song.current_song_time)
-    previous_start = float(song.start_time)
     previous_quantization = song.clip_trigger_quantization
     try:
         song.clip_trigger_quantization = _no_quantization_value()
@@ -895,10 +871,9 @@ def _bulk_create_cue_points_steps(
             except RemoteError as error:
                 results.append({"index": index, **error.to_envelope()})
     finally:
-        yield from _verified_cue_cursor_steps(
+        yield from _verified_cue_position_steps(
             song,
-            current_target=previous_time,
-            start_target=previous_start,
+            target=previous_time,
         )
         song.clip_trigger_quantization = previous_quantization
     return {"results": results}

@@ -74,14 +74,14 @@ class LaggyCueSong(FakeSong):
                 (
                     cue
                     for cue in self.cue_points
-                    if abs(float(cue.time) - self.start_time) < 0.01
+                    if abs(float(cue.time) - self.current_song_time) < 0.01
                 ),
                 None,
             )
             if existing is None:
                 self.cue_points.append(
                     LaggyCuePoint(
-                        self.start_time,
+                        self.current_song_time,
                         rename_delay_ticks=self._rename_delay_ticks,
                     )
                 )
@@ -144,7 +144,7 @@ def test_existing_cue_rename_retries_dropped_idempotent_writes() -> None:
     assert song.toggle_count == 0
 
 
-def test_create_moves_both_cursors_verifies_toggle_and_restores_them() -> None:
+def test_create_moves_only_playback_position_and_preserves_start_time() -> None:
     song = FakeSong(deferred_writes=True)
     song._current_song_time = 2.0
     song._start_time = 2.0
@@ -161,6 +161,7 @@ def test_create_moves_both_cursors_verifies_toggle_and_restores_them() -> None:
     assert [(cue.name, float(cue.time)) for cue in song.cue_points] == [("Verse", 8.0)]
     assert song.current_song_time == 2.0
     assert song.start_time == 2.0
+    assert song.start_time_write_attempts == 0
     assert song.toggle_count == 1
     assert (app.begin_count, app.end_count) == (1, 1)
 
@@ -185,6 +186,7 @@ def test_create_holds_target_until_laggy_toggle_and_rename_are_observed() -> Non
     assert [(cue.name, float(cue.time)) for cue in song.cue_points] == [("Verse", 8.0)]
     assert song.current_song_time == 2.0
     assert song.start_time == 2.0
+    assert song.start_time_write_attempts == 0
 
 
 def test_create_does_not_toggle_when_cursor_never_reaches_target() -> None:
@@ -197,7 +199,7 @@ def test_create_does_not_toggle_when_cursor_never_reaches_target() -> None:
     assert song.toggle_count == 0
 
 
-def test_delete_verifies_absence_and_restores_both_cursors() -> None:
+def test_delete_verifies_absence_and_preserves_start_time() -> None:
     song = FakeSong(deferred_writes=True)
     song._current_song_time = 2.0
     song._start_time = 2.0
@@ -207,6 +209,7 @@ def test_delete_verifies_absence_and_restores_both_cursors() -> None:
     assert song.cue_points == []
     assert song.current_song_time == 2.0
     assert song.start_time == 2.0
+    assert song.start_time_write_attempts == 0
 
 
 def test_delete_waits_for_laggy_toggle_before_restoring_cursors() -> None:
@@ -227,6 +230,7 @@ def test_delete_waits_for_laggy_toggle_before_restoring_cursors() -> None:
     assert song.cue_points == []
     assert song.current_song_time == 2.0
     assert song.start_time == 2.0
+    assert song.start_time_write_attempts == 0
 
 
 def test_bulk_runs_each_cue_operation_across_ticks_and_collects_errors() -> None:
@@ -259,3 +263,4 @@ def test_bulk_restores_cursors_once_instead_of_between_every_item() -> None:
     assert song.transport_write_attempts <= 6
     assert song.current_song_time == 0.0
     assert song.start_time == 0.0
+    assert song.start_time_write_attempts == 0

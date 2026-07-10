@@ -196,7 +196,7 @@ The FastMCP server exposes 37 snake_case tools. Remote examples below show the J
 - Returns: name, observed time, and action `created` or `renamed`.
 - Request: `{"type":"create_cue_point","params":{"name":"Verse","time":8.0}}`
 - Response: `{"status":"ok","result":{"name":"Verse","time":8.0,"action":"created"}}`
-- Edge cases / side effects: one undo step; moves both cursor properties, toggles exactly once, verifies creation and naming across UI ticks, then restores the cursors.
+- Edge cases / side effects: one undo step; moves only `current_song_time`, toggles exactly once, verifies creation and naming across UI ticks, then restores playback position without changing `start_time`.
 
 ### `bulk_create_cue_points(items: list[CuePointSpec])`
 

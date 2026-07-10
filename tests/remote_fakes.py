@@ -189,6 +189,7 @@ class FakeSong:
         self._pending_loop_length: float | None = None
         self._start_time = 0.0
         self._pending_start_time: float | None = None
+        self.start_time_write_attempts = 0
         self.start_marker = 0.0
         self.end_marker = 64.0
         self.song_length = 64.25
@@ -271,6 +272,7 @@ class FakeSong:
 
     @start_time.setter
     def start_time(self, value: float) -> None:
+        self.start_time_write_attempts += 1
         if self.deferred_writes:
             self._pending_start_time = float(value)
         else:
@@ -305,12 +307,12 @@ class FakeSong:
             (
                 cue
                 for cue in self.cue_points
-                if abs(float(cue.time) - self.start_time) < 0.01
+                if abs(float(cue.time) - self.current_song_time) < 0.01
             ),
             None,
         )
         if existing is None:
-            self.cue_points.append(FakeCuePoint("", BeatTime(self.start_time)))
+            self.cue_points.append(FakeCuePoint("", BeatTime(self.current_song_time)))
         else:
             self.cue_points.remove(existing)
 
