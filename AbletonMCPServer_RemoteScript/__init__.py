@@ -828,6 +828,52 @@ def _wait_for_created_cue_steps(
     )
 
 
+def _wait_for_deleted_cue_steps(
+    song: Any,
+    target_time: float,
+    *,
+    before: dict[float, str],
+    ticks: int = CUE_OPERATION_VERIFY_TICKS,
+) -> Generator[None, None, None]:
+    """Observe exact deletion or reverse a grid-snapped toggle."""
+
+    for attempt in range(ticks):
+        yield
+        cue = _find_cue(song, target_time)
+        after = _cue_snapshot(song)
+        added, removed = _cue_snapshot_delta(before, after)
+        if cue is None:
+            unexpected_removed = [
+                time
+                for time in removed
+                if abs(time - target_time) >= CUE_TIME_TOLERANCE
+            ]
+            if not added and not unexpected_removed:
+                return
+            raise RemoteError(
+                ERROR_LIVE_UNAVAILABLE,
+                "Cue deletion changed additional locator state; automatic reversal "
+                "was not safe.",
+                "Inspect Arrangement locators before retrying.",
+            )
+        _dbg(
+            "cue_delete time=%s observed=False added=%r removed=%r tick_attempt=%s"
+            % (target_time, added, removed, attempt + 1)
+        )
+        if added or removed:
+            yield from _reverse_snapped_cue_toggle_steps(
+                song,
+                requested_time=target_time,
+                before=before,
+                after=after,
+            )
+    raise RemoteError(
+        ERROR_LIVE_UNAVAILABLE,
+        "set_or_delete_cue() did not delete the cue near %s after %s UI ticks."
+        % (target_time, ticks),
+    )
+
+
 def _verified_cue_name_steps(
     cue: Any,
     name: str,
@@ -930,6 +976,7 @@ def _delete_cue_point_steps(
     if cue is None:
         return {"deleted": False, "reason": "no cue at time"}
     cue_time = float(cue.time)
+    before = _cue_snapshot(song)
     previous_time = float(song.current_song_time)
     previous_quantization = song.clip_trigger_quantization
     try:
@@ -939,7 +986,7 @@ def _delete_cue_point_steps(
             target=cue_time,
         )
         song.set_or_delete_cue()
-        yield from _wait_for_cue_state_steps(song, cue_time, should_exist=False)
+        yield from _wait_for_deleted_cue_steps(song, cue_time, before=before)
         return {"deleted": True, "time": cue_time}
     finally:
         yield from _verified_cue_position_steps(

@@ -118,6 +118,11 @@ class SnappingCueSong(FakeSong):
             self.cue_points.remove(existing)
 
 
+class NoopCueSong(FakeSong):
+    def set_or_delete_cue(self) -> None:
+        self.toggle_count += 1
+
+
 def call_across_ticks(
     song: FakeSong,
     application: FakeApplication,
@@ -333,6 +338,73 @@ def test_create_restores_existing_cue_removed_by_grid_snap() -> None:
         ("Existing", 32.0)
     ]
     assert song.current_song_time == 2.0
+
+
+def test_delete_detects_grid_snap_and_removes_unintended_cue() -> None:
+    song = SnappingCueSong()
+    song._current_song_time = 2.0
+    song.cue_points.append(FakeCuePoint("Target", BeatTime(24.0)))
+
+    response = call_across_ticks(
+        song,
+        FakeApplication(),
+        "delete_cue_point",
+        {"time": 24.0},
+        max_ticks=60,
+    )
+
+    assert response["status"] == "error"
+    assert response["code"] == "CUE_SNAPPED_TO_GRID"
+    assert [(cue.name, float(cue.time)) for cue in song.cue_points] == [
+        ("Target", 24.0)
+    ]
+    assert song.current_song_time == 2.0
+
+
+def test_delete_restores_other_existing_cue_removed_by_grid_snap() -> None:
+    song = SnappingCueSong()
+    song._current_song_time = 2.0
+    song.cue_points.extend(
+        [
+            FakeCuePoint("Target", BeatTime(24.0)),
+            FakeCuePoint("Grid", BeatTime(32.0)),
+        ]
+    )
+
+    response = call_across_ticks(
+        song,
+        FakeApplication(),
+        "delete_cue_point",
+        {"time": 24.0},
+        max_ticks=60,
+    )
+
+    assert response["status"] == "error"
+    assert response["code"] == "CUE_SNAPPED_TO_GRID"
+    assert sorted((cue.name, float(cue.time)) for cue in song.cue_points) == [
+        ("Grid", 32.0),
+        ("Target", 24.0),
+    ]
+    assert song.current_song_time == 2.0
+
+
+def test_delete_reports_when_toggle_never_changes_locator_state() -> None:
+    song = NoopCueSong(deferred_writes=True)
+    song.cue_points.append(FakeCuePoint("Target", BeatTime(8.0)))
+
+    response = call_across_ticks(
+        song,
+        FakeApplication(),
+        "delete_cue_point",
+        {"time": 8.0},
+        max_ticks=40,
+    )
+
+    assert response["status"] == "error"
+    assert response["code"] == "LIVE_UNAVAILABLE"
+    assert [(cue.name, float(cue.time)) for cue in song.cue_points] == [
+        ("Target", 8.0)
+    ]
 
 
 def test_bulk_contains_each_grid_snap_without_corrupting_successes() -> None:

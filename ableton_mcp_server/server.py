@@ -442,7 +442,8 @@ def delete_cue_point(time: float) -> Any:
 
     Side effects: mutates the Set in one undo step and temporarily moves the playhead.
     Example: ``delete_cue_point(8.0)`` deletes a cue near beat eight.
-    Edge cases: no cue at the time returns ``deleted: false``.
+    Edge cases: no cue at the time returns ``deleted: false``; an Arrangement-grid
+    snap is reversed and raises ``CUE_SNAPPED_TO_GRID``.
     """
     return _remote("delete_cue_point", models.DeleteCuePointRequest(time=time))
 

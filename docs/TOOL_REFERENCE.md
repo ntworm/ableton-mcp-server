@@ -212,7 +212,7 @@ The FastMCP server exposes 37 snake_case tools. Remote examples below show the J
 - Returns: `deleted`, and the actual cue time when found.
 - Request: `{"type":"delete_cue_point","params":{"time":8.0}}`
 - Response: `{"status":"ok","result":{"deleted":true,"time":8.0}}`
-- Edge cases / side effects: one undo step; move-and-toggle; no match returns `deleted:false`.
+- Edge cases / side effects: one undo step; move-and-toggle; no match returns `deleted:false`. An off-grid snap is reversed—including restoration of a different locator temporarily removed by Live—and returns `CUE_SNAPPED_TO_GRID`.
 
 ### `set_current_song_time(time: float)`
 
