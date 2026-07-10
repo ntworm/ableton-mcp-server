@@ -1,6 +1,6 @@
 # Tool Reference
 
-The FastMCP server exposes 36 snake_case tools. Remote examples below show the JSONL command envelope after MCP/Pydantic validation. All error responses use `{"status":"error","code","message","hint?"}`.
+The FastMCP server exposes 37 snake_case tools. Remote examples below show the JSONL command envelope after MCP/Pydantic validation. All error responses use `{"status":"error","code","message","hint?"}`.
 
 ## Reads
 
@@ -11,6 +11,14 @@ The FastMCP server exposes 36 snake_case tools. Remote examples below show the J
 - Request: `{"type":"get_session_info","params":{}}`
 - Response: `{"status":"ok","result":{"tempo":120.0,"signature_numerator":4,"signature_denominator":4,"is_playing":false,"current_song_time":0.0}}`
 - Edge cases / side effects: pure read; fails if the Remote Script is unavailable.
+
+### `get_bridge_status()`
+
+- Params: none.
+- Returns: endpoint, Python runtime/WSL detection, bridge availability, a live `get_session_info` probe, error, and actionable hint.
+- Request: local MCP invocation; the probe sends `{"type":"get_session_info","params":{}}` to the Remote Script.
+- Response: `{"status":"ok","bridge_available":true,"endpoint":{"host":"127.0.0.1","port":9888},"live":{"tempo":120.0}}`
+- Edge cases / side effects: pure diagnostic read; under WSL, a failed native Linux probe recommends invoking the native Windows executable rather than exposing the listener.
 
 ### `get_track_list()`
 
@@ -47,10 +55,10 @@ The FastMCP server exposes 36 snake_case tools. Remote examples below show the J
 ### `get_ableton_logs(lines: int = 100)`
 
 - Params: `lines`, 1..5000.
-- Returns: tail text from the newest `%APPDATA%\Ableton\Live *\Preferences\Log.txt`.
+- Returns: tail text from the newest supported Ableton `Preferences/Log.txt` location.
 - Request: local MCP argument `{"lines":100}`; no Remote Script command.
 - Response: plain text containing log lines or an `Error:` diagnostic.
-- Edge cases / side effects: local filesystem read only; missing logs are not protocol errors.
+- Edge cases / side effects: local filesystem read only; supports Windows, macOS, mounted Windows profiles under WSL, and the `ABLETON_MCP_LOG_PATH` override; missing logs are not protocol errors.
 
 ### `get_control_surfaces()`
 
@@ -188,7 +196,7 @@ The FastMCP server exposes 36 snake_case tools. Remote examples below show the J
 - Returns: name, observed time, and action `created` or `renamed`.
 - Request: `{"type":"create_cue_point","params":{"name":"Verse","time":8.0}}`
 - Response: `{"status":"ok","result":{"name":"Verse","time":8.0,"action":"created"}}`
-- Edge cases / side effects: one undo step; temporarily moves/restores playhead; never toggles before verified movement.
+- Edge cases / side effects: one undo step; moves/restores both Live cursor properties over UI ticks and never toggles before verified movement.
 
 ### `bulk_create_cue_points(items: list[CuePointSpec])`
 
@@ -212,7 +220,7 @@ The FastMCP server exposes 36 snake_case tools. Remote examples below show the J
 - Returns: observed `current_song_time`.
 - Request: `{"type":"set_current_song_time","params":{"time":32.0}}`
 - Response: `{"status":"ok","result":{"current_song_time":32.0}}`
-- Edge cases / side effects: one undo step; set/read/retry; exhaustion returns `PLAYHEAD_NOT_MOVED`.
+- Edge cases / side effects: one undo step; set/yield/read/retry across Live UI ticks; exhaustion returns `PLAYHEAD_NOT_MOVED`.
 
 ### `set_tempo(tempo: float)`
 
@@ -268,7 +276,7 @@ The FastMCP server exposes 36 snake_case tools. Remote examples below show the J
 - Returns: ordered results, completed count, failing index or `null`, and `rolled_back:false`.
 - Request: `{"type":"run_batch","params":{"commands":[{"type":"set_tempo","params":{"tempo":128.0}}]}}`
 - Response: `{"status":"ok","result":{"results":[{"index":0,"status":"ok","result":{"tempo":128.0}}],"completed":1,"aborted_at":null,"rolled_back":false}}`
-- Edge cases / side effects: one undo step; stops at first error; prior successes persist until one Ctrl+Z.
+- Edge cases / side effects: one outer undo step, including deferred children; stops at first error; prior successes persist until one Ctrl+Z.
 
 ### `add_notes_to_clip(track_index: int, clip_index: int, notes: list[NoteSpec])`
 
@@ -276,7 +284,7 @@ The FastMCP server exposes 36 snake_case tools. Remote examples below show the J
 - Returns: added count, returned note ids, and clip path-id.
 - Request: `{"type":"add_notes_to_clip","params":{"track_index":0,"clip_index":0,"notes":[{"pitch":60,"start_time":0.0,"duration":1.0,"velocity":100,"mute":false}]}}`
 - Response: `{"status":"ok","result":{"added":1,"note_ids":[42],"clip_id":"track:0/clipslot:0/clip"}}`
-- Edge cases / side effects: one undo step; adds without deleting existing notes; requires a MIDI clip.
+- Edge cases / side effects: one undo step; adds without deleting existing notes; requires a MIDI clip. The JSON contract remains dictionaries, while the embedded Python bridge converts them to `Live.Clip.MidiNoteSpecification` objects.
 
 ### `fire_clip(track_index: int, clip_index: int)`
 

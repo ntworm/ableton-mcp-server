@@ -2,6 +2,33 @@
 
 All notable changes to this project are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.1] - 2026-07-09
+
+### Added
+
+- Native Windows bootstrap, packaged Remote Script installer, installation status, and bridge doctor commands.
+- A guarded real-Live acceptance runner that refuses to mutate unless the disposable Set name, MIDI track, and empty clip slot all match.
+- `get_bridge_status`, bringing the public FastMCP surface to 37 tools.
+- Cross-platform Ableton log discovery with an explicit `ABLETON_MCP_LOG_PATH` override.
+
+### Changed
+
+- WSL uses the native Windows MCP executable to reach Live's loopback listener; the listener remains bound to `127.0.0.1:9888`.
+- Live mutations now advance and verify across `update_display` ticks without sleeping on Live's UI thread.
+- Batches execute deferred child operations inside one outer undo step, abort at the first error, and report the exact successful prefix.
+
+### Fixed
+
+- Embedded Python note insertion now constructs `Live.Clip.MidiNoteSpecification` objects instead of passing Max-for-Live-style dictionaries.
+- Transport and loop results are verified only after Live has had a UI tick to apply each write.
+- Cue creation/deletion moves and restores both `current_song_time` and `start_time`, preventing misplaced toggles and false failures.
+- Verbose diagnostics use a consistent `[MCP-Server]` prefix and emit a startup endpoint record.
+- Wheel builds include the canonical contracts module and installable Remote Script assets.
+
+### Security
+
+- The bridge remains loopback-only. WSL compatibility does not expose port 9888 on the LAN.
+
 ## [0.2.0] - 2026-07-09
 
 ### Added

@@ -68,7 +68,7 @@ _MAX_FRAME_BYTES = 1024 * 1024
 
 def _dbg(message: str) -> None:
     if _VERBOSE:
-        logger.info("[PROBE] %s", message)
+        logger.info("[MCP-Server] %s", message)
 
 
 class RemoteError(Exception):
@@ -1358,6 +1358,7 @@ class AbletonMCPServer(ControlSurface):
         self._processor = RequestProcessor(song, application, undo_target)
         self._socket_server = JsonlSocketServer(self._processor)
         self._socket_server.start()
+        _dbg("startup endpoint=127.0.0.1:9888")
         self.show_message("AbletonMCPServer: Active on 127.0.0.1:9888")
 
     def update_display(self) -> None:
