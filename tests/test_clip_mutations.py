@@ -33,7 +33,7 @@ def test_create_clip_rejects_occupied_slot() -> None:
     assert exc_info.value.code == "BAD_INPUT"
 
 
-def test_fire_clip_and_add_notes_use_documented_lom_methods() -> None:
+def test_fire_clip_and_add_notes_use_python_remote_script_lom_types() -> None:
     song = FakeSong()
     app = FakeApplication()
     fired = execute_command(song, app, "fire_clip", {"track_index": 0, "clip_index": 0})
@@ -53,10 +53,12 @@ def test_fire_clip_and_add_notes_use_documented_lom_methods() -> None:
     )
     assert added["added"] == 1
     assert slot.clip is not None
-    assert slot.clip.add_payloads == [
-        {
-            "notes": [
-                {"pitch": 64, "start_time": 1.0, "duration": 0.5, "velocity": 90, "mute": False}
-            ]
-        }
-    ]
+    assert len(slot.clip.add_payloads) == 1
+    specifications = slot.clip.add_payloads[0]
+    assert len(specifications) == 1
+    specification = specifications[0]
+    assert specification.pitch == 64
+    assert specification.start_time == 1.0
+    assert specification.duration == 0.5
+    assert specification.velocity == 90
+    assert specification.mute is False
