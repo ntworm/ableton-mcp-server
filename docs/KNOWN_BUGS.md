@@ -14,9 +14,9 @@ The categories below describe recurring Live API failure shapes rather than one 
 
 **Symptom:** calling `Song.set_or_delete_cue()` deletes a cue when one already exists at the playhead.
 
-**Root cause:** it is a toggle, not a create-only operation. The official [Song LOM reference](https://docs.cycling74.com/apiref/lom/song/#set_or_delete_cue) states that it acts at `current_song_time`. `Song.start_time` instead controls where playback will begin; writing it made cue placement follow the 8-bar global quantization in Live 12 Beta.
+**Root cause:** it is a toggle, not a create-only operation. The official [Song LOM reference](https://docs.cycling74.com/apiref/lom/song/#set_or_delete_cue) states that it acts at `current_song_time`. Hardware-in-loop testing on Live 12.4.5b7 additionally shows that the call can snap that position to the Arrangement editing grid even while `clip_trigger_quantization` is `None`. `Song.start_time` controls where playback will begin and is not the cue cursor.
 
-**Mitigation:** enumerate cue points first. Existing cues are renamed idempotently. New operations move and verify only `current_song_time`, invoke the toggle once, hold the target while observing the result for up to ten UI ticks, verify/retry the name, and only then restore the playback position. `start_time` is never written by cue tools.
+**Mitigation:** enumerate cue points first. Existing cues are renamed idempotently. New operations move and verify only `current_song_time`, snapshot locators, invoke the toggle once, and observe the exact state change. Exact placement is verified before naming. If Live snaps to another time, the script reverses the unintended creation or deletion, restores the original cue name when needed, and returns `CUE_SNAPPED_TO_GRID`. Disable Arrangement Snap-to-Grid or use a grid-aligned time. The public LOM does not expose the Arrangement grid switch, so the MCP does not fake exact placement. `start_time` is never written by cue tools.
 
 ## Category C — Read-only properties that look writable
 

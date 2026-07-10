@@ -196,7 +196,7 @@ The FastMCP server exposes 37 snake_case tools. Remote examples below show the J
 - Returns: name, observed time, and action `created` or `renamed`.
 - Request: `{"type":"create_cue_point","params":{"name":"Verse","time":8.0}}`
 - Response: `{"status":"ok","result":{"name":"Verse","time":8.0,"action":"created"}}`
-- Edge cases / side effects: one undo step; moves only `current_song_time`, toggles exactly once, verifies creation and naming across UI ticks, then restores playback position without changing `start_time`.
+- Edge cases / side effects: one undo step; moves only `current_song_time`, toggles exactly once, verifies creation and naming across UI ticks, then restores playback position without changing `start_time`. If Live's Arrangement grid snaps the toggle to another time, the unintended state change is reversed and the call returns `CUE_SNAPPED_TO_GRID`.
 
 ### `bulk_create_cue_points(items: list[CuePointSpec])`
 
@@ -204,7 +204,7 @@ The FastMCP server exposes 37 snake_case tools. Remote examples below show the J
 - Returns: per-item status/result or typed error.
 - Request: `{"type":"bulk_create_cue_points","params":{"items":[{"name":"Verse","time":8.0}]}}`
 - Response: `{"status":"ok","result":{"results":[{"index":0,"status":"ok","result":{"action":"created"}}]}}`
-- Edge cases / side effects: one undo step for the command; item failures do not stop later items; one shared cursor scope is restored after the bulk finishes; the transport deadline scales with item count.
+- Edge cases / side effects: one undo step for the command; item failures do not stop later items; off-grid snaps are reversed per item and reported as `CUE_SNAPPED_TO_GRID`; one shared cursor scope is restored after the bulk finishes; the transport deadline scales with item count.
 
 ### `delete_cue_point(time: float)`
 

@@ -418,6 +418,7 @@ def create_cue_point(name: str, time: float) -> Any:
     Side effects: mutates the Set in one undo step and temporarily moves the playhead.
     Example: ``create_cue_point("Verse", 8.0)`` creates a locator.
     Edge cases: verified movement failure raises ``PLAYHEAD_NOT_MOVED`` before toggling.
+    Arrangement-grid snap is reversed and raises ``CUE_SNAPPED_TO_GRID``.
     """
     return _remote("create_cue_point", models.CreateCuePointRequest(name=name, time=time))
 
@@ -428,7 +429,8 @@ def bulk_create_cue_points(items: list[dict[str, Any]]) -> Any:
 
     Side effects: mutates all successful items inside one undo step.
     Example: ``bulk_create_cue_points([{"name": "A", "time": 0}])``.
-    Edge cases: per-item errors are aggregated instead of aborting later items.
+    Edge cases: per-item errors are aggregated instead of aborting later items;
+    off-grid snaps are reversed and reported as ``CUE_SNAPPED_TO_GRID``.
     """
     request = models.BulkCuePointsRequest.model_validate({"items": items})
     return _remote("bulk_create_cue_points", request)

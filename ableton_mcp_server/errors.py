@@ -86,6 +86,10 @@ class PlayheadNotMovedError(BridgeError):
         )
 
 
+class CueSnappedToGridError(BridgeError):
+    default_code = "CUE_SNAPPED_TO_GRID"
+
+
 _ERROR_TYPES: dict[str, type[BridgeError]] = {
     cls.default_code: cls
     for cls in (
@@ -96,6 +100,7 @@ _ERROR_TYPES: dict[str, type[BridgeError]] = {
         LiveUnavailableError,
         InternalBridgeError,
         PlayheadNotMovedError,
+        CueSnappedToGridError,
         StaleReferenceError,
         WrongTypeError,
         BadInputError,

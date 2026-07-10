@@ -19,7 +19,8 @@ All notable changes to this project are documented in this file. The format foll
 - Windows socket failures become typed `LIVE_UNAVAILABLE` errors and keep mutation retry decisions explicit.
 - Delayed cue toggles no longer race cursor restoration and leave default-name markers at the restored position.
 - Cue names are verified and idempotently retried when Live drops a name write.
-- Cue operations no longer write `Song.start_time`; the official LOM defines the toggle position as `current_song_time`, while changing `start_time` caused 8-bar/32-beat placement.
+- Cue operations no longer write `Song.start_time`; the official LOM defines it as the playback start position rather than the cue cursor.
+- Live 12 Beta Arrangement-grid snapping is detected transactionally. An unintended off-grid cue creation or deletion is reversed and returned as `CUE_SNAPPED_TO_GRID` instead of leaking or corrupting a locator.
 
 ## [0.2.1] - 2026-07-09
 

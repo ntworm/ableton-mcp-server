@@ -27,6 +27,7 @@ from ._contracts import (
     DEFAULT_HOST,
     DEFAULT_PORT,
     ERROR_BAD_INPUT,
+    ERROR_CUE_SNAPPED_TO_GRID,
     ERROR_INTERNAL_ERROR,
     ERROR_INVALID_PARAMS,
     ERROR_LIVE_UNAVAILABLE,
@@ -101,6 +102,18 @@ class PlayheadNotMovedError(RemoteError):
             "Transport setter did not reach the requested value "
             "(asked=%s, got=%s after %s attempts)." % (requested, actual, attempts),
             "Live may be in a transitional state; retry after it settles.",
+        )
+
+
+class CueSnappedToGridError(RemoteError):
+    def __init__(self, requested: float, actual: float) -> None:
+        self.requested = requested
+        self.actual = actual
+        super().__init__(
+            ERROR_CUE_SNAPPED_TO_GRID,
+            "Live snapped the cue operation from requested %s to %s. "
+            "The unintended grid operation was reversed." % (requested, actual),
+            "Disable Arrangement Snap-to-Grid (Ctrl/Cmd+4) or use a grid-aligned time.",
         )
 
 
@@ -702,6 +715,24 @@ def _find_cue(song: Any, target_time: float) -> Any:
     return None
 
 
+def _cue_snapshot(song: Any) -> dict[float, str]:
+    return {float(cue.time): str(_safe(lambda cue=cue: cue.name, "")) for cue in song.cue_points}
+
+
+def _snapshot_has_time(snapshot: dict[float, str], target_time: float) -> bool:
+    return any(
+        abs(cue_time - target_time) < CUE_TIME_TOLERANCE for cue_time in snapshot
+    )
+
+
+def _cue_snapshot_delta(
+    before: dict[float, str], after: dict[float, str]
+) -> tuple[list[float], list[float]]:
+    added = [time for time in after if not _snapshot_has_time(before, time)]
+    removed = [time for time in before if not _snapshot_has_time(after, time)]
+    return added, removed
+
+
 def _wait_for_cue_state_steps(
     song: Any,
     target_time: float,
@@ -726,6 +757,74 @@ def _wait_for_cue_state_steps(
         ERROR_LIVE_UNAVAILABLE,
         "set_or_delete_cue() did not %s the cue near %s after %s UI ticks."
         % (action, target_time, ticks),
+    )
+
+
+def _reverse_snapped_cue_toggle_steps(
+    song: Any,
+    *,
+    requested_time: float,
+    before: dict[float, str],
+    after: dict[float, str],
+) -> Generator[None, None, None]:
+    """Reverse the one off-grid toggle before reporting a typed failure."""
+
+    added, removed = _cue_snapshot_delta(before, after)
+    if len(added) == 1 and not removed:
+        actual_time = added[0]
+        yield from _verified_cue_position_steps(song, target=actual_time)
+        song.set_or_delete_cue()
+        yield from _wait_for_cue_state_steps(song, actual_time, should_exist=False)
+        raise CueSnappedToGridError(requested_time, actual_time)
+    if len(removed) == 1 and not added:
+        actual_time = removed[0]
+        original_name = before[actual_time]
+        yield from _verified_cue_position_steps(song, target=actual_time)
+        song.set_or_delete_cue()
+        restored = yield from _wait_for_cue_state_steps(
+            song, actual_time, should_exist=True
+        )
+        yield from _verified_cue_name_steps(restored, original_name)
+        raise CueSnappedToGridError(requested_time, actual_time)
+    raise RemoteError(
+        ERROR_LIVE_UNAVAILABLE,
+        "Cue state changed unexpectedly after an off-grid toggle; automatic reversal "
+        "was not safe.",
+        "Inspect Arrangement locators before retrying.",
+    )
+
+
+def _wait_for_created_cue_steps(
+    song: Any,
+    target_time: float,
+    *,
+    before: dict[float, str],
+    ticks: int = CUE_OPERATION_VERIFY_TICKS,
+) -> Generator[None, None, Any]:
+    """Observe exact creation or reverse a grid-snapped toggle."""
+
+    for attempt in range(ticks):
+        yield
+        cue = _find_cue(song, target_time)
+        if cue is not None:
+            return cue
+        after = _cue_snapshot(song)
+        added, removed = _cue_snapshot_delta(before, after)
+        _dbg(
+            "cue_create time=%s observed=False added=%r removed=%r tick_attempt=%s"
+            % (target_time, added, removed, attempt + 1)
+        )
+        if added or removed:
+            yield from _reverse_snapped_cue_toggle_steps(
+                song,
+                requested_time=target_time,
+                before=before,
+                after=after,
+            )
+    raise RemoteError(
+        ERROR_LIVE_UNAVAILABLE,
+        "set_or_delete_cue() did not create the cue near %s after %s UI ticks."
+        % (target_time, ticks),
     )
 
 
@@ -789,13 +888,16 @@ def _create_cue_at_cursor_steps(
         yield from _verified_cue_name_steps(existing, name)
         return {"name": name, "time": float(existing.time), "action": "renamed"}
 
+    before = _cue_snapshot(song)
     yield from _verified_cue_position_steps(
         song,
         target=target_time,
     )
     song.set_or_delete_cue()
-    created = yield from _wait_for_cue_state_steps(
-        song, target_time, should_exist=True
+    created = yield from _wait_for_created_cue_steps(
+        song,
+        target_time,
+        before=before,
     )
     yield from _verified_cue_name_steps(created, name)
     return {"name": name, "time": float(created.time), "action": "created"}

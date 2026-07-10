@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import queue
 from typing import Any
 
@@ -88,6 +89,33 @@ class LaggyCueSong(FakeSong):
             else:
                 self.cue_points.remove(existing)
             self._pending_toggle_ticks = None
+
+
+class SnappingCueSong(FakeSong):
+    """Model Live 12's Arrangement grid snap during cue toggling."""
+
+    def __init__(self, *, grid_size: float = 32.0) -> None:
+        super().__init__(deferred_writes=True)
+        self.grid_size = grid_size
+
+    def set_or_delete_cue(self) -> None:
+        self.toggle_count += 1
+        snapped = math.floor(
+            (self.current_song_time + self.grid_size / 2.0) / self.grid_size
+        ) * self.grid_size
+        self._current_song_time = snapped
+        existing = next(
+            (
+                cue
+                for cue in self.cue_points
+                if abs(float(cue.time) - snapped) < 0.01
+            ),
+            None,
+        )
+        if existing is None:
+            self.cue_points.append(FakeCuePoint("", BeatTime(snapped)))
+        else:
+            self.cue_points.remove(existing)
 
 
 def call_across_ticks(
@@ -264,3 +292,72 @@ def test_bulk_restores_cursors_once_instead_of_between_every_item() -> None:
     assert song.current_song_time == 0.0
     assert song.start_time == 0.0
     assert song.start_time_write_attempts == 0
+
+
+def test_create_detects_grid_snap_and_removes_unintended_cue() -> None:
+    song = SnappingCueSong()
+    song._current_song_time = 2.0
+
+    response = call_across_ticks(
+        song,
+        FakeApplication(),
+        "create_cue_point",
+        {"name": "Off Grid", "time": 24.0},
+        max_ticks=60,
+    )
+
+    assert response["status"] == "error"
+    assert response["code"] == "CUE_SNAPPED_TO_GRID"
+    assert "requested 24.0" in response["message"]
+    assert "32.0" in response["message"]
+    assert song.cue_points == []
+    assert song.current_song_time == 2.0
+
+
+def test_create_restores_existing_cue_removed_by_grid_snap() -> None:
+    song = SnappingCueSong()
+    song._current_song_time = 2.0
+    song.cue_points.append(FakeCuePoint("Existing", BeatTime(32.0)))
+
+    response = call_across_ticks(
+        song,
+        FakeApplication(),
+        "create_cue_point",
+        {"name": "Off Grid", "time": 24.0},
+        max_ticks=60,
+    )
+
+    assert response["status"] == "error"
+    assert response["code"] == "CUE_SNAPPED_TO_GRID"
+    assert [(cue.name, float(cue.time)) for cue in song.cue_points] == [
+        ("Existing", 32.0)
+    ]
+    assert song.current_song_time == 2.0
+
+
+def test_bulk_contains_each_grid_snap_without_corrupting_successes() -> None:
+    song = SnappingCueSong()
+
+    response = call_across_ticks(
+        song,
+        FakeApplication(),
+        "bulk_create_cue_points",
+        {
+            "items": [
+                {"name": "Off Before", "time": 24.0},
+                {"name": "Aligned", "time": 32.0},
+                {"name": "Off After", "time": 40.0},
+            ]
+        },
+        max_ticks=120,
+    )
+
+    results = response["result"]["results"]
+    assert [item["status"] for item in results] == ["error", "ok", "error"]
+    assert [results[index]["code"] for index in (0, 2)] == [
+        "CUE_SNAPPED_TO_GRID",
+        "CUE_SNAPPED_TO_GRID",
+    ]
+    assert [(cue.name, float(cue.time)) for cue in song.cue_points] == [
+        ("Aligned", 32.0)
+    ]
