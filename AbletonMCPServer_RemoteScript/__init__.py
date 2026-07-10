@@ -22,6 +22,7 @@ from typing import Any
 
 from ._contracts import (
     ALLOWED_MUTATIONS,
+    CUE_OPERATION_VERIFY_TICKS,
     CUE_TIME_TOLERANCE,
     DEFAULT_HOST,
     DEFAULT_PORT,
@@ -37,7 +38,7 @@ from ._contracts import (
     ERROR_WRONG_TYPE,
     PLAYHEAD_MOVE_RETRIES,
     READ_ONLY_COMMANDS,
-    REQUEST_TIMEOUT_SECONDS,
+    request_timeout_seconds,
 )
 
 try:  # These modules only exist inside Ableton Live.
@@ -701,6 +702,61 @@ def _find_cue(song: Any, target_time: float) -> Any:
     return None
 
 
+def _wait_for_cue_state_steps(
+    song: Any,
+    target_time: float,
+    *,
+    should_exist: bool,
+    ticks: int = CUE_OPERATION_VERIFY_TICKS,
+) -> Generator[None, None, Any]:
+    """Wait for Live to apply one cue toggle without toggling a second time."""
+
+    cue = _find_cue(song, target_time)
+    for attempt in range(ticks):
+        yield
+        cue = _find_cue(song, target_time)
+        _dbg(
+            "cue_state time=%s expected=%s observed=%s tick_attempt=%s"
+            % (target_time, should_exist, cue is not None, attempt + 1)
+        )
+        if (cue is not None) is should_exist:
+            return cue
+    action = "create" if should_exist else "delete"
+    raise RemoteError(
+        ERROR_LIVE_UNAVAILABLE,
+        "set_or_delete_cue() did not %s the cue near %s after %s UI ticks."
+        % (action, target_time, ticks),
+    )
+
+
+def _verified_cue_name_steps(
+    cue: Any,
+    name: str,
+    *,
+    ticks: int = CUE_OPERATION_VERIFY_TICKS,
+) -> Generator[None, None, None]:
+    """Confirm a cue rename before reporting creation success."""
+
+    cue.name = name
+    actual = str(_safe(lambda: cue.name, ""))
+    if actual == name:
+        return
+    for attempt in range(ticks):
+        yield
+        actual = str(_safe(lambda: cue.name, ""))
+        _dbg(
+            "cue_name asked=%r got=%r tick_attempt=%s" % (name, actual, attempt + 1)
+        )
+        if actual == name:
+            return
+        cue.name = name
+    raise RemoteError(
+        ERROR_LIVE_UNAVAILABLE,
+        "Cue near %s was created but its name did not reach %r after %s UI ticks."
+        % (float(cue.time), name, ticks),
+    )
+
+
 def _verified_cue_cursor_steps(
     song: Any,
     *,
@@ -742,36 +798,39 @@ def _verified_cue_cursor_steps(
     )
 
 
+def _create_cue_at_cursor_steps(
+    song: Any, name: str, target_time: float
+) -> Generator[None, None, dict[str, Any]]:
+    existing = _find_cue(song, target_time)
+    if existing is not None:
+        yield from _verified_cue_name_steps(existing, name)
+        return {"name": name, "time": float(existing.time), "action": "renamed"}
+
+    yield from _verified_cue_cursor_steps(
+        song,
+        current_target=target_time,
+        start_target=target_time,
+    )
+    song.set_or_delete_cue()
+    created = yield from _wait_for_cue_state_steps(
+        song, target_time, should_exist=True
+    )
+    yield from _verified_cue_name_steps(created, name)
+    return {"name": name, "time": float(created.time), "action": "created"}
+
+
 def _create_cue_point_steps(
     song: Any, params: dict[str, Any]
 ) -> Generator[None, None, dict[str, Any]]:
     name = _string_param(params, "name")
     target_time = _float_param(params, "time", 0.0, 100000.0)
-    existing = _find_cue(song, target_time)
-    if existing is not None:
-        existing.name = name
-        return {"name": name, "time": float(existing.time), "action": "renamed"}
 
     previous_time = float(song.current_song_time)
     previous_start = float(song.start_time)
     previous_quantization = song.clip_trigger_quantization
     try:
         song.clip_trigger_quantization = _no_quantization_value()
-        yield from _verified_cue_cursor_steps(
-            song,
-            current_target=target_time,
-            start_target=target_time,
-        )
-        song.set_or_delete_cue()
-        yield
-        created = _find_cue(song, target_time)
-        if created is None:
-            raise RemoteError(
-                ERROR_LIVE_UNAVAILABLE,
-                "set_or_delete_cue() did not create a cue near %s." % target_time,
-            )
-        created.name = name
-        return {"name": name, "time": float(created.time), "action": "created"}
+        return (yield from _create_cue_at_cursor_steps(song, name, target_time))
     finally:
         yield from _verified_cue_cursor_steps(
             song,
@@ -800,12 +859,7 @@ def _delete_cue_point_steps(
             start_target=cue_time,
         )
         song.set_or_delete_cue()
-        yield
-        if _find_cue(song, cue_time) is not None:
-            raise RemoteError(
-                ERROR_LIVE_UNAVAILABLE,
-                "set_or_delete_cue() did not delete the cue near %s." % cue_time,
-            )
+        yield from _wait_for_cue_state_steps(song, cue_time, should_exist=False)
         return {"deleted": True, "time": cue_time}
     finally:
         yield from _verified_cue_cursor_steps(
@@ -823,16 +877,30 @@ def _bulk_create_cue_points_steps(
     if not isinstance(items, list) or not items:
         raise RemoteError(ERROR_INVALID_PARAMS, "Parameter 'items' must be a non-empty list.")
     results = []
-    for index, item in enumerate(items):
-        if not isinstance(item, dict):
-            error = RemoteError(ERROR_INVALID_PARAMS, "Cue item must be an object.")
-            results.append({"index": index, **error.to_envelope()})
-            continue
-        try:
-            result = yield from _create_cue_point_steps(song, item)
-            results.append({"index": index, "status": "ok", "result": result})
-        except RemoteError as error:
-            results.append({"index": index, **error.to_envelope()})
+    previous_time = float(song.current_song_time)
+    previous_start = float(song.start_time)
+    previous_quantization = song.clip_trigger_quantization
+    try:
+        song.clip_trigger_quantization = _no_quantization_value()
+        for index, item in enumerate(items):
+            if not isinstance(item, dict):
+                error = RemoteError(ERROR_INVALID_PARAMS, "Cue item must be an object.")
+                results.append({"index": index, **error.to_envelope()})
+                continue
+            try:
+                name = _string_param(item, "name")
+                target_time = _float_param(item, "time", 0.0, 100000.0)
+                result = yield from _create_cue_at_cursor_steps(song, name, target_time)
+                results.append({"index": index, "status": "ok", "result": result})
+            except RemoteError as error:
+                results.append({"index": index, **error.to_envelope()})
+    finally:
+        yield from _verified_cue_cursor_steps(
+            song,
+            current_target=previous_time,
+            start_target=previous_start,
+        )
+        song.clip_trigger_quantization = previous_quantization
     return {"results": results}
 
 
@@ -1283,10 +1351,13 @@ class JsonlSocketServer:
 
     def _serve_client(self, connection: socket.socket) -> None:
         buffer = bytearray()
-        connection.settimeout(10.0)
+        connection.settimeout(1.0)
         try:
             while not self.shutdown_event.is_set():
-                chunk = connection.recv(4096)
+                try:
+                    chunk = connection.recv(4096)
+                except TimeoutError:
+                    continue
                 if not chunk:
                     break
                 buffer.extend(chunk)
@@ -1328,7 +1399,7 @@ class JsonlSocketServer:
         response_queue: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=1)
         self.processor.enqueue(QueuedRequest(command, params, response_queue))
         try:
-            return response_queue.get(timeout=REQUEST_TIMEOUT_SECONDS)
+            return response_queue.get(timeout=request_timeout_seconds(command, params))
         except queue.Empty:
             return RemoteError(
                 ERROR_TIMEOUT,

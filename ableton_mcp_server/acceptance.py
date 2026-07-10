@@ -12,7 +12,7 @@ class AcceptanceClient(Protocol):
         command_type: str,
         params: Mapping[str, Any] | None = None,
         *,
-        timeout: float = 5.0,
+        timeout: float | None = None,
     ) -> Any: ...
 
 
@@ -38,7 +38,7 @@ def run_live_acceptance(
     """Exercise the real bridge after exact disposable-project confirmation."""
 
     def call(command: str, params: Mapping[str, Any] | None = None) -> Any:
-        return client.call(command, params or {}, timeout=5.0)
+        return client.call(command, params or {}, timeout=None)
 
     metadata = call("get_project_metadata")
     actual_name = str(metadata.get("song_name", ""))

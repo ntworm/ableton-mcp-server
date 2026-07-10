@@ -24,9 +24,44 @@ ERROR_WRONG_TYPE = "WRONG_TYPE"
 ERROR_BAD_INPUT = "BAD_INPUT"
 
 CUE_TIME_TOLERANCE = 0.01
-PLAYHEAD_MOVE_RETRIES = 3
+CUE_OPERATION_VERIFY_TICKS = 10
+PLAYHEAD_MOVE_RETRIES = 10
 SNAPSHOT_REFRESH_INTERVAL_MS = 100
-REQUEST_TIMEOUT_SECONDS = 6.0
+REQUEST_TIMEOUT_SECONDS = 20.0
+REQUEST_TIMEOUT_PER_WORK_UNIT_SECONDS = 2.0
+
+
+def _request_work_units(command_name: str, params: object) -> int:
+    if not isinstance(params, dict):
+        return 1
+    normalized = command_name.strip().lower()
+    if normalized == "bulk_create_cue_points":
+        items = params.get("items")
+        return max(1, len(items)) if isinstance(items, list) else 1
+    if normalized == "run_batch":
+        commands = params.get("commands")
+        if not isinstance(commands, list):
+            return 1
+        units = 0
+        for command in commands:
+            if not isinstance(command, dict):
+                units += 1
+                continue
+            command_type = command.get("type")
+            command_params = command.get("params", {})
+            units += _request_work_units(
+                command_type if isinstance(command_type, str) else "",
+                command_params,
+            )
+        return max(1, units)
+    return 1
+
+
+def request_timeout_seconds(command_name: str, params: object) -> float:
+    """Return a shared client/server deadline scaled to serialized UI work."""
+
+    work_units = _request_work_units(command_name, params)
+    return REQUEST_TIMEOUT_SECONDS + (work_units - 1) * REQUEST_TIMEOUT_PER_WORK_UNIT_SECONDS
 
 READ_COMMANDS = frozenset(
     {

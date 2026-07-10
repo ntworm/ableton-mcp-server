@@ -19,10 +19,10 @@ class MetadataOnlyClient:
         command: str,
         _params: dict[str, Any],
         *,
-        timeout: float = 5.0,
+        timeout: float | None = None,
     ) -> Any:
         self.calls.append(command)
-        assert timeout == 5.0
+        assert timeout is None
         return {"song_name": "Valuable Project", "file_path": "valuable.als"}
 
 

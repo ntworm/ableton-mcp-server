@@ -7,9 +7,9 @@ from collections.abc import Mapping
 from contextlib import suppress
 from typing import Any
 
-from contracts import ALLOWED_MUTATIONS, DEFAULT_HOST, DEFAULT_PORT
+from contracts import ALLOWED_MUTATIONS, DEFAULT_HOST, DEFAULT_PORT, request_timeout_seconds
 
-from .errors import BridgeTimeoutError, error_from_envelope
+from .errors import BridgeTimeoutError, LiveUnavailableError, error_from_envelope
 from .protocol import decode_response, encode_request
 
 
@@ -85,10 +85,16 @@ class Client:
         command_type: str,
         params: Mapping[str, Any] | None = None,
         *,
-        timeout: float = 5.0,
+        timeout: float | None = None,
     ) -> Any:
         retries = 0
         may_retry = command_type not in ALLOWED_MUTATIONS
+        request_params = dict(params or {})
+        effective_timeout = (
+            request_timeout_seconds(command_type, request_params)
+            if timeout is None
+            else timeout
+        )
         with self._lock:
             while True:
                 try:
@@ -96,8 +102,8 @@ class Client:
                         self._connect_socket()
                     if self._socket is None:
                         raise ConnectionError("Socket is not connected")
-                    self._socket.sendall(encode_request(command_type, params))
-                    response = decode_response(self._read_line(timeout))
+                    self._socket.sendall(encode_request(command_type, request_params))
+                    response = decode_response(self._read_line(effective_timeout))
                     if response.status == "ok":
                         return response.result
                     assert response.code is not None
@@ -106,7 +112,7 @@ class Client:
                 except TimeoutError as exc:
                     self.close()
                     raise BridgeTimeoutError(
-                        f"Command {command_type!r} timed out after {timeout} seconds",
+                        f"Command {command_type!r} timed out after {effective_timeout} seconds",
                         "For mutations, inspect current state before retrying.",
                     ) from exc
                 except (ConnectionError, OSError) as exc:
@@ -116,6 +122,12 @@ class Client:
                         if self.backoff_factor:
                             time.sleep(self.backoff_factor * (2 ** (retries - 1)))
                         continue
-                    raise ConnectionError(
-                        f"Command {command_type!r} failed at {self.host}:{self.port}: {exc}"
+                    hint = (
+                        "Verify that Live is running and AbletonMCPServer is enabled."
+                        if may_retry
+                        else "For mutations, inspect current Live state before retrying."
+                    )
+                    raise LiveUnavailableError(
+                        f"Command {command_type!r} failed at {self.host}:{self.port}: {exc}",
+                        hint,
                     ) from exc
