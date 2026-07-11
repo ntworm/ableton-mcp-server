@@ -32,6 +32,9 @@ def test_debug_mutations_are_explicitly_allowed() -> None:
         "set_warp_state",
         "load_device_to_track",
         "set_parameter_value",
+        "delete_clip",
+        "clear_clip_notes",
+        "fire_scene",
     }
     assert frozenset(expected) == contracts.ALLOWED_MUTATIONS
     assert expected.isdisjoint(contracts.READ_ONLY_COMMANDS)

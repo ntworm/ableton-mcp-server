@@ -121,6 +121,10 @@ ALLOWED_MUTATIONS = frozenset(
         "load_device_to_track",
         # v0.4.0 — verified device parameter write (TCP)
         "set_parameter_value",
+        # v0.4.0 — Session clip and scene mutations
+        "delete_clip",
+        "clear_clip_notes",
+        "fire_scene",
     }
 )
 

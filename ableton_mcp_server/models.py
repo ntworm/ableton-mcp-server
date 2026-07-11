@@ -89,6 +89,18 @@ class GetSessionOverviewRequest(EmptyRequest):
     pass
 
 
+class DeleteClipRequest(GetClipNotesRequest):
+    pass
+
+
+class ClearClipNotesRequest(GetClipNotesRequest):
+    pass
+
+
+class FireSceneRequest(RequestModel):
+    scene_index: NonNegativeInt
+
+
 class GetDeviceListRequest(RequestModel):
     track_index: NonNegativeInt
 
@@ -432,6 +444,9 @@ TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "get_clip_notes": GetClipNotesRequest,
     "get_clip_info": GetClipInfoRequest,
     "get_session_overview": GetSessionOverviewRequest,
+    "delete_clip": DeleteClipRequest,
+    "clear_clip_notes": ClearClipNotesRequest,
+    "fire_scene": FireSceneRequest,
     "get_device_list": GetDeviceListRequest,
     "get_parameter_value": GetParameterValueRequest,
     "set_parameter_value": SetParameterValueRequest,

@@ -105,6 +105,15 @@ class FakeClip:
         self.fire_count += 1
         self.is_playing = True
 
+    def remove_notes_extended(
+        self,
+        _from_pitch: int,
+        _pitch_span: int,
+        _from_time: float,
+        _time_span: float,
+    ) -> None:
+        self.notes.clear()
+
 
 class FakeClipSlot:
     def __init__(self, clip: FakeClip | None = None) -> None:
@@ -127,6 +136,11 @@ class FakeClipSlot:
             raise RuntimeError("slot is empty")
         self.fire_count += 1
         self.clip.fire()
+
+    def delete_clip(self) -> None:
+        if self.clip is None:
+            raise RuntimeError("slot is empty")
+        self.clip = None
 
 
 class FakeMixerDevice:
@@ -183,6 +197,10 @@ class FakeScene:
     def __init__(self, name: str, clip_slots: list[FakeClipSlot]) -> None:
         self.name = name
         self.clip_slots = clip_slots
+        self.fire_count = 0
+
+    def fire(self) -> None:
+        self.fire_count += 1
 
 
 class FakeSongView:

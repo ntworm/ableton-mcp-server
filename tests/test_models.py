@@ -70,12 +70,15 @@ def test_every_public_tool_has_an_explicit_request_model() -> None:
         "set_warp_state",
         "load_device_to_track",
         "set_parameter_value",
+        "delete_clip",
+        "clear_clip_notes",
+        "fire_scene",
         "scaffold_extension",
         "build_extension",
     }
     assert set(TOOL_REQUEST_MODELS) == reads | mutations
-    assert len(TOOL_REQUEST_MODELS) == 50
-    assert len(set(TOOL_REQUEST_MODELS.values())) == 50
+    assert len(TOOL_REQUEST_MODELS) == 53
+    assert len(set(TOOL_REQUEST_MODELS.values())) == 53
 
 
 @pytest.mark.parametrize("tempo", [19.99, 999.01, math.nan, math.inf])

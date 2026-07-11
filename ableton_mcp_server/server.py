@@ -65,6 +65,9 @@ PUBLIC_TOOL_NAMES = (
     "add_notes_to_clip",
     "fire_clip",
     "create_clip",
+    "delete_clip",
+    "clear_clip_notes",
+    "fire_scene",
     # v0.3.0 — composition diagnostics
     "get_composition_structure",
     "diagnose_midi_clip",
@@ -688,6 +691,45 @@ def create_clip(track_index: int, clip_index: int, length_beats: float) -> Any:
     )
 
 
+@mcp.tool()
+def delete_clip(track_index: int, clip_index: int) -> Any:
+    """Delete one occupied Session clip slot.
+
+    Side effects: deletes a clip in one Live undo step.
+    Example: ``delete_clip(0, 1)`` removes the clip in slot one.
+    Edge cases: empty slots return ``BAD_INPUT``.
+    """
+    return _remote(
+        "delete_clip",
+        models.DeleteClipRequest(track_index=track_index, clip_index=clip_index),
+    )
+
+
+@mcp.tool()
+def clear_clip_notes(track_index: int, clip_index: int) -> Any:
+    """Remove every MIDI note from one Session clip and report the observed delta.
+
+    Side effects: clears notes in one Live undo step.
+    Example: ``clear_clip_notes(0, 1)`` empties a MIDI clip without deleting it.
+    Edge cases: empty or audio clips return structured errors.
+    """
+    return _remote(
+        "clear_clip_notes",
+        models.ClearClipNotesRequest(track_index=track_index, clip_index=clip_index),
+    )
+
+
+@mcp.tool()
+def fire_scene(scene_index: int) -> Any:
+    """Fire one Session scene using Live's current launch quantization.
+
+    Side effects: triggers all playable clips in the selected scene.
+    Example: ``fire_scene(0)`` launches the first scene.
+    Edge cases: an out-of-range index returns ``INVALID_PARAMS``.
+    """
+    return _remote("fire_scene", models.FireSceneRequest(scene_index=scene_index))
+
+
 # ---------------------------------------------------------------------------
 # v0.3.0 — Composition Diagnostics
 # ---------------------------------------------------------------------------
@@ -1000,6 +1042,9 @@ PUBLIC_TOOL_FUNCTIONS = (
     add_notes_to_clip,
     fire_clip,
     create_clip,
+    delete_clip,
+    clear_clip_notes,
+    fire_scene,
     # v0.3.0
     get_composition_structure,
     diagnose_midi_clip,

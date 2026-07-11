@@ -1264,6 +1264,57 @@ def cmd_fire_clip(song: Any, _application: Any, params: dict[str, Any]) -> dict[
     return {"fired": True, "clip_id": "track:%s/clipslot:%s/clip" % (track_index, clip_index)}
 
 
+def cmd_delete_clip(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, Any]:
+    track_index = _integer_param(params, "track_index")
+    clip_index = _integer_param(params, "clip_index")
+    _track, slot = _clip_slot(song, track_index, clip_index)
+    if not bool(_safe(lambda: slot.has_clip, False)):
+        raise RemoteError(ERROR_BAD_INPUT, "Clip slot is empty.")
+    slot.delete_clip()
+    return {
+        "deleted": True,
+        "clip_id": "track:%s/clipslot:%s/clip" % (track_index, clip_index),
+    }
+
+
+def cmd_fire_scene(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, Any]:
+    scene_index = _integer_param(params, "scene_index")
+    scenes = list(_safe(lambda: song.scenes, []))
+    if scene_index >= len(scenes):
+        raise RemoteError(ERROR_INVALID_PARAMS, "Scene index %s does not exist." % scene_index)
+    scene = scenes[scene_index]
+    scene.fire()
+    return {
+        "fired": True,
+        "scene_index": scene_index,
+        "name": str(_safe(lambda: scene.name, "")),
+    }
+
+
+def _clear_clip_notes_steps(
+    song: Any,
+    params: dict[str, Any],
+) -> Generator[None, None, dict[str, Any]]:
+    track_index = _integer_param(params, "track_index")
+    clip_index = _integer_param(params, "clip_index")
+    _track, slot = _clip_slot(song, track_index, clip_index)
+    clip = _safe(lambda: slot.clip, None)
+    if clip is None:
+        raise RemoteError(ERROR_BAD_INPUT, "Clip slot is empty.")
+    if not bool(_safe(lambda: clip.is_midi_clip, False)):
+        raise RemoteError(ERROR_WRONG_TYPE, "clear_clip_notes requires a MIDI clip.")
+    before = len(list(clip.get_notes_extended(0, 128, -8192.0, 16384.0)))
+    length = float(_safe(lambda: clip.length, 0.0))
+    clip.remove_notes_extended(0, 128, 0.0, max(1.0, length + 1.0))
+    yield
+    after = len(list(clip.get_notes_extended(0, 128, -8192.0, 16384.0)))
+    return {
+        "cleared": True,
+        "notes_removed": max(0, before - after),
+        "clip_id": "track:%s/clipslot:%s/clip" % (track_index, clip_index),
+    }
+
+
 def cmd_add_notes_to_clip(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, Any]:
     track_index = _integer_param(params, "track_index")
     clip_index = _integer_param(params, "clip_index")
@@ -1574,6 +1625,8 @@ COMMAND_HANDLERS: dict[str, CommandHandler] = {
     "list_device_params": cmd_list_device_params,
     "create_clip": cmd_create_clip,
     "fire_clip": cmd_fire_clip,
+    "delete_clip": cmd_delete_clip,
+    "fire_scene": cmd_fire_scene,
     "add_notes_to_clip": cmd_add_notes_to_clip,
     # v0.3.0
     "get_composition_structure": cmd_get_composition_structure,
@@ -1687,6 +1740,8 @@ def _dispatch_command_steps(
         )
     if normalized == "set_parameter_value":
         return (yield from _set_parameter_value_steps(song, params))
+    if normalized == "clear_clip_notes":
+        return (yield from _clear_clip_notes_steps(song, params))
     if normalized == "start_playback":
         return (
             yield from _verified_boolean_steps(
