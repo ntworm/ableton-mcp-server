@@ -1398,6 +1398,93 @@ def _set_clip_properties_steps(
     return result
 
 
+def _automation_parameter(track: Any, parameter_name: str) -> Any:
+    normalized = parameter_name.casefold().replace(" ", "_")
+    mixer = _safe(lambda: track.mixer_device, None)
+    if normalized == "volume":
+        return _safe(lambda: mixer.volume, None)
+    if normalized in ("pan", "panning"):
+        return _safe(lambda: mixer.panning, None)
+    send_match = re.fullmatch(r"send_([a-h])", normalized)
+    if send_match is not None:
+        index = ord(send_match.group(1)) - ord("a")
+        sends = list(_safe(lambda: mixer.sends, []))
+        return sends[index] if index < len(sends) else None
+    for device in _safe(lambda: track.devices, []):
+        for parameter in _safe(lambda device=device: device.parameters, []):
+            if str(_safe(lambda parameter=parameter: parameter.name, "")) == parameter_name:
+                return parameter
+    return None
+
+
+def _create_clip_automation_steps(
+    song: Any,
+    params: dict[str, Any],
+) -> Generator[None, None, dict[str, Any]]:
+    track_index = _integer_param(params, "track_index")
+    clip_index = _integer_param(params, "clip_index")
+    parameter_name = _string_param(params, "parameter_name")
+    raw_points = _required(params, "automation_points")
+    if not isinstance(raw_points, list) or not raw_points or len(raw_points) > 500:
+        raise RemoteError(
+            ERROR_INVALID_PARAMS,
+            "automation_points must contain between 1 and 500 points.",
+        )
+    track, slot = _clip_slot(song, track_index, clip_index)
+    clip = _safe(lambda: slot.clip, None)
+    if clip is None:
+        raise RemoteError(ERROR_BAD_INPUT, "Clip slot is empty.")
+    if not bool(_safe(lambda: clip.is_session_clip, True)):
+        raise RemoteError(ERROR_WRONG_TYPE, "Automation is limited to Session clips.")
+    parameter = _automation_parameter(track, parameter_name)
+    if parameter is None:
+        raise RemoteError(ERROR_INVALID_PARAMS, "Parameter %r was not found." % parameter_name)
+    if not bool(_safe(lambda: parameter.is_enabled, True)):
+        raise RemoteError(ERROR_WRONG_TYPE, "Parameter %r is disabled." % parameter_name)
+    minimum = float(_safe(lambda: parameter.min, 0.0))
+    maximum = float(_safe(lambda: parameter.max, 1.0))
+    points: list[tuple[float, float]] = []
+    for raw_point in raw_points:
+        if not isinstance(raw_point, dict):
+            raise RemoteError(ERROR_INVALID_PARAMS, "Each automation point must be an object.")
+        point_time = _float_param(raw_point, "time", 0.0, 100000.0)
+        value = _float_param(raw_point, "value", -1000000.0, 1000000.0)
+        if value < minimum or value > maximum:
+            raise RemoteError(
+                ERROR_INVALID_PARAMS,
+                "Automation value %s is outside [%s, %s] for parameter %r."
+                % (value, minimum, maximum, parameter_name),
+            )
+        points.append((point_time, value))
+    points.sort(key=lambda point: point[0])
+    envelope_getter = _safe(lambda: clip.automation_envelope_for_parameter, None)
+    clear_envelope = _safe(lambda: clip.clear_envelope, None)
+    if not callable(envelope_getter) or not callable(clear_envelope):
+        raise RemoteError(
+            ERROR_LIVE_UNAVAILABLE,
+            "Live runtime does not expose the clip automation envelope API.",
+        )
+    clear_envelope(parameter)
+    envelope = envelope_getter(parameter)
+    insert_step = _safe(lambda: envelope.insert_step, None)
+    if not callable(insert_step):
+        raise RemoteError(
+            ERROR_LIVE_UNAVAILABLE,
+            "Live runtime does not expose automation envelope insertion.",
+        )
+    for point_time, value in points:
+        insert_step(point_time, 0.0, value)
+    yield
+    if not bool(_safe(lambda: clip.has_envelopes, False)):
+        raise RemoteError(ERROR_LIVE_UNAVAILABLE, "Clip automation write was not observed.")
+    return {
+        "parameter_name": str(_safe(lambda: parameter.name, parameter_name)),
+        "points_written": len(points),
+        "times": [point_time for point_time, _value in points],
+        "clip_id": "track:%s/clipslot:%s/clip" % (track_index, clip_index),
+    }
+
+
 def cmd_add_notes_to_clip(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, Any]:
     track_index = _integer_param(params, "track_index")
     clip_index = _integer_param(params, "clip_index")
@@ -1829,6 +1916,8 @@ def _dispatch_command_steps(
         return (yield from _set_track_property_steps(song, params))
     if normalized == "set_clip_properties":
         return (yield from _set_clip_properties_steps(song, params))
+    if normalized == "create_clip_automation":
+        return (yield from _create_clip_automation_steps(song, params))
     if normalized == "start_playback":
         return (
             yield from _verified_boolean_steps(

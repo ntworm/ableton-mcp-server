@@ -132,6 +132,8 @@ ALLOWED_MUTATIONS = frozenset(
         # v0.4.0 — verified track and clip attributes
         "set_track_property",
         "set_clip_properties",
+        # v0.4.0 — Session clip automation only
+        "create_clip_automation",
     }
 )
 

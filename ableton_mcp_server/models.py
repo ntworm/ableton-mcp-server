@@ -135,6 +135,31 @@ class SetClipPropertiesRequest(GetClipNotesRequest):
         return self
 
 
+class AutomationPoint(RequestModel):
+    time: NonNegativeBeat
+    value: float
+
+    @field_validator("value")
+    @classmethod
+    def finite_automation_value(cls, value: float) -> float:
+        if not math.isfinite(value):
+            raise ValueError("automation value must be finite")
+        return value
+
+
+class CreateClipAutomationRequest(GetClipNotesRequest):
+    parameter_name: Annotated[str, Field(min_length=1, max_length=256)]
+    automation_points: Annotated[list[AutomationPoint], Field(min_length=1, max_length=500)]
+
+    @field_validator("parameter_name")
+    @classmethod
+    def strip_automation_parameter(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("parameter_name must be non-empty")
+        return value
+
+
 class GetDeviceListRequest(RequestModel):
     track_index: NonNegativeInt
 
@@ -483,6 +508,7 @@ TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "fire_scene": FireSceneRequest,
     "set_track_property": SetTrackPropertyRequest,
     "set_clip_properties": SetClipPropertiesRequest,
+    "create_clip_automation": CreateClipAutomationRequest,
     "get_device_list": GetDeviceListRequest,
     "get_parameter_value": GetParameterValueRequest,
     "set_parameter_value": SetParameterValueRequest,

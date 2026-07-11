@@ -70,6 +70,7 @@ PUBLIC_TOOL_NAMES = (
     "fire_scene",
     "set_track_property",
     "set_clip_properties",
+    "create_clip_automation",
     # v0.3.0 — composition diagnostics
     "get_composition_structure",
     "diagnose_midi_clip",
@@ -785,6 +786,30 @@ def set_clip_properties(
     )
 
 
+@mcp.tool()
+def create_clip_automation(
+    track_index: int,
+    clip_index: int,
+    parameter_name: str,
+    automation_points: list[dict[str, float]],
+) -> Any:
+    """Replace one Session clip parameter envelope with verified breakpoints.
+
+    Side effects: clears and rewrites one clip envelope in one Live undo step.
+    Example: ``create_clip_automation(0, 1, "volume", [{"time": 0, "value": 0.5}])``.
+    Edge cases: requires Session-clip automation APIs and accepts at most 500 points.
+    """
+    request = models.CreateClipAutomationRequest.model_validate(
+        {
+            "track_index": track_index,
+            "clip_index": clip_index,
+            "parameter_name": parameter_name,
+            "automation_points": automation_points,
+        }
+    )
+    return _remote("create_clip_automation", request)
+
+
 # ---------------------------------------------------------------------------
 # v0.3.0 — Composition Diagnostics
 # ---------------------------------------------------------------------------
@@ -1102,6 +1127,7 @@ PUBLIC_TOOL_FUNCTIONS = (
     fire_scene,
     set_track_property,
     set_clip_properties,
+    create_clip_automation,
     # v0.3.0
     get_composition_structure,
     diagnose_midi_clip,

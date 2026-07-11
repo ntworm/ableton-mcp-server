@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -39,11 +39,14 @@ class FakeParameter:
 
 
 class FakeAutomationEnvelope:
-    def __init__(self) -> None:
+    def __init__(self, on_insert: Callable[[], None] | None = None) -> None:
         self.steps: list[tuple[float, float, float]] = []
+        self._on_insert = on_insert
 
     def insert_step(self, time: float, duration: float, value: float) -> None:
         self.steps.append((time, duration, value))
+        if self._on_insert is not None:
+            self._on_insert()
 
 
 class FakeBrowserItem:
@@ -75,6 +78,9 @@ class FakeClip:
         self.length = length
         self.loop_start = 0.0
         self.loop_end = length
+        self.is_session_clip = True
+        self.has_envelopes = False
+        self._automation_envelopes: dict[FakeParameter, FakeAutomationEnvelope] = {}
         self.is_midi_clip = midi
         self.is_playing = False
         self.notes = [FakeNote(60, 0.0, 1.0, 100)] if midi else []
@@ -115,6 +121,19 @@ class FakeClip:
         _time_span: float,
     ) -> None:
         self.notes.clear()
+
+    def automation_envelope_for_parameter(
+        self, parameter: FakeParameter
+    ) -> FakeAutomationEnvelope:
+        if parameter not in self._automation_envelopes:
+            self._automation_envelopes[parameter] = FakeAutomationEnvelope(
+                lambda: setattr(self, "has_envelopes", True)
+            )
+        return self._automation_envelopes[parameter]
+
+    def clear_envelope(self, parameter: FakeParameter) -> None:
+        self.automation_envelope_for_parameter(parameter).steps.clear()
+        self.has_envelopes = False
 
 
 class FakeClipSlot:

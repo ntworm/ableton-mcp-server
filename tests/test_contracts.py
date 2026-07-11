@@ -37,6 +37,7 @@ def test_debug_mutations_are_explicitly_allowed() -> None:
         "fire_scene",
         "set_track_property",
         "set_clip_properties",
+        "create_clip_automation",
     }
     assert frozenset(expected) == contracts.ALLOWED_MUTATIONS
     assert expected.isdisjoint(contracts.READ_ONLY_COMMANDS)
