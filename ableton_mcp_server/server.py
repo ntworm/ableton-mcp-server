@@ -938,10 +938,10 @@ async def load_device_to_track(track_index: int, device_uri: str) -> str:
     Example: ``load_device_to_track(0, "Operator")`` loads Operator on track 0.
     Edge cases: requires the AbletonMCPServer Extension to be installed.
     """
-    models.LoadDeviceToTrackRequest(track_index=track_index, device_uri=device_uri)
+    request = models.LoadDeviceToTrackRequest(track_index=track_index, device_uri=device_uri)
     result = await _remote_ws(
         "load_device_to_track",
-        {"track_index": track_index, "device_uri": device_uri},
+        request.model_dump(mode="json"),
     )
     return json.dumps(result, indent=2)
 
