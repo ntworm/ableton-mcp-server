@@ -2,6 +2,35 @@
 
 All notable changes to this project are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.0] - 2026-07-11
+
+### Added
+
+- Ten public tools, bringing the FastMCP surface to 56:
+  - `set_parameter_value` with bounds, enabled-state, close-name suggestions, deferred readback, and batch support.
+  - `get_clip_info`, `get_session_overview`, and bounded TCP `search_browser` reads.
+  - `delete_clip`, `clear_clip_notes`, `fire_scene`, `set_track_property`, and `set_clip_properties` Session operations.
+  - Capability-gated `create_clip_automation` for Session clip parameter envelopes.
+- Optional MIDI note `probability`, `release_velocity`, and `velocity_deviation` fields.
+- Backward-compatible server version, tool count, WebSocket method, runtime, and feature metadata in `get_bridge_status`.
+- Command-specific deadlines and bounded work-unit scaling for device loading, Browser search, clip properties, note clearing, and automation.
+
+### Changed
+
+- `load_device_to_track` remains the existing WebSocket-routed tool and now has explicit 30-second timeout coverage; it was not duplicated.
+- Optional MIDI expression fields are omitted from legacy wire payloads unless requested.
+- Browser search uses the Remote Script's existing `application.browser` access and does not require the Extension.
+
+### Safety
+
+- All new Python LOM work remains on Live's UI-thread queue. Mutations use the explicit allowlist, one undo step, and no automatic replay after ambiguous network failure.
+- Browser traversal is bounded by depth, per-node children, visited nodes, and results. Automation is limited to Session clips and fails explicitly when host APIs are absent.
+
+### Attribution
+
+- Design inspiration: `pnomolos/live-wire` at `7fc8b06` — https://github.com/pnomolos/live-wire
+- Design inspiration: `hidingwill/AbletonBridge` at `01c31c4e` — https://github.com/hidingwill/AbletonBridge
+
 ## [0.3.0] - 2026-07-10
 
 ### Added

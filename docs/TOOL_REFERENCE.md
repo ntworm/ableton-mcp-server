@@ -1,6 +1,6 @@
 # Tool Reference
 
-The FastMCP server exposes 37 snake_case tools. Remote examples below show the JSONL command envelope after MCP/Pydantic validation. All error responses use `{"status":"error","code","message","hint?"}`.
+The FastMCP server exposes 56 snake_case tools. Remote examples below show the JSONL command envelope after MCP/Pydantic validation. All error responses use `{"status":"error","code","message","hint?"}`.
 
 ## Reads
 
@@ -280,7 +280,7 @@ The FastMCP server exposes 37 snake_case tools. Remote examples below show the J
 
 ### `add_notes_to_clip(track_index: int, clip_index: int, notes: list[NoteSpec])`
 
-- Params: track/slot indexes and 1..2048 notes (`pitch`, `start_time`, `duration`, optional `velocity`, `mute`).
+- Params: track/slot indexes and 1..2048 notes (`pitch`, `start_time`, `duration`, optional `velocity`, `mute`, `probability`, `release_velocity`, `velocity_deviation`).
 - Returns: added count, returned note ids, and clip path-id.
 - Request: `{"type":"add_notes_to_clip","params":{"track_index":0,"clip_index":0,"notes":[{"pitch":60,"start_time":0.0,"duration":1.0,"velocity":100,"mute":false}]}}`
 - Response: `{"status":"ok","result":{"added":1,"note_ids":[42],"clip_id":"track:0/clipslot:0/clip"}}`
@@ -301,3 +301,62 @@ The FastMCP server exposes 37 snake_case tools. Remote examples below show the J
 - Request: `{"type":"create_clip","params":{"track_index":0,"clip_index":1,"length_beats":4.0}}`
 - Response: `{"status":"ok","result":{"created":true,"clip_id":"track:0/clipslot:1/clip","length_beats":4.0}}`
 - Edge cases / side effects: one undo step; only empty Session slots on MIDI tracks are supported.
+
+## v0.4.0 capability expansion
+
+### `set_parameter_value(track_index, device_index, parameter_name, value)`
+
+- Params: exact parameter name and finite value within the parameter's reported bounds.
+- Returns: requested target, observed value, and `is_quantized`.
+- Request: `{"type":"set_parameter_value","params":{"track_index":0,"device_index":0,"parameter_name":"Filter Freq","value":0.75}}`
+- Edge cases / side effects: one undo step; disabled, unknown, or out-of-range parameters are rejected. Unknown names include close suggestions. The write is read back and retried once; it is valid inside `run_batch`.
+
+### `get_clip_info(track_index, clip_index)`
+
+- Returns stable Session slot metadata including name, loop bounds, color, type, playing/trigger state, mute state, and time signature.
+- Empty slots return `{"has_clip":false,"clip_id":null}`.
+- Edge cases / side effects: pure TCP read; return/master tracks return `WRONG_TYPE`.
+
+### `get_session_overview()`
+
+- Locally composes `get_session_info`, `get_track_list`, and `get_scenes` into `session`, `tracks`, and `scenes` keys.
+- Edge cases / side effects: performs three read-only TCP calls; it is not a new remote command.
+
+### `search_browser(query, category_type=None, limit=50)`
+
+- Performs case-insensitive depth-first search through `application.browser` over TCP.
+- Returns display name, URI when exposed, category, path, and `is_loadable`.
+- Edge cases / side effects: pure read; limit is 1..200 and traversal is capped at depth 5, 500 children per node, and 5000 visited nodes.
+
+### `delete_clip(track_index, clip_index)`
+
+- Deletes one occupied Session clip and returns its prior clip path-id.
+- Edge cases / side effects: one undo step; an empty slot returns `BAD_INPUT`.
+
+### `clear_clip_notes(track_index, clip_index)`
+
+- Removes all notes from one MIDI Session clip and returns the observed `notes_removed` delta.
+- Edge cases / side effects: one undo step with deferred readback; empty and audio clips are rejected.
+
+### `fire_scene(scene_index)`
+
+- Calls `Scene.fire()` and returns the fired scene index and name.
+- Edge cases / side effects: triggers clips under Live's current quantization; invalid indexes return `INVALID_PARAMS`.
+
+### `set_track_property(track_index, property, value)`
+
+- `property` is exactly `mute`, `solo`, or `arm`; `value` is boolean.
+- Returns the verified observed property value.
+- Edge cases / side effects: one undo step; return/master tracks cannot be armed.
+
+### `set_clip_properties(track_index, clip_index, loop_start=None, loop_end=None, name=None)`
+
+- Requires at least one requested property and validates the final loop interval before writing.
+- Returns only requested observed fields plus the clip path-id.
+- Edge cases / side effects: one undo step; each property is verified over later Live UI ticks.
+
+### `create_clip_automation(track_index, clip_index, parameter_name, automation_points)`
+
+- Replaces one Session clip envelope with 1..500 sorted `{time,value}` breakpoints.
+- Resolves exact device parameters plus mixer aliases `volume`, `pan`/`panning`, and `send_a` through `send_h`.
+- Edge cases / side effects: one undo step; only Session clips are supported. Values must fit parameter bounds, and hosts without the automation-envelope API return `LIVE_UNAVAILABLE`.
