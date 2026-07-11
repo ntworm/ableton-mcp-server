@@ -6,7 +6,7 @@ The repository contains three cooperating components:
 
 1. `ableton_mcp_server/` is the stdio FastMCP server. It owns Pydantic validation, JSONL encoding, reconnect policy, local log reading, and snapshot diffing. It imports no Ableton module.
 2. `AbletonMCPServer_RemoteScript/` runs inside Live. It owns the loopback socket, the main-thread request queue, command handlers, Live Object Model access, and undo grouping.
-3. `AbletonMCPServer_Extension/` is the TypeScript Ableton Live Extension. It compiles into a `.ablx` file running inside the Node.js Extension Host, hosting a WebSocket server on `127.0.0.1:9889` to expose warping properties and device insertion.
+3. `AbletonMCPServer_Extension/` is the TypeScript Ableton Live Extension. It compiles into a `.ablx` file running inside the Node.js Extension Host, hosting a WebSocket server on port `9889` to expose warping properties and device insertion. Loopback use is required, but the current Node server does not explicitly set its bind host.
 
 ## Data Flow and Thread Safety
 
@@ -84,6 +84,16 @@ The listener binds the literal `127.0.0.1`. It has no LAN mode.
 `Client` maps remote errors and socket failures to typed Python exceptions. At the FastMCP boundary, expected bridge exceptions become typed MCP error results rather than internal framework failures. Empty arrays receive both structured `[]` data and a textual `[]` fallback for clients that ignore structured content.
 
 The client automatically retries reads after connection failure. It never automatically retries a mutation: a broken connection does not prove that Live failed to apply the write. Client and Remote Script compute the same deadline from `contracts.request_timeout_seconds`; the 20-second base scales by serialized bulk/batch work units.
+
+## v0.4.0 routing and capability boundaries
+
+The public surface contains 56 tools. Ten v0.4.0 tools add verified parameter writes, Session detail/overview, bounded Browser search, clip/scene mutations, verified properties, and Session clip automation.
+
+`search_browser` is a TCP read because the Remote Script already owns `application.browser`. Traversal state is per request and bounded by depth, children, visited objects, and result count. `get_session_overview` is local MCP composition of three existing reads and therefore has no remote contract row. `load_device_to_track` remains the existing WebSocket method; it is not duplicated on TCP.
+
+Device parameter writes resolve exact LOM parameters, enforce enabled state and bounds, then write/yield/read back with one retry. Quantized parameters return Live's observed quantized value. Session clip automation is capability-gated: it resolves mixer aliases or exact device parameters, clears only the selected envelope, inserts sorted breakpoints, yields, and requires observable envelope state. Arrangement and track automation remain out of scope.
+
+Optional MIDI note expression fields are passed to `Live.Clip.MidiNoteSpecification` only when requested. A host that cannot construct the requested extended specification returns `LIVE_UNAVAILABLE`; fields are never silently discarded.
 
 ## Mutation Allowlist
 

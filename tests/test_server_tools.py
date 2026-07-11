@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -34,6 +35,17 @@ FORWARD_CASES: list[tuple[Callable[..., Any], tuple[Any, ...], str, dict[str, An
         (1, 2, "Cutoff"),
         "get_parameter_value",
         {"track_index": 1, "device_index": 2, "parameter_name": "Cutoff"},
+    ),
+    (
+        server.set_parameter_value,
+        (1, 2, "Cutoff", 0.75),
+        "set_parameter_value",
+        {
+            "track_index": 1,
+            "device_index": 2,
+            "parameter_name": "Cutoff",
+            "value": 0.75,
+        },
     ),
     (server.get_routing, (1,), "get_routing", {"track_index": 1}),
     (server.get_browser_categories, (), "get_browser_categories", {}),
@@ -106,6 +118,20 @@ FORWARD_CASES: list[tuple[Callable[..., Any], tuple[Any, ...], str, dict[str, An
         "create_clip",
         {"track_index": 0, "clip_index": 1, "length_beats": 4.0},
     ),
+    (server.get_composition_structure, (), "get_composition_structure", {}),
+    (
+        server.diagnose_midi_clip,
+        (0, 1, "C", "major"),
+        "diagnose_midi_clip",
+        {"track_index": 0, "clip_index": 1, "scale_root": "C", "scale_type": "major"},
+    ),
+    (
+        server.create_midi_track,
+        ("Bass", 1),
+        "create_midi_track",
+        {"name": "Bass", "index": 1},
+    ),
+    (server.rename_track, (0, "Drums"), "rename_track", {"track_index": 0, "new_name": "Drums"}),
 ]
 
 
@@ -115,7 +141,7 @@ def test_bridge_status_tool_probes_the_backend_without_forwarding(
 ) -> None:
     mock_status.return_value = {"status": "ok", "bridge_available": True}
     assert server.get_bridge_status() == {"status": "ok", "bridge_available": True}
-    mock_status.assert_called_once_with(server.get_client())
+    mock_status.assert_called_once_with(server.get_client(), tool_count=56)
 
 
 @pytest.mark.parametrize(("function", "args", "command", "params"), FORWARD_CASES)
@@ -140,6 +166,39 @@ def test_diff_tool_is_local_and_deterministic() -> None:
         "removed": [],
         "changed": [{"path": "tempo", "before": 120.0, "after": 128.0}],
     }
+
+
+@pytest.mark.asyncio
+@patch("ableton_mcp_server.server._remote_ws")
+async def test_websocket_tools_validate_and_forward_exact_contract(
+    mock_remote_ws: MagicMock,
+) -> None:
+    mock_remote_ws.side_effect = [
+        {"warping": True},
+        {"warping": False},
+        {"device_id": "track:0/device:1"},
+    ]
+
+    assert json.loads(await server.get_warp_state(0, 1)) == {"warping": True}
+    assert json.loads(await server.set_warp_state(0, 1, False, "complex")) == {
+        "warping": False
+    }
+    assert json.loads(await server.load_device_to_track(0, " Operator ")) == {
+        "device_id": "track:0/device:1"
+    }
+    assert [call.args for call in mock_remote_ws.await_args_list] == [
+        ("get_warp_state", {"track_index": 0, "clip_index": 1}),
+        (
+            "set_warp_state",
+            {
+                "track_index": 0,
+                "clip_index": 1,
+                "warping": False,
+                "warp_mode": "complex",
+            },
+        ),
+        ("load_device_to_track", {"track_index": 0, "device_uri": "Operator"}),
+    ]
 
 
 @pytest.mark.asyncio
@@ -198,7 +257,7 @@ def test_log_tool_limits_lines_and_reads_locally(mock_find: MagicMock, tmp_path:
 
 
 def test_every_tool_docstring_has_contract_sections() -> None:
-    assert len(server.PUBLIC_TOOL_FUNCTIONS) == 46
+    assert len(server.PUBLIC_TOOL_FUNCTIONS) == 56
     for function in server.PUBLIC_TOOL_FUNCTIONS:
         docstring = function.__doc__ or ""
         assert "Side effects:" in docstring, function.__name__

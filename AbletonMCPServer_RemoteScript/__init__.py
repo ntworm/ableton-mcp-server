@@ -6,6 +6,7 @@ dispatched by :meth:`AbletonMCPServer.update_display` on Live's main thread.
 
 from __future__ import annotations
 
+import difflib
 import json
 import logging
 import math
@@ -127,6 +128,9 @@ class _FallbackMidiNoteSpecification:
     duration: float
     velocity: int
     mute: bool
+    probability: float | None = None
+    release_velocity: float | None = None
+    velocity_deviation: float | None = None
 
 
 def _midi_note_specification(**values: Any) -> Any:
@@ -171,9 +175,7 @@ def _float_param(
     try:
         value = float(raw)
     except (TypeError, ValueError) as error:
-        raise RemoteError(
-            ERROR_INVALID_PARAMS, "Parameter %r must be numeric." % name
-        ) from error
+        raise RemoteError(ERROR_INVALID_PARAMS, "Parameter %r must be numeric." % name) from error
     if not math.isfinite(value):
         raise RemoteError(ERROR_BAD_INPUT, "Parameter %r must be finite." % name)
     if strictly_positive and value <= minimum:
@@ -495,6 +497,36 @@ def cmd_get_clip_notes(
     ]
 
 
+def cmd_get_clip_info(
+    song: Any,
+    _application: Any,
+    params: dict[str, Any],
+) -> dict[str, Any]:
+    track_index = _integer_param(params, "track_index")
+    clip_index = _integer_param(params, "clip_index")
+    _track, slot = _clip_slot(song, track_index, clip_index)
+    clip = _safe(lambda: slot.clip, None) if bool(_safe(lambda: slot.has_clip, False)) else None
+    if clip is None:
+        return {"has_clip": False, "clip_id": None}
+    is_midi = bool(_safe(lambda: clip.is_midi_clip, False))
+    return {
+        "has_clip": True,
+        "clip_id": "track:%s/clipslot:%s/clip" % (track_index, clip_index),
+        "name": str(_safe(lambda: clip.name, "")),
+        "length": float(_safe(lambda: clip.length, 0.0)),
+        "loop_start": float(_safe(lambda: clip.loop_start, 0.0)),
+        "loop_end": float(_safe(lambda: clip.loop_end, _safe(lambda: clip.length, 0.0))),
+        "color_index": int(_safe(lambda: clip.color_index, -1)),
+        "is_triggered": bool(_safe(lambda: clip.is_triggered, False)),
+        "is_playing": bool(_safe(lambda: clip.is_playing, False)),
+        "is_midi_clip": is_midi,
+        "is_audio_clip": bool(_safe(lambda: clip.is_audio_clip, not is_midi)),
+        "muted": bool(_safe(lambda: clip.muted, False)),
+        "signature_numerator": int(_safe(lambda: clip.signature_numerator, 4)),
+        "signature_denominator": int(_safe(lambda: clip.signature_denominator, 4)),
+    }
+
+
 def cmd_get_device_list(
     song: Any, _application: Any, params: dict[str, Any]
 ) -> list[dict[str, Any]]:
@@ -525,6 +557,64 @@ def cmd_get_parameter_value(song: Any, _application: Any, params: dict[str, Any]
     raise RemoteError(ERROR_INVALID_PARAMS, "Parameter %r was not found." % parameter_name)
 
 
+def _set_parameter_value_steps(
+    song: Any,
+    params: dict[str, Any],
+) -> Generator[None, None, dict[str, Any]]:
+    track_index = _integer_param(params, "track_index")
+    device_index = _integer_param(params, "device_index")
+    parameter_name = _string_param(params, "parameter_name")
+    requested = _float_param(params, "value", -1000000.0, 1000000.0)
+    track = _track_at(song, track_index)
+    devices = list(_safe(lambda: track.devices, []))
+    if device_index >= len(devices):
+        raise RemoteError(ERROR_INVALID_PARAMS, "Device index %s does not exist." % device_index)
+    parameters = list(_safe(lambda: devices[device_index].parameters, []))
+    parameter = next(
+        (
+            item
+            for item in parameters
+            if str(_safe(lambda item=item: item.name, "")) == parameter_name
+        ),
+        None,
+    )
+    if parameter is None:
+        names = [str(_safe(lambda item=item: item.name, "")) for item in parameters]
+        suggestions = difflib.get_close_matches(parameter_name, names, n=3, cutoff=0.5)
+        suffix = " Did you mean: %s?" % ", ".join(suggestions) if suggestions else ""
+        raise RemoteError(
+            ERROR_INVALID_PARAMS,
+            "Parameter %r was not found.%s" % (parameter_name, suffix),
+        )
+    if not bool(_safe(lambda: parameter.is_enabled, True)):
+        raise RemoteError(ERROR_WRONG_TYPE, "Parameter %r is disabled." % parameter_name)
+    minimum = float(_safe(lambda: parameter.min, 0.0))
+    maximum = float(_safe(lambda: parameter.max, 1.0))
+    if requested < minimum or requested > maximum:
+        raise RemoteError(
+            ERROR_INVALID_PARAMS,
+            "Value %s is outside [%s, %s] for parameter %r."
+            % (requested, minimum, maximum, parameter_name),
+        )
+    is_quantized = bool(_safe(lambda: parameter.is_quantized, False))
+    observed = float(_safe(lambda: parameter.value, minimum))
+    for _attempt in range(2):
+        parameter.value = requested
+        yield
+        observed = float(parameter.value)
+        if is_quantized or abs(observed - requested) < 1e-6:
+            return {
+                "target": requested,
+                "value": observed,
+                "is_quantized": is_quantized,
+            }
+    raise RemoteError(
+        ERROR_INTERNAL_ERROR,
+        "Parameter %r did not converge: target=%s observed=%s delta=%s."
+        % (parameter_name, requested, observed, abs(observed - requested)),
+    )
+
+
 def cmd_get_routing(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, str]:
     return _capture_routing(_track_at(song, _integer_param(params, "track_index")))
 
@@ -548,6 +638,73 @@ def cmd_get_browser_categories(_song: Any, application: Any, _params: dict[str, 
         for name in names
         if _safe(lambda name=name: getattr(browser, name), None) is not None
     ]
+
+
+def cmd_search_browser(
+    _song: Any,
+    application: Any,
+    params: dict[str, Any],
+) -> list[dict[str, Any]]:
+    query = _string_param(params, "query").casefold()
+    raw_limit = params.get("limit", 50)
+    if isinstance(raw_limit, bool) or not isinstance(raw_limit, int):
+        raise RemoteError(ERROR_INVALID_PARAMS, "Parameter 'limit' must be an integer.")
+    limit = max(1, min(200, raw_limit))
+    category_filter = params.get("category_type")
+    if category_filter is not None:
+        if not isinstance(category_filter, str) or not category_filter.strip():
+            raise RemoteError(ERROR_INVALID_PARAMS, "Parameter 'category_type' must be text.")
+        category_filter = category_filter.strip().casefold().replace(" ", "_")
+    category_names = (
+        "sounds",
+        "drums",
+        "instruments",
+        "audio_effects",
+        "midi_effects",
+        "plugins",
+        "samples",
+        "clips",
+        "packs",
+        "user_library",
+    )
+    if category_filter is not None and category_filter not in category_names:
+        raise RemoteError(ERROR_INVALID_PARAMS, "Unknown browser category %r." % category_filter)
+    selected = (category_filter,) if category_filter is not None else category_names
+    results: list[dict[str, Any]] = []
+    visited: set[int] = set()
+    budget = 5000
+    for category in selected:
+        root = _safe(lambda category=category: getattr(application.browser, category), None)
+        if root is None:
+            continue
+        root_name = str(_safe(lambda root=root: root.name, category.replace("_", " ").title()))
+        stack = [(root, [root_name], 0)]
+        while stack and len(results) < limit and len(visited) < budget:
+            item, path, depth = stack.pop()
+            identity = id(item)
+            if identity in visited:
+                continue
+            visited.add(identity)
+            name = str(_safe(lambda item=item: item.name, ""))
+            if depth > 0 and query in name.casefold():
+                results.append(
+                    {
+                        "name": name,
+                        "uri": str(_safe(lambda item=item: item.uri, "")),
+                        "category": category,
+                        "path": path,
+                        "is_loadable": bool(_safe(lambda item=item: item.is_loadable, False)),
+                    }
+                )
+            if depth >= 5:
+                continue
+            children = list(_safe(lambda item=item: item.children, []))[:500]
+            for child in reversed(children):
+                child_name = str(_safe(lambda child=child: child.name, ""))
+                stack.append((child, [*path, child_name], depth + 1))
+        if len(results) >= limit or len(visited) >= budget:
+            break
+    return results
 
 
 def cmd_get_song_length(song: Any, _application: Any, _params: dict[str, Any]) -> dict[str, float]:
@@ -676,8 +833,7 @@ def _verified_boolean_steps(
             return {result_key: actual}
     raise RemoteError(
         ERROR_LIVE_UNAVAILABLE,
-        "State setter for %s did not reach %s after %s UI ticks."
-        % (attribute, expected, retries),
+        "State setter for %s did not reach %s after %s UI ticks." % (attribute, expected, retries),
     )
 
 
@@ -689,13 +845,34 @@ def _verified_numeric_steps(
     result_key: str,
     retries: int = PLAYHEAD_MOVE_RETRIES,
 ) -> Generator[None, None, dict[str, float]]:
-    """Apply and confirm a numeric state change on later UI ticks."""
+    """Compatibility wrapper for verified numeric Song attributes."""
 
-    actual = float(_safe(lambda: getattr(song, attribute), -1.0))
+    return (
+        yield from _verified_attribute_numeric_steps(
+            song,
+            attribute=attribute,
+            expected=expected,
+            result_key=result_key,
+            retries=retries,
+        )
+    )
+
+
+def _verified_attribute_numeric_steps(
+    target: Any,
+    *,
+    attribute: str,
+    expected: float,
+    result_key: str,
+    retries: int = PLAYHEAD_MOVE_RETRIES,
+) -> Generator[None, None, dict[str, float]]:
+    """Apply and confirm a numeric attribute change on later UI ticks."""
+
+    actual = float(_safe(lambda: getattr(target, attribute), -1.0))
     for attempt in range(retries):
-        setattr(song, attribute, expected)
+        setattr(target, attribute, expected)
         yield
-        actual = float(getattr(song, attribute))
+        actual = float(getattr(target, attribute))
         _dbg(
             "state attribute=%s asked=%s got=%s tick_attempt=%s"
             % (attribute, expected, actual, attempt + 1)
@@ -704,7 +881,54 @@ def _verified_numeric_steps(
             return {result_key: actual}
     raise RemoteError(
         ERROR_LIVE_UNAVAILABLE,
+        "State setter for %s did not reach %s after %s UI ticks." % (attribute, expected, retries),
+    )
+
+
+def _verified_attribute_boolean_steps(
+    target: Any,
+    *,
+    attribute: str,
+    expected: bool,
+    result_key: str,
+    retries: int = PLAYHEAD_MOVE_RETRIES,
+) -> Generator[None, None, dict[str, bool]]:
+    """Apply and confirm a boolean attribute change on later UI ticks."""
+
+    actual = bool(_safe(lambda: getattr(target, attribute), not expected))
+    for _attempt in range(retries):
+        setattr(target, attribute, expected)
+        yield
+        actual = bool(getattr(target, attribute))
+        if actual is expected:
+            return {result_key: actual}
+    raise RemoteError(
+        ERROR_LIVE_UNAVAILABLE,
         "State setter for %s did not reach %s after %s UI ticks."
+        % (attribute, expected, retries),
+    )
+
+
+def _verified_attribute_string_steps(
+    target: Any,
+    *,
+    attribute: str,
+    expected: str,
+    result_key: str,
+    retries: int = PLAYHEAD_MOVE_RETRIES,
+) -> Generator[None, None, dict[str, str]]:
+    """Apply and confirm a string attribute change on later UI ticks."""
+
+    actual = str(_safe(lambda: getattr(target, attribute), ""))
+    for _attempt in range(retries):
+        setattr(target, attribute, expected)
+        yield
+        actual = str(getattr(target, attribute))
+        if actual == expected:
+            return {result_key: actual}
+    raise RemoteError(
+        ERROR_LIVE_UNAVAILABLE,
+        "State setter for %s did not reach %r after %s UI ticks."
         % (attribute, expected, retries),
     )
 
@@ -721,9 +945,7 @@ def _cue_snapshot(song: Any) -> dict[float, str]:
 
 
 def _snapshot_has_time(snapshot: dict[float, str], target_time: float) -> bool:
-    return any(
-        abs(cue_time - target_time) < CUE_TIME_TOLERANCE for cue_time in snapshot
-    )
+    return any(abs(cue_time - target_time) < CUE_TIME_TOLERANCE for cue_time in snapshot)
 
 
 def _cue_snapshot_delta(
@@ -782,15 +1004,12 @@ def _reverse_snapped_cue_toggle_steps(
         original_name = before[actual_time]
         yield from _verified_cue_position_steps(song, target=actual_time)
         song.set_or_delete_cue()
-        restored = yield from _wait_for_cue_state_steps(
-            song, actual_time, should_exist=True
-        )
+        restored = yield from _wait_for_cue_state_steps(song, actual_time, should_exist=True)
         yield from _verified_cue_name_steps(restored, original_name)
         raise CueSnappedToGridError(requested_time, actual_time)
     raise RemoteError(
         ERROR_LIVE_UNAVAILABLE,
-        "Cue state changed unexpectedly after an off-grid toggle; automatic reversal "
-        "was not safe.",
+        "Cue state changed unexpectedly after an off-grid toggle; automatic reversal was not safe.",
         "Inspect Arrangement locators before retrying.",
     )
 
@@ -845,16 +1064,13 @@ def _wait_for_deleted_cue_steps(
         added, removed = _cue_snapshot_delta(before, after)
         if cue is None:
             unexpected_removed = [
-                time
-                for time in removed
-                if abs(time - target_time) >= CUE_TIME_TOLERANCE
+                time for time in removed if abs(time - target_time) >= CUE_TIME_TOLERANCE
             ]
             if not added and not unexpected_removed:
                 return
             raise RemoteError(
                 ERROR_LIVE_UNAVAILABLE,
-                "Cue deletion changed additional locator state; automatic reversal "
-                "was not safe.",
+                "Cue deletion changed additional locator state; automatic reversal was not safe.",
                 "Inspect Arrangement locators before retrying.",
             )
         _dbg(
@@ -890,9 +1106,7 @@ def _verified_cue_name_steps(
     for attempt in range(ticks):
         yield
         actual = str(_safe(lambda: cue.name, ""))
-        _dbg(
-            "cue_name asked=%r got=%r tick_attempt=%s" % (name, actual, attempt + 1)
-        )
+        _dbg("cue_name asked=%r got=%r tick_attempt=%s" % (name, actual, attempt + 1))
         if actual == name:
             return
         cue.name = name
@@ -918,10 +1132,7 @@ def _verified_cue_position_steps(
         song.current_song_time = target
         yield
         actual = float(song.current_song_time)
-        _dbg(
-            "cue_position asked=%s got=%s tick_attempt=%s"
-            % (target, actual, attempt + 1)
-        )
+        _dbg("cue_position asked=%s got=%s tick_attempt=%s" % (target, actual, attempt + 1))
         if abs(actual - target) < CUE_TIME_TOLERANCE:
             return
     raise PlayheadNotMovedError(target, actual, retries)
@@ -1056,6 +1267,227 @@ def cmd_fire_clip(song: Any, _application: Any, params: dict[str, Any]) -> dict[
     return {"fired": True, "clip_id": "track:%s/clipslot:%s/clip" % (track_index, clip_index)}
 
 
+def cmd_delete_clip(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, Any]:
+    track_index = _integer_param(params, "track_index")
+    clip_index = _integer_param(params, "clip_index")
+    _track, slot = _clip_slot(song, track_index, clip_index)
+    if not bool(_safe(lambda: slot.has_clip, False)):
+        raise RemoteError(ERROR_BAD_INPUT, "Clip slot is empty.")
+    slot.delete_clip()
+    return {
+        "deleted": True,
+        "clip_id": "track:%s/clipslot:%s/clip" % (track_index, clip_index),
+    }
+
+
+def cmd_fire_scene(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, Any]:
+    scene_index = _integer_param(params, "scene_index")
+    scenes = list(_safe(lambda: song.scenes, []))
+    if scene_index >= len(scenes):
+        raise RemoteError(ERROR_INVALID_PARAMS, "Scene index %s does not exist." % scene_index)
+    scene = scenes[scene_index]
+    scene.fire()
+    return {
+        "fired": True,
+        "scene_index": scene_index,
+        "name": str(_safe(lambda: scene.name, "")),
+    }
+
+
+def _clear_clip_notes_steps(
+    song: Any,
+    params: dict[str, Any],
+) -> Generator[None, None, dict[str, Any]]:
+    track_index = _integer_param(params, "track_index")
+    clip_index = _integer_param(params, "clip_index")
+    _track, slot = _clip_slot(song, track_index, clip_index)
+    clip = _safe(lambda: slot.clip, None)
+    if clip is None:
+        raise RemoteError(ERROR_BAD_INPUT, "Clip slot is empty.")
+    if not bool(_safe(lambda: clip.is_midi_clip, False)):
+        raise RemoteError(ERROR_WRONG_TYPE, "clear_clip_notes requires a MIDI clip.")
+    before = len(list(clip.get_notes_extended(0, 128, -8192.0, 16384.0)))
+    length = float(_safe(lambda: clip.length, 0.0))
+    clip.remove_notes_extended(0, 128, 0.0, max(1.0, length + 1.0))
+    yield
+    after = len(list(clip.get_notes_extended(0, 128, -8192.0, 16384.0)))
+    return {
+        "cleared": True,
+        "notes_removed": max(0, before - after),
+        "clip_id": "track:%s/clipslot:%s/clip" % (track_index, clip_index),
+    }
+
+
+def _set_track_property_steps(
+    song: Any,
+    params: dict[str, Any],
+) -> Generator[None, None, dict[str, Any]]:
+    track_index = _integer_param(params, "track_index")
+    property_name = _string_param(params, "property")
+    if property_name not in ("mute", "solo", "arm"):
+        raise RemoteError(ERROR_BAD_INPUT, "Unsupported track property %r." % property_name)
+    value = _required(params, "value")
+    if not isinstance(value, bool):
+        raise RemoteError(ERROR_INVALID_PARAMS, "Parameter 'value' must be boolean.")
+    track = _track_at(song, track_index)
+    if property_name == "arm" and _track_type(song, track) not in ("midi", "audio"):
+        raise RemoteError(ERROR_WRONG_TYPE, "Only MIDI and audio tracks can be armed.")
+    observed = yield from _verified_attribute_boolean_steps(
+        track,
+        attribute=property_name,
+        expected=value,
+        result_key="value",
+    )
+    return {"property": property_name, "value": observed["value"]}
+
+
+def _set_clip_properties_steps(
+    song: Any,
+    params: dict[str, Any],
+) -> Generator[None, None, dict[str, Any]]:
+    track_index = _integer_param(params, "track_index")
+    clip_index = _integer_param(params, "clip_index")
+    requested_names = [name for name in ("loop_start", "loop_end", "name") if name in params]
+    if not requested_names:
+        raise RemoteError(
+            ERROR_INVALID_PARAMS,
+            "At least one of loop_start, loop_end, or name is required.",
+        )
+    _track, slot = _clip_slot(song, track_index, clip_index)
+    clip = _safe(lambda: slot.clip, None)
+    if clip is None:
+        raise RemoteError(ERROR_BAD_INPUT, "Clip slot is empty.")
+    current_start = float(_safe(lambda: clip.loop_start, 0.0))
+    current_end = float(_safe(lambda: clip.loop_end, _safe(lambda: clip.length, 0.0)))
+    requested_start = (
+        _float_param(params, "loop_start", 0.0, 100000.0)
+        if "loop_start" in params
+        else None
+    )
+    requested_end = (
+        _float_param(params, "loop_end", 0.0, 100000.0)
+        if "loop_end" in params
+        else None
+    )
+    requested_name = _string_param(params, "name") if "name" in params else None
+    final_start = requested_start if requested_start is not None else current_start
+    final_end = requested_end if requested_end is not None else current_end
+    if final_start >= final_end:
+        raise RemoteError(ERROR_BAD_INPUT, "loop_start must be less than loop_end.")
+    result: dict[str, Any] = {}
+    numeric_order = ["loop_start", "loop_end"]
+    if requested_start is not None and requested_end is not None and final_start >= current_end:
+        numeric_order.reverse()
+    for attribute in numeric_order:
+        expected = requested_start if attribute == "loop_start" else requested_end
+        if expected is None:
+            continue
+        observed = yield from _verified_attribute_numeric_steps(
+            clip,
+            attribute=attribute,
+            expected=expected,
+            result_key=attribute,
+        )
+        result.update(observed)
+    if requested_name is not None:
+        observed_name = yield from _verified_attribute_string_steps(
+            clip,
+            attribute="name",
+            expected=requested_name,
+            result_key="name",
+        )
+        result.update(observed_name)
+    result["clip_id"] = "track:%s/clipslot:%s/clip" % (track_index, clip_index)
+    return result
+
+
+def _automation_parameter(track: Any, parameter_name: str) -> Any:
+    normalized = parameter_name.casefold().replace(" ", "_")
+    mixer = _safe(lambda: track.mixer_device, None)
+    if normalized == "volume":
+        return _safe(lambda: mixer.volume, None)
+    if normalized in ("pan", "panning"):
+        return _safe(lambda: mixer.panning, None)
+    send_match = re.fullmatch(r"send_([a-h])", normalized)
+    if send_match is not None:
+        index = ord(send_match.group(1)) - ord("a")
+        sends = list(_safe(lambda: mixer.sends, []))
+        return sends[index] if index < len(sends) else None
+    for device in _safe(lambda: track.devices, []):
+        for parameter in _safe(lambda device=device: device.parameters, []):
+            if str(_safe(lambda parameter=parameter: parameter.name, "")) == parameter_name:
+                return parameter
+    return None
+
+
+def _create_clip_automation_steps(
+    song: Any,
+    params: dict[str, Any],
+) -> Generator[None, None, dict[str, Any]]:
+    track_index = _integer_param(params, "track_index")
+    clip_index = _integer_param(params, "clip_index")
+    parameter_name = _string_param(params, "parameter_name")
+    raw_points = _required(params, "automation_points")
+    if not isinstance(raw_points, list) or not raw_points or len(raw_points) > 500:
+        raise RemoteError(
+            ERROR_INVALID_PARAMS,
+            "automation_points must contain between 1 and 500 points.",
+        )
+    track, slot = _clip_slot(song, track_index, clip_index)
+    clip = _safe(lambda: slot.clip, None)
+    if clip is None:
+        raise RemoteError(ERROR_BAD_INPUT, "Clip slot is empty.")
+    if not bool(_safe(lambda: clip.is_session_clip, True)):
+        raise RemoteError(ERROR_WRONG_TYPE, "Automation is limited to Session clips.")
+    parameter = _automation_parameter(track, parameter_name)
+    if parameter is None:
+        raise RemoteError(ERROR_INVALID_PARAMS, "Parameter %r was not found." % parameter_name)
+    if not bool(_safe(lambda: parameter.is_enabled, True)):
+        raise RemoteError(ERROR_WRONG_TYPE, "Parameter %r is disabled." % parameter_name)
+    minimum = float(_safe(lambda: parameter.min, 0.0))
+    maximum = float(_safe(lambda: parameter.max, 1.0))
+    points: list[tuple[float, float]] = []
+    for raw_point in raw_points:
+        if not isinstance(raw_point, dict):
+            raise RemoteError(ERROR_INVALID_PARAMS, "Each automation point must be an object.")
+        point_time = _float_param(raw_point, "time", 0.0, 100000.0)
+        value = _float_param(raw_point, "value", -1000000.0, 1000000.0)
+        if value < minimum or value > maximum:
+            raise RemoteError(
+                ERROR_INVALID_PARAMS,
+                "Automation value %s is outside [%s, %s] for parameter %r."
+                % (value, minimum, maximum, parameter_name),
+            )
+        points.append((point_time, value))
+    points.sort(key=lambda point: point[0])
+    envelope_getter = _safe(lambda: clip.automation_envelope_for_parameter, None)
+    clear_envelope = _safe(lambda: clip.clear_envelope, None)
+    if not callable(envelope_getter) or not callable(clear_envelope):
+        raise RemoteError(
+            ERROR_LIVE_UNAVAILABLE,
+            "Live runtime does not expose the clip automation envelope API.",
+        )
+    clear_envelope(parameter)
+    envelope = envelope_getter(parameter)
+    insert_step = _safe(lambda: envelope.insert_step, None)
+    if not callable(insert_step):
+        raise RemoteError(
+            ERROR_LIVE_UNAVAILABLE,
+            "Live runtime does not expose automation envelope insertion.",
+        )
+    for point_time, value in points:
+        insert_step(point_time, 0.0, value)
+    yield
+    if not bool(_safe(lambda: clip.has_envelopes, False)):
+        raise RemoteError(ERROR_LIVE_UNAVAILABLE, "Clip automation write was not observed.")
+    return {
+        "parameter_name": str(_safe(lambda: parameter.name, parameter_name)),
+        "points_written": len(points),
+        "times": [point_time for point_time, _value in points],
+        "clip_id": "track:%s/clipslot:%s/clip" % (track_index, clip_index),
+    }
+
+
 def cmd_add_notes_to_clip(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, Any]:
     track_index = _integer_param(params, "track_index")
     clip_index = _integer_param(params, "clip_index")
@@ -1074,15 +1506,39 @@ def cmd_add_notes_to_clip(song: Any, _application: Any, params: dict[str, Any]) 
         velocity = int(raw_note.get("velocity", 100))
         if pitch > 127 or velocity < 1 or velocity > 127:
             raise RemoteError(ERROR_BAD_INPUT, "MIDI pitch and velocity must be in range.")
-        note = _midi_note_specification(
-            pitch=pitch,
-            start_time=_float_param(raw_note, "start_time", 0.0, 100000.0),
-            duration=_float_param(
-                raw_note, "duration", 0.0, 100000.0, strictly_positive=True
+        note_values: dict[str, Any] = {
+            "pitch": pitch,
+            "start_time": _float_param(raw_note, "start_time", 0.0, 100000.0),
+            "duration": _float_param(
+                raw_note,
+                "duration",
+                0.0,
+                100000.0,
+                strictly_positive=True,
             ),
-            velocity=velocity,
-            mute=bool(raw_note.get("mute", False)),
-        )
+            "velocity": velocity,
+            "mute": bool(raw_note.get("mute", False)),
+        }
+        extended_ranges = {
+            "probability": (0.0, 1.0),
+            "release_velocity": (0.0, 127.0),
+            "velocity_deviation": (-127.0, 127.0),
+        }
+        for field_name, (minimum, maximum) in extended_ranges.items():
+            if field_name in raw_note and raw_note[field_name] is not None:
+                note_values[field_name] = _float_param(
+                    raw_note,
+                    field_name,
+                    minimum,
+                    maximum,
+                )
+        try:
+            note = _midi_note_specification(**note_values)
+        except (AttributeError, TypeError) as error:
+            raise RemoteError(
+                ERROR_LIVE_UNAVAILABLE,
+                "Live runtime does not support the requested MIDI note expression fields.",
+            ) from error
         notes.append(note)
     note_ids = clip.add_new_notes(tuple(notes))
     return {
@@ -1124,7 +1580,9 @@ def _note_name_to_number(name):
 
 
 def cmd_get_composition_structure(
-    song, _application, _params,
+    song,
+    _application,
+    _params,
 ):
     # type: (Any, Any, dict[str, Any]) -> dict[str, Any]
     tracks = []
@@ -1165,7 +1623,9 @@ def cmd_get_composition_structure(
 
 
 def cmd_diagnose_midi_clip(
-    song, _application, params,
+    song,
+    _application,
+    params,
 ):
     # type: (Any, Any, dict[str, Any]) -> dict[str, Any]
     track_index = _integer_param(params, "track_index")
@@ -1176,9 +1636,14 @@ def cmd_diagnose_midi_clip(
     _track, slot = _clip_slot(song, track_index, clip_index)
     clip = _safe(lambda: slot.clip, None)
     if clip is None:
-        return {"has_overlaps": False, "overlaps_count": 0,
-                "notes_outside_scale": [], "timing_drift_detected": False,
-                "recommendations": ["Clip slot is empty."], "note_count": 0}
+        return {
+            "has_overlaps": False,
+            "overlaps_count": 0,
+            "notes_outside_scale": [],
+            "timing_drift_detected": False,
+            "recommendations": ["Clip slot is empty."],
+            "note_count": 0,
+        }
 
     if not bool(_safe(lambda: clip.is_midi_clip, False)):
         raise RemoteError(ERROR_WRONG_TYPE, "Clip is not a MIDI clip.")
@@ -1186,13 +1651,15 @@ def cmd_diagnose_midi_clip(
     raw_notes = clip.get_notes_extended(0, 128, -8192.0, 16384.0)
     notes = []
     for note in raw_notes:
-        notes.append({
-            "pitch": int(_note_value(note, "pitch", 0)),
-            "start_time": float(_note_value(note, "start_time", 0.0)),
-            "duration": float(_note_value(note, "duration", 0.0)),
-            "velocity": int(_note_value(note, "velocity", 100)),
-            "mute": bool(_note_value(note, "mute", False)),
-        })
+        notes.append(
+            {
+                "pitch": int(_note_value(note, "pitch", 0)),
+                "start_time": float(_note_value(note, "start_time", 0.0)),
+                "duration": float(_note_value(note, "duration", 0.0)),
+                "velocity": int(_note_value(note, "velocity", 100)),
+                "mute": bool(_note_value(note, "mute", False)),
+            }
+        )
 
     # --- Overlap Detection ---
     overlaps_count = 0
@@ -1220,11 +1687,13 @@ def cmd_diagnose_midi_clip(
             for note in notes:
                 pc = note["pitch"] % 12
                 if pc not in scale_pitches:
-                    notes_outside_scale.append({
-                        "pitch": note["pitch"],
-                        "start_time": note["start_time"],
-                        "note_name": _NOTE_NAMES[pc],
-                    })
+                    notes_outside_scale.append(
+                        {
+                            "pitch": note["pitch"],
+                            "start_time": note["start_time"],
+                            "note_name": _NOTE_NAMES[pc],
+                        }
+                    )
 
     # --- Timing Drift Detection ---
     timing_drift_detected = False
@@ -1281,7 +1750,9 @@ _MAX_TRACKS = 96
 
 
 def cmd_create_midi_track(
-    song, _application, params,
+    song,
+    _application,
+    params,
 ):
     # type: (Any, Any, dict[str, Any]) -> dict[str, Any]
     name = params.get("name", "MIDI Track")
@@ -1290,7 +1761,8 @@ def cmd_create_midi_track(
     if current_count >= _MAX_TRACKS:
         raise RemoteError(
             ERROR_TRACK_LIMIT_REACHED,
-            "Cannot create track: set already has %s tracks (limit=%s)." % (current_count, _MAX_TRACKS),
+            "Cannot create track: set already has %s tracks (limit=%s)."
+            % (current_count, _MAX_TRACKS),
             "Remove unused tracks before creating new ones.",
         )
     insert_at = index if index is not None else -1
@@ -1308,7 +1780,9 @@ def cmd_create_midi_track(
 
 
 def cmd_rename_track(
-    song, _application, params,
+    song,
+    _application,
+    params,
 ):
     # type: (Any, Any, dict[str, Any]) -> dict[str, Any]
     track_index = _integer_param(params, "track_index")
@@ -1339,15 +1813,19 @@ COMMAND_HANDLERS: dict[str, CommandHandler] = {
     "get_selected_context": cmd_get_selected_context,
     "get_clip_summary": cmd_get_clip_summary,
     "get_clip_notes": cmd_get_clip_notes,
+    "get_clip_info": cmd_get_clip_info,
     "get_device_list": cmd_get_device_list,
     "get_parameter_value": cmd_get_parameter_value,
     "get_routing": cmd_get_routing,
     "get_browser_categories": cmd_get_browser_categories,
+    "search_browser": cmd_search_browser,
     "get_song_length": cmd_get_song_length,
     "live_find_track": cmd_live_find_track,
     "list_device_params": cmd_list_device_params,
     "create_clip": cmd_create_clip,
     "fire_clip": cmd_fire_clip,
+    "delete_clip": cmd_delete_clip,
+    "fire_scene": cmd_fire_scene,
     "add_notes_to_clip": cmd_add_notes_to_clip,
     # v0.3.0
     "get_composition_structure": cmd_get_composition_structure,
@@ -1459,6 +1937,16 @@ def _dispatch_command_steps(
                 result_key="tempo",
             )
         )
+    if normalized == "set_parameter_value":
+        return (yield from _set_parameter_value_steps(song, params))
+    if normalized == "clear_clip_notes":
+        return (yield from _clear_clip_notes_steps(song, params))
+    if normalized == "set_track_property":
+        return (yield from _set_track_property_steps(song, params))
+    if normalized == "set_clip_properties":
+        return (yield from _set_clip_properties_steps(song, params))
+    if normalized == "create_clip_automation":
+        return (yield from _create_clip_automation_steps(song, params))
     if normalized == "start_playback":
         return (
             yield from _verified_boolean_steps(

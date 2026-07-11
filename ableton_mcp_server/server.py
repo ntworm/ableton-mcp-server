@@ -5,7 +5,7 @@ import os
 import subprocess
 from collections.abc import Awaitable, Callable, Generator, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 os.environ.setdefault("OTEL_SDK_DISABLED", "true")
 os.environ.setdefault("FASTMCP_TELEMETRY_DISABLED", "true")
@@ -25,6 +25,7 @@ from .errors import BridgeError
 
 PUBLIC_TOOL_NAMES = (
     "get_session_info",
+    "get_session_overview",
     "get_bridge_status",
     "get_track_list",
     "get_track_state",
@@ -39,10 +40,13 @@ PUBLIC_TOOL_NAMES = (
     "get_selected_context",
     "get_clip_summary",
     "get_clip_notes",
+    "get_clip_info",
     "get_device_list",
     "get_parameter_value",
+    "set_parameter_value",
     "get_routing",
     "get_browser_categories",
+    "search_browser",
     "diff_snapshots_tool",
     "get_song_length",
     "live_find_track",
@@ -61,6 +65,12 @@ PUBLIC_TOOL_NAMES = (
     "add_notes_to_clip",
     "fire_clip",
     "create_clip",
+    "delete_clip",
+    "clear_clip_notes",
+    "fire_scene",
+    "set_track_property",
+    "set_clip_properties",
+    "create_clip_automation",
     # v0.3.0 — composition diagnostics
     "get_composition_structure",
     "diagnose_midi_clip",
@@ -143,9 +153,17 @@ def _explicit_json_result(
     )
 
 
-def _remote(command: str, request: models.RequestModel) -> Any:
+def _remote(
+    command: str,
+    request: models.RequestModel,
+    *,
+    exclude_none: bool = False,
+) -> Any:
     try:
-        result = get_client().call(command, request.model_dump(mode="json"))
+        result = get_client().call(
+            command,
+            request.model_dump(mode="json", exclude_none=exclude_none),
+        )
     except BridgeError as error:
         return _explicit_json_result(error.to_envelope(), is_error=True)
     if isinstance(result, list) and not result:
@@ -170,6 +188,22 @@ def get_session_info() -> Any:
 
 
 @mcp.tool()
+def get_session_overview() -> dict[str, Any]:
+    """Compose a compact Session snapshot from three existing read tools.
+
+    Side effects: none; performs three read-only TCP bridge calls.
+    Example: ``get_session_overview()`` returns session, tracks, and scenes.
+    Edge cases: a bridge failure is returned by the corresponding component read.
+    """
+    models.GetSessionOverviewRequest()
+    return {
+        "session": _remote("get_session_info", models.GetSessionInfoRequest()),
+        "tracks": _remote("get_track_list", models.GetTrackListRequest()),
+        "scenes": _remote("get_scenes", models.GetScenesRequest()),
+    }
+
+
+@mcp.tool()
 def get_bridge_status() -> dict[str, Any]:
     """Probe the Live bridge and explain environment-specific connection failures.
 
@@ -178,7 +212,7 @@ def get_bridge_status() -> dict[str, Any]:
     Edge cases: WSL NAT failures include a Windows-Python launcher hint.
     """
     models.GetBridgeStatusRequest()
-    return bridge_status(get_client())
+    return bridge_status(get_client(), tool_count=len(PUBLIC_TOOL_NAMES))
 
 
 @mcp.tool()
@@ -336,6 +370,20 @@ def get_clip_notes(track_index: int, clip_index: int) -> Any:
 
 
 @mcp.tool()
+def get_clip_info(track_index: int, clip_index: int) -> Any:
+    """Read stable metadata for one Session clip slot.
+
+    Side effects: none.
+    Example: ``get_clip_info(0, 1)`` returns loop, type, color, and signature fields.
+    Edge cases: empty slots return ``has_clip=false`` instead of an error.
+    """
+    return _remote(
+        "get_clip_info",
+        models.GetClipInfoRequest(track_index=track_index, clip_index=clip_index),
+    )
+
+
+@mcp.tool()
 def get_device_list(track_index: int) -> Any:
     """List devices and parameter snapshots on one track.
 
@@ -365,6 +413,30 @@ def get_parameter_value(track_index: int, device_index: int, parameter_name: str
 
 
 @mcp.tool()
+def set_parameter_value(
+    track_index: int,
+    device_index: int,
+    parameter_name: str,
+    value: float,
+) -> Any:
+    """Write a named device parameter and verify the observed Live value.
+
+    Side effects: mutates one device parameter in one Live undo step.
+    Example: ``set_parameter_value(0, 0, "Filter Freq", 0.75)`` updates a device.
+    Edge cases: disabled, unknown, and out-of-range parameters return structured errors.
+    """
+    return _remote(
+        "set_parameter_value",
+        models.SetParameterValueRequest(
+            track_index=track_index,
+            device_index=device_index,
+            parameter_name=parameter_name,
+            value=value,
+        ),
+    )
+
+
+@mcp.tool()
 def get_routing(track_index: int) -> Any:
     """Read input and output routing labels for one track.
 
@@ -384,6 +456,28 @@ def get_browser_categories() -> Any:
     Edge cases: version-specific missing categories are omitted.
     """
     return _remote("get_browser_categories", models.GetBrowserCategoriesRequest())
+
+
+@mcp.tool()
+def search_browser(
+    query: str,
+    category_type: str | None = None,
+    limit: int = 50,
+) -> Any:
+    """Search the Live Browser with bounded TCP-side traversal.
+
+    Side effects: none.
+    Example: ``search_browser("Operator", "instruments", 25)`` finds native devices.
+    Edge cases: traversal is capped by depth, children, visited nodes, and result limit.
+    """
+    return _remote(
+        "search_browser",
+        models.SearchBrowserRequest(
+            query=query,
+            category_type=category_type,
+            limit=limit,
+        ),
+    )
 
 
 @mcp.tool()
@@ -573,7 +667,7 @@ def add_notes_to_clip(track_index: int, clip_index: int, notes: list[dict[str, A
     request = models.AddNotesToClipRequest.model_validate(
         {"track_index": track_index, "clip_index": clip_index, "notes": notes}
     )
-    return _remote("add_notes_to_clip", request)
+    return _remote("add_notes_to_clip", request, exclude_none=True)
 
 
 @mcp.tool()
@@ -606,6 +700,114 @@ def create_clip(track_index: int, clip_index: int, length_beats: float) -> Any:
             length_beats=length_beats,
         ),
     )
+
+
+@mcp.tool()
+def delete_clip(track_index: int, clip_index: int) -> Any:
+    """Delete one occupied Session clip slot.
+
+    Side effects: deletes a clip in one Live undo step.
+    Example: ``delete_clip(0, 1)`` removes the clip in slot one.
+    Edge cases: empty slots return ``BAD_INPUT``.
+    """
+    return _remote(
+        "delete_clip",
+        models.DeleteClipRequest(track_index=track_index, clip_index=clip_index),
+    )
+
+
+@mcp.tool()
+def clear_clip_notes(track_index: int, clip_index: int) -> Any:
+    """Remove every MIDI note from one Session clip and report the observed delta.
+
+    Side effects: clears notes in one Live undo step.
+    Example: ``clear_clip_notes(0, 1)`` empties a MIDI clip without deleting it.
+    Edge cases: empty or audio clips return structured errors.
+    """
+    return _remote(
+        "clear_clip_notes",
+        models.ClearClipNotesRequest(track_index=track_index, clip_index=clip_index),
+    )
+
+
+@mcp.tool()
+def fire_scene(scene_index: int) -> Any:
+    """Fire one Session scene using Live's current launch quantization.
+
+    Side effects: triggers all playable clips in the selected scene.
+    Example: ``fire_scene(0)`` launches the first scene.
+    Edge cases: an out-of-range index returns ``INVALID_PARAMS``.
+    """
+    return _remote("fire_scene", models.FireSceneRequest(scene_index=scene_index))
+
+
+@mcp.tool()
+def set_track_property(
+    track_index: int,
+    property: Literal["mute", "solo", "arm"],
+    value: bool,
+) -> Any:
+    """Set and verify one boolean track property.
+
+    Side effects: changes mute, solo, or arm in one Live undo step.
+    Example: ``set_track_property(0, "mute", True)`` mutes the first track.
+    Edge cases: arm is rejected for return and master tracks.
+    """
+    return _remote(
+        "set_track_property",
+        models.SetTrackPropertyRequest(track_index=track_index, property=property, value=value),
+    )
+
+
+@mcp.tool()
+def set_clip_properties(
+    track_index: int,
+    clip_index: int,
+    loop_start: float | None = None,
+    loop_end: float | None = None,
+    name: str | None = None,
+) -> Any:
+    """Set and verify selected Session clip loop bounds or name.
+
+    Side effects: changes one clip in one Live undo step.
+    Example: ``set_clip_properties(0, 1, loop_end=8, name="Verse")`` edits a clip.
+    Edge cases: the final loop interval must remain positive and non-empty.
+    """
+    return _remote(
+        "set_clip_properties",
+        models.SetClipPropertiesRequest(
+            track_index=track_index,
+            clip_index=clip_index,
+            loop_start=loop_start,
+            loop_end=loop_end,
+            name=name,
+        ),
+        exclude_none=True,
+    )
+
+
+@mcp.tool()
+def create_clip_automation(
+    track_index: int,
+    clip_index: int,
+    parameter_name: str,
+    automation_points: list[dict[str, float]],
+) -> Any:
+    """Replace one Session clip parameter envelope with verified breakpoints.
+
+    Side effects: clears and rewrites one clip envelope in one Live undo step.
+    Example: ``create_clip_automation(0, 1, "volume", [{"time": 0, "value": 0.5}])``.
+    Edge cases: requires Session-clip automation APIs and accepts at most 500 points.
+    """
+    request = models.CreateClipAutomationRequest.model_validate(
+        {
+            "track_index": track_index,
+            "clip_index": clip_index,
+            "parameter_name": parameter_name,
+            "automation_points": automation_points,
+        }
+    )
+    return _remote("create_clip_automation", request)
 
 
 # ---------------------------------------------------------------------------
@@ -736,10 +938,10 @@ async def load_device_to_track(track_index: int, device_uri: str) -> str:
     Example: ``load_device_to_track(0, "Operator")`` loads Operator on track 0.
     Edge cases: requires the AbletonMCPServer Extension to be installed.
     """
-    models.LoadDeviceToTrackRequest(track_index=track_index, device_uri=device_uri)
+    request = models.LoadDeviceToTrackRequest(track_index=track_index, device_uri=device_uri)
     result = await _remote_ws(
         "load_device_to_track",
-        {"track_index": track_index, "device_uri": device_uri},
+        request.model_dump(mode="json"),
     )
     return json.dumps(result, indent=2)
 
@@ -880,6 +1082,7 @@ def build_extension(project_path: str) -> str:
 
 PUBLIC_TOOL_FUNCTIONS = (
     get_session_info,
+    get_session_overview,
     get_bridge_status,
     get_track_list,
     get_track_state,
@@ -894,10 +1097,13 @@ PUBLIC_TOOL_FUNCTIONS = (
     get_selected_context,
     get_clip_summary,
     get_clip_notes,
+    get_clip_info,
     get_device_list,
     get_parameter_value,
+    set_parameter_value,
     get_routing,
     get_browser_categories,
+    search_browser,
     diff_snapshots_tool,
     get_song_length,
     live_find_track,
@@ -916,6 +1122,12 @@ PUBLIC_TOOL_FUNCTIONS = (
     add_notes_to_clip,
     fire_clip,
     create_clip,
+    delete_clip,
+    clear_clip_notes,
+    fire_scene,
+    set_track_property,
+    set_clip_properties,
+    create_clip_automation,
     # v0.3.0
     get_composition_structure,
     diagnose_midi_clip,

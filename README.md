@@ -5,10 +5,16 @@ Ableton Live Set. A stdio FastMCP server communicates with a MIDI Remote Script
 over newline-delimited JSON on TCP `127.0.0.1:9888`, and with an Extension Host
 bridge over WebSockets on `127.0.0.1:9889`.
 
-Version 0.3.0 exposes 46 tools: reads/diagnostics (including composition diagnostics
-and scale mapping), and creative mutations for transport, loop state, cue points,
-Session clips, MIDI notes, track renaming, guarded MIDI track creation, audio warping control,
-plug-in device loading, and extension scaffolding/building.
+Version 0.4.0 exposes 56 tools: reads and diagnostics, verified transport and
+device writes, bounded Browser discovery, Session clip/scene operations, MIDI
+notes and clip automation, guarded track creation, audio warping, device loading,
+and Extension scaffolding/building.
+
+The v0.4.0 additions are `set_parameter_value`, `get_clip_info`,
+`get_session_overview`, `search_browser`, `delete_clip`, `clear_clip_notes`,
+`fire_scene`, `set_track_property`, `set_clip_properties`, and
+`create_clip_automation`. Browser search stays on the TCP Remote Script path;
+`load_device_to_track` remains on the WebSocket Extension path.
 
 ## Architecture
 
@@ -58,8 +64,9 @@ This process still uses stdio with the WSL MCP client, but it runs in the Window
 network namespace and can securely reach Live's loopback listener. Do not point
 Hermes at `.venv/bin/python` from a Linux venv when WSL uses NAT networking.
 
-The bridge deliberately rejects non-loopback hosts. It never binds `0.0.0.0` and
-does not expose unauthenticated Live control to the LAN.
+The TCP bridge enforces `127.0.0.1`. The Extension WebSocket bridge is intended
+for loopback use but its current server construction does not explicitly set a
+host; do not expose or forward port `9889` to a LAN or tunnel.
 
 ## Remote Script lifecycle
 

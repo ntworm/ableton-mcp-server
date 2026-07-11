@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -38,6 +38,32 @@ class FakeParameter:
         self.is_quantized = False
 
 
+class FakeAutomationEnvelope:
+    def __init__(self, on_insert: Callable[[], None] | None = None) -> None:
+        self.steps: list[tuple[float, float, float]] = []
+        self._on_insert = on_insert
+
+    def insert_step(self, time: float, duration: float, value: float) -> None:
+        self.steps.append((time, duration, value))
+        if self._on_insert is not None:
+            self._on_insert()
+
+
+class FakeBrowserItem:
+    def __init__(
+        self,
+        name: str,
+        *,
+        uri: str = "",
+        is_loadable: bool = False,
+        children: list[FakeBrowserItem] | None = None,
+    ) -> None:
+        self.name = name
+        self.uri = uri
+        self.is_loadable = is_loadable
+        self.children = children if children is not None else []
+
+
 class FakeDevice:
     def __init__(self, name: str = "Operator") -> None:
         self.name = name
@@ -50,6 +76,11 @@ class FakeClip:
     def __init__(self, name: str = "Clip", length: float = 4.0, midi: bool = True) -> None:
         self.name = name
         self.length = length
+        self.loop_start = 0.0
+        self.loop_end = length
+        self.is_session_clip = True
+        self.has_envelopes = False
+        self._automation_envelopes: dict[FakeParameter, FakeAutomationEnvelope] = {}
         self.is_midi_clip = midi
         self.is_playing = False
         self.notes = [FakeNote(60, 0.0, 1.0, 100)] if midi else []
@@ -82,6 +113,28 @@ class FakeClip:
         self.fire_count += 1
         self.is_playing = True
 
+    def remove_notes_extended(
+        self,
+        _from_pitch: int,
+        _pitch_span: int,
+        _from_time: float,
+        _time_span: float,
+    ) -> None:
+        self.notes.clear()
+
+    def automation_envelope_for_parameter(
+        self, parameter: FakeParameter
+    ) -> FakeAutomationEnvelope:
+        if parameter not in self._automation_envelopes:
+            self._automation_envelopes[parameter] = FakeAutomationEnvelope(
+                lambda: setattr(self, "has_envelopes", True)
+            )
+        return self._automation_envelopes[parameter]
+
+    def clear_envelope(self, parameter: FakeParameter) -> None:
+        self.automation_envelope_for_parameter(parameter).steps.clear()
+        self.has_envelopes = False
+
 
 class FakeClipSlot:
     def __init__(self, clip: FakeClip | None = None) -> None:
@@ -104,6 +157,11 @@ class FakeClipSlot:
             raise RuntimeError("slot is empty")
         self.fire_count += 1
         self.clip.fire()
+
+    def delete_clip(self) -> None:
+        if self.clip is None:
+            raise RuntimeError("slot is empty")
+        self.clip = None
 
 
 class FakeMixerDevice:
@@ -160,6 +218,10 @@ class FakeScene:
     def __init__(self, name: str, clip_slots: list[FakeClipSlot]) -> None:
         self.name = name
         self.clip_slots = clip_slots
+        self.fire_count = 0
+
+    def fire(self) -> None:
+        self.fire_count += 1
 
 
 class FakeSongView:
@@ -337,18 +399,34 @@ class FakeSong:
 
 
 class FakeBrowser:
-    sounds = object()
-    drums = object()
-    instruments = object()
-    audio_effects = object()
-    midi_effects = object()
-    plugins = object()
-    samples = object()
+    def __init__(self) -> None:
+        self.sounds = FakeBrowserItem("Sounds")
+        self.drums = FakeBrowserItem("Drums")
+        self.instruments = FakeBrowserItem("Instruments")
+        self.audio_effects = FakeBrowserItem("Audio Effects")
+        self.midi_effects = FakeBrowserItem("MIDI Effects")
+        self.plugins = FakeBrowserItem("Plug-ins")
+        self.samples = FakeBrowserItem("Samples")
+        self.clips = FakeBrowserItem("Clips")
+        self.packs = FakeBrowserItem("Packs")
+        self.user_library = FakeBrowserItem("User Library")
+
+    @classmethod
+    def with_operator(cls) -> FakeBrowser:
+        browser = cls()
+        browser.instruments.children.append(
+            FakeBrowserItem(
+                "Operator",
+                uri="query:Instruments#Operator",
+                is_loadable=True,
+            )
+        )
+        return browser
 
 
 class FakeApplication:
-    def __init__(self) -> None:
-        self.browser = FakeBrowser()
+    def __init__(self, browser: FakeBrowser | None = None) -> None:
+        self.browser = browser if browser is not None else FakeBrowser()
         self.control_surfaces = [object()]
         self.begin_count = 0
         self.end_count = 0

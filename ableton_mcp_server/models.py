@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -81,6 +81,85 @@ class GetClipNotesRequest(RequestModel):
     clip_index: NonNegativeInt
 
 
+class GetClipInfoRequest(GetClipNotesRequest):
+    pass
+
+
+class GetSessionOverviewRequest(EmptyRequest):
+    pass
+
+
+class DeleteClipRequest(GetClipNotesRequest):
+    pass
+
+
+class ClearClipNotesRequest(GetClipNotesRequest):
+    pass
+
+
+class FireSceneRequest(RequestModel):
+    scene_index: NonNegativeInt
+
+
+class SetTrackPropertyRequest(RequestModel):
+    track_index: NonNegativeInt
+    property: Literal["mute", "solo", "arm"]
+    value: bool
+
+
+class SetClipPropertiesRequest(GetClipNotesRequest):
+    loop_start: NonNegativeBeat | None = None
+    loop_end: NonNegativeBeat | None = None
+    name: Annotated[str, Field(min_length=1, max_length=256)] | None = None
+
+    @field_validator("name")
+    @classmethod
+    def strip_clip_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            raise ValueError("name must be non-empty")
+        return value
+
+    @model_validator(mode="after")
+    def validate_requested_changes(self) -> SetClipPropertiesRequest:
+        if self.loop_start is None and self.loop_end is None and self.name is None:
+            raise ValueError("at least one clip property must be provided")
+        if (
+            self.loop_start is not None
+            and self.loop_end is not None
+            and self.loop_start >= self.loop_end
+        ):
+            raise ValueError("loop_start must be less than loop_end")
+        return self
+
+
+class AutomationPoint(RequestModel):
+    time: NonNegativeBeat
+    value: float
+
+    @field_validator("value")
+    @classmethod
+    def finite_automation_value(cls, value: float) -> float:
+        if not math.isfinite(value):
+            raise ValueError("automation value must be finite")
+        return value
+
+
+class CreateClipAutomationRequest(GetClipNotesRequest):
+    parameter_name: Annotated[str, Field(min_length=1, max_length=256)]
+    automation_points: Annotated[list[AutomationPoint], Field(min_length=1, max_length=500)]
+
+    @field_validator("parameter_name")
+    @classmethod
+    def strip_automation_parameter(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("parameter_name must be non-empty")
+        return value
+
+
 class GetDeviceListRequest(RequestModel):
     track_index: NonNegativeInt
 
@@ -99,12 +178,39 @@ class GetParameterValueRequest(RequestModel):
         return value
 
 
+class SetParameterValueRequest(GetParameterValueRequest):
+    value: float
+
+    @field_validator("value")
+    @classmethod
+    def finite_value(cls, value: float) -> float:
+        if not math.isfinite(value):
+            raise ValueError("value must be finite")
+        return value
+
+
 class GetRoutingRequest(RequestModel):
     track_index: NonNegativeInt
 
 
 class GetBrowserCategoriesRequest(EmptyRequest):
     pass
+
+
+class SearchBrowserRequest(RequestModel):
+    query: Annotated[str, Field(min_length=1, max_length=256)]
+    category_type: Annotated[str, Field(min_length=1, max_length=64)] | None = None
+    limit: Annotated[int, Field(ge=1, le=200)] = 50
+
+    @field_validator("query", "category_type")
+    @classmethod
+    def strip_browser_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            raise ValueError("browser text fields must be non-empty")
+        return value
 
 
 class DiffSnapshotsRequest(RequestModel):
@@ -223,6 +329,9 @@ class NoteSpec(RequestModel):
     duration: PositiveBeat
     velocity: Annotated[int, Field(ge=1, le=127)] = 100
     mute: bool = False
+    probability: Annotated[float, Field(ge=0, le=1)] | None = None
+    release_velocity: Annotated[float, Field(ge=0, le=127)] | None = None
+    velocity_deviation: Annotated[float, Field(ge=-127, le=127)] | None = None
 
 
 class AddNotesToClipRequest(RequestModel):
@@ -395,10 +504,20 @@ TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "get_selected_context": GetSelectedContextRequest,
     "get_clip_summary": GetClipSummaryRequest,
     "get_clip_notes": GetClipNotesRequest,
+    "get_clip_info": GetClipInfoRequest,
+    "get_session_overview": GetSessionOverviewRequest,
+    "delete_clip": DeleteClipRequest,
+    "clear_clip_notes": ClearClipNotesRequest,
+    "fire_scene": FireSceneRequest,
+    "set_track_property": SetTrackPropertyRequest,
+    "set_clip_properties": SetClipPropertiesRequest,
+    "create_clip_automation": CreateClipAutomationRequest,
     "get_device_list": GetDeviceListRequest,
     "get_parameter_value": GetParameterValueRequest,
+    "set_parameter_value": SetParameterValueRequest,
     "get_routing": GetRoutingRequest,
     "get_browser_categories": GetBrowserCategoriesRequest,
+    "search_browser": SearchBrowserRequest,
     "diff_snapshots_tool": DiffSnapshotsRequest,
     "get_song_length": GetSongLengthRequest,
     "live_find_track": LiveFindTrackRequest,

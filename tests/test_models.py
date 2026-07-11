@@ -11,6 +11,7 @@ from ableton_mcp_server.models import (
     BulkCuePointsRequest,
     CreateClipRequest,
     CuePointSpec,
+    NoteSpec,
     RunBatchRequest,
     SetTempoRequest,
 )
@@ -45,6 +46,9 @@ def test_every_public_tool_has_an_explicit_request_model() -> None:
         "get_composition_structure",
         "diagnose_midi_clip",
         "get_warp_state",
+        "get_clip_info",
+        "get_session_overview",
+        "search_browser",
     }
     mutations = {
         "create_cue_point",
@@ -66,12 +70,19 @@ def test_every_public_tool_has_an_explicit_request_model() -> None:
         "rename_track",
         "set_warp_state",
         "load_device_to_track",
+        "set_parameter_value",
+        "delete_clip",
+        "clear_clip_notes",
+        "fire_scene",
+        "set_track_property",
+        "set_clip_properties",
+        "create_clip_automation",
         "scaffold_extension",
         "build_extension",
     }
     assert set(TOOL_REQUEST_MODELS) == reads | mutations
-    assert len(TOOL_REQUEST_MODELS) == 46
-    assert len(set(TOOL_REQUEST_MODELS.values())) == 46
+    assert len(TOOL_REQUEST_MODELS) == 56
+    assert len(set(TOOL_REQUEST_MODELS.values())) == 56
 
 
 @pytest.mark.parametrize("tempo", [19.99, 999.01, math.nan, math.inf])
@@ -95,6 +106,23 @@ def test_cue_and_note_models_normalize_without_losing_values() -> None:
     )
     assert request.notes[0].pitch == 60
     assert request.notes[0].duration == 1.0
+
+
+def test_note_spec_accepts_bounded_expression_fields() -> None:
+    note = NoteSpec(
+        pitch=60,
+        start_time=0,
+        duration=1,
+        probability=0.5,
+        release_velocity=64,
+        velocity_deviation=-12,
+    )
+    assert note.probability == 0.5
+    assert note.release_velocity == 64
+    assert note.velocity_deviation == -12
+
+    with pytest.raises(ValidationError):
+        NoteSpec(pitch=60, start_time=0, duration=1, probability=1.1)
 
 
 def test_bulk_has_safe_size_bounds() -> None:
