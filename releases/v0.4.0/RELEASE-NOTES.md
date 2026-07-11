@@ -1,9 +1,10 @@
-# Release notes — v0.4.0 review candidate
+# Release notes — v0.4.0
 
 **Date**: 2026-07-11
-**Branch**: `feature/v0.4.0-implementation`
+**Branch**: `main`
 **Base**: local `main` at `ce7fe9c`
-**Tag**: pending owner review; no tag or push has been performed
+**Merge commit**: `e62892e`
+**Tag**: annotated `v0.4.0`, local-only; no push has been performed
 
 ## What ships
 
