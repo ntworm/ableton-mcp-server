@@ -494,6 +494,36 @@ def cmd_get_clip_notes(
     ]
 
 
+def cmd_get_clip_info(
+    song: Any,
+    _application: Any,
+    params: dict[str, Any],
+) -> dict[str, Any]:
+    track_index = _integer_param(params, "track_index")
+    clip_index = _integer_param(params, "clip_index")
+    _track, slot = _clip_slot(song, track_index, clip_index)
+    clip = _safe(lambda: slot.clip, None) if bool(_safe(lambda: slot.has_clip, False)) else None
+    if clip is None:
+        return {"has_clip": False, "clip_id": None}
+    is_midi = bool(_safe(lambda: clip.is_midi_clip, False))
+    return {
+        "has_clip": True,
+        "clip_id": "track:%s/clipslot:%s/clip" % (track_index, clip_index),
+        "name": str(_safe(lambda: clip.name, "")),
+        "length": float(_safe(lambda: clip.length, 0.0)),
+        "loop_start": float(_safe(lambda: clip.loop_start, 0.0)),
+        "loop_end": float(_safe(lambda: clip.loop_end, _safe(lambda: clip.length, 0.0))),
+        "color_index": int(_safe(lambda: clip.color_index, -1)),
+        "is_triggered": bool(_safe(lambda: clip.is_triggered, False)),
+        "is_playing": bool(_safe(lambda: clip.is_playing, False)),
+        "is_midi_clip": is_midi,
+        "is_audio_clip": bool(_safe(lambda: clip.is_audio_clip, not is_midi)),
+        "muted": bool(_safe(lambda: clip.muted, False)),
+        "signature_numerator": int(_safe(lambda: clip.signature_numerator, 4)),
+        "signature_denominator": int(_safe(lambda: clip.signature_denominator, 4)),
+    }
+
+
 def cmd_get_device_list(
     song: Any, _application: Any, params: dict[str, Any]
 ) -> list[dict[str, Any]]:
@@ -605,6 +635,73 @@ def cmd_get_browser_categories(_song: Any, application: Any, _params: dict[str, 
         for name in names
         if _safe(lambda name=name: getattr(browser, name), None) is not None
     ]
+
+
+def cmd_search_browser(
+    _song: Any,
+    application: Any,
+    params: dict[str, Any],
+) -> list[dict[str, Any]]:
+    query = _string_param(params, "query").casefold()
+    raw_limit = params.get("limit", 50)
+    if isinstance(raw_limit, bool) or not isinstance(raw_limit, int):
+        raise RemoteError(ERROR_INVALID_PARAMS, "Parameter 'limit' must be an integer.")
+    limit = max(1, min(200, raw_limit))
+    category_filter = params.get("category_type")
+    if category_filter is not None:
+        if not isinstance(category_filter, str) or not category_filter.strip():
+            raise RemoteError(ERROR_INVALID_PARAMS, "Parameter 'category_type' must be text.")
+        category_filter = category_filter.strip().casefold().replace(" ", "_")
+    category_names = (
+        "sounds",
+        "drums",
+        "instruments",
+        "audio_effects",
+        "midi_effects",
+        "plugins",
+        "samples",
+        "clips",
+        "packs",
+        "user_library",
+    )
+    if category_filter is not None and category_filter not in category_names:
+        raise RemoteError(ERROR_INVALID_PARAMS, "Unknown browser category %r." % category_filter)
+    selected = (category_filter,) if category_filter is not None else category_names
+    results: list[dict[str, Any]] = []
+    visited: set[int] = set()
+    budget = 5000
+    for category in selected:
+        root = _safe(lambda category=category: getattr(application.browser, category), None)
+        if root is None:
+            continue
+        root_name = str(_safe(lambda root=root: root.name, category.replace("_", " ").title()))
+        stack = [(root, [root_name], 0)]
+        while stack and len(results) < limit and len(visited) < budget:
+            item, path, depth = stack.pop()
+            identity = id(item)
+            if identity in visited:
+                continue
+            visited.add(identity)
+            name = str(_safe(lambda item=item: item.name, ""))
+            if depth > 0 and query in name.casefold():
+                results.append(
+                    {
+                        "name": name,
+                        "uri": str(_safe(lambda item=item: item.uri, "")),
+                        "category": category,
+                        "path": path,
+                        "is_loadable": bool(_safe(lambda item=item: item.is_loadable, False)),
+                    }
+                )
+            if depth >= 5:
+                continue
+            children = list(_safe(lambda item=item: item.children, []))[:500]
+            for child in reversed(children):
+                child_name = str(_safe(lambda child=child: child.name, ""))
+                stack.append((child, [*path, child_name], depth + 1))
+        if len(results) >= limit or len(visited) >= budget:
+            break
+    return results
 
 
 def cmd_get_song_length(song: Any, _application: Any, _params: dict[str, Any]) -> dict[str, float]:
@@ -1466,10 +1563,12 @@ COMMAND_HANDLERS: dict[str, CommandHandler] = {
     "get_selected_context": cmd_get_selected_context,
     "get_clip_summary": cmd_get_clip_summary,
     "get_clip_notes": cmd_get_clip_notes,
+    "get_clip_info": cmd_get_clip_info,
     "get_device_list": cmd_get_device_list,
     "get_parameter_value": cmd_get_parameter_value,
     "get_routing": cmd_get_routing,
     "get_browser_categories": cmd_get_browser_categories,
+    "search_browser": cmd_search_browser,
     "get_song_length": cmd_get_song_length,
     "live_find_track": cmd_live_find_track,
     "list_device_params": cmd_list_device_params,

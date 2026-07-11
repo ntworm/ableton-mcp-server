@@ -58,3 +58,8 @@ def test_creative_mutations_remain_blocked_without_prefix_rules() -> None:
 def test_remote_command_sets_do_not_overlap() -> None:
     assert contracts.READ_COMMANDS.isdisjoint(contracts.ALLOWED_MUTATIONS)
     assert contracts.ALL_REMOTE_COMMANDS == (contracts.READ_COMMANDS | contracts.ALLOWED_MUTATIONS)
+
+
+def test_v040_remote_reads_are_explicitly_registered() -> None:
+    assert {"get_clip_info", "search_browser"} <= contracts.READ_COMMANDS
+    assert "get_session_overview" not in contracts.ALL_REMOTE_COMMANDS

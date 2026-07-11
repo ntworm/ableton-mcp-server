@@ -25,6 +25,7 @@ from .errors import BridgeError
 
 PUBLIC_TOOL_NAMES = (
     "get_session_info",
+    "get_session_overview",
     "get_bridge_status",
     "get_track_list",
     "get_track_state",
@@ -39,11 +40,13 @@ PUBLIC_TOOL_NAMES = (
     "get_selected_context",
     "get_clip_summary",
     "get_clip_notes",
+    "get_clip_info",
     "get_device_list",
     "get_parameter_value",
     "set_parameter_value",
     "get_routing",
     "get_browser_categories",
+    "search_browser",
     "diff_snapshots_tool",
     "get_song_length",
     "live_find_track",
@@ -168,6 +171,22 @@ def get_session_info() -> Any:
     Edge cases: fails when the Remote Script is unavailable.
     """
     return _remote("get_session_info", models.GetSessionInfoRequest())
+
+
+@mcp.tool()
+def get_session_overview() -> dict[str, Any]:
+    """Compose a compact Session snapshot from three existing read tools.
+
+    Side effects: none; performs three read-only TCP bridge calls.
+    Example: ``get_session_overview()`` returns session, tracks, and scenes.
+    Edge cases: a bridge failure is returned by the corresponding component read.
+    """
+    models.GetSessionOverviewRequest()
+    return {
+        "session": _remote("get_session_info", models.GetSessionInfoRequest()),
+        "tracks": _remote("get_track_list", models.GetTrackListRequest()),
+        "scenes": _remote("get_scenes", models.GetScenesRequest()),
+    }
 
 
 @mcp.tool()
@@ -337,6 +356,20 @@ def get_clip_notes(track_index: int, clip_index: int) -> Any:
 
 
 @mcp.tool()
+def get_clip_info(track_index: int, clip_index: int) -> Any:
+    """Read stable metadata for one Session clip slot.
+
+    Side effects: none.
+    Example: ``get_clip_info(0, 1)`` returns loop, type, color, and signature fields.
+    Edge cases: empty slots return ``has_clip=false`` instead of an error.
+    """
+    return _remote(
+        "get_clip_info",
+        models.GetClipInfoRequest(track_index=track_index, clip_index=clip_index),
+    )
+
+
+@mcp.tool()
 def get_device_list(track_index: int) -> Any:
     """List devices and parameter snapshots on one track.
 
@@ -409,6 +442,28 @@ def get_browser_categories() -> Any:
     Edge cases: version-specific missing categories are omitted.
     """
     return _remote("get_browser_categories", models.GetBrowserCategoriesRequest())
+
+
+@mcp.tool()
+def search_browser(
+    query: str,
+    category_type: str | None = None,
+    limit: int = 50,
+) -> Any:
+    """Search the Live Browser with bounded TCP-side traversal.
+
+    Side effects: none.
+    Example: ``search_browser("Operator", "instruments", 25)`` finds native devices.
+    Edge cases: traversal is capped by depth, children, visited nodes, and result limit.
+    """
+    return _remote(
+        "search_browser",
+        models.SearchBrowserRequest(
+            query=query,
+            category_type=category_type,
+            limit=limit,
+        ),
+    )
 
 
 @mcp.tool()
@@ -905,6 +960,7 @@ def build_extension(project_path: str) -> str:
 
 PUBLIC_TOOL_FUNCTIONS = (
     get_session_info,
+    get_session_overview,
     get_bridge_status,
     get_track_list,
     get_track_state,
@@ -919,11 +975,13 @@ PUBLIC_TOOL_FUNCTIONS = (
     get_selected_context,
     get_clip_summary,
     get_clip_notes,
+    get_clip_info,
     get_device_list,
     get_parameter_value,
     set_parameter_value,
     get_routing,
     get_browser_categories,
+    search_browser,
     diff_snapshots_tool,
     get_song_length,
     live_find_track,

@@ -94,6 +94,9 @@ READ_COMMANDS = frozenset(
         "diagnose_midi_clip",
         # v0.3.0 — warp read (routed via WebSocket)
         "get_warp_state",
+        # v0.4.0 — Session detail and bounded browser discovery
+        "get_clip_info",
+        "search_browser",
     }
 )
 

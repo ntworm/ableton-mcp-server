@@ -81,6 +81,14 @@ class GetClipNotesRequest(RequestModel):
     clip_index: NonNegativeInt
 
 
+class GetClipInfoRequest(GetClipNotesRequest):
+    pass
+
+
+class GetSessionOverviewRequest(EmptyRequest):
+    pass
+
+
 class GetDeviceListRequest(RequestModel):
     track_index: NonNegativeInt
 
@@ -116,6 +124,22 @@ class GetRoutingRequest(RequestModel):
 
 class GetBrowserCategoriesRequest(EmptyRequest):
     pass
+
+
+class SearchBrowserRequest(RequestModel):
+    query: Annotated[str, Field(min_length=1, max_length=256)]
+    category_type: Annotated[str, Field(min_length=1, max_length=64)] | None = None
+    limit: Annotated[int, Field(ge=1, le=200)] = 50
+
+    @field_validator("query", "category_type")
+    @classmethod
+    def strip_browser_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            raise ValueError("browser text fields must be non-empty")
+        return value
 
 
 class DiffSnapshotsRequest(RequestModel):
@@ -406,11 +430,14 @@ TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "get_selected_context": GetSelectedContextRequest,
     "get_clip_summary": GetClipSummaryRequest,
     "get_clip_notes": GetClipNotesRequest,
+    "get_clip_info": GetClipInfoRequest,
+    "get_session_overview": GetSessionOverviewRequest,
     "get_device_list": GetDeviceListRequest,
     "get_parameter_value": GetParameterValueRequest,
     "set_parameter_value": SetParameterValueRequest,
     "get_routing": GetRoutingRequest,
     "get_browser_categories": GetBrowserCategoriesRequest,
+    "search_browser": SearchBrowserRequest,
     "diff_snapshots_tool": DiffSnapshotsRequest,
     "get_song_length": GetSongLengthRequest,
     "live_find_track": LiveFindTrackRequest,

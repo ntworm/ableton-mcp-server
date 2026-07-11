@@ -209,7 +209,7 @@ def test_log_tool_limits_lines_and_reads_locally(mock_find: MagicMock, tmp_path:
 
 
 def test_every_tool_docstring_has_contract_sections() -> None:
-    assert len(server.PUBLIC_TOOL_FUNCTIONS) == 47
+    assert len(server.PUBLIC_TOOL_FUNCTIONS) == 50
     for function in server.PUBLIC_TOOL_FUNCTIONS:
         docstring = function.__doc__ or ""
         assert "Side effects:" in docstring, function.__name__

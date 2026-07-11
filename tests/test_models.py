@@ -45,6 +45,9 @@ def test_every_public_tool_has_an_explicit_request_model() -> None:
         "get_composition_structure",
         "diagnose_midi_clip",
         "get_warp_state",
+        "get_clip_info",
+        "get_session_overview",
+        "search_browser",
     }
     mutations = {
         "create_cue_point",
@@ -71,8 +74,8 @@ def test_every_public_tool_has_an_explicit_request_model() -> None:
         "build_extension",
     }
     assert set(TOOL_REQUEST_MODELS) == reads | mutations
-    assert len(TOOL_REQUEST_MODELS) == 47
-    assert len(set(TOOL_REQUEST_MODELS.values())) == 47
+    assert len(TOOL_REQUEST_MODELS) == 50
+    assert len(set(TOOL_REQUEST_MODELS.values())) == 50
 
 
 @pytest.mark.parametrize("tempo", [19.99, 999.01, math.nan, math.inf])
