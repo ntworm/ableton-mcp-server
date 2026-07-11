@@ -29,6 +29,11 @@ PLAYHEAD_MOVE_RETRIES = 10
 SNAPSHOT_REFRESH_INTERVAL_MS = 100
 REQUEST_TIMEOUT_SECONDS = 20.0
 REQUEST_TIMEOUT_PER_WORK_UNIT_SECONDS = 2.0
+COMMAND_TIMEOUT_OVERRIDES = {
+    "load_device_to_track": 30.0,
+    "search_browser": 30.0,
+    "create_clip_automation": 20.0,
+}
 
 
 def _request_work_units(command_name: str, params: object) -> int:
@@ -38,6 +43,13 @@ def _request_work_units(command_name: str, params: object) -> int:
     if normalized == "bulk_create_cue_points":
         items = params.get("items")
         return max(1, len(items)) if isinstance(items, list) else 1
+    if normalized == "create_clip_automation":
+        points = params.get("automation_points")
+        return min(10, 1 + len(points)) if isinstance(points, list) else 1
+    if normalized == "set_clip_properties":
+        return max(1, sum(name in params for name in ("loop_start", "loop_end", "name")))
+    if normalized == "clear_clip_notes":
+        return 2
     if normalized == "run_batch":
         commands = params.get("commands")
         if not isinstance(commands, list):
@@ -61,7 +73,9 @@ def request_timeout_seconds(command_name: str, params: object) -> float:
     """Return a shared client/server deadline scaled to serialized UI work."""
 
     work_units = _request_work_units(command_name, params)
-    return REQUEST_TIMEOUT_SECONDS + (work_units - 1) * REQUEST_TIMEOUT_PER_WORK_UNIT_SECONDS
+    scaled = REQUEST_TIMEOUT_SECONDS + (work_units - 1) * REQUEST_TIMEOUT_PER_WORK_UNIT_SECONDS
+    override = COMMAND_TIMEOUT_OVERRIDES.get(command_name.strip().lower(), 0.0)
+    return max(scaled, override)
 
 READ_COMMANDS = frozenset(
     {

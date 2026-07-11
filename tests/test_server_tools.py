@@ -126,7 +126,7 @@ def test_bridge_status_tool_probes_the_backend_without_forwarding(
 ) -> None:
     mock_status.return_value = {"status": "ok", "bridge_available": True}
     assert server.get_bridge_status() == {"status": "ok", "bridge_available": True}
-    mock_status.assert_called_once_with(server.get_client())
+    mock_status.assert_called_once_with(server.get_client(), tool_count=56)
 
 
 @pytest.mark.parametrize(("function", "args", "command", "params"), FORWARD_CASES)

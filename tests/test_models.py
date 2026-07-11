@@ -11,6 +11,7 @@ from ableton_mcp_server.models import (
     BulkCuePointsRequest,
     CreateClipRequest,
     CuePointSpec,
+    NoteSpec,
     RunBatchRequest,
     SetTempoRequest,
 )
@@ -105,6 +106,23 @@ def test_cue_and_note_models_normalize_without_losing_values() -> None:
     )
     assert request.notes[0].pitch == 60
     assert request.notes[0].duration == 1.0
+
+
+def test_note_spec_accepts_bounded_expression_fields() -> None:
+    note = NoteSpec(
+        pitch=60,
+        start_time=0,
+        duration=1,
+        probability=0.5,
+        release_velocity=64,
+        velocity_deviation=-12,
+    )
+    assert note.probability == 0.5
+    assert note.release_velocity == 64
+    assert note.velocity_deviation == -12
+
+    with pytest.raises(ValidationError):
+        NoteSpec(pitch=60, start_time=0, duration=1, probability=1.1)
 
 
 def test_bulk_has_safe_size_bounds() -> None:

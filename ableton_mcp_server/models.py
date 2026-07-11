@@ -329,6 +329,9 @@ class NoteSpec(RequestModel):
     duration: PositiveBeat
     velocity: Annotated[int, Field(ge=1, le=127)] = 100
     mute: bool = False
+    probability: Annotated[float, Field(ge=0, le=1)] | None = None
+    release_velocity: Annotated[float, Field(ge=0, le=127)] | None = None
+    velocity_deviation: Annotated[float, Field(ge=-127, le=127)] | None = None
 
 
 class AddNotesToClipRequest(RequestModel):

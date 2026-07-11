@@ -38,12 +38,23 @@ def test_bridge_status_probes_live_instead_of_tool_discovery() -> None:
     result = bridge_status(
         HealthyClient(),
         runtime=RuntimeInfo(platform="win32", is_wsl=False, python_executable="python.exe"),
+        tool_count=56,
     )
     assert result["status"] == "ok"
     assert result["bridge_available"] is True
     assert result["endpoint"] == {"host": "127.0.0.1", "port": 9888}
     assert result["live"] == {"tempo": 120.0, "is_playing": False}
     assert result["runtime"]["is_wsl"] is False
+    assert result["server_version"] == "0.3.0"
+    assert result["tool_count"] == 56
+    assert result["ws_endpoint"] == {"host": "127.0.0.1", "port": 9889}
+    assert result["extension_host_available"] is None
+    assert result["ws_methods_registered"] == [
+        "get_warp_state",
+        "load_device_to_track",
+        "set_warp_state",
+    ]
+    assert "device_parameter_write" in result["features"]
 
 
 def test_bridge_status_explains_wsl_nat_failure_without_relaxing_loopback() -> None:

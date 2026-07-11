@@ -128,6 +128,9 @@ class _FallbackMidiNoteSpecification:
     duration: float
     velocity: int
     mute: bool
+    probability: float | None = None
+    release_velocity: float | None = None
+    velocity_deviation: float | None = None
 
 
 def _midi_note_specification(**values: Any) -> Any:
@@ -1503,13 +1506,39 @@ def cmd_add_notes_to_clip(song: Any, _application: Any, params: dict[str, Any]) 
         velocity = int(raw_note.get("velocity", 100))
         if pitch > 127 or velocity < 1 or velocity > 127:
             raise RemoteError(ERROR_BAD_INPUT, "MIDI pitch and velocity must be in range.")
-        note = _midi_note_specification(
-            pitch=pitch,
-            start_time=_float_param(raw_note, "start_time", 0.0, 100000.0),
-            duration=_float_param(raw_note, "duration", 0.0, 100000.0, strictly_positive=True),
-            velocity=velocity,
-            mute=bool(raw_note.get("mute", False)),
-        )
+        note_values: dict[str, Any] = {
+            "pitch": pitch,
+            "start_time": _float_param(raw_note, "start_time", 0.0, 100000.0),
+            "duration": _float_param(
+                raw_note,
+                "duration",
+                0.0,
+                100000.0,
+                strictly_positive=True,
+            ),
+            "velocity": velocity,
+            "mute": bool(raw_note.get("mute", False)),
+        }
+        extended_ranges = {
+            "probability": (0.0, 1.0),
+            "release_velocity": (0.0, 127.0),
+            "velocity_deviation": (-127.0, 127.0),
+        }
+        for field_name, (minimum, maximum) in extended_ranges.items():
+            if field_name in raw_note and raw_note[field_name] is not None:
+                note_values[field_name] = _float_param(
+                    raw_note,
+                    field_name,
+                    minimum,
+                    maximum,
+                )
+        try:
+            note = _midi_note_specification(**note_values)
+        except (AttributeError, TypeError) as error:
+            raise RemoteError(
+                ERROR_LIVE_UNAVAILABLE,
+                "Live runtime does not support the requested MIDI note expression fields.",
+            ) from error
         notes.append(note)
     note_ids = clip.add_new_notes(tuple(notes))
     return {

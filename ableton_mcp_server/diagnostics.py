@@ -11,6 +11,10 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+from contracts import DEFAULT_HOST, DEFAULT_WS_PORT, WEBSOCKET_TARGET_COMMANDS
+
+from . import __version__
+
 
 @dataclass(frozen=True)
 class RuntimeInfo:
@@ -82,11 +86,25 @@ def bridge_status(
     *,
     runtime: RuntimeInfo | None = None,
     timeout: float = 2.0,
+    tool_count: int = 0,
 ) -> dict[str, Any]:
     info = detect_runtime() if runtime is None else runtime
     base: dict[str, Any] = {
         "endpoint": {"host": client.host, "port": client.port},
         "runtime": asdict(info),
+        "server_version": __version__,
+        "tool_count": tool_count,
+        "ws_endpoint": {"host": DEFAULT_HOST, "port": DEFAULT_WS_PORT},
+        "extension_host_available": None,
+        "ws_methods_registered": sorted(WEBSOCKET_TARGET_COMMANDS),
+        "python_runtime": {"platform": info.platform, "is_wsl": info.is_wsl},
+        "features": [
+            "device_parameter_write",
+            "session_clip_automation",
+            "session_clip_mutations",
+            "bounded_browser_search",
+            "extended_midi_notes",
+        ],
     }
     try:
         live = client.call("get_session_info", {}, timeout=timeout)

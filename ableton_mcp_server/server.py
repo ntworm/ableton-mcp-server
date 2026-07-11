@@ -212,7 +212,7 @@ def get_bridge_status() -> dict[str, Any]:
     Edge cases: WSL NAT failures include a Windows-Python launcher hint.
     """
     models.GetBridgeStatusRequest()
-    return bridge_status(get_client())
+    return bridge_status(get_client(), tool_count=len(PUBLIC_TOOL_NAMES))
 
 
 @mcp.tool()
@@ -667,7 +667,7 @@ def add_notes_to_clip(track_index: int, clip_index: int, notes: list[dict[str, A
     request = models.AddNotesToClipRequest.model_validate(
         {"track_index": track_index, "clip_index": clip_index, "notes": notes}
     )
-    return _remote("add_notes_to_clip", request)
+    return _remote("add_notes_to_clip", request, exclude_none=True)
 
 
 @mcp.tool()

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 
 from AbletonMCPServer_RemoteScript import RemoteError, execute_command
@@ -62,3 +64,58 @@ def test_fire_clip_and_add_notes_use_python_remote_script_lom_types() -> None:
     assert specification.duration == 0.5
     assert specification.velocity == 90
     assert specification.mute is False
+
+
+def test_add_notes_passes_optional_expression_fields_to_host_specification() -> None:
+    song = FakeSong()
+    execute_command(
+        song,
+        FakeApplication(),
+        "add_notes_to_clip",
+        {
+            "track_index": 0,
+            "clip_index": 0,
+            "notes": [
+                {
+                    "pitch": 64,
+                    "start_time": 1.0,
+                    "duration": 0.5,
+                    "probability": 0.75,
+                    "release_velocity": 70,
+                    "velocity_deviation": -5,
+                }
+            ],
+        },
+    )
+    specification = song.tracks[0].clip_slots[0].clip.add_payloads[-1][0]
+    assert specification.probability == 0.75
+    assert specification.release_velocity == 70
+    assert specification.velocity_deviation == -5
+
+
+def test_add_notes_reports_missing_note_expression_capability() -> None:
+    with (
+        patch(
+            "AbletonMCPServer_RemoteScript._midi_note_specification",
+            side_effect=TypeError("unsupported field"),
+        ),
+        pytest.raises(RemoteError) as error,
+    ):
+        execute_command(
+            FakeSong(),
+            FakeApplication(),
+            "add_notes_to_clip",
+            {
+                "track_index": 0,
+                "clip_index": 0,
+                "notes": [
+                    {
+                        "pitch": 64,
+                        "start_time": 1.0,
+                        "duration": 0.5,
+                        "probability": 0.75,
+                    }
+                ],
+            },
+        )
+    assert error.value.code == "LIVE_UNAVAILABLE"
