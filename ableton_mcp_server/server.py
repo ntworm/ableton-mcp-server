@@ -5,7 +5,7 @@ import os
 import subprocess
 from collections.abc import Awaitable, Callable, Generator, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 os.environ.setdefault("OTEL_SDK_DISABLED", "true")
 os.environ.setdefault("FASTMCP_TELEMETRY_DISABLED", "true")
@@ -68,6 +68,8 @@ PUBLIC_TOOL_NAMES = (
     "delete_clip",
     "clear_clip_notes",
     "fire_scene",
+    "set_track_property",
+    "set_clip_properties",
     # v0.3.0 — composition diagnostics
     "get_composition_structure",
     "diagnose_midi_clip",
@@ -150,9 +152,17 @@ def _explicit_json_result(
     )
 
 
-def _remote(command: str, request: models.RequestModel) -> Any:
+def _remote(
+    command: str,
+    request: models.RequestModel,
+    *,
+    exclude_none: bool = False,
+) -> Any:
     try:
-        result = get_client().call(command, request.model_dump(mode="json"))
+        result = get_client().call(
+            command,
+            request.model_dump(mode="json", exclude_none=exclude_none),
+        )
     except BridgeError as error:
         return _explicit_json_result(error.to_envelope(), is_error=True)
     if isinstance(result, list) and not result:
@@ -730,6 +740,51 @@ def fire_scene(scene_index: int) -> Any:
     return _remote("fire_scene", models.FireSceneRequest(scene_index=scene_index))
 
 
+@mcp.tool()
+def set_track_property(
+    track_index: int,
+    property: Literal["mute", "solo", "arm"],
+    value: bool,
+) -> Any:
+    """Set and verify one boolean track property.
+
+    Side effects: changes mute, solo, or arm in one Live undo step.
+    Example: ``set_track_property(0, "mute", True)`` mutes the first track.
+    Edge cases: arm is rejected for return and master tracks.
+    """
+    return _remote(
+        "set_track_property",
+        models.SetTrackPropertyRequest(track_index=track_index, property=property, value=value),
+    )
+
+
+@mcp.tool()
+def set_clip_properties(
+    track_index: int,
+    clip_index: int,
+    loop_start: float | None = None,
+    loop_end: float | None = None,
+    name: str | None = None,
+) -> Any:
+    """Set and verify selected Session clip loop bounds or name.
+
+    Side effects: changes one clip in one Live undo step.
+    Example: ``set_clip_properties(0, 1, loop_end=8, name="Verse")`` edits a clip.
+    Edge cases: the final loop interval must remain positive and non-empty.
+    """
+    return _remote(
+        "set_clip_properties",
+        models.SetClipPropertiesRequest(
+            track_index=track_index,
+            clip_index=clip_index,
+            loop_start=loop_start,
+            loop_end=loop_end,
+            name=name,
+        ),
+        exclude_none=True,
+    )
+
+
 # ---------------------------------------------------------------------------
 # v0.3.0 — Composition Diagnostics
 # ---------------------------------------------------------------------------
@@ -1045,6 +1100,8 @@ PUBLIC_TOOL_FUNCTIONS = (
     delete_clip,
     clear_clip_notes,
     fire_scene,
+    set_track_property,
+    set_clip_properties,
     # v0.3.0
     get_composition_structure,
     diagnose_midi_clip,

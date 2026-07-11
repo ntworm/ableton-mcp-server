@@ -129,6 +129,9 @@ ALLOWED_MUTATIONS = frozenset(
         "delete_clip",
         "clear_clip_notes",
         "fire_scene",
+        # v0.4.0 — verified track and clip attributes
+        "set_track_property",
+        "set_clip_properties",
     }
 )
 

@@ -73,6 +73,8 @@ class FakeClip:
     def __init__(self, name: str = "Clip", length: float = 4.0, midi: bool = True) -> None:
         self.name = name
         self.length = length
+        self.loop_start = 0.0
+        self.loop_end = length
         self.is_midi_clip = midi
         self.is_playing = False
         self.notes = [FakeNote(60, 0.0, 1.0, 100)] if midi else []

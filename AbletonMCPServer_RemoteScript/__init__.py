@@ -1315,6 +1315,89 @@ def _clear_clip_notes_steps(
     }
 
 
+def _set_track_property_steps(
+    song: Any,
+    params: dict[str, Any],
+) -> Generator[None, None, dict[str, Any]]:
+    track_index = _integer_param(params, "track_index")
+    property_name = _string_param(params, "property")
+    if property_name not in ("mute", "solo", "arm"):
+        raise RemoteError(ERROR_BAD_INPUT, "Unsupported track property %r." % property_name)
+    value = _required(params, "value")
+    if not isinstance(value, bool):
+        raise RemoteError(ERROR_INVALID_PARAMS, "Parameter 'value' must be boolean.")
+    track = _track_at(song, track_index)
+    if property_name == "arm" and _track_type(song, track) not in ("midi", "audio"):
+        raise RemoteError(ERROR_WRONG_TYPE, "Only MIDI and audio tracks can be armed.")
+    observed = yield from _verified_attribute_boolean_steps(
+        track,
+        attribute=property_name,
+        expected=value,
+        result_key="value",
+    )
+    return {"property": property_name, "value": observed["value"]}
+
+
+def _set_clip_properties_steps(
+    song: Any,
+    params: dict[str, Any],
+) -> Generator[None, None, dict[str, Any]]:
+    track_index = _integer_param(params, "track_index")
+    clip_index = _integer_param(params, "clip_index")
+    requested_names = [name for name in ("loop_start", "loop_end", "name") if name in params]
+    if not requested_names:
+        raise RemoteError(
+            ERROR_INVALID_PARAMS,
+            "At least one of loop_start, loop_end, or name is required.",
+        )
+    _track, slot = _clip_slot(song, track_index, clip_index)
+    clip = _safe(lambda: slot.clip, None)
+    if clip is None:
+        raise RemoteError(ERROR_BAD_INPUT, "Clip slot is empty.")
+    current_start = float(_safe(lambda: clip.loop_start, 0.0))
+    current_end = float(_safe(lambda: clip.loop_end, _safe(lambda: clip.length, 0.0)))
+    requested_start = (
+        _float_param(params, "loop_start", 0.0, 100000.0)
+        if "loop_start" in params
+        else None
+    )
+    requested_end = (
+        _float_param(params, "loop_end", 0.0, 100000.0)
+        if "loop_end" in params
+        else None
+    )
+    requested_name = _string_param(params, "name") if "name" in params else None
+    final_start = requested_start if requested_start is not None else current_start
+    final_end = requested_end if requested_end is not None else current_end
+    if final_start >= final_end:
+        raise RemoteError(ERROR_BAD_INPUT, "loop_start must be less than loop_end.")
+    result: dict[str, Any] = {}
+    numeric_order = ["loop_start", "loop_end"]
+    if requested_start is not None and requested_end is not None and final_start >= current_end:
+        numeric_order.reverse()
+    for attribute in numeric_order:
+        expected = requested_start if attribute == "loop_start" else requested_end
+        if expected is None:
+            continue
+        observed = yield from _verified_attribute_numeric_steps(
+            clip,
+            attribute=attribute,
+            expected=expected,
+            result_key=attribute,
+        )
+        result.update(observed)
+    if requested_name is not None:
+        observed_name = yield from _verified_attribute_string_steps(
+            clip,
+            attribute="name",
+            expected=requested_name,
+            result_key="name",
+        )
+        result.update(observed_name)
+    result["clip_id"] = "track:%s/clipslot:%s/clip" % (track_index, clip_index)
+    return result
+
+
 def cmd_add_notes_to_clip(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, Any]:
     track_index = _integer_param(params, "track_index")
     clip_index = _integer_param(params, "clip_index")
@@ -1742,6 +1825,10 @@ def _dispatch_command_steps(
         return (yield from _set_parameter_value_steps(song, params))
     if normalized == "clear_clip_notes":
         return (yield from _clear_clip_notes_steps(song, params))
+    if normalized == "set_track_property":
+        return (yield from _set_track_property_steps(song, params))
+    if normalized == "set_clip_properties":
+        return (yield from _set_clip_properties_steps(song, params))
     if normalized == "start_playback":
         return (
             yield from _verified_boolean_steps(

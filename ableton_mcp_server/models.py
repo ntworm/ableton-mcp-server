@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -99,6 +99,40 @@ class ClearClipNotesRequest(GetClipNotesRequest):
 
 class FireSceneRequest(RequestModel):
     scene_index: NonNegativeInt
+
+
+class SetTrackPropertyRequest(RequestModel):
+    track_index: NonNegativeInt
+    property: Literal["mute", "solo", "arm"]
+    value: bool
+
+
+class SetClipPropertiesRequest(GetClipNotesRequest):
+    loop_start: NonNegativeBeat | None = None
+    loop_end: NonNegativeBeat | None = None
+    name: Annotated[str, Field(min_length=1, max_length=256)] | None = None
+
+    @field_validator("name")
+    @classmethod
+    def strip_clip_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            raise ValueError("name must be non-empty")
+        return value
+
+    @model_validator(mode="after")
+    def validate_requested_changes(self) -> SetClipPropertiesRequest:
+        if self.loop_start is None and self.loop_end is None and self.name is None:
+            raise ValueError("at least one clip property must be provided")
+        if (
+            self.loop_start is not None
+            and self.loop_end is not None
+            and self.loop_start >= self.loop_end
+        ):
+            raise ValueError("loop_start must be less than loop_end")
+        return self
 
 
 class GetDeviceListRequest(RequestModel):
@@ -447,6 +481,8 @@ TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "delete_clip": DeleteClipRequest,
     "clear_clip_notes": ClearClipNotesRequest,
     "fire_scene": FireSceneRequest,
+    "set_track_property": SetTrackPropertyRequest,
+    "set_clip_properties": SetClipPropertiesRequest,
     "get_device_list": GetDeviceListRequest,
     "get_parameter_value": GetParameterValueRequest,
     "set_parameter_value": SetParameterValueRequest,
