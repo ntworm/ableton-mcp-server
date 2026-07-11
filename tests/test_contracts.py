@@ -31,6 +31,7 @@ def test_debug_mutations_are_explicitly_allowed() -> None:
         "rename_track",
         "set_warp_state",
         "load_device_to_track",
+        "set_parameter_value",
     }
     assert frozenset(expected) == contracts.ALLOWED_MUTATIONS
     assert expected.isdisjoint(contracts.READ_ONLY_COMMANDS)

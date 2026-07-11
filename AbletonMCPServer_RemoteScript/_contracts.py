@@ -120,6 +120,8 @@ ALLOWED_MUTATIONS = frozenset(
         "set_warp_state",
         # v0.3.0 — device loading (routed via WebSocket)
         "load_device_to_track",
+        # v0.4.0 — verified device parameter write (TCP)
+        "set_parameter_value",
     }
 )
 

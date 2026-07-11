@@ -35,6 +35,17 @@ FORWARD_CASES: list[tuple[Callable[..., Any], tuple[Any, ...], str, dict[str, An
         "get_parameter_value",
         {"track_index": 1, "device_index": 2, "parameter_name": "Cutoff"},
     ),
+    (
+        server.set_parameter_value,
+        (1, 2, "Cutoff", 0.75),
+        "set_parameter_value",
+        {
+            "track_index": 1,
+            "device_index": 2,
+            "parameter_name": "Cutoff",
+            "value": 0.75,
+        },
+    ),
     (server.get_routing, (1,), "get_routing", {"track_index": 1}),
     (server.get_browser_categories, (), "get_browser_categories", {}),
     (server.get_song_length, (), "get_song_length", {}),
@@ -198,7 +209,7 @@ def test_log_tool_limits_lines_and_reads_locally(mock_find: MagicMock, tmp_path:
 
 
 def test_every_tool_docstring_has_contract_sections() -> None:
-    assert len(server.PUBLIC_TOOL_FUNCTIONS) == 46
+    assert len(server.PUBLIC_TOOL_FUNCTIONS) == 47
     for function in server.PUBLIC_TOOL_FUNCTIONS:
         docstring = function.__doc__ or ""
         assert "Side effects:" in docstring, function.__name__

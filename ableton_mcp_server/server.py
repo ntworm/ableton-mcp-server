@@ -41,6 +41,7 @@ PUBLIC_TOOL_NAMES = (
     "get_clip_notes",
     "get_device_list",
     "get_parameter_value",
+    "set_parameter_value",
     "get_routing",
     "get_browser_categories",
     "diff_snapshots_tool",
@@ -360,6 +361,30 @@ def get_parameter_value(track_index: int, device_index: int, parameter_name: str
             track_index=track_index,
             device_index=device_index,
             parameter_name=parameter_name,
+        ),
+    )
+
+
+@mcp.tool()
+def set_parameter_value(
+    track_index: int,
+    device_index: int,
+    parameter_name: str,
+    value: float,
+) -> Any:
+    """Write a named device parameter and verify the observed Live value.
+
+    Side effects: mutates one device parameter in one Live undo step.
+    Example: ``set_parameter_value(0, 0, "Filter Freq", 0.75)`` updates a device.
+    Edge cases: disabled, unknown, and out-of-range parameters return structured errors.
+    """
+    return _remote(
+        "set_parameter_value",
+        models.SetParameterValueRequest(
+            track_index=track_index,
+            device_index=device_index,
+            parameter_name=parameter_name,
+            value=value,
         ),
     )
 
@@ -896,6 +921,7 @@ PUBLIC_TOOL_FUNCTIONS = (
     get_clip_notes,
     get_device_list,
     get_parameter_value,
+    set_parameter_value,
     get_routing,
     get_browser_categories,
     diff_snapshots_tool,

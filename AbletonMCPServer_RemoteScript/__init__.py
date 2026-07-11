@@ -6,6 +6,7 @@ dispatched by :meth:`AbletonMCPServer.update_display` on Live's main thread.
 
 from __future__ import annotations
 
+import difflib
 import json
 import logging
 import math
@@ -521,6 +522,64 @@ def cmd_get_parameter_value(song: Any, _application: Any, params: dict[str, Any]
                 "track:%s/device:%s/param:%s" % (track_index, device_index, parameter_index),
             )
     raise RemoteError(ERROR_INVALID_PARAMS, "Parameter %r was not found." % parameter_name)
+
+
+def _set_parameter_value_steps(
+    song: Any,
+    params: dict[str, Any],
+) -> Generator[None, None, dict[str, Any]]:
+    track_index = _integer_param(params, "track_index")
+    device_index = _integer_param(params, "device_index")
+    parameter_name = _string_param(params, "parameter_name")
+    requested = _float_param(params, "value", -1000000.0, 1000000.0)
+    track = _track_at(song, track_index)
+    devices = list(_safe(lambda: track.devices, []))
+    if device_index >= len(devices):
+        raise RemoteError(ERROR_INVALID_PARAMS, "Device index %s does not exist." % device_index)
+    parameters = list(_safe(lambda: devices[device_index].parameters, []))
+    parameter = next(
+        (
+            item
+            for item in parameters
+            if str(_safe(lambda item=item: item.name, "")) == parameter_name
+        ),
+        None,
+    )
+    if parameter is None:
+        names = [str(_safe(lambda item=item: item.name, "")) for item in parameters]
+        suggestions = difflib.get_close_matches(parameter_name, names, n=3, cutoff=0.5)
+        suffix = " Did you mean: %s?" % ", ".join(suggestions) if suggestions else ""
+        raise RemoteError(
+            ERROR_INVALID_PARAMS,
+            "Parameter %r was not found.%s" % (parameter_name, suffix),
+        )
+    if not bool(_safe(lambda: parameter.is_enabled, True)):
+        raise RemoteError(ERROR_WRONG_TYPE, "Parameter %r is disabled." % parameter_name)
+    minimum = float(_safe(lambda: parameter.min, 0.0))
+    maximum = float(_safe(lambda: parameter.max, 1.0))
+    if requested < minimum or requested > maximum:
+        raise RemoteError(
+            ERROR_INVALID_PARAMS,
+            "Value %s is outside [%s, %s] for parameter %r."
+            % (requested, minimum, maximum, parameter_name),
+        )
+    is_quantized = bool(_safe(lambda: parameter.is_quantized, False))
+    observed = float(_safe(lambda: parameter.value, minimum))
+    for _attempt in range(2):
+        parameter.value = requested
+        yield
+        observed = float(parameter.value)
+        if is_quantized or abs(observed - requested) < 1e-6:
+            return {
+                "target": requested,
+                "value": observed,
+                "is_quantized": is_quantized,
+            }
+    raise RemoteError(
+        ERROR_INTERNAL_ERROR,
+        "Parameter %r did not converge: target=%s observed=%s delta=%s."
+        % (parameter_name, requested, observed, abs(observed - requested)),
+    )
 
 
 def cmd_get_routing(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, str]:
@@ -1527,6 +1586,8 @@ def _dispatch_command_steps(
                 result_key="tempo",
             )
         )
+    if normalized == "set_parameter_value":
+        return (yield from _set_parameter_value_steps(song, params))
     if normalized == "start_playback":
         return (
             yield from _verified_boolean_steps(

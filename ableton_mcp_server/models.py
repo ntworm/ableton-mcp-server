@@ -99,6 +99,17 @@ class GetParameterValueRequest(RequestModel):
         return value
 
 
+class SetParameterValueRequest(GetParameterValueRequest):
+    value: float
+
+    @field_validator("value")
+    @classmethod
+    def finite_value(cls, value: float) -> float:
+        if not math.isfinite(value):
+            raise ValueError("value must be finite")
+        return value
+
+
 class GetRoutingRequest(RequestModel):
     track_index: NonNegativeInt
 
@@ -397,6 +408,7 @@ TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "get_clip_notes": GetClipNotesRequest,
     "get_device_list": GetDeviceListRequest,
     "get_parameter_value": GetParameterValueRequest,
+    "set_parameter_value": SetParameterValueRequest,
     "get_routing": GetRoutingRequest,
     "get_browser_categories": GetBrowserCategoriesRequest,
     "diff_snapshots_tool": DiffSnapshotsRequest,
