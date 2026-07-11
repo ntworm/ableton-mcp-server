@@ -686,13 +686,34 @@ def _verified_numeric_steps(
     result_key: str,
     retries: int = PLAYHEAD_MOVE_RETRIES,
 ) -> Generator[None, None, dict[str, float]]:
-    """Apply and confirm a numeric state change on later UI ticks."""
+    """Compatibility wrapper for verified numeric Song attributes."""
 
-    actual = float(_safe(lambda: getattr(song, attribute), -1.0))
+    return (
+        yield from _verified_attribute_numeric_steps(
+            song,
+            attribute=attribute,
+            expected=expected,
+            result_key=result_key,
+            retries=retries,
+        )
+    )
+
+
+def _verified_attribute_numeric_steps(
+    target: Any,
+    *,
+    attribute: str,
+    expected: float,
+    result_key: str,
+    retries: int = PLAYHEAD_MOVE_RETRIES,
+) -> Generator[None, None, dict[str, float]]:
+    """Apply and confirm a numeric attribute change on later UI ticks."""
+
+    actual = float(_safe(lambda: getattr(target, attribute), -1.0))
     for attempt in range(retries):
-        setattr(song, attribute, expected)
+        setattr(target, attribute, expected)
         yield
-        actual = float(getattr(song, attribute))
+        actual = float(getattr(target, attribute))
         _dbg(
             "state attribute=%s asked=%s got=%s tick_attempt=%s"
             % (attribute, expected, actual, attempt + 1)
@@ -702,6 +723,54 @@ def _verified_numeric_steps(
     raise RemoteError(
         ERROR_LIVE_UNAVAILABLE,
         "State setter for %s did not reach %s after %s UI ticks." % (attribute, expected, retries),
+    )
+
+
+def _verified_attribute_boolean_steps(
+    target: Any,
+    *,
+    attribute: str,
+    expected: bool,
+    result_key: str,
+    retries: int = PLAYHEAD_MOVE_RETRIES,
+) -> Generator[None, None, dict[str, bool]]:
+    """Apply and confirm a boolean attribute change on later UI ticks."""
+
+    actual = bool(_safe(lambda: getattr(target, attribute), not expected))
+    for _attempt in range(retries):
+        setattr(target, attribute, expected)
+        yield
+        actual = bool(getattr(target, attribute))
+        if actual is expected:
+            return {result_key: actual}
+    raise RemoteError(
+        ERROR_LIVE_UNAVAILABLE,
+        "State setter for %s did not reach %s after %s UI ticks."
+        % (attribute, expected, retries),
+    )
+
+
+def _verified_attribute_string_steps(
+    target: Any,
+    *,
+    attribute: str,
+    expected: str,
+    result_key: str,
+    retries: int = PLAYHEAD_MOVE_RETRIES,
+) -> Generator[None, None, dict[str, str]]:
+    """Apply and confirm a string attribute change on later UI ticks."""
+
+    actual = str(_safe(lambda: getattr(target, attribute), ""))
+    for _attempt in range(retries):
+        setattr(target, attribute, expected)
+        yield
+        actual = str(getattr(target, attribute))
+        if actual == expected:
+            return {result_key: actual}
+    raise RemoteError(
+        ERROR_LIVE_UNAVAILABLE,
+        "State setter for %s did not reach %r after %s UI ticks."
+        % (attribute, expected, retries),
     )
 
 

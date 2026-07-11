@@ -38,6 +38,29 @@ class FakeParameter:
         self.is_quantized = False
 
 
+class FakeAutomationEnvelope:
+    def __init__(self) -> None:
+        self.steps: list[tuple[float, float, float]] = []
+
+    def insert_step(self, time: float, duration: float, value: float) -> None:
+        self.steps.append((time, duration, value))
+
+
+class FakeBrowserItem:
+    def __init__(
+        self,
+        name: str,
+        *,
+        uri: str = "",
+        is_loadable: bool = False,
+        children: list[FakeBrowserItem] | None = None,
+    ) -> None:
+        self.name = name
+        self.uri = uri
+        self.is_loadable = is_loadable
+        self.children = children if children is not None else []
+
+
 class FakeDevice:
     def __init__(self, name: str = "Operator") -> None:
         self.name = name
@@ -337,18 +360,34 @@ class FakeSong:
 
 
 class FakeBrowser:
-    sounds = object()
-    drums = object()
-    instruments = object()
-    audio_effects = object()
-    midi_effects = object()
-    plugins = object()
-    samples = object()
+    def __init__(self) -> None:
+        self.sounds = FakeBrowserItem("Sounds")
+        self.drums = FakeBrowserItem("Drums")
+        self.instruments = FakeBrowserItem("Instruments")
+        self.audio_effects = FakeBrowserItem("Audio Effects")
+        self.midi_effects = FakeBrowserItem("MIDI Effects")
+        self.plugins = FakeBrowserItem("Plug-ins")
+        self.samples = FakeBrowserItem("Samples")
+        self.clips = FakeBrowserItem("Clips")
+        self.packs = FakeBrowserItem("Packs")
+        self.user_library = FakeBrowserItem("User Library")
+
+    @classmethod
+    def with_operator(cls) -> FakeBrowser:
+        browser = cls()
+        browser.instruments.children.append(
+            FakeBrowserItem(
+                "Operator",
+                uri="query:Instruments#Operator",
+                is_loadable=True,
+            )
+        )
+        return browser
 
 
 class FakeApplication:
-    def __init__(self) -> None:
-        self.browser = FakeBrowser()
+    def __init__(self, browser: FakeBrowser | None = None) -> None:
+        self.browser = browser if browser is not None else FakeBrowser()
         self.control_surfaces = [object()]
         self.begin_count = 0
         self.end_count = 0
