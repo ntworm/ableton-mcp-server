@@ -20,8 +20,14 @@ from contracts import DEFAULT_HOST, DEFAULT_PORT, DEFAULT_WS_PORT
 from . import models
 from .analysis import (
     analyze_audio as _analyze_audio,
+)
+from .analysis import (
     analyze_mix as _analyze_mix,
+)
+from .analysis import (
     extract_single_cycle as _extract_single_cycle,
+)
+from .analysis import (
     find_frequency_masking as _find_frequency_masking,
 )
 from .client import Client
@@ -1200,7 +1206,7 @@ def build_extension(project_path: str) -> str:
     return json.dumps({"status": "built", "steps": steps}, indent=2)
 
 
-PUBLIC_TOOL_FUNCTIONS = (
+PUBLIC_TOOL_FUNCTIONS_HEAD = (
     get_session_info,
     get_session_overview,
     get_bridge_status,
@@ -1264,12 +1270,10 @@ PUBLIC_TOOL_FUNCTIONS = (
     quit_ableton,
     live_fade,
     create_audio_track,
-    # v0.5.0 — offline mix analysis
-    analyze_audio,
-    find_frequency_masking,
-    analyze_mix,
-    extract_single_cycle,
 )
+# NOTE: v0.5.0 offline mix analysis wrappers (analyze_audio, find_frequency_masking,
+# analyze_mix, extract_single_cycle) are defined below; the canonical PUBLIC_TOOL_FUNCTIONS
+# tuple is assembled AFTER those definitions so all names are in scope.
 
 
 # ---------------------------------------------------------------------------
@@ -1279,13 +1283,16 @@ PUBLIC_TOOL_FUNCTIONS = (
 
 @mcp.tool()
 def analyze_audio(path: str) -> dict[str, Any]:
-    """Compute LUFS-I, true-peak, RMS, and per-band energy summary for a local audio file.
+    """Compute LUFS-I, true-peak, RMS, and per-band energy summary for a
+    local audio file.
 
     Side effects: reads the file from disk.
-    Example: ``analyze_audio(path="/stems/kick.wav")`` returns LUFS-I plus per-band energy summary.
-    Edge cases: missing files and unsupported encodings return a structured ``{"ok": False, "reason": ...}``.
+    Example: ``analyze_audio(path="/stems/kick.wav")`` returns LUFS-I plus
+    per-band energy summary.
+    Edge cases: missing files and unsupported encodings return a structured
+    ``{"ok": False, "reason": ...}``.
     """
-    return _explicit_json_result(analyze_audio(path))
+    return _explicit_json_result(_analyze_audio(path))
 
 
 @mcp.tool()
@@ -1294,14 +1301,17 @@ def find_frequency_masking(
     reference_path: str,
     threshold_db: float = 6.0,
 ) -> dict[str, Any]:
-    """Identify frequency bands where ``target_path`` exceeds ``reference_path`` by ``threshold_db`` dB or more.
+    """Identify frequency bands where ``target_path`` exceeds ``reference_path``
+    by ``threshold_db`` dB or more.
 
     Side effects: reads both files.
-    Example: ``find_frequency_masking(target_path=master, reference_path=kick)`` suggests band-level cuts.
-    Edge cases: mismatched sample rates raise a structured error; identical paths are rejected at the model.
+    Example: ``find_frequency_masking(target_path=master, reference_path=kick)``
+    suggests band-level cuts.
+    Edge cases: mismatched sample rates raise a structured error; identical
+    paths are rejected at the model.
     """
     return _explicit_json_result(
-        find_frequency_masking(
+        _find_frequency_masking(
             target_path=target_path,
             reference_path=reference_path,
             threshold_db=threshold_db,
@@ -1311,16 +1321,43 @@ def find_frequency_masking(
 
 @mcp.tool()
 def analyze_mix(stems: list[str]) -> dict[str, Any]:
-    """Run per-stem analysis and pair-wise masking across up to 16 local audio files."""
-    return _explicit_json_result(analyze_mix(stems=stems))
+    """Run per-stem analysis and pair-wise masking across up to 16 local audio files.
+
+    Side effects: reads each stem from disk.
+    Example: ``analyze_mix(stems=["/stems/kick.wav", "/stems/bass.wav"])`` returns
+    per-stem LUFS plus pair-wise masking scores.
+    Edge cases: more than 16 stems raises a structured error; missing files
+    are reported per-stem via ``{"ok": False, "reason": ...}``.
+    """
+    return _explicit_json_result(_analyze_mix(stems=stems))
 
 
 @mcp.tool()
 def extract_single_cycle(path: str, frame_size: int = 2048) -> dict[str, Any]:
-    """Find a candidate single-cycle loop in a local audio file plus its detected pitch."""
+    """Find a candidate single-cycle loop in a local audio file plus its
+    detected pitch.
+
+    Side effects: reads the file from disk.
+    Example: ``extract_single_cycle(path="/stems/kick.wav")`` returns the
+    detected pitch plus the single-cycle sample buffer.
+    Edge cases: aperiodic content returns ``{"ok": False, "reason": ...}``
+    instead of crashing.
+    """
     return _explicit_json_result(
-        extract_single_cycle(path=path, frame_size=frame_size)
+        _extract_single_cycle(path=path, frame_size=frame_size)
     )
+
+
+# Canonical ordered tuple of every public tool callable. Assembled after the
+# v0.5.0 offline mix analysis wrappers are defined so all names are in scope.
+PUBLIC_TOOL_FUNCTIONS = (
+    *PUBLIC_TOOL_FUNCTIONS_HEAD,
+    # v0.5.0 — offline mix analysis
+    analyze_audio,
+    find_frequency_masking,
+    analyze_mix,
+    extract_single_cycle,
+)
 
 
 def main() -> None:
