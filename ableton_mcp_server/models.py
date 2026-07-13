@@ -488,6 +488,15 @@ class BuildExtensionRequest(RequestModel):
     project_path: Annotated[str, Field(min_length=1, max_length=1024)]
 
 
+# ---------------------------------------------------------------------------
+# v0.5.0 — Set lifecycle
+# ---------------------------------------------------------------------------
+
+
+class GetLifecycleStatusRequest(EmptyRequest):
+    pass
+
+
 TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "get_session_info": GetSessionInfoRequest,
     "get_bridge_status": GetBridgeStatusRequest,
@@ -546,4 +555,6 @@ TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "load_device_to_track": LoadDeviceToTrackRequest,
     "scaffold_extension": ScaffoldExtensionRequest,
     "build_extension": BuildExtensionRequest,
+    # v0.5.0
+    "lifecycle_status": GetLifecycleStatusRequest,
 }

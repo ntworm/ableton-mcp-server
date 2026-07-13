@@ -85,6 +85,8 @@ PUBLIC_TOOL_NAMES = (
     # v0.3.0 — extension tooling
     "scaffold_extension",
     "build_extension",
+    # v0.5.0 — set lifecycle
+    "lifecycle_status",
 )
 
 
@@ -947,6 +949,22 @@ async def load_device_to_track(track_index: int, device_uri: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# v0.5.0 — Set Lifecycle
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def lifecycle_status() -> Any:
+    """Read Live save/quit API availability and return a GUI-workflow fallback.
+
+    Side effects: none.
+    Example: ``lifecycle_status()`` reports ``song_save_available`` and ``app_quit_available``.
+    Edge cases: missing Live APIs degrade to ``False`` flags; never raises.
+    """
+    return _remote("lifecycle_status", models.GetLifecycleStatusRequest())
+
+
+# ---------------------------------------------------------------------------
 # v0.3.0 — Extension Scaffolding & Building
 # ---------------------------------------------------------------------------
 
@@ -1138,6 +1156,8 @@ PUBLIC_TOOL_FUNCTIONS = (
     load_device_to_track,
     scaffold_extension,
     build_extension,
+    # v0.5.0 — set lifecycle
+    lifecycle_status,
 )
 
 

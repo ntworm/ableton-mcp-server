@@ -1799,6 +1799,38 @@ def cmd_rename_track(
 
 CommandHandler = Callable[[Any, Any, dict[str, Any]], Any]
 
+# v0.5.0 — Set lifecycle. Informational fallback for WSL↔Windows: our transport
+# cannot automate GUI clicks, so ``gui_workflow`` is descriptive only. Steps are
+# kept generic enough that they apply to both macOS AppleScript and Windows GUI
+# pathways (the upstream notes use AppleScript-specific phrasing; we use plain
+# menu references instead).
+GUI_LIFECYCLE_WORKFLOW: dict[str, list[str]] = {
+    "save": [
+        "Open the File menu in the Live window.",
+        "Click 'Save Live Set'. If the menu item is disabled, the set is already saved.",
+    ],
+    "quit": [
+        "Save first through the File menu if the option is enabled.",
+        "Open the Live application menu and click 'Quit Live'.",
+    ],
+    "notes": [
+        "Locked or asleep displays block automated GUI workflows.",
+    ],
+}
+
+
+def cmd_lifecycle_status(song: Any, application: Any, _params: dict[str, Any]) -> dict[str, Any]:
+    save_attr_names = ("save",)
+    quit_attr_names = ("quit",)
+    return {
+        "song_save_attrs": [name for name in save_attr_names if hasattr(song, name)],
+        "app_lifecycle_attrs": [name for name in quit_attr_names if hasattr(application, name)],
+        "song_save_available": callable(getattr(song, "save", None)),
+        "app_quit_available": callable(getattr(application, "quit", None)),
+        "gui_workflow": GUI_LIFECYCLE_WORKFLOW,
+    }
+
+
 COMMAND_HANDLERS: dict[str, CommandHandler] = {
     "get_session_info": cmd_get_session_info,
     "get_track_list": cmd_get_track_list,
@@ -1832,6 +1864,8 @@ COMMAND_HANDLERS: dict[str, CommandHandler] = {
     "diagnose_midi_clip": cmd_diagnose_midi_clip,
     "create_midi_track": cmd_create_midi_track,
     "rename_track": cmd_rename_track,
+    # v0.5.0 — set lifecycle
+    "lifecycle_status": cmd_lifecycle_status,
 }
 
 
@@ -1915,6 +1949,7 @@ def _dispatch_command_steps(
     normalized: str,
     params: dict[str, Any],
     undo_target: Any,
+    control_surface: Any = None,
 ) -> Generator[None, None, Any]:
     if normalized == "run_batch":
         return (yield from _run_batch_steps(song, application, params, undo_target))
@@ -2014,6 +2049,7 @@ def _command_steps(
     *,
     manage_undo: bool,
     undo_target: Any,
+    control_surface: Any = None,
 ) -> Generator[None, None, Any]:
     normalized = command.strip().lower()
     if normalized in READ_ONLY_COMMANDS:
@@ -2034,6 +2070,7 @@ def _command_steps(
                 normalized,
                 params,
                 undo_target,
+                control_surface,
             )
         )
     finally:

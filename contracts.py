@@ -107,6 +107,8 @@ READ_COMMANDS = frozenset(
         # v0.4.0 — Session detail and bounded browser discovery
         "get_clip_info",
         "search_browser",
+        # v0.5.0 — set lifecycle read-only probe
+        "lifecycle_status",
     }
 )
 
