@@ -30,12 +30,18 @@ The v0.4.0 additions are `set_parameter_value`, `get_clip_info`,
   (deprecated alias). Warp markers are readable via `get_warp_state` but
   `set_warp_state` rejects marker writes at the model layer.
 - The cross-bridge error taxonomy is stable: `CAPABILITY_UNAVAILABLE`,
-  `AMBIGUOUS_MATCH`, `VERIFICATION_FAILED`, `ACCEPTANCE_GUARD_FAILED` are
-  the only domain codes the MCP layer ever raises.
+  `AMBIGUOUS_MATCH`, `VERIFICATION_FAILED`, `ACCEPTANCE_GUARD_FAILED`
+  complement the long-standing transport codes
+  (`INVALID_PARAMS`, `LIVE_UNAVAILABLE`, `STALE_REFERENCE`,
+  `READ_ONLY_VIOLATION`, ...). See `ableton_mcp_server.errors` for the
+  complete list.
 - Per-tool certification statuses (`offline_passed`, `live_passed`,
   `manual_passed`, `host_unavailable`, `environment_unavailable`,
   `failed`) are produced by `ableton-mcp acceptance --profile baseline`
-  and gate the release decision.
+  and gate the release decision. The baseline is only **certified**
+  after this gated Live run completes with zero `failed` rows.
+- Both bridges bind explicitly to loopback: TCP `127.0.0.1:9888` and
+  WebSocket `127.0.0.1:9889`. LAN exposure is forbidden by design.
 - A disposable Set called `TESTE_CODEX` is the only safe target for
   acceptance mutations; `--confirm-project-name` enforces it.
 - Node.js is required only for Extension development; the Python wheel

@@ -87,7 +87,7 @@ The client automatically retries reads after connection failure. It never automa
 
 ## v0.5.0 set lifecycle, fader fade, and offline mix analysis
 
-The public surface contains 65 tools. Nine v0.5.0 tools add a read-only `lifecycle_status` probe, `save_set` / `quit_ableton` lifecycle mutations with scheduled GUI fallback, `live_fade` smoothstep/linear interpolation on the Live main thread, `create_audio_track` mirroring `create_midi_track`, and a `ableton_mcp_server.analysis` package of four offline mix analysis tools (`analyze_audio`, `find_frequency_masking`, `analyze_mix`, `extract_single_cycle`) that are dependency-free of Live and the bridge.
+The public surface contains 65 tools. Nine v0.5.0 tools add a read-only `lifecycle_status` probe, `save_set` / `quit_ableton` lifecycle mutations with scheduled GUI fallback, `live_fade` smoothstep/linear interpolation that distributes writes across `duration` seconds via `time.monotonic` and yields to `Song.update_display` between steps (no `time.sleep`, never blocks the Live main thread), `create_audio_track` mirroring `create_midi_track`, and a `ableton_mcp_server.analysis` package of four offline mix analysis tools (`analyze_audio`, `find_frequency_masking`, `analyze_mix`, `extract_single_cycle`) that are dependency-free of Live and the bridge.
 
 `lifecycle_status` is registered in `READ_COMMANDS` and therefore bypasses the mutation allowlist. The other three lifecycle tools (`save_set`, `quit_ableton`, `live_fade`) and `create_audio_track` are explicit `ALLOWED_MUTATIONS`. Mix analysis tools touch only the local filesystem and never touch the Set.
 
@@ -203,12 +203,19 @@ without breaking them:
 - Warp markers are **read-only**: `get_warp_state` exposes the array, but
   `set_warp_state` rejects `warp_markers` writes at the model layer.
 - Stable cross-bridge error taxonomy: `CAPABILITY_UNAVAILABLE`,
-  `AMBIGUOUS_MATCH`, `VERIFICATION_FAILED`, `ACCEPTANCE_GUARD_FAILED` are
-  the only domain codes the MCP layer ever raises.
+  `AMBIGUOUS_MATCH`, `VERIFICATION_FAILED`, `ACCEPTANCE_GUARD_FAILED`
+  join the long-standing transport codes (`INVALID_PARAMS`,
+  `LIVE_UNAVAILABLE`, `STALE_REFERENCE`, `READ_ONLY_VIOLATION`, ...).
+  See `ableton_mcp_server.errors` for the full list.
 - Per-tool certification statuses (`offline_passed`, `live_passed`,
   `manual_passed`, `host_unavailable`, `environment_unavailable`,
   `failed`) are produced by `cli acceptance --profile baseline` and gate
-  the release decision.
+  the release decision. A baseline certification is only declared
+  **certified** after this gated Live run finishes with zero `failed`
+  rows.
+- The WebSocket bridge (Extension Host) binds explicitly to
+  `127.0.0.1:9889`. The TCP bridge remains on `127.0.0.1:9888`. LAN
+  exposure is forbidden by design.
 - The guarded `acceptance --confirm-project-name TESTE_CODEX` command is
   the only path that runs mutations against a real Live Set.
 - Node.js is required only for Extension development; the Python wheel

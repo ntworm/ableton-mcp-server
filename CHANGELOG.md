@@ -57,7 +57,7 @@ All notable changes to this project are documented in this file. The format foll
 ### Added
 
 - Nine public tools, bringing the FastMCP surface to 65:
-  - Set lifecycle: `lifecycle_status` (read-only probe of save/quit API availability), `save_set` (conditional `Song.save()`), `quit_ableton` (save-then-quit with scheduled GUI fallback), `live_fade` (smoothstep/linear interpolation on the Live main thread).
+  - Set lifecycle: `lifecycle_status` (read-only probe of save/quit API availability), `save_set` (conditional `Song.save()`), `quit_ableton` (save-then-quit with scheduled GUI fallback), `live_fade` (smoothstep/linear interpolation distributed across `duration` via `time.monotonic`; yields between steps; never blocks the Live main thread).
   - Track creation: `create_audio_track` (mirrors `create_midi_track`, zero-touch).
   - Offline mix analysis: `analyze_audio` (LUFS-I, true-peak, RMS, per-band energy), `find_frequency_masking` (target/reference band-level delta), `analyze_mix` (up to 16 stems with pair-wise masking), `extract_single_cycle` (pitch detection plus single-cycle buffer).
 - New `ableton_mcp_server.analysis` package — dependency-free of Live and the bridge; reads local audio through `soundfile`.

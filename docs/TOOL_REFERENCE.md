@@ -25,7 +25,9 @@ The FastMCP server exposes 65 snake_case tools. Remote examples below show the J
 ### `live_fade(target: str, from_value: float, to_value: float, duration_s: float, steps: int = 30, easing: str = "smoothstep")`
 
 - Params: `target` (mixer path-id), numeric `from_value`/`to_value`, `duration_s`, `steps`, `easing` (`smoothstep` or `linear`).
-- Side effects: interpolates the parameter on the Live main thread via `Song.update_display` ticks; no `time.sleep`.
+- Side effects: distributes writes across the requested `duration_s` via
+  `time.monotonic` and yields between steps; the Live main thread stays
+  responsive because there is no `time.sleep` and no busy-wait.
 - Edge cases / side effects: 60-second timeout override; `min(60, steps + 1)` work units; mutation gated by `ALLOWED_MUTATIONS`.
 
 ## v0.5.0 track creation
