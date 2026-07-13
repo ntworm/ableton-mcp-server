@@ -61,7 +61,13 @@ def test_search_browser_is_case_insensitive_and_bounded() -> None:
 def test_search_browser_returns_match_under_each_category_with_limit_ten() -> None:
     """Two hits under different categories must both surface even when the
     traversal depends on items whose ``.children`` accessor yields fresh
-    proxy wrappers on every call (Live's LOM behaviour)."""
+    proxy wrappers on every call (Live's LOM behaviour).
+
+    The query ``"o"`` matches ``Operator``; ``Utility`` lives under a
+    different query and is exercised in
+    ``test_search_browser_finds_utility_under_midi_effects`` below so
+    this test does not pretend to cover it.
+    """
     app = FakeApplication(browser=FakeBrowser())
     instruments_dynamic = FakeBrowserItem(
         "InstrumentsDyn",
@@ -89,6 +95,36 @@ def test_search_browser_returns_match_under_each_category_with_limit_ten() -> No
 
     names = sorted(item["name"] for item in result)
     assert "Operator" in names
+
+
+def test_search_browser_finds_utility_under_midi_effects() -> None:
+    """The ``Utility`` device is the canonical MIDI effect; search must
+    surface it independently from ``Operator`` (which only matches the
+    ``"o"`` query) and must not be skipped by reproxying wrappers.
+    """
+    app = FakeApplication(browser=FakeBrowser())
+    midi_effects_dynamic = FakeBrowserItem(
+        "MIDI Effects",
+        reproxy_children=True,
+        children=[
+            FakeBrowserItem("Utility", uri="query:MIDI Effects#Utility",
+                            is_loadable=True),
+        ],
+    )
+    app.browser.midi_effects = midi_effects_dynamic
+
+    result = execute_command(
+        FakeSong(),
+        app,
+        "search_browser",
+        {"query": "Utility", "limit": 10},
+    )
+
+    names = [item["name"] for item in result]
+    assert "Utility" in names
+    utility = next(item for item in result if item["name"] == "Utility")
+    assert utility["category"] == "midi_effects"
+    assert utility["uri"] == "query:MIDI Effects#Utility"
 
 
 def test_search_browser_stops_at_cycle_within_budget() -> None:
