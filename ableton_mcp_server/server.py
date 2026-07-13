@@ -30,12 +30,11 @@ from .analysis import (
 from .analysis import (
     find_frequency_masking as _find_frequency_masking,
 )
+from .catalog import TOOL_CATALOG
 from .client import Client
 from .diagnostics import bridge_status, find_ableton_log_path
 from .diff import diff_snapshots
 from .errors import BridgeError
-
-from .catalog import TOOL_CATALOG
 
 PUBLIC_TOOL_NAMES = tuple(spec.name for spec in TOOL_CATALOG)
 
@@ -1221,7 +1220,7 @@ PUBLIC_TOOL_FUNCTIONS_HEAD = (
 
 
 @mcp.tool()
-def analyze_audio(path: str) -> dict[str, Any]:
+def analyze_audio(path: str) -> ToolResult:
     """Compute LUFS-I, true-peak, RMS, and per-band energy summary for a
     local audio file.
 
@@ -1239,7 +1238,7 @@ def find_frequency_masking(
     target_path: str,
     reference_path: str,
     threshold_db: float = 6.0,
-) -> dict[str, Any]:
+) -> ToolResult:
     """Identify frequency bands where ``target_path`` exceeds ``reference_path``
     by ``threshold_db`` dB or more.
 
@@ -1259,7 +1258,7 @@ def find_frequency_masking(
 
 
 @mcp.tool()
-def analyze_mix(stems: list[str]) -> dict[str, Any]:
+def analyze_mix(stems: list[str]) -> ToolResult:
     """Run per-stem analysis and pair-wise masking across up to 16 local audio files.
 
     Side effects: reads each stem from disk.
@@ -1272,7 +1271,7 @@ def analyze_mix(stems: list[str]) -> dict[str, Any]:
 
 
 @mcp.tool()
-def extract_single_cycle(path: str, frame_size: int = 2048) -> dict[str, Any]:
+def extract_single_cycle(path: str, frame_size: int = 2048) -> ToolResult:
     """Find a candidate single-cycle loop in a local audio file plus its
     detected pitch.
 

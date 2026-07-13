@@ -74,24 +74,65 @@ def analyze_audio(path: str) -> dict[str, Any]:
     }
 
 
-def _band_mask(freqs, target_db, reference_db, low_hz, high_hz, threshold_db):
-    mask = (freqs >= low_hz) & (freqs < high_hz)
-    if not np.any(mask):
+def _stft_power(
+    samples: np.ndarray, window_size: int = 4096, hop: int = 1024
+) -> np.ndarray:
+    if samples.size < window_size:
+        samples = np.pad(samples, (0, window_size - samples.size))
+    starts = range(0, samples.size - window_size + 1, hop)
+    window = np.hanning(window_size)
+    frames = np.stack(
+        [samples[start : start + window_size] * window for start in starts]
+    )
+    return np.median(np.abs(np.fft.rfft(frames, axis=1)) ** 2, axis=0)
+
+
+def _band_mask(
+    freqs: np.ndarray,
+    target_power: np.ndarray,
+    reference_power: np.ndarray,
+    low_hz: float,
+    high_hz: float,
+    threshold_db: float,
+) -> dict[str, float | None]:
+    band = (freqs >= low_hz) & (freqs < high_hz)
+    target = target_power[band]
+    reference = reference_power[band]
+    if not target.size:
         return {
             "start_hz": low_hz,
             "end_hz": high_hz,
             "target_db": -120.0,
             "reference_db": -120.0,
+            "overlap_ratio": 0.0,
             "excess_db": None,
         }
-    target_band = float(np.mean(target_db[mask]))
-    reference_band = float(np.mean(reference_db[mask]))
-    excess = target_band - reference_band
+    active = (target >= target.max(initial=0.0) * 1e-6) & (
+        reference >= reference.max(initial=0.0) * 1e-6
+    )
+    if not np.any(active):
+        return {
+            "start_hz": low_hz,
+            "end_hz": high_hz,
+            "target_db": -120.0,
+            "reference_db": -120.0,
+            "overlap_ratio": 0.0,
+            "excess_db": None,
+        }
+    target_sum = float(np.sum(target[active]))
+    reference_sum = float(np.sum(reference[active]))
+    target_db = 10.0 * math.log10(target_sum + 1e-12)
+    reference_db = 10.0 * math.log10(reference_sum + 1e-12)
+    excess = target_db - reference_db
+    overlap = float(np.sum(np.minimum(target[active], reference[active]))) / max(
+        reference_sum, 1e-12
+    )
     return {
         "start_hz": low_hz,
         "end_hz": high_hz,
-        "target_db": target_band,
-        "reference_db": reference_band,
+        "target_db": target_db,
+        "reference_db": reference_db,
+        "overlap_ratio": min(overlap, 1.0),
         "excess_db": excess if excess >= threshold_db else None,
     }
 
@@ -105,15 +146,22 @@ def find_frequency_masking(
     reference, sr_r = _load_mono(reference_path)
     if sr_t != sr_r:
         raise ValueError("sample rate mismatch between target and reference")
-    spec_t = np.abs(np.fft.rfft(target))
-    spec_r = np.abs(np.fft.rfft(reference))
-    freqs = np.fft.rfftfreq(target.size, d=1.0 / sr_t)
-    log_t = 20.0 * np.log10(spec_t + 1e-12)
-    log_r = 20.0 * np.log10(spec_r + 1e-12)
+    # Slice 1 Task 7: trim to the shared sample count so STFT frames line up
+    # regardless of how the stems were rendered.
+    shared = min(target.size, reference.size)
+    target = target[:shared]
+    reference = reference[:shared]
+    target_power = _stft_power(target)
+    reference_power = _stft_power(reference)
+    freqs = np.fft.rfftfreq(4096, d=1.0 / sr_t).astype(np.float64)
     bands = [
-        _band_mask(freqs, log_t, log_r, 0.0, LOW_HZ, threshold_db),
-        _band_mask(freqs, log_t, log_r, LOW_HZ, HIGH_HZ, threshold_db),
-        _band_mask(freqs, log_t, log_r, HIGH_HZ, sr_t / 2, threshold_db),
+        _band_mask(freqs, target_power, reference_power, 0.0, LOW_HZ, threshold_db),
+        _band_mask(
+            freqs, target_power, reference_power, LOW_HZ, HIGH_HZ, threshold_db
+        ),
+        _band_mask(
+            freqs, target_power, reference_power, HIGH_HZ, sr_t / 2, threshold_db
+        ),
     ]
     excess = [b["excess_db"] for b in bands if b["excess_db"] is not None]
     return {"bands": bands, "score": float(max(excess) if excess else 0.0)}
