@@ -85,6 +85,14 @@ The listener binds the literal `127.0.0.1`. It has no LAN mode.
 
 The client automatically retries reads after connection failure. It never automatically retries a mutation: a broken connection does not prove that Live failed to apply the write. Client and Remote Script compute the same deadline from `contracts.request_timeout_seconds`; the 20-second base scales by serialized bulk/batch work units.
 
+## v0.5.0 set lifecycle, fader fade, and offline mix analysis
+
+The public surface contains 65 tools. Nine v0.5.0 tools add a read-only `lifecycle_status` probe, `save_set` / `quit_ableton` lifecycle mutations with scheduled GUI fallback, `live_fade` smoothstep/linear interpolation on the Live main thread, `create_audio_track` mirroring `create_midi_track`, and a `ableton_mcp_server.analysis` package of four offline mix analysis tools (`analyze_audio`, `find_frequency_masking`, `analyze_mix`, `extract_single_cycle`) that are dependency-free of Live and the bridge.
+
+`lifecycle_status` is registered in `READ_COMMANDS` and therefore bypasses the mutation allowlist. The other three lifecycle tools (`save_set`, `quit_ableton`, `live_fade`) and `create_audio_track` are explicit `ALLOWED_MUTATIONS`. Mix analysis tools touch only the local filesystem and never touch the Set.
+
+`live_fade` runs its steps inside `Song.update_display` ticks — `time.sleep` is intentionally not used — and is bounded by a 60-second timeout override plus `min(60, steps + 1)` work units. The runtime identity tag added to `get_bridge_status` (`set-lifecycle-and-fade-1`) lets consumers distinguish which feature set a given server is running.
+
 ## v0.4.0 routing and capability boundaries
 
 The public surface contains 56 tools. Ten v0.4.0 tools add verified parameter writes, Session detail/overview, bounded Browser search, clip/scene mutations, verified properties, and Session clip automation.

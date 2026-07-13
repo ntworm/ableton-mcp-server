@@ -14,10 +14,10 @@ def test_release_version_is_aligned_across_package_metadata() -> None:
     extension_manifest = json.loads(
         (ROOT / "AbletonMCPServer_Extension" / "package.json").read_text(encoding="utf-8")
     )
-    assert __version__ == "0.4.0"
-    assert manifest["version"] == "0.4.0"
-    assert extension_manifest["version"] == "0.4.0"
-    assert 'version = "0.4.0"' in pyproject
+    assert __version__ == "0.5.0"
+    assert manifest["version"] == "0.5.0"
+    assert extension_manifest["version"] == "0.5.0"
+    assert 'version = "0.5.0"' in pyproject
 
 
 def test_v040_public_docs_cover_tools_and_attribution() -> None:
@@ -36,12 +36,34 @@ def test_v040_public_docs_cover_tools_and_attribution() -> None:
         "set_clip_properties",
         "create_clip_automation",
     }
-    assert "Version 0.4.0 exposes 56 tools" in readme
+    assert "Version 0.5.0 exposes 65 tools" in readme
     for tool in new_tools:
         assert f"`{tool}`" in readme
         assert f"`{tool}" in reference
     assert "pnomolos/live-wire" in changelog
     assert "hidingwill/AbletonBridge" in changelog
+
+
+def test_v050_public_docs_cover_lifecycle_fade_tracks_and_analysis() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    reference = (ROOT / "docs" / "TOOL_REFERENCE.md").read_text(encoding="utf-8")
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    new_tools = {
+        "lifecycle_status",
+        "save_set",
+        "quit_ableton",
+        "live_fade",
+        "create_audio_track",
+        "analyze_audio",
+        "find_frequency_masking",
+        "analyze_mix",
+        "extract_single_cycle",
+    }
+    assert "65 tools" in readme
+    for tool in new_tools:
+        assert f"`{tool}`" in readme
+        assert f"`{tool}`" in reference or f"`{tool}(" in reference
+        assert f"`{tool}`" in changelog
 
 
 def test_wheel_configuration_includes_contracts_and_remote_script() -> None:

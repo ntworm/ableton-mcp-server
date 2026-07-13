@@ -5,10 +5,19 @@ Ableton Live Set. A stdio FastMCP server communicates with a MIDI Remote Script
 over newline-delimited JSON on TCP `127.0.0.1:9888`, and with an Extension Host
 bridge over WebSockets on `127.0.0.1:9889`.
 
-Version 0.4.0 exposes 56 tools: reads and diagnostics, verified transport and
+Version 0.5.0 exposes 65 tools: reads and diagnostics, verified transport and
 device writes, bounded Browser discovery, Session clip/scene operations, MIDI
 notes and clip automation, guarded track creation, audio warping, device loading,
-and Extension scaffolding/building.
+Extension scaffolding/building, set lifecycle (lifecycle_status / save_set /
+quit_ableton / live_fade), audio-track creation, and offline mix analysis
+(analyze_audio / find_frequency_masking / analyze_mix / extract_single_cycle).
+
+The v0.5.0 additions are `lifecycle_status`, `save_set`, `quit_ableton`,
+`live_fade`, `create_audio_track`, `analyze_audio`, `find_frequency_masking`,
+`analyze_mix`, and `extract_single_cycle`. `live_fade` runs its interpolation
+inside `Song.update_display` ticks — `time.sleep` is intentionally not used.
+The mix analysis tools live in the `ableton_mcp_server.analysis` package and
+are dependency-free of Live and the bridge.
 
 The v0.4.0 additions are `set_parameter_value`, `get_clip_info`,
 `get_session_overview`, `search_browser`, `delete_clip`, `clear_clip_notes`,

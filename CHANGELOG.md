@@ -2,6 +2,32 @@
 
 All notable changes to this project are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0] - 2026-07-13
+
+### Added
+
+- Nine public tools, bringing the FastMCP surface to 65:
+  - Set lifecycle: `lifecycle_status` (read-only probe of save/quit API availability), `save_set` (conditional `Song.save()`), `quit_ableton` (save-then-quit with scheduled GUI fallback), `live_fade` (smoothstep/linear interpolation on the Live main thread).
+  - Track creation: `create_audio_track` (mirrors `create_midi_track`, zero-touch).
+  - Offline mix analysis: `analyze_audio` (LUFS-I, true-peak, RMS, per-band energy), `find_frequency_masking` (target/reference band-level delta), `analyze_mix` (up to 16 stems with pair-wise masking), `extract_single_cycle` (pitch detection plus single-cycle buffer).
+- New `ableton_mcp_server.analysis` package — dependency-free of Live and the bridge; reads local audio through `soundfile`.
+- Runtime identity tag in `get_bridge_status` payload (e.g. `set-lifecycle-and-fade-1`) so consumers can distinguish which feature set a given server is running.
+- Contract vendoring: `live_fade` 60-second timeout override; `lifecycle_status` listed in `READ_COMMANDS`.
+- `time.sleep` removed from `live_fade_steps` per repo invariant (no blocking on Live main thread); steps execute inside `Song.update_display` ticks.
+
+### Changed
+
+- Public tool registry: `PUBLIC_TOOL_FUNCTIONS` is now assembled at the end of `server.py` after the v0.5.0 mix analysis wrappers are defined; the upstream portion is exposed as `PUBLIC_TOOL_FUNCTIONS_HEAD` for readability.
+
+### Safety
+
+- All new Python LOM work remains on Live's UI-thread queue; one undo step; no automatic replay after ambiguous network failure.
+- Mix analysis is dependency-free of Live, the Remote Script, and the bridge — it cannot touch the Set.
+
+### Attribution
+
+- No third-party code vendored; design notes referenced from prior in-repo specs under `docs/superpowers/specs/`.
+
 ## [0.4.0] - 2026-07-11
 
 ### Added

@@ -1,8 +1,72 @@
 # Tool Reference
 
-The FastMCP server exposes 56 snake_case tools. Remote examples below show the JSONL command envelope after MCP/Pydantic validation. All error responses use `{"status":"error","code","message","hint?"}`.
+The FastMCP server exposes 65 snake_case tools. Remote examples below show the JSONL command envelope after MCP/Pydantic validation. All error responses use `{"status":"error","code","message","hint?"}`.
 
-## Reads
+## v0.5.0 set lifecycle
+
+### `lifecycle_status()`
+
+- Params: none.
+- Returns: a read-only probe of save/quit API availability plus runtime identity tag.
+- Edge cases / side effects: pure read; registered in `READ_COMMANDS`.
+
+### `save_set(require_api: bool = False)`
+
+- Params: `require_api` (default `False`) — when `True`, the call fails unless a write API is available.
+- Side effects: calls `Song.save()` if the API is present; no-op otherwise.
+- Edge cases / side effects: mutation gated by `ALLOWED_MUTATIONS`; one undo step; never replayed after ambiguous network failure.
+
+### `quit_ableton()`
+
+- Params: none.
+- Side effects: saves the Set (when the API is available) then schedules a quit. GUI fallback is scheduled so the call cannot hang.
+- Edge cases / side effects: mutation gated by `ALLOWED_MUTATIONS`; one undo step.
+
+### `live_fade(target: str, from_value: float, to_value: float, duration_s: float, steps: int = 30, easing: str = "smoothstep")`
+
+- Params: `target` (mixer path-id), numeric `from_value`/`to_value`, `duration_s`, `steps`, `easing` (`smoothstep` or `linear`).
+- Side effects: interpolates the parameter on the Live main thread via `Song.update_display` ticks; no `time.sleep`.
+- Edge cases / side effects: 60-second timeout override; `min(60, steps + 1)` work units; mutation gated by `ALLOWED_MUTATIONS`.
+
+## v0.5.0 track creation
+
+### `create_audio_track(index: int = -1, name: str | None = None)`
+
+- Params: optional insertion `index` and `name`.
+- Side effects: creates a new empty audio track; mirrors `create_midi_track`.
+- Edge cases / side effects: respects the 96-track safety limit; mutation gated by `ALLOWED_MUTATIONS`.
+
+## v0.5.0 offline mix analysis
+
+### `analyze_audio(path: str)`
+
+- Params: local path to a `.wav` / audio file.
+- Returns: LUFS-I, true-peak, RMS, and per-band energy summary.
+- Side effects: reads the file from disk; dependency-free of Live.
+- Edge cases / side effects: missing files and unsupported encodings return a structured `{"ok": False, "reason": ...}`.
+
+### `find_frequency_masking(target_path: str, reference_path: str, threshold_db: float = 6.0)`
+
+- Params: `target_path`, `reference_path`, `threshold_db`.
+- Returns: bands where the target exceeds the reference by at least `threshold_db` dB.
+- Side effects: reads both files.
+- Edge cases / side effects: mismatched sample rates raise a structured error; identical paths are rejected at the model layer.
+
+### `analyze_mix(stems: list[str])`
+
+- Params: list of stem paths, max 16.
+- Returns: per-stem analysis plus pair-wise masking scores.
+- Side effects: reads each stem from disk.
+- Edge cases / side effects: more than 16 stems raises a structured error.
+
+### `extract_single_cycle(path: str, frame_size: int = 2048)`
+
+- Params: local path plus optional `frame_size`.
+- Returns: detected pitch plus a single-cycle sample buffer (or `{"ok": False, "reason": ...}` on aperiodic content).
+- Side effects: reads the file from disk.
+- Edge cases / side effects: aperiodic content returns a structured failure rather than crashing.
+
+## v0.4.0 capability expansion
 
 ### `get_session_info()`
 
