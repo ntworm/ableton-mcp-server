@@ -88,6 +88,7 @@ PUBLIC_TOOL_NAMES = (
     # v0.5.0 — set lifecycle
     "lifecycle_status",
     "save_set",
+    "quit_ableton",
 )
 
 
@@ -976,6 +977,28 @@ def save_set(require_api: bool = False) -> Any:
     return _remote("save_set", models.SaveSetRequest(require_api=require_api))
 
 
+@mcp.tool()
+def quit_ableton(
+    save: bool = True,
+    force_without_save: bool = False,
+    quit_delay_ticks: int = 2,
+) -> Any:
+    """Save the Live Set (when requested) then schedule Application.quit after a small UI delay.
+
+    Side effects: invokes Song.save() and schedules Application.quit.
+    Example: ``quit_ableton(quit_delay_ticks=5)`` waits five UI ticks.
+    Edge cases: missing APIs return a structured GUI workflow refusal.
+    """
+    return _remote(
+        "quit_ableton",
+        models.QuitAbletonRequest(
+            save=save,
+            force_without_save=force_without_save,
+            quit_delay_ticks=quit_delay_ticks,
+        ),
+    )
+
+
 # ---------------------------------------------------------------------------
 # v0.3.0 — Extension Scaffolding & Building
 # ---------------------------------------------------------------------------
@@ -1171,6 +1194,7 @@ PUBLIC_TOOL_FUNCTIONS = (
     # v0.5.0 — set lifecycle
     lifecycle_status,
     save_set,
+    quit_ableton,
 )
 
 

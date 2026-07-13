@@ -509,6 +509,12 @@ class SaveSetRequest(RequestModel):
     require_api: bool = False
 
 
+class QuitAbletonRequest(RequestModel):
+    save: bool = True
+    force_without_save: bool = False
+    quit_delay_ticks: Annotated[int, Field(ge=1, le=120)] = 2
+
+
 TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "get_session_info": GetSessionInfoRequest,
     "get_bridge_status": GetBridgeStatusRequest,
@@ -570,4 +576,5 @@ TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     # v0.5.0
     "lifecycle_status": GetLifecycleStatusRequest,
     "save_set": SaveSetRequest,
+    "quit_ableton": QuitAbletonRequest,
 }

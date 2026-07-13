@@ -146,8 +146,9 @@ ALLOWED_MUTATIONS = frozenset(
         "set_clip_properties",
         # v0.4.0 — Session clip automation only
         "create_clip_automation",
-        # v0.5.0 — set lifecycle save (can be batched through run_batch)
+        # v0.5.0 — set lifecycle mutations
         "save_set",
+        "quit_ableton",
     }
 )
 

@@ -1857,6 +1857,58 @@ def cmd_save_set(song: Any, _application: Any, params: dict[str, Any]) -> dict[s
     return {"saved": True, "api_available": True, "result": result}
 
 
+def quit_ableton_steps(
+    song: Any,
+    application: Any,
+    control_surface: Any,
+    params: dict[str, Any],
+) -> dict[str, Any]:
+    save_attr = getattr(song, "save", None)
+    if params.get("save", True) and callable(save_attr):
+        save_attr()
+        saved = True
+    elif params.get("save", True):
+        saved = False
+        if not params.get("force_without_save"):
+            return {
+                "quit_requested": False,
+                "saved_first": False,
+                "reason": (
+                    "save API unavailable; pass force_without_save:true to quit anyway "
+                    "or use the GUI workflow"
+                ),
+                "gui_workflow": GUI_LIFECYCLE_WORKFLOW,
+            }
+    else:
+        saved = False
+    quit_fn = getattr(application, "quit", None)
+    if not callable(quit_fn):
+        return {
+            "quit_requested": False,
+            "saved_first": saved,
+            "api_available": False,
+            "gui_workflow": GUI_LIFECYCLE_WORKFLOW["quit"],
+            "gui_notes": GUI_LIFECYCLE_WORKFLOW["notes"],
+        }
+    if not hasattr(control_surface, "schedule_message"):
+        return {
+            "quit_requested": False,
+            "saved_first": saved,
+            "api_available": True,
+            "reason": "Live control surface does not expose schedule_message",
+            "gui_workflow": GUI_LIFECYCLE_WORKFLOW["quit"],
+            "gui_notes": GUI_LIFECYCLE_WORKFLOW["notes"],
+        }
+    delay = int(params.get("quit_delay_ticks") or 2)
+    control_surface.schedule_message(max(1, delay), quit_fn)
+    return {
+        "quit_requested": True,
+        "saved_first": saved,
+        "api_available": True,
+        "scheduled": True,
+    }
+
+
 COMMAND_HANDLERS: dict[str, CommandHandler] = {
     "get_session_info": cmd_get_session_info,
     "get_track_list": cmd_get_track_list,
@@ -1893,6 +1945,7 @@ COMMAND_HANDLERS: dict[str, CommandHandler] = {
     # v0.5.0 — set lifecycle
     "lifecycle_status": cmd_lifecycle_status,
     "save_set": cmd_save_set,
+    "quit_ableton": quit_ableton_steps,
 }
 
 
@@ -1921,6 +1974,7 @@ def _run_batch_steps(
     application: Any,
     params: dict[str, Any],
     undo_target: Any,
+    control_surface: Any = None,
 ) -> Generator[None, None, dict[str, Any]]:
     commands = _required(params, "commands")
     if not isinstance(commands, list) or not commands:
@@ -1950,6 +2004,7 @@ def _run_batch_steps(
                 command_params,
                 manage_undo=False,
                 undo_target=undo_target,
+                control_surface=control_surface,
             )
             results.append({"index": index, "status": "ok", "result": result})
             completed += 1
@@ -1979,7 +2034,14 @@ def _dispatch_command_steps(
     control_surface: Any = None,
 ) -> Generator[None, None, Any]:
     if normalized == "run_batch":
-        return (yield from _run_batch_steps(song, application, params, undo_target))
+        return (
+            yield from _run_batch_steps(
+                song, application, params, undo_target, control_surface
+            )
+        )
+    if normalized == "quit_ableton":
+        # Give Live's UI thread one cycle before scheduling application quit.
+        yield
     if normalized == "create_cue_point":
         return (yield from _create_cue_point_steps(song, params))
     if normalized == "bulk_create_cue_points":
@@ -2065,6 +2127,8 @@ def _dispatch_command_steps(
     handler = COMMAND_HANDLERS.get(normalized)
     if handler is None:
         raise RemoteError(ERROR_UNKNOWN_COMMAND, "Unknown command %r." % normalized)
+    if normalized == "quit_ableton":
+        return handler(song, application, control_surface, params)
     return handler(song, application, params)
 
 
@@ -2138,6 +2202,7 @@ def _request_steps(
     command: str,
     params: dict[str, Any],
     undo_target: Any,
+    control_surface: Any = None,
 ) -> Generator[None, None, Any]:
     """Build one request execution that may span multiple Live UI ticks."""
 
@@ -2149,6 +2214,7 @@ def _request_steps(
             params,
             manage_undo=True,
             undo_target=undo_target,
+            control_surface=control_surface,
         )
     )
 
@@ -2169,10 +2235,17 @@ class ActiveRequest:
 class RequestProcessor:
     """Owns the UI-thread queue; socket threads only call :meth:`enqueue`."""
 
-    def __init__(self, song: Any, application: Any, undo_target: Any = None) -> None:
+    def __init__(
+        self,
+        song: Any,
+        application: Any,
+        undo_target: Any = None,
+        control_surface: Any = None,
+    ) -> None:
         self.song = song
         self.application = application
         self.undo_target = undo_target if undo_target is not None else application
+        self.control_surface = control_surface
         self.request_queue: queue.Queue[QueuedRequest] = queue.Queue()
         self.active_request: ActiveRequest | None = None
 
@@ -2195,6 +2268,7 @@ class RequestProcessor:
                         request.command,
                         request.params,
                         self.undo_target,
+                        self.control_surface,
                     ),
                 )
             active = self.active_request
@@ -2339,7 +2413,7 @@ class AbletonMCPServer(ControlSurface):
         )
         song = self.song() if callable(self.song) else self.song
         undo_target = _resolve_undo_target(c_instance, self, application, song)
-        self._processor = RequestProcessor(song, application, undo_target)
+        self._processor = RequestProcessor(song, application, undo_target, self)
         self._socket_server = JsonlSocketServer(self._processor)
         self._socket_server.start()
         _dbg("startup endpoint=127.0.0.1:9888")
