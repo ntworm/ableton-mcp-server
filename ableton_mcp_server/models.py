@@ -583,7 +583,7 @@ class FindFrequencyMaskingRequest(RequestModel):
     threshold_db: float = 6.0
 
     @model_validator(mode="after")
-    def _paths_differ(self) -> "FindFrequencyMaskingRequest":
+    def _paths_differ(self) -> FindFrequencyMaskingRequest:
         if self.target_path == self.reference_path:
             raise ValueError("target_path and reference_path must differ")
         return self
