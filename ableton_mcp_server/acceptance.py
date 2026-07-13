@@ -339,7 +339,6 @@ async def run_live_acceptance(
     proves the mutation took effect. ``failed`` rows propagate to
     ``release_ready=False`` and to a non-zero CLI exit code.
     """
-    from .client import Client as _Client
     from .errors import BridgeError
 
     async def call_ws(method: str, params: dict[str, Any] | None = None) -> Any:
@@ -496,10 +495,11 @@ async def run_live_acceptance(
 
                 if "websocket_reads" in expanded_profiles:
                     async def get_warp_state() -> dict[str, Any]:
-                        return await call_ws("get_warp_state", {
+                        warp = await call_ws("get_warp_state", {
                             "track_index": audio_track_index,
                             "clip_index": audio_clip_index,
                         })
+                        return dict(warp) if warp else {}
                     try:
                         warp = await get_warp_state()
                         report.record(
@@ -686,7 +686,7 @@ async def run_live_acceptance(
                             Verification(
                                 "add_notes_to_clip",
                                 "live_passed",
-                                f"added=4, observed=4",
+                                "added=4, observed=4",
                             )
                         )
 
@@ -783,7 +783,7 @@ async def run_live_acceptance(
                             Verification(
                                 "run_batch",
                                 "live_passed",
-                                f"completed=2 aborted_at=2 rolled_back=False",
+                                "completed=2 aborted_at=2 rolled_back=False",
                             )
                         )
 
@@ -1046,7 +1046,7 @@ async def run_live_acceptance(
     # baseline profile does not produce any.
     catalog_names = list(report.tool_names)
     already_recorded = set(report.recorded)
-    selected = set()
+    selected: set[str] = set()
     for profile in expanded_profiles:
         if profile == "baseline":
             for group in BASELINE_PROBE_GROUPS:

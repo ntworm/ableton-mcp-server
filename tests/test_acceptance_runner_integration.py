@@ -11,15 +11,11 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-import pytest
-
 from ableton_mcp_server.acceptance import (
     BASELINE_PROBE_GROUPS,
-    build_baseline_report,
     run_live_acceptance,
 )
 from ableton_mcp_server.catalog import TOOL_CATALOG
-from ableton_mcp_server.errors import CapabilityUnavailableError
 
 
 class FakeBridge:

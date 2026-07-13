@@ -129,8 +129,7 @@ def test_live_fade_duration_one_second_spans_one_second_of_clock(
     while ticks_used < max_ticks:
         try:
             gen.send(None)
-        except StopIteration as stop:
-            result = stop.value
+        except StopIteration:
             break
         clock["t"] += tick
         ticks_used += 1
