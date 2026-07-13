@@ -85,9 +85,11 @@ async def test_ws_client_preserves_structured_extension_error() -> None:
         )
     )
 
-    with patch("websockets.asyncio.client.connect", return_value=mock_connection):
-        with pytest.raises(CapabilityUnavailableError) as exc_info:
-            await client.call("get_warp_state", {"track_index": 0, "clip_index": 0})
+    with (
+        patch("websockets.asyncio.client.connect", return_value=mock_connection),
+        pytest.raises(CapabilityUnavailableError) as exc_info,
+    ):
+        await client.call("get_warp_state", {"track_index": 0, "clip_index": 0})
 
     assert exc_info.value.code == "CAPABILITY_UNAVAILABLE"
     assert exc_info.value.hint == "Use get_warp_state"
