@@ -148,12 +148,27 @@ async function handleLoadDeviceToTrack(params: any) {
   const song = context.application.song;
   const track = getTrackAtIndex(song, params.track_index);
   const index = track.devices.length;
-  
-  // Insert device at the end of the device chain
-  const device = await track.insertDevice(params.device_uri, index);
+
+  // Slice 1 Task 6: ``device_name`` is the primary contract; ``device_uri``
+  // is the deprecated alias kept for backward compatibility with v0.5.0
+  // callers. Empty / non-string values are rejected with a domain error.
+  const deviceName =
+    typeof params.device_name === "string"
+      ? params.device_name.trim()
+      : typeof params.device_uri === "string"
+        ? params.device_uri.trim()
+        : "";
+  if (!deviceName) {
+    throw new RpcDomainError(
+      "INVALID_PARAMS",
+      "load_device_to_track requires a non-empty device_name",
+    );
+  }
+  const device = await track.insertDevice(deviceName, index);
 
   return {
     status: "loaded",
+    track_index: params.track_index,
     device_name: device.name,
     device_index: index,
   };

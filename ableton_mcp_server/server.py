@@ -901,17 +901,27 @@ async def set_warp_state(
 
 
 @mcp.tool()
-async def load_device_to_track(track_index: int, device_uri: str) -> str:
+async def load_device_to_track(
+    track_index: int,
+    device_name: str | None = None,
+    device_uri: str | None = None,
+) -> str:
     """Load a device onto a track using the Extensions SDK browser API.
 
     Side effects: mutates the track device chain via the Extension Host.
-    Example: ``load_device_to_track(0, "Operator")`` loads Operator on track 0.
+    Example: ``load_device_to_track(0, device_name="Operator")`` loads Operator
+    on track 0. ``device_uri`` is retained as a deprecated alias for callers
+    that still pass a query URI.
     Edge cases: requires the AbletonMCPServer Extension to be installed.
     """
-    request = models.LoadDeviceToTrackRequest(track_index=track_index, device_uri=device_uri)
+    request = models.LoadDeviceToTrackRequest(
+        track_index=track_index,
+        device_name=device_name,
+        device_uri=device_uri,
+    )
     result = await _remote_ws(
         "load_device_to_track",
-        request.model_dump(mode="json"),
+        {"track_index": request.track_index, "device_name": request.resolved_name},
     )
     return json.dumps(result, indent=2)
 

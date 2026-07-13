@@ -189,7 +189,7 @@ async def test_websocket_tools_validate_and_forward_exact_contract(
     assert json.loads(await server.set_warp_state(0, 1, False, "complex")) == {
         "warping": False
     }
-    assert json.loads(await server.load_device_to_track(0, " Operator ")) == {
+    assert json.loads(await server.load_device_to_track(0, device_name=" Operator ")) == {
         "device_id": "track:0/device:1"
     }
     assert [call.args for call in mock_remote_ws.await_args_list] == [
@@ -203,8 +203,57 @@ async def test_websocket_tools_validate_and_forward_exact_contract(
                 "warp_mode": "complex",
             },
         ),
-        ("load_device_to_track", {"track_index": 0, "device_uri": "Operator"}),
+        ("load_device_to_track", {"track_index": 0, "device_name": "Operator"}),
     ]
+
+
+@pytest.mark.asyncio
+@patch("ableton_mcp_server.server._remote_ws")
+async def test_load_device_to_track_sends_only_resolved_name_over_ws(
+    mock_remote_ws: MagicMock,
+) -> None:
+    """Both public arguments must collapse to the same payload — and only
+    the resolved ``device_name`` field travels over the bridge."""
+    mock_remote_ws.side_effect = [
+        {
+            "status": "loaded",
+            "track_index": 0,
+            "device_name": "Operator",
+            "device_index": 0,
+        },
+        {
+            "status": "loaded",
+            "track_index": 0,
+            "device_name": "Utility",
+            "device_index": 0,
+        },
+    ]
+
+    by_name = await server.load_device_to_track(0, device_name="Operator")
+    by_uri = await server.load_device_to_track(0, device_uri="Utility")
+
+    # Both calls collapse to the same payload shape; the mock returns the
+    # same body so the serialized JSON is identical.
+    assert json.loads(by_name)["device_name"] == "Operator"
+    assert json.loads(by_uri)["device_name"] == "Utility"
+    assert [
+        call.args for call in mock_remote_ws.await_args_list
+    ] == [
+        ("load_device_to_track", {"track_index": 0, "device_name": "Operator"}),
+        ("load_device_to_track", {"track_index": 0, "device_name": "Utility"}),
+    ]
+
+
+@pytest.mark.asyncio
+@patch("ableton_mcp_server.server._remote_ws")
+async def test_load_device_to_track_rejects_missing_name(
+    mock_remote_ws: MagicMock,
+) -> None:
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        await server.load_device_to_track(0)
+    assert mock_remote_ws.await_count == 0
 
 
 @pytest.mark.asyncio

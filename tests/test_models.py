@@ -11,9 +11,11 @@ from ableton_mcp_server.models import (
     BulkCuePointsRequest,
     CreateClipRequest,
     CuePointSpec,
+    LoadDeviceToTrackRequest,
     NoteSpec,
     RunBatchRequest,
     SetTempoRequest,
+    SetWarpStateRequest,
 )
 
 
@@ -76,3 +78,39 @@ def test_batch_rejects_nested_batch_and_blocked_commands() -> None:
         RunBatchRequest(commands=[{"type": "run_batch", "params": {"commands": []}}])
     with pytest.raises(ValidationError, match="not an allowed mutation"):
         RunBatchRequest(commands=[{"type": "delete_track", "params": {"track_index": 0}}])
+
+
+def test_warp_marker_write_is_rejected_before_ws_call() -> None:
+    """The v0.5.0 audio warp-marker write API was retired: marker writes
+    must fail at the model layer rather than reach the Extension bridge."""
+    with pytest.raises(ValidationError):
+        SetWarpStateRequest(
+            track_index=0,
+            clip_index=0,
+            warp_markers=[{"sample_time": 0, "beat_time": 0}],
+        )
+
+
+def test_warp_state_requires_a_change_argument() -> None:
+    with pytest.raises(ValidationError):
+        SetWarpStateRequest(track_index=0, clip_index=0)
+
+
+def test_device_name_is_primary_and_uri_alias_is_compatible() -> None:
+    assert (
+        LoadDeviceToTrackRequest(track_index=0, device_name=" Operator ").resolved_name
+        == "Operator"
+    )
+    assert (
+        LoadDeviceToTrackRequest(track_index=0, device_uri="Utility").resolved_name
+        == "Utility"
+    )
+    with pytest.raises(ValidationError):
+        LoadDeviceToTrackRequest(track_index=0)
+
+
+def test_device_request_rejects_both_name_and_uri() -> None:
+    with pytest.raises(ValidationError):
+        LoadDeviceToTrackRequest(
+            track_index=0, device_name="Operator", device_uri="Utility"
+        )
