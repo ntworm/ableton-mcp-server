@@ -99,7 +99,10 @@ def test_cli_acceptance_requires_explicit_disposable_project_confirmation(
     mock_acceptance: MagicMock,
     capsys: MagicMock,
 ) -> None:
-    mock_acceptance.return_value = {"status": "ok", "notes_added": 4}
+    mock_acceptance.return_value = {
+        "status": "ok",
+        "certification": {"release_ready": True, "tools": []},
+    }
     assert (
         main(
             [
@@ -116,11 +119,109 @@ def test_cli_acceptance_requires_explicit_disposable_project_confirmation(
         )
         == 0
     )
-    assert json.loads(capsys.readouterr().out)["notes_added"] == 4
-    mock_acceptance.assert_called_once_with(
-        mock_client.return_value,
-        confirm_project_name="TESTE_CODEX",
-        track_index=0,
-        clip_index=3,
-        fire_clip=True,
+    output = json.loads(capsys.readouterr().out)
+    assert output["status"] == "ok"
+    mock_acceptance.assert_called_once()
+    kwargs = mock_acceptance.call_args.kwargs
+    assert kwargs["confirm_project_name"] == "TESTE_CODEX"
+    assert kwargs["track_index"] == 0
+    assert kwargs["clip_index"] == 3
+    assert kwargs["fire_clip"] is True
+
+
+@patch("ableton_mcp_server.cli.run_live_acceptance")
+@patch("ableton_mcp_server.cli.Client")
+def test_cli_parser_accepts_full_acceptance_command(
+    mock_client: MagicMock,
+    mock_acceptance: MagicMock,
+) -> None:
+    """The exact command documented in the Slice 1 plan must be accepted."""
+    mock_acceptance.return_value = {
+        "status": "ok",
+        "certification": {"release_ready": True, "tools": []},
+    }
+    rc = main(
+        [
+            "acceptance",
+            "--confirm-project-name",
+            "TESTE_CODEX",
+            "--track-index",
+            "0",
+            "--clip-index",
+            "3",
+            "--audio-track-index",
+            "2",
+            "--audio-clip-index",
+            "0",
+            "--fire-clip",
+            "--profile",
+            "baseline",
+            "--json",
+        ]
     )
+    assert rc == 0
+
+
+@patch("ableton_mcp_server.cli.run_live_acceptance")
+@patch("ableton_mcp_server.cli.Client")
+def test_acceptance_passes_profile_and_audio_indices_to_runner(
+    mock_client: MagicMock,
+    mock_acceptance: MagicMock,
+) -> None:
+    mock_acceptance.return_value = {"status": "ok"}
+    rc = main(
+        [
+            "acceptance",
+            "--confirm-project-name",
+            "TESTE_CODEX",
+            "--track-index",
+            "0",
+            "--clip-index",
+            "3",
+            "--audio-track-index",
+            "2",
+            "--audio-clip-index",
+            "0",
+            "--profile",
+            "baseline",
+        ]
+    )
+    assert rc == 0
+    mock_acceptance.assert_called_once()
+    kwargs = mock_acceptance.call_args.kwargs
+    assert kwargs["confirm_project_name"] == "TESTE_CODEX"
+    assert kwargs["track_index"] == 0
+    assert kwargs["clip_index"] == 3
+    assert kwargs["audio_track_index"] == 2
+    assert kwargs["audio_clip_index"] == 0
+    assert kwargs["profiles"] == ("baseline",)
+    assert kwargs["fire_clip"] is False
+
+
+@patch("ableton_mcp_server.cli.run_live_acceptance")
+@patch("ableton_mcp_server.cli.Client")
+def test_acceptance_returns_nonzero_when_runner_reports_failure(
+    mock_client: MagicMock,
+    mock_acceptance: MagicMock,
+    capsys: MagicMock,
+) -> None:
+    """Any ``failed`` row in the certification must produce a non-zero exit."""
+    mock_acceptance.return_value = {
+        "status": "failed",
+        "certification": {"release_ready": False, "failed": ["set_tempo"]},
+    }
+    rc = main(
+        [
+            "acceptance",
+            "--confirm-project-name",
+            "TESTE_CODEX",
+            "--track-index",
+            "0",
+            "--clip-index",
+            "3",
+            "--profile",
+            "baseline",
+        ]
+    )
+    assert rc != 0
+    assert "failed" in capsys.readouterr().out.lower()

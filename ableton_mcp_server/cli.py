@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import os
 from collections.abc import Sequence
@@ -47,6 +48,20 @@ def _parser() -> argparse.ArgumentParser:
     acceptance.add_argument("--confirm-project-name", required=True)
     acceptance.add_argument("--track-index", required=True, type=int)
     acceptance.add_argument("--clip-index", required=True, type=int)
+    acceptance.add_argument(
+        "--audio-track-index", type=int, default=None,
+        help="Track index used for warp/audio probes (defaults to track-index)",
+    )
+    acceptance.add_argument(
+        "--audio-clip-index", type=int, default=None,
+        help="Clip-slot index used for warp/audio probes (defaults to clip-index)",
+    )
+    acceptance.add_argument(
+        "--profile",
+        action="append",
+        default=[],
+        help="Acceptance profile name (repeat for multiple). Default: baseline",
+    )
     acceptance.add_argument("--fire-clip", action="store_true")
     acceptance.add_argument("--json", action="store_true")
 
@@ -70,15 +85,36 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "acceptance":
         host = os.environ.get("ABLETON_MCP_SERVER_HOST", DEFAULT_HOST)
         port = int(os.environ.get("ABLETON_MCP_SERVER_PORT", str(DEFAULT_PORT)))
-        result = run_live_acceptance(
-            Client(host=host, port=port, reconnect=False),
-            confirm_project_name=str(args.confirm_project_name),
-            track_index=int(args.track_index),
-            clip_index=int(args.clip_index),
-            fire_clip=bool(args.fire_clip),
+        profiles = tuple(args.profile) if args.profile else ("baseline",)
+        result = asyncio.run(
+            run_live_acceptance(
+                Client(host=host, port=port, reconnect=False),
+                confirm_project_name=str(args.confirm_project_name),
+                track_index=int(args.track_index),
+                clip_index=int(args.clip_index),
+                audio_track_index=(
+                    int(args.audio_track_index)
+                    if args.audio_track_index is not None
+                    else int(args.track_index)
+                ),
+                audio_clip_index=(
+                    int(args.audio_clip_index)
+                    if args.audio_clip_index is not None
+                    else int(args.clip_index)
+                ),
+                profiles=profiles,
+                fire_clip=bool(args.fire_clip),
+            )
         )
         _emit(result, as_json=bool(args.json))
-        return 0 if result["status"] == "ok" else 1
+        cert = result.get("certification") or {}
+        release_ready = bool(cert.get("release_ready", False))
+        # Only the legacy success path (no certification attached) accepts
+        # ``status == "ok"`` as a green light. When a certification is
+        # present it owns the gate.
+        if cert:
+            return 0 if release_ready else 1
+        return 0 if result.get("status") == "ok" else 1
 
     source = bundled_remote_script_path() if args.source is None else args.source
     destination = (
