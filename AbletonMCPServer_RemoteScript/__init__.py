@@ -38,6 +38,7 @@ from ._contracts import (
     ERROR_TIMEOUT,
     ERROR_TRACK_LIMIT_REACHED,
     ERROR_UNKNOWN_COMMAND,
+    ERROR_VERIFICATION_FAILED,
     ERROR_WRONG_TYPE,
     PLAYHEAD_MOVE_RETRIES,
     READ_ONLY_COMMANDS,
@@ -1793,6 +1794,11 @@ def cmd_create_audio_track(
     # the existing TRACK_LIMIT_REACHED guard above is not reused because audio may
     # legitimately exceed 96 tracks on hosts that already grew the midi set past
     # the cap. We rely on Live's per-host track-limit instead.
+    #
+    # Slice 1 Task 4: Live's LOM yields a new proxy wrapper per enumeration, so
+    # ``id()`` comparisons collapse to the proxy identity. We now identify the
+    # new track by counting the collection before and after the mutation and
+    # resolving the requested index against the verified post-mutation list.
     fn = getattr(song, "create_audio_track", None)
     if not callable(fn):
         raise RemoteError(
@@ -1802,21 +1808,29 @@ def cmd_create_audio_track(
     raw_index = params.get("index")
     index = int(raw_index) if raw_index is not None else -1
     name = params.get("name")
-    before_ids = set(id(track) for track in song.tracks)
+    before_count = len(list(song.tracks))
     fn(index)
-    created = None
-    created_index = None
-    for position, track in enumerate(song.tracks):
-        if id(track) not in before_ids:
-            created = track
-            created_index = position
-            break
-    result = {"created": True, "track_index": created_index, "requested_index": index}
-    if created is not None and name:
+    tracks = list(song.tracks)
+    if len(tracks) != before_count + 1:
+        raise RemoteError(
+            ERROR_VERIFICATION_FAILED,
+            "create_audio_track did not increase the regular track count by one",
+        )
+    created_index = len(tracks) - 1 if index == -1 else index
+    if created_index < 0 or created_index >= len(tracks):
+        raise RemoteError(
+            ERROR_VERIFICATION_FAILED, "created track index is out of range"
+        )
+    created = tracks[created_index]
+    if name:
         created.name = str(name)
-    if created is not None:
-        result["track_name"] = getattr(created, "name", "")
-    return result
+    return {
+        "created": True,
+        "track_id": "track:%s" % created_index,
+        "track_index": created_index,
+        "requested_index": index,
+        "track_name": str(getattr(created, "name", "")),
+    }
 
 
 def cmd_rename_track(
