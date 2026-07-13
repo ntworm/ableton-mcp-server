@@ -1,7 +1,6 @@
-from contracts import ALLOWED_MUTATIONS, READ_COMMANDS, WEBSOCKET_TARGET_COMMANDS
-
 from ableton_mcp_server import models, server
-from ableton_mcp_server.catalog import AcceptanceMode, Risk, Route, TOOL_CATALOG
+from ableton_mcp_server.catalog import TOOL_CATALOG, AcceptanceMode, Risk, Route
+from contracts import ALLOWED_MUTATIONS, READ_COMMANDS, WEBSOCKET_TARGET_COMMANDS
 
 
 def test_baseline_catalog_is_complete_and_unique() -> None:
