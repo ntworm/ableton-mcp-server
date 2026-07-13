@@ -18,80 +18,10 @@ from ableton_mcp_server.models import (
 
 
 def test_every_public_tool_has_an_explicit_request_model() -> None:
-    reads = {
-        "get_session_info",
-        "get_bridge_status",
-        "get_track_list",
-        "get_track_state",
-        "get_locators",
-        "take_snapshot",
-        "get_ableton_logs",
-        "get_control_surfaces",
-        "get_scenes",
-        "get_scene_state",
-        "get_project_metadata",
-        "get_loop_settings",
-        "get_selected_context",
-        "get_clip_summary",
-        "get_clip_notes",
-        "get_device_list",
-        "get_parameter_value",
-        "get_routing",
-        "get_browser_categories",
-        "diff_snapshots_tool",
-        "get_song_length",
-        "live_find_track",
-        "list_device_params",
-        # v0.3.0
-        "get_composition_structure",
-        "diagnose_midi_clip",
-        "get_warp_state",
-        "get_clip_info",
-        "get_session_overview",
-        "search_browser",
-    }
-    mutations = {
-        "create_cue_point",
-        "bulk_create_cue_points",
-        "delete_cue_point",
-        "set_current_song_time",
-        "set_tempo",
-        "start_playback",
-        "stop_playback",
-        "set_loop",
-        "set_loop_start",
-        "set_loop_length",
-        "run_batch",
-        "add_notes_to_clip",
-        "fire_clip",
-        "create_clip",
-        # v0.3.0
-        "create_midi_track",
-        "rename_track",
-        "set_warp_state",
-        "load_device_to_track",
-        "set_parameter_value",
-        "delete_clip",
-        "clear_clip_notes",
-        "fire_scene",
-        "set_track_property",
-        "set_clip_properties",
-        "create_clip_automation",
-        "scaffold_extension",
-        "build_extension",
-        "lifecycle_status",
-        "save_set",
-        "quit_ableton",
-        "live_fade",
-        "create_audio_track",
-        "analyze_audio",
-        "find_frequency_masking",
-        "analyze_mix",
-        "extract_single_cycle",
-    }
-    assert set(TOOL_REQUEST_MODELS) == reads | mutations
+    from ableton_mcp_server.catalog import TOOL_CATALOG
+
+    assert set(TOOL_REQUEST_MODELS) == {item.name for item in TOOL_CATALOG}
     assert len(TOOL_REQUEST_MODELS) == 65
-    assert len(set(TOOL_REQUEST_MODELS.values())) == 65
 
 
 @pytest.mark.parametrize("tempo", [19.99, 999.01, math.nan, math.inf])

@@ -9,7 +9,9 @@ dependencies = [
     "mcp>=1.28,<2",
     "fastmcp>=3.4,<4",
     "pydantic>=2.12,<3",
-    "websockets>=14.0,<15",
+    "websockets>=15.0.1,<17",
+    "numpy>=2.2,<3",
+    "soundfile>=0.13,<1",
 ]
 
 [project.optional-dependencies]
@@ -47,3 +49,9 @@ ignore = ["UP031"]
 python_version = "3.10"
 strict = true
 warn_unused_configs = true
+follow_imports_for_stubs = true
+
+[[tool.mypy.overrides]]
+module = ["numpy", "numpy.*", "soundfile"]
+follow_imports = "skip"
+ignore_missing_imports = true
