@@ -158,6 +158,8 @@ ALLOWED_MUTATIONS = frozenset(
         "save_set",
         "quit_ableton",
         "live_fade",
+        # v0.5.0 — audio-track mirror of create_midi_track
+        "create_audio_track",
     }
 )
 

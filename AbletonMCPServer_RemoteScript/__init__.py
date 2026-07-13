@@ -1783,6 +1783,42 @@ def cmd_create_midi_track(
     }
 
 
+def cmd_create_audio_track(
+    song,
+    _application,
+    params,
+):
+    # type: (Any, Any, dict[str, Any]) -> dict[str, Any]
+    # v0.5.0 — Mirror cmd_create_midi_track for audio. Zero-touch on the midi path:
+    # the existing TRACK_LIMIT_REACHED guard above is not reused because audio may
+    # legitimately exceed 96 tracks on hosts that already grew the midi set past
+    # the cap. We rely on Live's per-host track-limit instead.
+    fn = getattr(song, "create_audio_track", None)
+    if not callable(fn):
+        raise RemoteError(
+            ERROR_LIVE_UNAVAILABLE,
+            "Live Song object does not expose create_audio_track()",
+        )
+    raw_index = params.get("index")
+    index = int(raw_index) if raw_index is not None else -1
+    name = params.get("name")
+    before_ids = set(id(track) for track in song.tracks)
+    fn(index)
+    created = None
+    created_index = None
+    for position, track in enumerate(song.tracks):
+        if id(track) not in before_ids:
+            created = track
+            created_index = position
+            break
+    result = {"created": True, "track_index": created_index, "requested_index": index}
+    if created is not None and name:
+        created.name = str(name)
+    if created is not None:
+        result["track_name"] = getattr(created, "name", "")
+    return result
+
+
 def cmd_rename_track(
     song,
     _application,
@@ -2045,6 +2081,8 @@ COMMAND_HANDLERS: dict[str, CommandHandler] = {
     "diagnose_midi_clip": cmd_diagnose_midi_clip,
     "create_midi_track": cmd_create_midi_track,
     "rename_track": cmd_rename_track,
+    # v0.5.0 — audio-track mirror of create_midi_track. Zero-touch on the midi path.
+    "create_audio_track": cmd_create_audio_track,
     # v0.5.0 — set lifecycle
     "lifecycle_status": cmd_lifecycle_status,
     "save_set": cmd_save_set,

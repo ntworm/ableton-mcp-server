@@ -42,6 +42,8 @@ def test_debug_mutations_are_explicitly_allowed() -> None:
         "save_set",
         "quit_ableton",
         "live_fade",
+        # v0.5.0 — audio-track mirror
+        "create_audio_track",
     }
     assert frozenset(expected) == contracts.ALLOWED_MUTATIONS
     assert expected.isdisjoint(contracts.READ_ONLY_COMMANDS)

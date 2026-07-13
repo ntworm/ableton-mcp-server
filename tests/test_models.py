@@ -83,10 +83,11 @@ def test_every_public_tool_has_an_explicit_request_model() -> None:
         "save_set",
         "quit_ableton",
         "live_fade",
+        "create_audio_track",
     }
     assert set(TOOL_REQUEST_MODELS) == reads | mutations
-    assert len(TOOL_REQUEST_MODELS) == 60
-    assert len(set(TOOL_REQUEST_MODELS.values())) == 60
+    assert len(TOOL_REQUEST_MODELS) == 61
+    assert len(set(TOOL_REQUEST_MODELS.values())) == 61
 
 
 @pytest.mark.parametrize("tempo", [19.99, 999.01, math.nan, math.inf])

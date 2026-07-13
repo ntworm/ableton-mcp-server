@@ -90,6 +90,7 @@ PUBLIC_TOOL_NAMES = (
     "save_set",
     "quit_ableton",
     "live_fade",
+    "create_audio_track",
 )
 
 
@@ -875,6 +876,24 @@ def create_midi_track(name: str = "MIDI Track", index: int | None = None) -> Any
 
 
 @mcp.tool()
+def create_audio_track(index: int = -1, name: str | None = None) -> Any:
+    """Create a new audio track in Ableton Live.
+
+    Side effects: mutates the Set by adding an audio track in one undo step.
+    Example: ``create_audio_track(name="vocals")`` appends a named audio track;
+    ``create_audio_track(index=2)`` inserts at position 2.
+    Edge cases: raises ``LIVE_UNAVAILABLE`` when the Live host does not
+    expose ``Song.create_audio_track``. Note: this audio variant does not
+    reuse the 96-track ``TRACK_LIMIT_REACHED`` guard — Live itself enforces
+    the per-host track cap.
+    """
+    return _remote(
+        "create_audio_track",
+        models.CreateAudioTrackRequest(index=index, name=name),
+    )
+
+
+@mcp.tool()
 def rename_track(track_index: int, new_name: str) -> Any:
     """Rename a track in the Live Set.
 
@@ -1233,6 +1252,7 @@ PUBLIC_TOOL_FUNCTIONS = (
     save_set,
     quit_ableton,
     live_fade,
+    create_audio_track,
 )
 
 

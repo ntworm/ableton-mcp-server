@@ -131,8 +131,14 @@ FORWARD_CASES: list[tuple[Callable[..., Any], tuple[Any, ...], str, dict[str, An
         "create_midi_track",
         {"name": "Bass", "index": 1},
     ),
+    (
+        server.create_audio_track,
+        (2, "vocals"),
+        "create_audio_track",
+        {"index": 2, "name": "vocals"},
+    ),
     (server.rename_track, (0, "Drums"), "rename_track", {"track_index": 0, "new_name": "Drums"}),
-]
+]  # noqa: E501
 
 
 @patch("ableton_mcp_server.server.bridge_status")
@@ -141,7 +147,7 @@ def test_bridge_status_tool_probes_the_backend_without_forwarding(
 ) -> None:
     mock_status.return_value = {"status": "ok", "bridge_available": True}
     assert server.get_bridge_status() == {"status": "ok", "bridge_available": True}
-    mock_status.assert_called_once_with(server.get_client(), tool_count=60)
+    mock_status.assert_called_once_with(server.get_client(), tool_count=61)
 
 
 @pytest.mark.parametrize(("function", "args", "command", "params"), FORWARD_CASES)
@@ -257,7 +263,7 @@ def test_log_tool_limits_lines_and_reads_locally(mock_find: MagicMock, tmp_path:
 
 
 def test_every_tool_docstring_has_contract_sections() -> None:
-    assert len(server.PUBLIC_TOOL_FUNCTIONS) == 60
+    assert len(server.PUBLIC_TOOL_FUNCTIONS) == 61
     for function in server.PUBLIC_TOOL_FUNCTIONS:
         docstring = function.__doc__ or ""
         assert "Side effects:" in docstring, function.__name__

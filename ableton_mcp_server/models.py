@@ -413,6 +413,15 @@ class CreateMidiTrackRequest(RequestModel):
         return value
 
 
+# v0.5.0 — audio-track mirror of CreateMidiTrackRequest. Naming differs:
+# `name` is optional (no default) because callers usually want Live's default
+# "Audio" track name; only override when explicitly provided. `index` defaults
+# to ``-1`` to match Live's LOM "append" semantics.
+class CreateAudioTrackRequest(RequestModel):
+    index: int = -1
+    name: str | None = Field(default=None, max_length=120)
+
+
 class RenameTrackRequest(RequestModel):
     track_index: NonNegativeInt
     new_name: Annotated[str, Field(min_length=1, max_length=128)]
@@ -607,4 +616,5 @@ TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "save_set": SaveSetRequest,
     "quit_ableton": QuitAbletonRequest,
     "live_fade": LiveFadeRequest,
+    "create_audio_track": CreateAudioTrackRequest,
 }
