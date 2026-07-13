@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from ableton_mcp_server.errors import (
     BridgeError,
     CueSnappedToGridError,
@@ -52,3 +54,18 @@ def test_error_factory_keeps_unknown_code_machine_readable() -> None:
     error = error_from_envelope("FUTURE_CODE", "future failure", None)
     assert type(error) is BridgeError
     assert error.code == "FUTURE_CODE"
+
+
+@pytest.mark.parametrize(
+    ("code", "class_name"),
+    [
+        ("CAPABILITY_UNAVAILABLE", "CapabilityUnavailableError"),
+        ("AMBIGUOUS_MATCH", "AmbiguousMatchError"),
+        ("VERIFICATION_FAILED", "VerificationFailedError"),
+        ("ACCEPTANCE_GUARD_FAILED", "AcceptanceGuardFailedError"),
+    ],
+)
+def test_new_public_error_codes_are_typed(code: str, class_name: str) -> None:
+    error = error_from_envelope(code, "message", "hint")
+    assert type(error).__name__ == class_name
+    assert error.code == code

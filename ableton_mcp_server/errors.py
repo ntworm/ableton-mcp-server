@@ -114,6 +114,22 @@ class CueSnappedToGridError(BridgeError):
     default_code = "CUE_SNAPPED_TO_GRID"
 
 
+class CapabilityUnavailableError(BridgeError):
+    default_code = "CAPABILITY_UNAVAILABLE"
+
+
+class AmbiguousMatchError(BridgeError):
+    default_code = "AMBIGUOUS_MATCH"
+
+
+class VerificationFailedError(BridgeError):
+    default_code = "VERIFICATION_FAILED"
+
+
+class AcceptanceGuardFailedError(BridgeError):
+    default_code = "ACCEPTANCE_GUARD_FAILED"
+
+
 _ERROR_TYPES: dict[str, type[BridgeError]] = {
     cls.default_code: cls
     for cls in (
@@ -130,6 +146,10 @@ _ERROR_TYPES: dict[str, type[BridgeError]] = {
         BadInputError,
         ExtensionUnavailableError,
         TrackLimitError,
+        CapabilityUnavailableError,
+        AmbiguousMatchError,
+        VerificationFailedError,
+        AcceptanceGuardFailedError,
     )
 }
 

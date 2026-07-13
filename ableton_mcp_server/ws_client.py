@@ -16,7 +16,7 @@ import websockets.asyncio.client
 
 from contracts import DEFAULT_HOST, DEFAULT_WS_PORT
 
-from .errors import ExtensionUnavailableError
+from .errors import BridgeError, ExtensionUnavailableError, error_from_envelope
 
 logger = logging.getLogger("AbletonMCPServer.ws")
 
@@ -83,10 +83,19 @@ class WSClient:
 
         if "error" in response:
             error_data = response["error"]
+            details = error_data.get("data") or {}
+            if isinstance(details, dict) and isinstance(details.get("code"), str):
+                hint = details.get("hint")
+                raise error_from_envelope(
+                    details["code"],
+                    str(error_data.get("message", details["code"])),
+                    hint if isinstance(hint, str) else None,
+                )
             error_msg = error_data.get("message", str(error_data))
             error_code = error_data.get("code", -1)
-            raise Exception(
-                f"Extension Host JSON-RPC error ({error_code}): {error_msg}"
+            raise BridgeError(
+                error_msg,
+                code=f"EXTENSION_RPC_{error_code}",
             )
 
         return response.get("result")

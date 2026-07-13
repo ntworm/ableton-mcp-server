@@ -4,6 +4,36 @@ import { getExtensionContext } from './context.js';
 
 let wss: WebSocketServer | null = null;
 
+class RpcDomainError extends Error {
+  constructor(
+    public readonly domainCode: string,
+    message: string,
+    public readonly hint?: string,
+  ) {
+    super(message);
+  }
+}
+
+function rpcError(error: unknown, id: any): { jsonrpc: string; error: unknown; id: any } {
+  if (error instanceof RpcDomainError) {
+    return {
+      jsonrpc: "2.0",
+      id,
+      error: {
+        code: -32000,
+        message: error.message,
+        data: { code: error.domainCode, hint: error.hint },
+      },
+    };
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  return {
+    jsonrpc: "2.0",
+    id,
+    error: { code: -32603, message },
+  };
+}
+
 const WARP_MODE_MAP: Record<string, number> = {
   "beats": WarpMode.Beats,
   "tones": WarpMode.Tones,
@@ -177,11 +207,7 @@ export function startServer(): void {
         }));
       } catch (err: any) {
         console.error(`[Extension WS] Error executing method ${method}:`, err);
-        ws.send(JSON.stringify({
-          jsonrpc: "2.0",
-          error: { code: -32603, message: err.message || String(err) },
-          id
-        }));
+        ws.send(JSON.stringify(rpcError(err, id)));
       }
     });
 

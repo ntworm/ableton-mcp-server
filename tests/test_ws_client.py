@@ -62,6 +62,38 @@ async def test_ws_client_error_response() -> None:
 
 
 @pytest.mark.asyncio
+async def test_ws_client_preserves_structured_extension_error() -> None:
+    client = WSClient()
+    from ableton_mcp_server.errors import CapabilityUnavailableError
+
+    mock_connection = AsyncMock()
+    mock_connection.__aenter__.return_value = mock_connection
+    mock_connection.recv = AsyncMock(
+        return_value=json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "error": {
+                    "code": -32000,
+                    "message": "Audio clip warp markers are read-only",
+                    "data": {
+                        "code": "CAPABILITY_UNAVAILABLE",
+                        "hint": "Use get_warp_state",
+                    },
+                },
+            }
+        )
+    )
+
+    with patch("websockets.asyncio.client.connect", return_value=mock_connection):
+        with pytest.raises(CapabilityUnavailableError) as exc_info:
+            await client.call("get_warp_state", {"track_index": 0, "clip_index": 0})
+
+    assert exc_info.value.code == "CAPABILITY_UNAVAILABLE"
+    assert exc_info.value.hint == "Use get_warp_state"
+
+
+@pytest.mark.asyncio
 async def test_ws_client_unreachable() -> None:
     client = WSClient(port=9999)
 
