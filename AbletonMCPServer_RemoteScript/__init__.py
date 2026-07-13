@@ -44,6 +44,10 @@ from ._contracts import (
     request_timeout_seconds,
 )
 
+# v0.5.0 — runtime identity tag surfaced in `get_bridge_status`.
+# The base upstream did not ship one; v0.5.0 establishes the convention.
+REMOTE_SCRIPT_RUNTIME_VERSION = "set-lifecycle-and-fade-1"
+
 try:  # These modules only exist inside Ableton Live.
     import Live  # type: ignore[import-not-found]
     from ableton.v2.control_surface import ControlSurface  # type: ignore[import-not-found]
