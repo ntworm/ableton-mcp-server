@@ -177,7 +177,10 @@ async function handleLoadDeviceToTrack(params: any) {
 export function startServer(): void {
   if (wss) return;
 
-  wss = new WebSocketServer({ port: 9889 });
+  // Slice 1 Task — loopback enforced: bind explicitly to 127.0.0.1 so the
+  // WebSocketServer does not accept LAN connections. Do not remove the host
+  // argument without replacing it with another loopback-only binding.
+  wss = new WebSocketServer({ host: '127.0.0.1', port: 9889 });
 
   wss.on('connection', (ws) => {
     console.log('[Extension WS] Client connected');
