@@ -144,6 +144,58 @@ def test_bundled_remote_script_path_supports_checkout_and_wheel_layout(tmp_path:
     assert bundled_remote_script_path(package) == wheel_source
 
 
+def test_bundled_remote_script_source_distinguishes_checkout_and_wheel(tmp_path: Path) -> None:
+    """Slice 1 Task 8: callers must be able to tell checkout vs wheel apart
+    so that diagnostics reports an honest source identity."""
+    from ableton_mcp_server.diagnostics import bundled_remote_script_source
+
+    package = tmp_path / "ableton_mcp_server"
+    package.mkdir()
+    checkout_source = tmp_path / "AbletonMCPServer_RemoteScript"
+    checkout_source.mkdir()
+    src = bundled_remote_script_source(package)
+    assert src.kind == "checkout"
+    assert src.path == checkout_source
+
+    checkout_source.rmdir()
+    wheel_source = package / "_remote_script"
+    wheel_source.mkdir()
+    src = bundled_remote_script_source(package)
+    assert src.kind == "wheel"
+    assert src.path == wheel_source
+
+
+def test_bridge_status_reports_source_kind_and_python_executable(tmp_path: Path) -> None:
+    """Slice 1 Task 8: install/status output must surface source identity
+    so an unfamiliar agent can tell checkout vs wheel and the exact
+    interpreter in use."""
+    import sys
+
+    from ableton_mcp_server.diagnostics import bridge_status, bundled_remote_script_source
+
+    package = tmp_path / "ableton_mcp_server"
+    package.mkdir()
+    checkout_source = tmp_path / "AbletonMCPServer_RemoteScript"
+    checkout_source.mkdir()
+
+    class _Stub:
+        host = "127.0.0.1"
+        port = 9888
+
+        def call(self, *_args, **_kwargs):
+            return {"tempo": 120.0}
+
+    with patch(
+        "ableton_mcp_server.diagnostics.bundled_remote_script_source",
+        return_value=bundled_remote_script_source(package),
+    ):
+        status = bridge_status(_Stub(), tool_count=65)
+
+    assert status["source_kind"] == "checkout"
+    assert status["source"] == str(checkout_source)
+    assert status["python_executable"] == str(Path(sys.executable).resolve())
+
+
 def test_runtime_and_remote_script_defaults_cover_wsl_windows_and_macos(tmp_path: Path) -> None:
     assert detect_runtime({"WSL_DISTRO_NAME": "Ubuntu"}).is_wsl is True
     explicit = tmp_path / "explicit-scripts"
