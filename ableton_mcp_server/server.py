@@ -18,6 +18,12 @@ from mcp.types import TextContent
 from contracts import DEFAULT_HOST, DEFAULT_PORT, DEFAULT_WS_PORT
 
 from . import models
+from .analysis import (
+    analyze_audio as _analyze_audio,
+    analyze_mix as _analyze_mix,
+    extract_single_cycle as _extract_single_cycle,
+    find_frequency_masking as _find_frequency_masking,
+)
 from .client import Client
 from .diagnostics import bridge_status, find_ableton_log_path
 from .diff import diff_snapshots
@@ -91,6 +97,11 @@ PUBLIC_TOOL_NAMES = (
     "quit_ableton",
     "live_fade",
     "create_audio_track",
+    # v0.5.0 — offline mix analysis
+    "analyze_audio",
+    "find_frequency_masking",
+    "analyze_mix",
+    "extract_single_cycle",
 )
 
 
@@ -1253,7 +1264,63 @@ PUBLIC_TOOL_FUNCTIONS = (
     quit_ableton,
     live_fade,
     create_audio_track,
+    # v0.5.0 — offline mix analysis
+    analyze_audio,
+    find_frequency_masking,
+    analyze_mix,
+    extract_single_cycle,
 )
+
+
+# ---------------------------------------------------------------------------
+# v0.5.0 — Offline Mix Analysis
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def analyze_audio(path: str) -> dict[str, Any]:
+    """Compute LUFS-I, true-peak, RMS, and per-band energy summary for a local audio file.
+
+    Side effects: reads the file from disk.
+    Example: ``analyze_audio(path="/stems/kick.wav")`` returns LUFS-I plus per-band energy summary.
+    Edge cases: missing files and unsupported encodings return a structured ``{"ok": False, "reason": ...}``.
+    """
+    return _explicit_json_result(analyze_audio(path))
+
+
+@mcp.tool()
+def find_frequency_masking(
+    target_path: str,
+    reference_path: str,
+    threshold_db: float = 6.0,
+) -> dict[str, Any]:
+    """Identify frequency bands where ``target_path`` exceeds ``reference_path`` by ``threshold_db`` dB or more.
+
+    Side effects: reads both files.
+    Example: ``find_frequency_masking(target_path=master, reference_path=kick)`` suggests band-level cuts.
+    Edge cases: mismatched sample rates raise a structured error; identical paths are rejected at the model.
+    """
+    return _explicit_json_result(
+        find_frequency_masking(
+            target_path=target_path,
+            reference_path=reference_path,
+            threshold_db=threshold_db,
+        )
+    )
+
+
+@mcp.tool()
+def analyze_mix(stems: list[str]) -> dict[str, Any]:
+    """Run per-stem analysis and pair-wise masking across up to 16 local audio files."""
+    return _explicit_json_result(analyze_mix(stems=stems))
+
+
+@mcp.tool()
+def extract_single_cycle(path: str, frame_size: int = 2048) -> dict[str, Any]:
+    """Find a candidate single-cycle loop in a local audio file plus its detected pitch."""
+    return _explicit_json_result(
+        extract_single_cycle(path=path, frame_size=frame_size)
+    )
 
 
 def main() -> None:

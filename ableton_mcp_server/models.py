@@ -553,6 +553,66 @@ class LiveFadeRequest(RequestModel):
         return self
 
 
+# ---------------------------------------------------------------------------
+# v0.5.0 — Mix analysis (offline, no Live bridge)
+# ---------------------------------------------------------------------------
+
+
+class AnalyzeAudioRequest(RequestModel):
+    """Request payload for ``analyze_audio``.
+
+    Reads a local audio file from disk and returns LUFS-I, true-peak, RMS,
+    and per-band energy summary. ``path`` must point at a file readable by
+    ``soundfile``; unsupported encodings surface a structured error.
+    """
+
+    path: str = Field(min_length=1)
+
+
+class FindFrequencyMaskingRequest(RequestModel):
+    """Request payload for ``find_frequency_masking``.
+
+    Compares two files sample-rate-aligned: every octave band whose ``target``
+    energy exceeds the ``reference`` by ``threshold_db`` dB or more is
+    reported. ``target_path`` and ``reference_path`` must point at distinct
+    files.
+    """
+
+    target_path: str = Field(min_length=1)
+    reference_path: str = Field(min_length=1)
+    threshold_db: float = 6.0
+
+    @model_validator(mode="after")
+    def _paths_differ(self) -> "FindFrequencyMaskingRequest":
+        if self.target_path == self.reference_path:
+            raise ValueError("target_path and reference_path must differ")
+        return self
+
+
+class AnalyzeMixRequest(RequestModel):
+    """Request payload for ``analyze_mix``.
+
+    ``stems`` is the ordered list of local audio files (1..16) to analyze
+    individually and then compare pair-wise for masking. The cap mirrors the
+    ``MAX_STEMS`` policy enforced in ``ableton_mcp_server.analysis.audio``.
+    """
+
+    stems: Annotated[list[str], Field(min_length=1, max_length=16)]
+
+
+class ExtractSingleCycleRequest(RequestModel):
+    """Request payload for ``extract_single_cycle``.
+
+    Searches the first 5 seconds of ``path`` for a candidate single-cycle
+    waveform starting at a low-energy zero-crossing. ``frame_size`` is the
+    analysis FFT window; the default of 2048 is tuned for bass-range
+    material but valid in 64..65536 inclusive.
+    """
+
+    path: str = Field(min_length=1)
+    frame_size: Annotated[int, Field(ge=64, le=65536)] = 2048
+
+
 TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "get_session_info": GetSessionInfoRequest,
     "get_bridge_status": GetBridgeStatusRequest,
@@ -617,4 +677,9 @@ TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "quit_ableton": QuitAbletonRequest,
     "live_fade": LiveFadeRequest,
     "create_audio_track": CreateAudioTrackRequest,
+    # v0.5.0 — mix analysis
+    "analyze_audio": AnalyzeAudioRequest,
+    "find_frequency_masking": FindFrequencyMaskingRequest,
+    "analyze_mix": AnalyzeMixRequest,
+    "extract_single_cycle": ExtractSingleCycleRequest,
 }
