@@ -190,3 +190,14 @@ def assert_not_blocked(command_name: str) -> None:
         raise ValueError(
             "Command %r is blocked: creative mutation is not available." % command_name
         )
+
+# Set lifecycle and fader fade (v0.5.0)
+COMMAND_LIFECYCLE_STATUS = "lifecycle_status"
+COMMAND_SAVE_SET = "save_set"
+COMMAND_QUIT_ABLETON = "quit_ableton"
+COMMAND_LIVE_FADE = "live_fade"
+COMMAND_CREATE_AUDIO_TRACK = "create_audio_track"
+COMMAND_ANALYZE_AUDIO = "analyze_audio"
+COMMAND_FIND_FREQUENCY_MASKING = "find_frequency_masking"
+COMMAND_ANALYZE_MIX = "analyze_mix"
+COMMAND_EXTRACT_SINGLE_CYCLE = "extract_single_cycle"
