@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+import inspect
+from collections.abc import Awaitable, Callable, Mapping
 from contextlib import suppress
 from typing import Any, Protocol
+
+from .certification import CertificationReport, Verification
 
 
 class AcceptanceClient(Protocol):
@@ -12,6 +15,14 @@ class AcceptanceClient(Protocol):
         params: Mapping[str, Any] | None = None,
         *,
         timeout: float | None = None,
+    ) -> Any: ...
+
+    async def call_ws(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        *,
+        timeout: float = 2.0,
     ) -> Any: ...
 
 
@@ -184,3 +195,173 @@ def run_live_acceptance(
         call("set_loop_length", {"length_beats": float(original_loop["loop_length"])})
         call("set_tempo", {"tempo": original_tempo})
         call("set_current_song_time", {"time": original_time})
+
+
+# Slice 1 Task 9: baseline probe map. The flattened names must equal the
+# 65-name ``PUBLIC_TOOL_NAMES`` set, so each catalogued tool has a home in
+# exactly one probe group. ``build_extension`` falls back to
+# ``environment_unavailable`` when Node is absent; ``quit_ableton`` is
+# ``environment_unavailable`` until the dedicated manual profile is added.
+BASELINE_PROBE_GROUPS: dict[str, tuple[str, ...]] = {
+    "offline": (
+        "get_ableton_logs",
+        "diff_snapshots_tool",
+        "scaffold_extension",
+        "build_extension",
+        "analyze_audio",
+        "find_frequency_masking",
+        "analyze_mix",
+        "extract_single_cycle",
+    ),
+    "composed": ("get_bridge_status", "get_session_overview"),
+    "tcp_reads": (
+        "get_session_info",
+        "get_track_list",
+        "get_track_state",
+        "get_locators",
+        "take_snapshot",
+        "get_control_surfaces",
+        "get_scenes",
+        "get_scene_state",
+        "get_project_metadata",
+        "get_loop_settings",
+        "get_selected_context",
+        "get_clip_summary",
+        "get_clip_notes",
+        "get_clip_info",
+        "get_device_list",
+        "get_parameter_value",
+        "get_routing",
+        "get_browser_categories",
+        "search_browser",
+        "get_song_length",
+        "live_find_track",
+        "list_device_params",
+        "get_composition_structure",
+        "diagnose_midi_clip",
+        "lifecycle_status",
+    ),
+    "websocket_reads": ("get_warp_state",),
+    "mutations": (
+        "create_cue_point",
+        "bulk_create_cue_points",
+        "delete_cue_point",
+        "set_current_song_time",
+        "set_tempo",
+        "start_playback",
+        "stop_playback",
+        "set_loop",
+        "set_loop_start",
+        "set_loop_length",
+        "run_batch",
+        "add_notes_to_clip",
+        "fire_clip",
+        "create_clip",
+        "delete_clip",
+        "clear_clip_notes",
+        "fire_scene",
+        "set_track_property",
+        "set_clip_properties",
+        "create_clip_automation",
+        "create_midi_track",
+        "create_audio_track",
+        "rename_track",
+        "set_parameter_value",
+        "save_set",
+        "quit_ableton",
+        "live_fade",
+        "set_warp_state",
+        "load_device_to_track",
+    ),
+}
+
+
+def _baseline_tool_names() -> tuple[str, ...]:
+    """Import lazily to avoid a circular import at module load."""
+    from .server import PUBLIC_TOOL_NAMES
+
+    return tuple(PUBLIC_TOOL_NAMES)
+
+
+def _baseline_probe_names() -> tuple[str, ...]:
+    names: list[str] = []
+    for group in BASELINE_PROBE_GROUPS.values():
+        names.extend(group)
+    return tuple(names)
+
+
+async def _record_call(
+    report: CertificationReport,
+    tool: str,
+    action: Callable[[], Any | Awaitable[Any]],
+    *,
+    passed: str = "live_passed",
+) -> Any:
+    """Invoke ``action``, record a Verification row, and return the value.
+
+    Failures map ``CAPABILITY_UNAVAILABLE`` to ``host_unavailable``; everything
+    else is recorded as ``failed``.
+    """
+    try:
+        value = action()
+        if inspect.isawaitable(value):
+            value = await value
+    except Exception as error:  # noqa: BLE001 — recording layer swallows all
+        from .errors import BridgeError
+
+        if isinstance(error, BridgeError) and error.code == "CAPABILITY_UNAVAILABLE":
+            report.record(
+                Verification(tool, "host_unavailable", f"{error.code}: {error}")
+            )
+        else:
+            report.record(
+                Verification(tool, "failed", f"{type(error).__name__}: {error}")
+            )
+        return None
+    report.record(Verification(tool, passed, "call and readback completed"))
+    return value
+
+
+def build_baseline_report(
+    profiles: tuple[str, ...] | None = None,
+) -> CertificationReport:
+    """Return a report covering exactly the catalogued tools for the given
+    profiles, or the full baseline surface when ``profiles`` is empty.
+
+    Tools that do not appear in any selected group are pre-recorded as
+    ``environment_unavailable`` with the rationale so callers can finish()
+    the report without juggling partial coverage.
+    """
+    selected = profiles or tuple(BASELINE_PROBE_GROUPS)
+    seen: set[str] = set()
+    for profile in selected:
+        if profile not in BASELINE_PROBE_GROUPS:
+            raise ValueError(f"unknown acceptance profile: {profile}")
+        seen.update(BASELINE_PROBE_GROUPS[profile])
+    catalog_names = _baseline_tool_names()
+    extras = seen.difference(catalog_names)
+    if extras:
+        raise ValueError(
+            f"baseline groups reference uncatalogued tools: {sorted(extras)}"
+        )
+    report = CertificationReport(tool_names=catalog_names)
+    missing = set(catalog_names).difference(seen)
+    for tool in missing:
+        report.record(
+            Verification(
+                tool,
+                "environment_unavailable",
+                f"not covered by selected profiles: {selected}",
+            )
+        )
+    return report
+
+
+def assert_baseline_probe_coverage() -> None:
+    """Invoked from tests and CLI: flattened probe names must equal 65."""
+    flat = set(_baseline_probe_names())
+    catalog_names = set(_baseline_tool_names())
+    assert flat == catalog_names, (
+        f"baseline probe mismatch: "
+        f"missing={catalog_names - flat}, extra={flat - catalog_names}"
+    )
