@@ -1988,9 +1988,13 @@ def live_fade_steps(
 ) -> Generator[None, None, dict[str, Any]]:
     """Interpolate one track's volume to a target value over ``duration`` seconds.
 
-    The first command in our bridge that deliberately blocks the Live main
-    thread. ``duration`` is bounded at :data:`LIVE_FADE_MAX_DURATION` and each
-    step yields to give Live's UI a chance to schedule other work.
+    The fade distributes its steps across the requested ``duration`` of
+    monotonic-clock time and yields between writes so the Live UI tick
+    (``update_display``) can keep scheduling other work. We deliberately do
+    *not* call :func:`time.sleep` — sleeping on the Live main thread would
+    freeze the GUI. Instead each step waits until its monotonic deadline
+    before requesting the next ``yield``. ``duration=0`` short-circuits the
+    wait entirely and finishes in a single Live tick.
     """
 
     track_index = _required(params, "track_index")
@@ -2045,18 +2049,31 @@ def live_fade_steps(
             "curve must be smoothstep or linear",
         )
     start = float(param.value)
-    for step in range(1, steps + 1):
-        t = step / float(steps)
+    if duration == 0.0 or steps <= 1:
+        # ``duration=0`` short-circuits: still write the target value so the
+        # documented contract holds, but never wait.
+        t = 1.0
         shaped = t * t * (3.0 - 2.0 * t) if curve == "smoothstep" else t
         param.value = start + (target - start) * shaped
-        # Yield once per step so the Live UI tick loop can schedule other work
-        # (and so the socket reader can drain incoming MCP requests) between
-        # volume writes. We deliberately do NOT call ``time.sleep`` here —
-        # blocking the Live main thread is forbidden by an AST invariant in
-        # ``tests/test_transport_retry.py``. The RPC timeout override in
-        # ``COMMAND_TIMEOUT_OVERRIDES`` leaves room for long multi-step faders,
-        # but the work itself stays responsive.
         yield
+    else:
+        step_deadline = time.monotonic()
+        step_interval = duration / float(steps)
+        for step in range(1, steps + 1):
+            t = step / float(steps)
+            shaped = t * t * (3.0 - 2.0 * t) if curve == "smoothstep" else t
+            param.value = start + (target - start) * shaped
+            # Wait until the monotonic clock has advanced to this step's
+            # deadline, but yield at least once so Live's ``update_display``
+            # tick loop runs other work. We never call ``time.sleep`` —
+            # blocking the Live main thread is forbidden by an AST invariant
+            # in ``tests/test_transport_retry.py``. The RPC timeout override
+            # in ``COMMAND_TIMEOUT_OVERRIDES`` leaves room for long
+            # multi-step faders, but the work itself stays responsive.
+            step_deadline += step_interval
+            while time.monotonic() < step_deadline:
+                yield
+            yield
     final_value = float(param.value)
     result: dict[str, Any] = {
         "track": str(_safe(lambda: track.name, "")),
@@ -2297,9 +2314,10 @@ def _dispatch_command_steps(
     if normalized == "quit_ableton":
         return handler(song, application, control_surface, params)
     if normalized == "live_fade":
-        # ``live_fade_steps`` is a generator that yields between volume
+        # ``live_fade_steps`` is a generator that distributes its writes
+        # across ``duration`` of monotonic-clock time and yields between
         # writes; ``yield from`` keeps the Live main thread pumping while it
-        # sleeps through its ``duration`` seconds of interpolation work.
+        # waits for each step's deadline.
         return (yield from handler(song, application, params))
     return handler(song, application, params)
 
