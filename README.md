@@ -25,6 +25,24 @@ The v0.4.0 additions are `set_parameter_value`, `get_clip_info`,
 `create_clip_automation`. Browser search stays on the TCP Remote Script path;
 `load_device_to_track` remains on the WebSocket Extension path.
 
+## Stabilization contract (v0.5.0)
+
+- `load_device_to_track` accepts `device_name` (primary) or `device_uri`
+  (deprecated alias). Warp markers are readable via `get_warp_state` but
+  `set_warp_state` rejects marker writes at the model layer.
+- The cross-bridge error taxonomy is stable: `CAPABILITY_UNAVAILABLE`,
+  `AMBIGUOUS_MATCH`, `VERIFICATION_FAILED`, `ACCEPTANCE_GUARD_FAILED` are
+  the only domain codes the MCP layer ever raises.
+- Per-tool certification statuses (`offline_passed`, `live_passed`,
+  `manual_passed`, `host_unavailable`, `environment_unavailable`,
+  `failed`) are produced by `ableton-mcp acceptance --profile baseline`
+  and gate the release decision.
+- A disposable Set called `TESTE_CODEX` is the only safe target for
+  acceptance mutations; `--confirm-project-name` enforces it.
+- Node.js is required only for Extension development; the Python wheel
+  installs and runs without it. Verify a clean install with
+  `scripts/verify_clean_install.ps1`.
+
 ## Architecture
 
 ```text

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from ableton_mcp_server import __version__
@@ -29,6 +30,45 @@ def test_runtime_dependencies_cover_imported_analysis_and_fastmcp_websockets() -
     assert '"websockets>=15.0.1,<17"' in pyproject
     assert '"numpy>=2.2,<3"' in pyproject
     assert '"soundfile>=0.13,<1"' in pyproject
+
+
+def test_baseline_docs_match_current_state() -> None:
+    """Slice 1 Task 10: public docs must reflect the certified 65-tool
+    baseline, the primary ``device_name`` contract, read-only warp markers,
+    the new error codes, the clean-install command, and certification
+    statuses. They must not advertise the stale ``37 registered tools``
+    figure."""
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    architecture = (ROOT / "docs" / "ARCHITECTURE.md").read_text(encoding="utf-8")
+    tool_reference = (ROOT / "docs" / "TOOL_REFERENCE.md").read_text(encoding="utf-8")
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+
+    for label, text in (
+        ("README", readme),
+        ("ARCHITECTURE", architecture),
+        ("TOOL_REFERENCE", tool_reference),
+        ("CHANGELOG", changelog),
+    ):
+        # The count must be present; the wording may be "65 tools" or
+        # "65 snake_case tools" / "65 cataloged public tools".
+        assert re.search(r"\b65\b", text), (
+            f"{label} should advertise the 65-tool baseline"
+        )
+        assert "37 registered tools" not in text, (
+            f"{label} still references the stale 37-tool count"
+        )
+
+    assert "device_name" in readme, "README must document device_name primary"
+    assert (
+        "warp_markers" in tool_reference or "warp_markers are read-only" in tool_reference
+    ), "TOOL_REFERENCE must mention warp markers are read-only"
+    assert (
+        "CAPABILITY_UNAVAILABLE" in architecture
+        or "CAPABILITY_UNAVAILABLE" in readme
+    ), "docs must surface the new CAPABILITY_UNAVAILABLE error code"
+    assert (
+        "verify_clean_install" in readme or "verify_clean_install" in architecture
+    ), "docs must surface the clean-install command"
 
 
 def test_v040_public_docs_cover_tools_and_attribution() -> None:

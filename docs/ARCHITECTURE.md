@@ -176,7 +176,7 @@ tools = await mcp.list_tools()
 count = len(mcp.list_tools())
 ```
 
-Tests assert both counts match the 37 registered tools.
+Tests assert both counts match the 65 cataloged public tools.
 
 `tools/list` remains deterministic metadata discovery. `get_bridge_status` and the `ableton-mcp doctor` CLI perform an actual `get_session_info` round trip and report WSL-specific topology hints when unavailable.
 
@@ -189,3 +189,28 @@ ableton-mcp acceptance --confirm-project-name TESTE_CODEX --track-index 0 --clip
 ```
 
 The created Session clip remains intentionally; run only against a disposable Set.
+
+## Slice 1 Stabilization Contract (v0.5.0)
+
+The certified baseline surface freezes these contracts; Slice 2 will expand
+without breaking them:
+
+- 65 catalogued public tools; `tool_count` is the single source of truth.
+- Two loopback transports, desktop-only: TCP `127.0.0.1:9888` for the Remote
+  Script and WebSocket `127.0.0.1:9889` for the Extension. No LAN mode.
+- `load_device_to_track` takes a primary `device_name` argument;
+  `device_uri` is retained as a deprecated alias for one release cycle.
+- Warp markers are **read-only**: `get_warp_state` exposes the array, but
+  `set_warp_state` rejects `warp_markers` writes at the model layer.
+- Stable cross-bridge error taxonomy: `CAPABILITY_UNAVAILABLE`,
+  `AMBIGUOUS_MATCH`, `VERIFICATION_FAILED`, `ACCEPTANCE_GUARD_FAILED` are
+  the only domain codes the MCP layer ever raises.
+- Per-tool certification statuses (`offline_passed`, `live_passed`,
+  `manual_passed`, `host_unavailable`, `environment_unavailable`,
+  `failed`) are produced by `cli acceptance --profile baseline` and gate
+  the release decision.
+- The guarded `acceptance --confirm-project-name TESTE_CODEX` command is
+  the only path that runs mutations against a real Live Set.
+- Node.js is required only for Extension development; the Python wheel
+  installs and runs without it. Clean install probe:
+  `scripts/verify_clean_install.ps1`.
