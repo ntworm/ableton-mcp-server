@@ -413,6 +413,15 @@ class CreateMidiTrackRequest(RequestModel):
         return value
 
 
+# v0.5.0 — audio-track mirror of CreateMidiTrackRequest. Naming differs:
+# `name` is optional (no default) because callers usually want Live's default
+# "Audio" track name; only override when explicitly provided. `index` defaults
+# to ``-1`` to match Live's LOM "append" semantics.
+class CreateAudioTrackRequest(RequestModel):
+    index: int = -1
+    name: str | None = Field(default=None, max_length=120)
+
+
 class RenameTrackRequest(RequestModel):
     track_index: NonNegativeInt
     new_name: Annotated[str, Field(min_length=1, max_length=128)]
@@ -488,6 +497,122 @@ class BuildExtensionRequest(RequestModel):
     project_path: Annotated[str, Field(min_length=1, max_length=1024)]
 
 
+# ---------------------------------------------------------------------------
+# v0.5.0 — Set lifecycle
+# ---------------------------------------------------------------------------
+
+
+class GetLifecycleStatusRequest(EmptyRequest):
+    pass
+
+
+class SaveSetRequest(RequestModel):
+    """Request payload for ``save_set``.
+
+    ``require_api`` is ``False`` by default — when the Live host hides
+    ``Song.save`` the handler returns a structured GUI-workflow response
+    instead of raising. Set ``require_api=True`` to fail fast with a
+    ``BAD_INPUT`` error in that case.
+    """
+
+    require_api: bool = False
+
+
+class QuitAbletonRequest(RequestModel):
+    save: bool = True
+    force_without_save: bool = False
+    quit_delay_ticks: Annotated[int, Field(ge=1, le=120)] = 2
+
+
+class LiveFadeRequest(RequestModel):
+    """Request payload for ``live_fade``.
+
+    The handler interpolates one track's mixer volume over ``duration``
+    seconds in ``steps`` increments. Provide exactly one of ``target_percent``
+    or ``target_value`` — ``target_percent`` is the user-facing fader value
+    (100 = unity ≈ 0.85 on the LOM parameter) and ``target_value`` is the raw
+    LOM value. ``duration`` is bounded at 60 seconds and ``steps`` is the
+    interpolation resolution, both enforced on the MCP layer as well as on the
+    Remote Script handler.
+    """
+
+    track_index: NonNegativeInt
+    target_percent: Annotated[float, Field(ge=0, le=200)] | None = None
+    target_value: Annotated[float, Field(ge=0, le=1)] | None = None
+    duration: Annotated[float, Field(ge=0, le=60.0)] = 10.0
+    steps: Annotated[int, Field(ge=1, le=500)] = 40
+    curve: Literal["smoothstep", "linear"] = "smoothstep"
+    allow_over_unity: bool = False
+
+    @model_validator(mode="after")
+    def _exactly_one_target(self) -> LiveFadeRequest:
+        if (self.target_percent is None) == (self.target_value is None):
+            raise ValueError(
+                "Provide exactly one of target_percent or target_value"
+            )
+        return self
+
+
+# ---------------------------------------------------------------------------
+# v0.5.0 — Mix analysis (offline, no Live bridge)
+# ---------------------------------------------------------------------------
+
+
+class AnalyzeAudioRequest(RequestModel):
+    """Request payload for ``analyze_audio``.
+
+    Reads a local audio file from disk and returns LUFS-I, true-peak, RMS,
+    and per-band energy summary. ``path`` must point at a file readable by
+    ``soundfile``; unsupported encodings surface a structured error.
+    """
+
+    path: str = Field(min_length=1)
+
+
+class FindFrequencyMaskingRequest(RequestModel):
+    """Request payload for ``find_frequency_masking``.
+
+    Compares two files sample-rate-aligned: every octave band whose ``target``
+    energy exceeds the ``reference`` by ``threshold_db`` dB or more is
+    reported. ``target_path`` and ``reference_path`` must point at distinct
+    files.
+    """
+
+    target_path: str = Field(min_length=1)
+    reference_path: str = Field(min_length=1)
+    threshold_db: float = 6.0
+
+    @model_validator(mode="after")
+    def _paths_differ(self) -> FindFrequencyMaskingRequest:
+        if self.target_path == self.reference_path:
+            raise ValueError("target_path and reference_path must differ")
+        return self
+
+
+class AnalyzeMixRequest(RequestModel):
+    """Request payload for ``analyze_mix``.
+
+    ``stems`` is the ordered list of local audio files (1..16) to analyze
+    individually and then compare pair-wise for masking. The cap mirrors the
+    ``MAX_STEMS`` policy enforced in ``ableton_mcp_server.analysis.audio``.
+    """
+
+    stems: Annotated[list[str], Field(min_length=1, max_length=16)]
+
+
+class ExtractSingleCycleRequest(RequestModel):
+    """Request payload for ``extract_single_cycle``.
+
+    Searches the first 5 seconds of ``path`` for a candidate single-cycle
+    waveform starting at a low-energy zero-crossing. ``frame_size`` is the
+    analysis FFT window; the default of 2048 is tuned for bass-range
+    material but valid in 64..65536 inclusive.
+    """
+
+    path: str = Field(min_length=1)
+    frame_size: Annotated[int, Field(ge=64, le=65536)] = 2048
+
+
 TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "get_session_info": GetSessionInfoRequest,
     "get_bridge_status": GetBridgeStatusRequest,
@@ -546,4 +671,15 @@ TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "load_device_to_track": LoadDeviceToTrackRequest,
     "scaffold_extension": ScaffoldExtensionRequest,
     "build_extension": BuildExtensionRequest,
+    # v0.5.0
+    "lifecycle_status": GetLifecycleStatusRequest,
+    "save_set": SaveSetRequest,
+    "quit_ableton": QuitAbletonRequest,
+    "live_fade": LiveFadeRequest,
+    "create_audio_track": CreateAudioTrackRequest,
+    # v0.5.0 — mix analysis
+    "analyze_audio": AnalyzeAudioRequest,
+    "find_frequency_masking": FindFrequencyMaskingRequest,
+    "analyze_mix": AnalyzeMixRequest,
+    "extract_single_cycle": ExtractSingleCycleRequest,
 }

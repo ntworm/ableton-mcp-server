@@ -33,6 +33,7 @@ COMMAND_TIMEOUT_OVERRIDES = {
     "load_device_to_track": 30.0,
     "search_browser": 30.0,
     "create_clip_automation": 20.0,
+    "live_fade": 60.0,
 }
 
 
@@ -50,6 +51,9 @@ def _request_work_units(command_name: str, params: object) -> int:
         return max(1, sum(name in params for name in ("loop_start", "loop_end", "name")))
     if normalized == "clear_clip_notes":
         return 2
+    if normalized == "live_fade":
+        steps = params.get("steps")
+        return min(60, int(steps) + 1) if isinstance(steps, int) else 41
     if normalized == "run_batch":
         commands = params.get("commands")
         if not isinstance(commands, list):
@@ -107,6 +111,8 @@ READ_COMMANDS = frozenset(
         # v0.4.0 — Session detail and bounded browser discovery
         "get_clip_info",
         "search_browser",
+        # v0.5.0 — set lifecycle read-only probe
+        "lifecycle_status",
     }
 )
 
@@ -144,6 +150,12 @@ ALLOWED_MUTATIONS = frozenset(
         "set_clip_properties",
         # v0.4.0 — Session clip automation only
         "create_clip_automation",
+        # v0.5.0 — set lifecycle mutations
+        "save_set",
+        "quit_ableton",
+        "live_fade",
+        # v0.5.0 — audio-track mirror of create_midi_track
+        "create_audio_track",
     }
 )
 
@@ -186,3 +198,14 @@ def assert_not_blocked(command_name: str) -> None:
         raise ValueError(
             "Command %r is blocked: creative mutation is not available." % command_name
         )
+
+# Set lifecycle and fader fade (v0.5.0)
+COMMAND_LIFECYCLE_STATUS = "lifecycle_status"
+COMMAND_SAVE_SET = "save_set"
+COMMAND_QUIT_ABLETON = "quit_ableton"
+COMMAND_LIVE_FADE = "live_fade"
+COMMAND_CREATE_AUDIO_TRACK = "create_audio_track"
+COMMAND_ANALYZE_AUDIO = "analyze_audio"
+COMMAND_FIND_FREQUENCY_MASKING = "find_frequency_masking"
+COMMAND_ANALYZE_MIX = "analyze_mix"
+COMMAND_EXTRACT_SINGLE_CYCLE = "extract_single_cycle"

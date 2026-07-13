@@ -18,6 +18,18 @@ from mcp.types import TextContent
 from contracts import DEFAULT_HOST, DEFAULT_PORT, DEFAULT_WS_PORT
 
 from . import models
+from .analysis import (
+    analyze_audio as _analyze_audio,
+)
+from .analysis import (
+    analyze_mix as _analyze_mix,
+)
+from .analysis import (
+    extract_single_cycle as _extract_single_cycle,
+)
+from .analysis import (
+    find_frequency_masking as _find_frequency_masking,
+)
 from .client import Client
 from .diagnostics import bridge_status, find_ableton_log_path
 from .diff import diff_snapshots
@@ -85,6 +97,17 @@ PUBLIC_TOOL_NAMES = (
     # v0.3.0 — extension tooling
     "scaffold_extension",
     "build_extension",
+    # v0.5.0 — set lifecycle
+    "lifecycle_status",
+    "save_set",
+    "quit_ableton",
+    "live_fade",
+    "create_audio_track",
+    # v0.5.0 — offline mix analysis
+    "analyze_audio",
+    "find_frequency_masking",
+    "analyze_mix",
+    "extract_single_cycle",
 )
 
 
@@ -870,6 +893,24 @@ def create_midi_track(name: str = "MIDI Track", index: int | None = None) -> Any
 
 
 @mcp.tool()
+def create_audio_track(index: int = -1, name: str | None = None) -> Any:
+    """Create a new audio track in Ableton Live.
+
+    Side effects: mutates the Set by adding an audio track in one undo step.
+    Example: ``create_audio_track(name="vocals")`` appends a named audio track;
+    ``create_audio_track(index=2)`` inserts at position 2.
+    Edge cases: raises ``LIVE_UNAVAILABLE`` when the Live host does not
+    expose ``Song.create_audio_track``. Note: this audio variant does not
+    reuse the 96-track ``TRACK_LIMIT_REACHED`` guard — Live itself enforces
+    the per-host track cap.
+    """
+    return _remote(
+        "create_audio_track",
+        models.CreateAudioTrackRequest(index=index, name=name),
+    )
+
+
+@mcp.tool()
 def rename_track(track_index: int, new_name: str) -> Any:
     """Rename a track in the Live Set.
 
@@ -944,6 +985,91 @@ async def load_device_to_track(track_index: int, device_uri: str) -> str:
         request.model_dump(mode="json"),
     )
     return json.dumps(result, indent=2)
+
+
+# ---------------------------------------------------------------------------
+# v0.5.0 — Set Lifecycle
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def lifecycle_status() -> Any:
+    """Read Live save/quit API availability and return a GUI-workflow fallback.
+
+    Side effects: none.
+    Example: ``lifecycle_status()`` reports ``song_save_available`` and ``app_quit_available``.
+    Edge cases: missing Live APIs degrade to ``False`` flags; never raises.
+    """
+    return _remote("lifecycle_status", models.GetLifecycleStatusRequest())
+
+
+@mcp.tool()
+def save_set(require_api: bool = False) -> Any:
+    """Save the Live Set via Song.save() when exposed, otherwise return a GUI workflow.
+
+    Side effects: invokes Song.save() in one undo step when available.
+    Example: ``save_set(require_api=True)`` raises when the API is missing.
+    Edge cases: missing API returns a structured GUI workflow response.
+    """
+    return _remote("save_set", models.SaveSetRequest(require_api=require_api))
+
+
+@mcp.tool()
+def quit_ableton(
+    save: bool = True,
+    force_without_save: bool = False,
+    quit_delay_ticks: int = 2,
+) -> Any:
+    """Save the Live Set (when requested) then schedule Application.quit after a small UI delay.
+
+    Side effects: invokes Song.save() and schedules Application.quit.
+    Example: ``quit_ableton(quit_delay_ticks=5)`` waits five UI ticks.
+    Edge cases: missing APIs return a structured GUI workflow refusal.
+    """
+    return _remote(
+        "quit_ableton",
+        models.QuitAbletonRequest(
+            save=save,
+            force_without_save=force_without_save,
+            quit_delay_ticks=quit_delay_ticks,
+        ),
+    )
+
+
+@mcp.tool()
+def live_fade(
+    track_index: int,
+    target_percent: float | None = None,
+    target_value: float | None = None,
+    duration: float = 10.0,
+    steps: int = 40,
+    curve: str = "smoothstep",
+    allow_over_unity: bool = False,
+) -> Any:
+    """Interpolate one track's mixer volume to a target value over ``duration`` seconds.
+
+    Side effects: blocks the Live main thread for up to ``duration`` seconds plus
+    steps; first such command in our bridge. Writes ``mixer_device.volume`` in
+    one undo step.
+    Example: ``live_fade(track_index=0, target_percent=0)`` ramps the first
+    track to silence; ``live_fade(track_index=0, target_percent=120,
+    allow_over_unity=True)`` exceeds unity and **may clip**.
+    Edge cases: rejects ``duration`` above 60 seconds and ``target_percent``
+    above 100 without ``allow_over_unity``. Provide exactly one of
+    ``target_percent`` or ``target_value``.
+    """
+    return _remote(
+        "live_fade",
+        models.LiveFadeRequest(
+            track_index=track_index,
+            target_percent=target_percent,
+            target_value=target_value,
+            duration=duration,
+            steps=steps,
+            curve=curve,  # type: ignore[arg-type]
+            allow_over_unity=allow_over_unity,
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1080,7 +1206,7 @@ def build_extension(project_path: str) -> str:
     return json.dumps({"status": "built", "steps": steps}, indent=2)
 
 
-PUBLIC_TOOL_FUNCTIONS = (
+PUBLIC_TOOL_FUNCTIONS_HEAD = (
     get_session_info,
     get_session_overview,
     get_bridge_status,
@@ -1138,6 +1264,99 @@ PUBLIC_TOOL_FUNCTIONS = (
     load_device_to_track,
     scaffold_extension,
     build_extension,
+    # v0.5.0 — set lifecycle
+    lifecycle_status,
+    save_set,
+    quit_ableton,
+    live_fade,
+    create_audio_track,
+)
+# NOTE: v0.5.0 offline mix analysis wrappers (analyze_audio, find_frequency_masking,
+# analyze_mix, extract_single_cycle) are defined below; the canonical PUBLIC_TOOL_FUNCTIONS
+# tuple is assembled AFTER those definitions so all names are in scope.
+
+
+# ---------------------------------------------------------------------------
+# v0.5.0 — Offline Mix Analysis
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def analyze_audio(path: str) -> dict[str, Any]:
+    """Compute LUFS-I, true-peak, RMS, and per-band energy summary for a
+    local audio file.
+
+    Side effects: reads the file from disk.
+    Example: ``analyze_audio(path="/stems/kick.wav")`` returns LUFS-I plus
+    per-band energy summary.
+    Edge cases: missing files and unsupported encodings return a structured
+    ``{"ok": False, "reason": ...}``.
+    """
+    return _explicit_json_result(_analyze_audio(path))
+
+
+@mcp.tool()
+def find_frequency_masking(
+    target_path: str,
+    reference_path: str,
+    threshold_db: float = 6.0,
+) -> dict[str, Any]:
+    """Identify frequency bands where ``target_path`` exceeds ``reference_path``
+    by ``threshold_db`` dB or more.
+
+    Side effects: reads both files.
+    Example: ``find_frequency_masking(target_path=master, reference_path=kick)``
+    suggests band-level cuts.
+    Edge cases: mismatched sample rates raise a structured error; identical
+    paths are rejected at the model.
+    """
+    return _explicit_json_result(
+        _find_frequency_masking(
+            target_path=target_path,
+            reference_path=reference_path,
+            threshold_db=threshold_db,
+        )
+    )
+
+
+@mcp.tool()
+def analyze_mix(stems: list[str]) -> dict[str, Any]:
+    """Run per-stem analysis and pair-wise masking across up to 16 local audio files.
+
+    Side effects: reads each stem from disk.
+    Example: ``analyze_mix(stems=["/stems/kick.wav", "/stems/bass.wav"])`` returns
+    per-stem LUFS plus pair-wise masking scores.
+    Edge cases: more than 16 stems raises a structured error; missing files
+    are reported per-stem via ``{"ok": False, "reason": ...}``.
+    """
+    return _explicit_json_result(_analyze_mix(stems=stems))
+
+
+@mcp.tool()
+def extract_single_cycle(path: str, frame_size: int = 2048) -> dict[str, Any]:
+    """Find a candidate single-cycle loop in a local audio file plus its
+    detected pitch.
+
+    Side effects: reads the file from disk.
+    Example: ``extract_single_cycle(path="/stems/kick.wav")`` returns the
+    detected pitch plus the single-cycle sample buffer.
+    Edge cases: aperiodic content returns ``{"ok": False, "reason": ...}``
+    instead of crashing.
+    """
+    return _explicit_json_result(
+        _extract_single_cycle(path=path, frame_size=frame_size)
+    )
+
+
+# Canonical ordered tuple of every public tool callable. Assembled after the
+# v0.5.0 offline mix analysis wrappers are defined so all names are in scope.
+PUBLIC_TOOL_FUNCTIONS = (
+    *PUBLIC_TOOL_FUNCTIONS_HEAD,
+    # v0.5.0 — offline mix analysis
+    analyze_audio,
+    find_frequency_masking,
+    analyze_mix,
+    extract_single_cycle,
 )
 
 

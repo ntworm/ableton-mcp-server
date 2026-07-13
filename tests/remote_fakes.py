@@ -231,7 +231,13 @@ class FakeSongView:
 
 
 class FakeSong:
-    def __init__(self, *, stuck_writes: int = 0, deferred_writes: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        stuck_writes: int = 0,
+        deferred_writes: bool = False,
+        save: Callable[[], Any] | None = None,
+    ) -> None:
         self._tempo = 120.0
         self._pending_tempo: float | None = None
         self.signature_numerator = 4
@@ -266,6 +272,10 @@ class FakeSong:
         self.file_path = r"C:\Music\Debug Set.als"
         self.is_dirty = False
         self.toggle_count = 0
+        if save is not None:
+            # v0.5.0 — Lifecycle seam. ``Song.save`` only exists when the Live host
+            # exposes it; Fakes opt in by passing a callable here.
+            self.save = save  # type: ignore[attr-defined]
 
     @property
     def current_song_time(self) -> float:
@@ -424,12 +434,48 @@ class FakeBrowser:
         return browser
 
 
+class FakeControlSurface:
+    """Stand-in for ``ableton.v2.control_surface.ControlSurface``.
+
+    The v0.5.0 lifecycle commands run ``schedule_message`` to defer the quit
+    callback to a future Live UI tick. Tests record what was scheduled rather
+    than actually invoking the callback, so the ``FakeControlSurface`` keeps an
+    audit list. The default policy is to **invoke immediately** (matches the
+    dispatch path where ``update_display`` is calling), but tests can opt into
+    "record only" behaviour via ``invoke_immediately=False``.
+    """
+
+    def __init__(
+        self,
+        c_instance: Any = None,
+        *,
+        invoke_immediately: bool = True,
+    ) -> None:
+        self._c_instance = c_instance
+        self.song = c_instance.song if c_instance is not None else None
+        self.scheduled: list[tuple[int, Callable[[], Any]]] = []
+        self._invoke_immediately = invoke_immediately
+
+    def schedule_message(self, delay: int, callback: Callable[[], Any]) -> None:
+        self.scheduled.append((int(delay), callback))
+        if self._invoke_immediately:
+            callback()
+
+
 class FakeApplication:
-    def __init__(self, browser: FakeBrowser | None = None) -> None:
+    def __init__(
+        self,
+        browser: FakeBrowser | None = None,
+        quit: Callable[[], Any] | None = None,
+    ) -> None:
         self.browser = browser if browser is not None else FakeBrowser()
         self.control_surfaces = [object()]
         self.begin_count = 0
         self.end_count = 0
+        if quit is not None:
+            # v0.5.0 — Lifecycle seam. ``Application.quit`` only exists when the
+            # Live host exposes it; Fakes opt in by passing a callable here.
+            self.quit = quit  # type: ignore[attr-defined]
 
     def get_major_version(self) -> int:
         return 12

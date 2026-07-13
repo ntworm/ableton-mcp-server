@@ -44,6 +44,10 @@ from ._contracts import (
     request_timeout_seconds,
 )
 
+# v0.5.0 — runtime identity tag surfaced in `get_bridge_status`.
+# The base upstream did not ship one; v0.5.0 establishes the convention.
+REMOTE_SCRIPT_RUNTIME_VERSION = "set-lifecycle-and-fade-1"
+
 try:  # These modules only exist inside Ableton Live.
     import Live  # type: ignore[import-not-found]
     from ableton.v2.control_surface import ControlSurface  # type: ignore[import-not-found]
@@ -1779,6 +1783,42 @@ def cmd_create_midi_track(
     }
 
 
+def cmd_create_audio_track(
+    song,
+    _application,
+    params,
+):
+    # type: (Any, Any, dict[str, Any]) -> dict[str, Any]
+    # v0.5.0 — Mirror cmd_create_midi_track for audio. Zero-touch on the midi path:
+    # the existing TRACK_LIMIT_REACHED guard above is not reused because audio may
+    # legitimately exceed 96 tracks on hosts that already grew the midi set past
+    # the cap. We rely on Live's per-host track-limit instead.
+    fn = getattr(song, "create_audio_track", None)
+    if not callable(fn):
+        raise RemoteError(
+            ERROR_LIVE_UNAVAILABLE,
+            "Live Song object does not expose create_audio_track()",
+        )
+    raw_index = params.get("index")
+    index = int(raw_index) if raw_index is not None else -1
+    name = params.get("name")
+    before_ids = set(id(track) for track in song.tracks)
+    fn(index)
+    created = None
+    created_index = None
+    for position, track in enumerate(song.tracks):
+        if id(track) not in before_ids:
+            created = track
+            created_index = position
+            break
+    result = {"created": True, "track_index": created_index, "requested_index": index}
+    if created is not None and name:
+        created.name = str(name)
+    if created is not None:
+        result["track_name"] = getattr(created, "name", "")
+    return result
+
+
 def cmd_rename_track(
     song,
     _application,
@@ -1798,6 +1838,215 @@ def cmd_rename_track(
 
 
 CommandHandler = Callable[[Any, Any, dict[str, Any]], Any]
+
+# v0.5.0 — Set lifecycle. Informational fallback for WSL↔Windows: our transport
+# cannot automate GUI clicks, so ``gui_workflow`` is descriptive only. Steps are
+# kept generic enough that they apply to both macOS AppleScript and Windows GUI
+# pathways (the upstream notes use AppleScript-specific phrasing; we use plain
+# menu references instead).
+GUI_LIFECYCLE_WORKFLOW: dict[str, list[str]] = {
+    "save": [
+        "Open the File menu in the Live window.",
+        "Click 'Save Live Set'. If the menu item is disabled, the set is already saved.",
+    ],
+    "quit": [
+        "Save first through the File menu if the option is enabled.",
+        "Open the Live application menu and click 'Quit Live'.",
+    ],
+    "notes": [
+        "Locked or asleep displays block automated GUI workflows.",
+    ],
+}
+
+# v0.5.0 — Fader fade. Live's mixer volume parameter sits below unity (0.85)
+# so that 100% on the user-facing fader maps to 0dB. Treat 0.85 as the canonical
+# unity value for target_percent→value conversion.
+LIVE_FADE_UNITY_VALUE = 0.8500000238418579
+LIVE_FADE_MAX_DURATION = 60.0
+LIVE_FADE_DEFAULT_STEPS = 40
+
+
+def cmd_lifecycle_status(song: Any, application: Any, _params: dict[str, Any]) -> dict[str, Any]:
+    save_attr_names = ("save",)
+    quit_attr_names = ("quit",)
+    return {
+        "song_save_attrs": [name for name in save_attr_names if hasattr(song, name)],
+        "app_lifecycle_attrs": [name for name in quit_attr_names if hasattr(application, name)],
+        "song_save_available": callable(getattr(song, "save", None)),
+        "app_quit_available": callable(getattr(application, "quit", None)),
+        "gui_workflow": GUI_LIFECYCLE_WORKFLOW,
+    }
+
+
+def cmd_save_set(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, Any]:
+    """Save the Live Set through ``Song.save()`` when the host exposes it.
+
+    When ``Song.save`` is missing on the host, fall back to a structured GUI
+    workflow. Set ``require_api=True`` to make the handler raise a
+    ``BAD_INPUT`` ``RemoteError`` instead of returning the fallback — useful
+    for callers that want to fail fast.
+    """
+
+    save = getattr(song, "save", None)
+    if not callable(save):
+        if params.get("require_api"):
+            raise RemoteError(
+                ERROR_BAD_INPUT,
+                "Live Song object does not expose save(); use the GUI save workflow",
+            )
+        return {
+            "saved": False,
+            "api_available": False,
+            "gui_workflow": GUI_LIFECYCLE_WORKFLOW,
+            "gui_notes": GUI_LIFECYCLE_WORKFLOW["notes"],
+        }
+    result = save()
+    return {"saved": True, "api_available": True, "result": result}
+
+
+def quit_ableton_steps(
+    song: Any,
+    application: Any,
+    control_surface: Any,
+    params: dict[str, Any],
+) -> dict[str, Any]:
+    save_attr = getattr(song, "save", None)
+    if params.get("save", True) and callable(save_attr):
+        save_attr()
+        saved = True
+    elif params.get("save", True):
+        saved = False
+        if not params.get("force_without_save"):
+            return {
+                "quit_requested": False,
+                "saved_first": False,
+                "reason": (
+                    "save API unavailable; pass force_without_save:true to quit anyway "
+                    "or use the GUI workflow"
+                ),
+                "gui_workflow": GUI_LIFECYCLE_WORKFLOW,
+            }
+    else:
+        saved = False
+    quit_fn = getattr(application, "quit", None)
+    if not callable(quit_fn):
+        return {
+            "quit_requested": False,
+            "saved_first": saved,
+            "api_available": False,
+            "gui_workflow": GUI_LIFECYCLE_WORKFLOW["quit"],
+            "gui_notes": GUI_LIFECYCLE_WORKFLOW["notes"],
+        }
+    if not hasattr(control_surface, "schedule_message"):
+        return {
+            "quit_requested": False,
+            "saved_first": saved,
+            "api_available": True,
+            "reason": "Live control surface does not expose schedule_message",
+            "gui_workflow": GUI_LIFECYCLE_WORKFLOW["quit"],
+            "gui_notes": GUI_LIFECYCLE_WORKFLOW["notes"],
+        }
+    delay = int(params.get("quit_delay_ticks") or 2)
+    control_surface.schedule_message(max(1, delay), quit_fn)
+    return {
+        "quit_requested": True,
+        "saved_first": saved,
+        "api_available": True,
+        "scheduled": True,
+    }
+
+
+def live_fade_steps(
+    song: Any,
+    _application: Any,
+    params: dict[str, Any],
+) -> Generator[None, None, dict[str, Any]]:
+    """Interpolate one track's volume to a target value over ``duration`` seconds.
+
+    The first command in our bridge that deliberately blocks the Live main
+    thread. ``duration`` is bounded at :data:`LIVE_FADE_MAX_DURATION` and each
+    step yields to give Live's UI a chance to schedule other work.
+    """
+
+    track_index = _required(params, "track_index")
+    track = song.tracks[int(track_index)]
+    mixer = getattr(track, "mixer_device", None)
+    if mixer is None:
+        raise RemoteError(ERROR_WRONG_TYPE, "Track has no mixer_device")
+    param = getattr(mixer, "volume", None)
+    if param is None:
+        raise RemoteError(
+            ERROR_WRONG_TYPE,
+            "Track has no mixer_device.volume parameter",
+        )
+    if params.get("target_value") is not None:
+        target = float(params["target_value"])
+    elif params.get("target_percent") is not None:
+        percent = float(params["target_percent"])
+        if percent < 0.0:
+            raise RemoteError(
+                ERROR_INVALID_PARAMS,
+                "target_percent must be >= 0",
+            )
+        if percent > 100.0 and not params.get("allow_over_unity"):
+            raise RemoteError(
+                ERROR_INVALID_PARAMS,
+                "target_percent above 100 (unity) requires allow_over_unity:true",
+            )
+        target = (percent / 100.0) * LIVE_FADE_UNITY_VALUE
+    else:
+        raise RemoteError(
+            ERROR_INVALID_PARAMS,
+            "Provide target_percent or target_value",
+        )
+    minimum = float(getattr(param, "min", 0.0))
+    maximum = float(getattr(param, "max", 1.0))
+    target = max(minimum, min(target, maximum))
+    duration_raw = params.get("duration")
+    duration = float(10.0 if duration_raw is None else duration_raw)
+    if duration < 0.0 or duration > LIVE_FADE_MAX_DURATION:
+        raise RemoteError(
+            ERROR_INVALID_PARAMS,
+            "duration must be between 0 and %s seconds" % LIVE_FADE_MAX_DURATION,
+        )
+    steps_raw = params.get("steps")
+    steps = int(LIVE_FADE_DEFAULT_STEPS if steps_raw is None else steps_raw)
+    if steps < 1:
+        raise RemoteError(ERROR_INVALID_PARAMS, "steps must be >= 1")
+    curve = params.get("curve") or "smoothstep"
+    if curve not in ("smoothstep", "linear"):
+        raise RemoteError(
+            ERROR_INVALID_PARAMS,
+            "curve must be smoothstep or linear",
+        )
+    start = float(param.value)
+    for step in range(1, steps + 1):
+        t = step / float(steps)
+        shaped = t * t * (3.0 - 2.0 * t) if curve == "smoothstep" else t
+        param.value = start + (target - start) * shaped
+        # Yield once per step so the Live UI tick loop can schedule other work
+        # (and so the socket reader can drain incoming MCP requests) between
+        # volume writes. We deliberately do NOT call ``time.sleep`` here —
+        # blocking the Live main thread is forbidden by an AST invariant in
+        # ``tests/test_transport_retry.py``. The RPC timeout override in
+        # ``COMMAND_TIMEOUT_OVERRIDES`` leaves room for long multi-step faders,
+        # but the work itself stays responsive.
+        yield
+    final_value = float(param.value)
+    result: dict[str, Any] = {
+        "track": str(_safe(lambda: track.name, "")),
+        "curve": curve,
+        "duration": duration,
+        "steps": steps,
+        "start_value": start,
+        "target_value": target,
+        "final_value": final_value,
+        "final_percent": round(final_value / LIVE_FADE_UNITY_VALUE * 100.0, 3),
+    }
+    with suppress(Exception):
+        result["display"] = param.str_for_value(param.value)
+    return result
+
 
 COMMAND_HANDLERS: dict[str, CommandHandler] = {
     "get_session_info": cmd_get_session_info,
@@ -1832,6 +2081,13 @@ COMMAND_HANDLERS: dict[str, CommandHandler] = {
     "diagnose_midi_clip": cmd_diagnose_midi_clip,
     "create_midi_track": cmd_create_midi_track,
     "rename_track": cmd_rename_track,
+    # v0.5.0 — audio-track mirror of create_midi_track. Zero-touch on the midi path.
+    "create_audio_track": cmd_create_audio_track,
+    # v0.5.0 — set lifecycle
+    "lifecycle_status": cmd_lifecycle_status,
+    "save_set": cmd_save_set,
+    "quit_ableton": quit_ableton_steps,
+    "live_fade": live_fade_steps,
 }
 
 
@@ -1860,6 +2116,7 @@ def _run_batch_steps(
     application: Any,
     params: dict[str, Any],
     undo_target: Any,
+    control_surface: Any = None,
 ) -> Generator[None, None, dict[str, Any]]:
     commands = _required(params, "commands")
     if not isinstance(commands, list) or not commands:
@@ -1889,6 +2146,7 @@ def _run_batch_steps(
                 command_params,
                 manage_undo=False,
                 undo_target=undo_target,
+                control_surface=control_surface,
             )
             results.append({"index": index, "status": "ok", "result": result})
             completed += 1
@@ -1915,9 +2173,17 @@ def _dispatch_command_steps(
     normalized: str,
     params: dict[str, Any],
     undo_target: Any,
+    control_surface: Any = None,
 ) -> Generator[None, None, Any]:
     if normalized == "run_batch":
-        return (yield from _run_batch_steps(song, application, params, undo_target))
+        return (
+            yield from _run_batch_steps(
+                song, application, params, undo_target, control_surface
+            )
+        )
+    if normalized == "quit_ableton":
+        # Give Live's UI thread one cycle before scheduling application quit.
+        yield
     if normalized == "create_cue_point":
         return (yield from _create_cue_point_steps(song, params))
     if normalized == "bulk_create_cue_points":
@@ -2003,6 +2269,13 @@ def _dispatch_command_steps(
     handler = COMMAND_HANDLERS.get(normalized)
     if handler is None:
         raise RemoteError(ERROR_UNKNOWN_COMMAND, "Unknown command %r." % normalized)
+    if normalized == "quit_ableton":
+        return handler(song, application, control_surface, params)
+    if normalized == "live_fade":
+        # ``live_fade_steps`` is a generator that yields between volume
+        # writes; ``yield from`` keeps the Live main thread pumping while it
+        # sleeps through its ``duration`` seconds of interpolation work.
+        return (yield from handler(song, application, params))
     return handler(song, application, params)
 
 
@@ -2014,6 +2287,7 @@ def _command_steps(
     *,
     manage_undo: bool,
     undo_target: Any,
+    control_surface: Any = None,
 ) -> Generator[None, None, Any]:
     normalized = command.strip().lower()
     if normalized in READ_ONLY_COMMANDS:
@@ -2034,6 +2308,7 @@ def _command_steps(
                 normalized,
                 params,
                 undo_target,
+                control_surface,
             )
         )
     finally:
@@ -2074,6 +2349,7 @@ def _request_steps(
     command: str,
     params: dict[str, Any],
     undo_target: Any,
+    control_surface: Any = None,
 ) -> Generator[None, None, Any]:
     """Build one request execution that may span multiple Live UI ticks."""
 
@@ -2085,6 +2361,7 @@ def _request_steps(
             params,
             manage_undo=True,
             undo_target=undo_target,
+            control_surface=control_surface,
         )
     )
 
@@ -2105,10 +2382,17 @@ class ActiveRequest:
 class RequestProcessor:
     """Owns the UI-thread queue; socket threads only call :meth:`enqueue`."""
 
-    def __init__(self, song: Any, application: Any, undo_target: Any = None) -> None:
+    def __init__(
+        self,
+        song: Any,
+        application: Any,
+        undo_target: Any = None,
+        control_surface: Any = None,
+    ) -> None:
         self.song = song
         self.application = application
         self.undo_target = undo_target if undo_target is not None else application
+        self.control_surface = control_surface
         self.request_queue: queue.Queue[QueuedRequest] = queue.Queue()
         self.active_request: ActiveRequest | None = None
 
@@ -2131,6 +2415,7 @@ class RequestProcessor:
                         request.command,
                         request.params,
                         self.undo_target,
+                        self.control_surface,
                     ),
                 )
             active = self.active_request
@@ -2275,7 +2560,7 @@ class AbletonMCPServer(ControlSurface):
         )
         song = self.song() if callable(self.song) else self.song
         undo_target = _resolve_undo_target(c_instance, self, application, song)
-        self._processor = RequestProcessor(song, application, undo_target)
+        self._processor = RequestProcessor(song, application, undo_target, self)
         self._socket_server = JsonlSocketServer(self._processor)
         self._socket_server.start()
         _dbg("startup endpoint=127.0.0.1:9888")
