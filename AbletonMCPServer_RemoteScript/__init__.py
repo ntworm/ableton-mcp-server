@@ -1818,6 +1818,13 @@ GUI_LIFECYCLE_WORKFLOW: dict[str, list[str]] = {
     ],
 }
 
+# v0.5.0 — Fader fade. Live's mixer volume parameter sits below unity (0.85)
+# so that 100% on the user-facing fader maps to 0dB. Treat 0.85 as the canonical
+# unity value for target_percent→value conversion.
+LIVE_FADE_UNITY_VALUE = 0.8500000238418579
+LIVE_FADE_MAX_DURATION = 60.0
+LIVE_FADE_DEFAULT_STEPS = 40
+
 
 def cmd_lifecycle_status(song: Any, application: Any, _params: dict[str, Any]) -> dict[str, Any]:
     save_attr_names = ("save",)
@@ -1909,6 +1916,98 @@ def quit_ableton_steps(
     }
 
 
+def live_fade_steps(
+    song: Any,
+    _application: Any,
+    params: dict[str, Any],
+) -> Generator[None, None, dict[str, Any]]:
+    """Interpolate one track's volume to a target value over ``duration`` seconds.
+
+    The first command in our bridge that deliberately blocks the Live main
+    thread. ``duration`` is bounded at :data:`LIVE_FADE_MAX_DURATION` and each
+    step yields to give Live's UI a chance to schedule other work.
+    """
+
+    track_index = _required(params, "track_index")
+    track = song.tracks[int(track_index)]
+    mixer = getattr(track, "mixer_device", None)
+    if mixer is None:
+        raise RemoteError(ERROR_WRONG_TYPE, "Track has no mixer_device")
+    param = getattr(mixer, "volume", None)
+    if param is None:
+        raise RemoteError(
+            ERROR_WRONG_TYPE,
+            "Track has no mixer_device.volume parameter",
+        )
+    if params.get("target_value") is not None:
+        target = float(params["target_value"])
+    elif params.get("target_percent") is not None:
+        percent = float(params["target_percent"])
+        if percent < 0.0:
+            raise RemoteError(
+                ERROR_INVALID_PARAMS,
+                "target_percent must be >= 0",
+            )
+        if percent > 100.0 and not params.get("allow_over_unity"):
+            raise RemoteError(
+                ERROR_INVALID_PARAMS,
+                "target_percent above 100 (unity) requires allow_over_unity:true",
+            )
+        target = (percent / 100.0) * LIVE_FADE_UNITY_VALUE
+    else:
+        raise RemoteError(
+            ERROR_INVALID_PARAMS,
+            "Provide target_percent or target_value",
+        )
+    minimum = float(getattr(param, "min", 0.0))
+    maximum = float(getattr(param, "max", 1.0))
+    target = max(minimum, min(target, maximum))
+    duration_raw = params.get("duration")
+    duration = float(10.0 if duration_raw is None else duration_raw)
+    if duration < 0.0 or duration > LIVE_FADE_MAX_DURATION:
+        raise RemoteError(
+            ERROR_INVALID_PARAMS,
+            "duration must be between 0 and %s seconds" % LIVE_FADE_MAX_DURATION,
+        )
+    steps_raw = params.get("steps")
+    steps = int(LIVE_FADE_DEFAULT_STEPS if steps_raw is None else steps_raw)
+    if steps < 1:
+        raise RemoteError(ERROR_INVALID_PARAMS, "steps must be >= 1")
+    curve = params.get("curve") or "smoothstep"
+    if curve not in ("smoothstep", "linear"):
+        raise RemoteError(
+            ERROR_INVALID_PARAMS,
+            "curve must be smoothstep or linear",
+        )
+    start = float(param.value)
+    for step in range(1, steps + 1):
+        t = step / float(steps)
+        shaped = t * t * (3.0 - 2.0 * t) if curve == "smoothstep" else t
+        param.value = start + (target - start) * shaped
+        # Yield once per step so the Live UI tick loop can schedule other work
+        # (and so the socket reader can drain incoming MCP requests) between
+        # volume writes. We deliberately do NOT call ``time.sleep`` here —
+        # blocking the Live main thread is forbidden by an AST invariant in
+        # ``tests/test_transport_retry.py``. The RPC timeout override in
+        # ``COMMAND_TIMEOUT_OVERRIDES`` leaves room for long multi-step faders,
+        # but the work itself stays responsive.
+        yield
+    final_value = float(param.value)
+    result: dict[str, Any] = {
+        "track": str(_safe(lambda: track.name, "")),
+        "curve": curve,
+        "duration": duration,
+        "steps": steps,
+        "start_value": start,
+        "target_value": target,
+        "final_value": final_value,
+        "final_percent": round(final_value / LIVE_FADE_UNITY_VALUE * 100.0, 3),
+    }
+    with suppress(Exception):
+        result["display"] = param.str_for_value(param.value)
+    return result
+
+
 COMMAND_HANDLERS: dict[str, CommandHandler] = {
     "get_session_info": cmd_get_session_info,
     "get_track_list": cmd_get_track_list,
@@ -1946,6 +2045,7 @@ COMMAND_HANDLERS: dict[str, CommandHandler] = {
     "lifecycle_status": cmd_lifecycle_status,
     "save_set": cmd_save_set,
     "quit_ableton": quit_ableton_steps,
+    "live_fade": live_fade_steps,
 }
 
 
@@ -2129,6 +2229,11 @@ def _dispatch_command_steps(
         raise RemoteError(ERROR_UNKNOWN_COMMAND, "Unknown command %r." % normalized)
     if normalized == "quit_ableton":
         return handler(song, application, control_surface, params)
+    if normalized == "live_fade":
+        # ``live_fade_steps`` is a generator that yields between volume
+        # writes; ``yield from`` keeps the Live main thread pumping while it
+        # sleeps through its ``duration`` seconds of interpolation work.
+        return (yield from handler(song, application, params))
     return handler(song, application, params)
 
 

@@ -33,6 +33,7 @@ COMMAND_TIMEOUT_OVERRIDES = {
     "load_device_to_track": 30.0,
     "search_browser": 30.0,
     "create_clip_automation": 20.0,
+    "live_fade": 60.0,
 }
 
 
@@ -50,6 +51,9 @@ def _request_work_units(command_name: str, params: object) -> int:
         return max(1, sum(name in params for name in ("loop_start", "loop_end", "name")))
     if normalized == "clear_clip_notes":
         return 2
+    if normalized == "live_fade":
+        steps = params.get("steps")
+        return min(60, int(steps) + 1) if isinstance(steps, int) else 41
     if normalized == "run_batch":
         commands = params.get("commands")
         if not isinstance(commands, list):
@@ -149,6 +153,7 @@ ALLOWED_MUTATIONS = frozenset(
         # v0.5.0 — set lifecycle mutations
         "save_set",
         "quit_ableton",
+        "live_fade",
     }
 )
 

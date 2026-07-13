@@ -41,6 +41,7 @@ def test_debug_mutations_are_explicitly_allowed() -> None:
         # v0.5.0 — set lifecycle mutations
         "save_set",
         "quit_ableton",
+        "live_fade",
     }
     assert frozenset(expected) == contracts.ALLOWED_MUTATIONS
     assert expected.isdisjoint(contracts.READ_ONLY_COMMANDS)

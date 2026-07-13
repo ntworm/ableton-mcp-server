@@ -89,6 +89,7 @@ PUBLIC_TOOL_NAMES = (
     "lifecycle_status",
     "save_set",
     "quit_ableton",
+    "live_fade",
 )
 
 
@@ -999,6 +1000,42 @@ def quit_ableton(
     )
 
 
+@mcp.tool()
+def live_fade(
+    track_index: int,
+    target_percent: float | None = None,
+    target_value: float | None = None,
+    duration: float = 10.0,
+    steps: int = 40,
+    curve: str = "smoothstep",
+    allow_over_unity: bool = False,
+) -> Any:
+    """Interpolate one track's mixer volume to a target value over ``duration`` seconds.
+
+    Side effects: blocks the Live main thread for up to ``duration`` seconds plus
+    steps; first such command in our bridge. Writes ``mixer_device.volume`` in
+    one undo step.
+    Example: ``live_fade(track_index=0, target_percent=0)`` ramps the first
+    track to silence; ``live_fade(track_index=0, target_percent=120,
+    allow_over_unity=True)`` exceeds unity and **may clip**.
+    Edge cases: rejects ``duration`` above 60 seconds and ``target_percent``
+    above 100 without ``allow_over_unity``. Provide exactly one of
+    ``target_percent`` or ``target_value``.
+    """
+    return _remote(
+        "live_fade",
+        models.LiveFadeRequest(
+            track_index=track_index,
+            target_percent=target_percent,
+            target_value=target_value,
+            duration=duration,
+            steps=steps,
+            curve=curve,  # type: ignore[arg-type]
+            allow_over_unity=allow_over_unity,
+        ),
+    )
+
+
 # ---------------------------------------------------------------------------
 # v0.3.0 — Extension Scaffolding & Building
 # ---------------------------------------------------------------------------
@@ -1195,6 +1232,7 @@ PUBLIC_TOOL_FUNCTIONS = (
     lifecycle_status,
     save_set,
     quit_ableton,
+    live_fade,
 )
 
 

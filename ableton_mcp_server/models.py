@@ -515,6 +515,35 @@ class QuitAbletonRequest(RequestModel):
     quit_delay_ticks: Annotated[int, Field(ge=1, le=120)] = 2
 
 
+class LiveFadeRequest(RequestModel):
+    """Request payload for ``live_fade``.
+
+    The handler interpolates one track's mixer volume over ``duration``
+    seconds in ``steps`` increments. Provide exactly one of ``target_percent``
+    or ``target_value`` — ``target_percent`` is the user-facing fader value
+    (100 = unity ≈ 0.85 on the LOM parameter) and ``target_value`` is the raw
+    LOM value. ``duration`` is bounded at 60 seconds and ``steps`` is the
+    interpolation resolution, both enforced on the MCP layer as well as on the
+    Remote Script handler.
+    """
+
+    track_index: NonNegativeInt
+    target_percent: Annotated[float, Field(ge=0, le=200)] | None = None
+    target_value: Annotated[float, Field(ge=0, le=1)] | None = None
+    duration: Annotated[float, Field(ge=0, le=60.0)] = 10.0
+    steps: Annotated[int, Field(ge=1, le=500)] = 40
+    curve: Literal["smoothstep", "linear"] = "smoothstep"
+    allow_over_unity: bool = False
+
+    @model_validator(mode="after")
+    def _exactly_one_target(self) -> LiveFadeRequest:
+        if (self.target_percent is None) == (self.target_value is None):
+            raise ValueError(
+                "Provide exactly one of target_percent or target_value"
+            )
+        return self
+
+
 TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "get_session_info": GetSessionInfoRequest,
     "get_bridge_status": GetBridgeStatusRequest,
@@ -577,4 +606,5 @@ TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "lifecycle_status": GetLifecycleStatusRequest,
     "save_set": SaveSetRequest,
     "quit_ableton": QuitAbletonRequest,
+    "live_fade": LiveFadeRequest,
 }
