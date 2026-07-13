@@ -14,10 +14,21 @@ def test_release_version_is_aligned_across_package_metadata() -> None:
     extension_manifest = json.loads(
         (ROOT / "AbletonMCPServer_Extension" / "package.json").read_text(encoding="utf-8")
     )
+    extension_manifest_json = json.loads(
+        (ROOT / "AbletonMCPServer_Extension" / "manifest.json").read_text(encoding="utf-8")
+    )
     assert __version__ == "0.5.0"
     assert manifest["version"] == "0.5.0"
     assert extension_manifest["version"] == "0.5.0"
+    assert extension_manifest_json["version"] == "0.5.0"
     assert 'version = "0.5.0"' in pyproject
+
+
+def test_runtime_dependencies_cover_imported_analysis_and_fastmcp_websockets() -> None:
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    assert '"websockets>=15.0.1,<17"' in pyproject
+    assert '"numpy>=2.2,<3"' in pyproject
+    assert '"soundfile>=0.13,<1"' in pyproject
 
 
 def test_v040_public_docs_cover_tools_and_attribution() -> None:
