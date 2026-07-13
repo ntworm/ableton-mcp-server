@@ -676,26 +676,34 @@ def cmd_search_browser(
         raise RemoteError(ERROR_INVALID_PARAMS, "Unknown browser category %r." % category_filter)
     selected = (category_filter,) if category_filter is not None else category_names
     results: list[dict[str, Any]] = []
-    visited: set[int] = set()
+    visited: set[str] = set()
     budget = 5000
     for category in selected:
         root = _safe(lambda category=category: getattr(application.browser, category), None)
         if root is None:
             continue
         root_name = str(_safe(lambda root=root: root.name, category.replace("_", " ").title()))
-        stack = [(root, [root_name], 0)]
+        # Slice 1 Task 5: Live's LOM yields fresh proxy wrappers on every
+        # ``.children`` access, so tracking identity via ``id()`` collapses.
+        # Use URI keys (stable across proxies) and ordinal-path keys (URI-less
+        # trees) to bound traversal.
+        stack = [(root, [root_name], 0, ())]
         while stack and len(results) < limit and len(visited) < budget:
-            item, path, depth = stack.pop()
-            identity = id(item)
-            if identity in visited:
+            item, path, depth, ordinal_path = stack.pop()
+            uri = str(_safe(lambda item=item: item.uri, ""))
+            key = "uri:" + uri if uri else "%s:%s" % (
+                category,
+                "/".join(str(part) for part in ordinal_path),
+            )
+            if key in visited:
                 continue
-            visited.add(identity)
+            visited.add(key)
             name = str(_safe(lambda item=item: item.name, ""))
             if depth > 0 and query in name.casefold():
                 results.append(
                     {
                         "name": name,
-                        "uri": str(_safe(lambda item=item: item.uri, "")),
+                        "uri": uri,
                         "category": category,
                         "path": path,
                         "is_loadable": bool(_safe(lambda item=item: item.is_loadable, False)),
@@ -704,9 +712,12 @@ def cmd_search_browser(
             if depth >= 5:
                 continue
             children = list(_safe(lambda item=item: item.children, []))[:500]
-            for child in reversed(children):
+            for child_index in range(len(children) - 1, -1, -1):
+                child = children[child_index]
                 child_name = str(_safe(lambda child=child: child.name, ""))
-                stack.append((child, [*path, child_name], depth + 1))
+                stack.append(
+                    (child, [*path, child_name], depth + 1, (*ordinal_path, child_index))
+                )
         if len(results) >= limit or len(visited) >= budget:
             break
     return results

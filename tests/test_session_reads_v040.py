@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import ableton_mcp_server.server as server
 from AbletonMCPServer_RemoteScript import execute_command
-from tests.remote_fakes import FakeApplication, FakeBrowser, FakeClipSlot, FakeSong
+from tests.remote_fakes import FakeApplication, FakeBrowser, FakeBrowserItem, FakeClipSlot, FakeSong
 
 
 def test_get_clip_info_reports_empty_slot() -> None:
@@ -56,6 +56,61 @@ def test_search_browser_is_case_insensitive_and_bounded() -> None:
             "is_loadable": True,
         }
     ]
+
+
+def test_search_browser_returns_match_under_each_category_with_limit_ten() -> None:
+    """Two hits under different categories must both surface even when the
+    traversal depends on items whose ``.children`` accessor yields fresh
+    proxy wrappers on every call (Live's LOM behaviour)."""
+    app = FakeApplication(browser=FakeBrowser())
+    instruments_dynamic = FakeBrowserItem(
+        "InstrumentsDyn",
+        reproxy_children=True,
+        children=[
+            FakeBrowserItem("Operator", uri="query:Instruments#Operator", is_loadable=True),
+        ],
+    )
+    midi_effects_dynamic = FakeBrowserItem(
+        "MIDI EffectsDyn",
+        reproxy_children=True,
+        children=[
+            FakeBrowserItem("Utility", uri="query:MIDI Effects#Utility", is_loadable=True),
+        ],
+    )
+    app.browser.instruments = instruments_dynamic
+    app.browser.midi_effects = midi_effects_dynamic
+
+    result = execute_command(
+        FakeSong(),
+        app,
+        "search_browser",
+        {"query": "o", "limit": 10},
+    )
+
+    names = sorted(item["name"] for item in result)
+    assert "Operator" in names
+
+
+def test_search_browser_stops_at_cycle_within_budget() -> None:
+    """A URI cycle (root → child → root) must terminate; traversal must not
+    loop until the 5,000-node budget is exhausted or hang forever."""
+    app = FakeApplication(browser=FakeBrowser())
+    back_item = FakeBrowserItem("Back", uri="cycle:root#back")
+    root_item = FakeBrowserItem("Root", uri="cycle:root", children=[back_item])
+    # Wire the cycle: the "Back" item's children are the root.
+    back_item.children = [root_item]
+    app.browser.instruments = root_item
+
+    result = execute_command(
+        FakeSong(),
+        app,
+        "search_browser",
+        {"query": "back", "limit": 50},
+    )
+
+    assert isinstance(result, list)
+    # Cycle terminates because URI keys deduplicate; traversal does not hang.
+    assert any(item["uri"] == "cycle:root#back" for item in result)
 
 
 @patch("ableton_mcp_server.server._remote")
