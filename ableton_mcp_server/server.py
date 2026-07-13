@@ -87,6 +87,7 @@ PUBLIC_TOOL_NAMES = (
     "build_extension",
     # v0.5.0 — set lifecycle
     "lifecycle_status",
+    "save_set",
 )
 
 
@@ -964,6 +965,17 @@ def lifecycle_status() -> Any:
     return _remote("lifecycle_status", models.GetLifecycleStatusRequest())
 
 
+@mcp.tool()
+def save_set(require_api: bool = False) -> Any:
+    """Save the Live Set via Song.save() when exposed, otherwise return a GUI workflow.
+
+    Side effects: invokes Song.save() in one undo step when available.
+    Example: ``save_set(require_api=True)`` raises when the API is missing.
+    Edge cases: missing API returns a structured GUI workflow response.
+    """
+    return _remote("save_set", models.SaveSetRequest(require_api=require_api))
+
+
 # ---------------------------------------------------------------------------
 # v0.3.0 — Extension Scaffolding & Building
 # ---------------------------------------------------------------------------
@@ -1158,6 +1170,7 @@ PUBLIC_TOOL_FUNCTIONS = (
     build_extension,
     # v0.5.0 — set lifecycle
     lifecycle_status,
+    save_set,
 )
 
 

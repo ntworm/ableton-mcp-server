@@ -1831,6 +1831,32 @@ def cmd_lifecycle_status(song: Any, application: Any, _params: dict[str, Any]) -
     }
 
 
+def cmd_save_set(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, Any]:
+    """Save the Live Set through ``Song.save()`` when the host exposes it.
+
+    When ``Song.save`` is missing on the host, fall back to a structured GUI
+    workflow. Set ``require_api=True`` to make the handler raise a
+    ``BAD_INPUT`` ``RemoteError`` instead of returning the fallback — useful
+    for callers that want to fail fast.
+    """
+
+    save = getattr(song, "save", None)
+    if not callable(save):
+        if params.get("require_api"):
+            raise RemoteError(
+                ERROR_BAD_INPUT,
+                "Live Song object does not expose save(); use the GUI save workflow",
+            )
+        return {
+            "saved": False,
+            "api_available": False,
+            "gui_workflow": GUI_LIFECYCLE_WORKFLOW,
+            "gui_notes": GUI_LIFECYCLE_WORKFLOW["notes"],
+        }
+    result = save()
+    return {"saved": True, "api_available": True, "result": result}
+
+
 COMMAND_HANDLERS: dict[str, CommandHandler] = {
     "get_session_info": cmd_get_session_info,
     "get_track_list": cmd_get_track_list,
@@ -1866,6 +1892,7 @@ COMMAND_HANDLERS: dict[str, CommandHandler] = {
     "rename_track": cmd_rename_track,
     # v0.5.0 — set lifecycle
     "lifecycle_status": cmd_lifecycle_status,
+    "save_set": cmd_save_set,
 }
 
 

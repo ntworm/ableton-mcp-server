@@ -497,6 +497,18 @@ class GetLifecycleStatusRequest(EmptyRequest):
     pass
 
 
+class SaveSetRequest(RequestModel):
+    """Request payload for ``save_set``.
+
+    ``require_api`` is ``False`` by default — when the Live host hides
+    ``Song.save`` the handler returns a structured GUI-workflow response
+    instead of raising. Set ``require_api=True`` to fail fast with a
+    ``BAD_INPUT`` error in that case.
+    """
+
+    require_api: bool = False
+
+
 TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "get_session_info": GetSessionInfoRequest,
     "get_bridge_status": GetBridgeStatusRequest,
@@ -557,4 +569,5 @@ TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "build_extension": BuildExtensionRequest,
     # v0.5.0
     "lifecycle_status": GetLifecycleStatusRequest,
+    "save_set": SaveSetRequest,
 }

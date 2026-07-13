@@ -1,8 +1,10 @@
-"""v0.5.0 lifecycle_status read-only probe tests."""
+"""v0.5.0 lifecycle_status read-only probe tests + save_set conditional save tests."""
 
 from __future__ import annotations
 
-from AbletonMCPServer_RemoteScript import execute_command
+import pytest
+
+from AbletonMCPServer_RemoteScript import RemoteError, execute_command
 from tests.remote_fakes import FakeApplication, FakeSong
 
 
@@ -42,3 +44,42 @@ def test_lifecycle_status_returns_gui_workflow() -> None:
     assert isinstance(gui_workflow["quit"], list)
     assert all(isinstance(step, str) for step in gui_workflow["quit"])
     assert "notes" in gui_workflow
+
+
+def test_save_set_uses_song_save_when_available() -> None:
+    invoked = {"called": False}
+
+    def fake_save() -> None:
+        invoked["called"] = True
+        return None
+
+    song = FakeSong(save=fake_save)
+    result = execute_command(song, FakeApplication(), "save_set", {})
+
+    assert invoked["called"] is True
+    assert result == {"saved": True, "api_available": True, "result": None}
+
+
+def test_save_set_returns_gui_workflow_when_save_missing() -> None:
+    # FakeSong(save=None) explicitly opts out of the v0.5.0 lifecycle seam,
+    # so the handler should treat the song as if the live host hid ``save``.
+    song = FakeSong(save=None)
+    result = execute_command(song, FakeApplication(), "save_set", {})
+
+    assert result["saved"] is False
+    assert result["api_available"] is False
+    assert "save" in result["gui_workflow"]
+
+
+def test_save_set_raises_when_require_api_true_and_save_missing() -> None:
+    song = FakeSong(save=None)
+
+    with pytest.raises(RemoteError) as error:
+        execute_command(
+            song,
+            FakeApplication(),
+            "save_set",
+            {"require_api": True},
+        )
+
+    assert error.value.code == "BAD_INPUT"
