@@ -875,10 +875,12 @@ def test_p1_7_build_release_persists_source_commit(
     summary = build_release(
         root=fake_project,
         output_directory=out,
-        source_commit="deadbeef1234",
+        source_commit="deadbeef12345678901234567890123456789012",
+
     )
-    assert summary["source_commit"] == "deadbeef1234"
+    assert summary["source_commit"] == "deadbeef12345678901234567890123456789012"
+
     on_disk = json.loads(
         (out / "manifest.json").read_text(encoding="utf-8")
     )
-    assert on_disk["source_commit"] == "deadbeef1234"
+    assert on_disk["source_commit"] == "deadbeef12345678901234567890123456789012"

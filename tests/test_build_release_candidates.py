@@ -198,11 +198,17 @@ def fake_npm_runner(fake_project: Path, monkeypatch: pytest.MonkeyPatch
             isinstance(argv_list, list)
             and len(argv_list) >= 3
             and argv_list[0] == "git"
-            and argv_list[1] == "rev-parse"
         ):
-            return _FakeCompletedProcess(
-                returncode=0, stdout=fake_commit + "\n", stderr="",
-            )
+            if argv_list[1] == "rev-parse":
+                return _FakeCompletedProcess(
+                    returncode=0, stdout=fake_commit + "\n", stderr="",
+                )
+            if argv_list[1] == "cat-file":
+                target_arg = argv_list[-1]
+                if "ffffffffffffffffffffffffffffffffffffffff" in target_arg:
+                    return _FakeCompletedProcess(returncode=1, stderr="not found")
+                return _FakeCompletedProcess(returncode=0)
+
         # Default: behave like the npm runner and drop a fresh .ablx.
         target = ext_dir / f"AbletonMCPServer-Extension-{VERSION}.ablx"
         if target.exists():
@@ -437,11 +443,28 @@ class _CapturedProcess:
 
 
 def test_validate_source_commit_accepts_hex_hash() -> None:
-    assert _validate_source_commit("f2a1ff840d93592e085b6f8ad5af1fdb27bfd61b") == (
-        "f2a1ff840d93592e085b6f8ad5af1fdb27bfd61b"
-    )
-    # 7-char short hashes are also valid.
-    assert _validate_source_commit("f2a1ff8") == "f2a1ff8"
+    def fake_git(*_args: Any, **_kwargs: Any) -> _FakeCompletedProcess:
+        return _FakeCompletedProcess(returncode=0)
+
+    full_hash = "f2a1ff840d93592e085b6f8ad5af1fdb27bfd61b"
+    assert _validate_source_commit(full_hash, git_runner=fake_git) == full_hash
+
+    # Short 7-char hashes must be rejected.
+    with pytest.raises(ValueError, match="40-character"):
+        _validate_source_commit("f2a1ff8", git_runner=fake_git)
+
+
+def test_validate_source_commit_rejects_non_existent_commit() -> None:
+    def fake_failing_git(*_args: Any, **_kwargs: Any) -> _FakeCompletedProcess:
+        return _FakeCompletedProcess(returncode=1, stderr="Not found")
+
+    non_existent_hash = "ffffffffffffffffffffffffffffffffffffffff"
+    with pytest.raises(
+        ValueError, match="does not correspond to an existing git commit object"
+    ):
+        _validate_source_commit(non_existent_hash, git_runner=fake_failing_git)
+
+
 
 
 def test_validate_source_commit_rejects_unknown_placeholder() -> None:

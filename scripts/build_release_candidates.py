@@ -26,7 +26,9 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 import zipfile
+
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -35,40 +37,90 @@ VERSION = "0.5.1"
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RELEASE_DIR = ROOT / "releases" / f"v{VERSION}-rc1"
 
-_HEX_COMMIT_PATTERN = re.compile(r"^[0-9a-fA-F]{7,64}$")
+_HEX_COMMIT_PATTERN = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
-def _validate_source_commit(value: str | None) -> str:
-    """Validate a git commit hash. Rejects placeholders like ``"unknown"``.
 
-    The release manifest must always carry a real commit hash so the
-    artifacts are traceable back to the code that built them. The
-    string ``"unknown"`` is rejected by validation rather than silently
-    accepted — a release built from an unverifiable commit must not
-    look certified.
+def _run_git_command(
+    args: list[str],
+    *,
+    root: Path | None = None,
+    runner: Callable[..., Any] | None = None,
+) -> Any:
+    exec_runner = runner or subprocess.run
+    cwd_str = str(root) if root else None
+    cmd = ["git"] + args
+    try:
+        proc = exec_runner(
+            cmd, cwd=cwd_str, capture_output=True, text=True, check=False
+        )
+        if getattr(proc, "returncode", 1) == 0:
+            return proc
+    except Exception:
+        pass
+
+    # Windows git.exe cannot parse /mnt/c/ paths in .git worktree pointer files created by WSL git.
+    # Fallback to `wsl git` on Windows.
+    if sys.platform == "win32" or os.name == "nt":
+        wsl_cmd = ["wsl", "git"] + args
+        try:
+            wsl_proc = exec_runner(
+                wsl_cmd, cwd=cwd_str, capture_output=True, text=True, check=False
+            )
+            if getattr(wsl_proc, "returncode", 1) == 0:
+                return wsl_proc
+        except Exception:
+            pass
+
+    return exec_runner(
+        cmd, cwd=cwd_str, capture_output=True, text=True, check=False
+    )
+
+
+def _validate_source_commit(
+    value: str | None,
+    *,
+    root: Path | None = None,
+    git_runner: Callable[..., Any] | None = None,
+) -> str:
+    """Validate a 40-char git commit hash and verify existence in git repository.
+
+    The release manifest must always carry a real, full 40-character commit hash
+    that exists as a commit object in the git repository.
     """
     if not isinstance(value, str) or not value.strip():
         raise ValueError(
             "source_commit must be a non-empty string; pass "
             "`git rev-parse HEAD` (or `--source-commit <hash>`) explicitly"
         )
-    candidate = value.strip()
-    if candidate.lower() == "unknown":
+    candidate = value.strip().lower()
+    if candidate == "unknown":
         raise ValueError(
             "source_commit='unknown' is forbidden; the release owner "
             "must supply a real git commit hash"
         )
     if not _HEX_COMMIT_PATTERN.match(candidate):
         raise ValueError(
-            f"source_commit {candidate!r} is not a valid hexadecimal "
-            "git hash (7-64 hex chars)"
+            f"source_commit {candidate!r} is not a valid 40-character hexadecimal "
+            "git commit hash"
         )
-    return candidate.lower()
+
+    proc = _run_git_command(
+        ["cat-file", "-e", f"{candidate}^{{commit}}"],
+        root=root,
+        runner=git_runner,
+    )
+    returncode = getattr(proc, "returncode", 1)
+    if returncode != 0:
+        raise ValueError(
+            f"source_commit {candidate!r} does not correspond to an existing git commit object"
+        )
+    return candidate
 
 
-def _resolve_source_commit(*, root: Path,
-                          runner: Callable[..., Any] | None = None
-                          ) -> str:
+def _resolve_source_commit(
+    *, root: Path, runner: Callable[..., Any] | None = None
+) -> str:
     """Resolve the source commit hash from the worktree.
 
     Production callers do not pass ``runner``; the helper invokes
@@ -77,16 +129,19 @@ def _resolve_source_commit(*, root: Path,
     directly without ``--source-commit``. Tests can swap in a fake
     runner so the resolution path stays deterministic.
     """
-    if runner is None:
-        runner = subprocess.run
-    completed = runner(
-        ["git", "rev-parse", "HEAD"],
-        cwd=str(root),
-        capture_output=True,
-        text=True,
-        check=True,
+    proc = _run_git_command(["rev-parse", "HEAD"], root=root, runner=runner)
+    if getattr(proc, "returncode", 1) != 0:
+        raise RuntimeError(
+            f"Failed to resolve git rev-parse HEAD in {root}: {getattr(proc, 'stderr', '')}"
+        )
+    raw_out = getattr(proc, "stdout", "")
+    raw_hash = (
+        raw_out.strip() if isinstance(raw_out, str) else str(raw_out).strip()
     )
-    return _validate_source_commit(completed.stdout)
+    return _validate_source_commit(raw_hash, root=root, git_runner=runner)
+
+
+
 
 
 def _sha256(path: Path) -> str:
@@ -306,7 +361,11 @@ def build_release(*, root: Path = ROOT,
         source_commit = _resolve_source_commit(
             root=root, runner=git_runner,
         )
-    source_commit = _validate_source_commit(source_commit)
+    else:
+        source_commit = _validate_source_commit(
+            source_commit, root=root, git_runner=git_runner,
+        )
+
     output_directory = output_directory or DEFAULT_RELEASE_DIR
     output_directory.mkdir(parents=True, exist_ok=True)
 

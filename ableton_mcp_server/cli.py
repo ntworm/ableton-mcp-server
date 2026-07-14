@@ -11,6 +11,7 @@ from typing import Any
 from contracts import DEFAULT_HOST, DEFAULT_PORT
 
 from .acceptance import run_live_acceptance
+from .catalog import TOOL_CATALOG
 from .client import Client
 from .diagnostics import (
     bridge_status,
@@ -19,7 +20,6 @@ from .diagnostics import (
     install_remote_script,
     remote_script_status,
 )
-from .server import PUBLIC_TOOL_NAMES
 
 
 def _emit(result: dict[str, Any], *, as_json: bool) -> None:
@@ -81,8 +81,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         port = int(os.environ.get("ABLETON_MCP_SERVER_PORT", str(DEFAULT_PORT)))
         result = bridge_status(
             Client(host=host, port=port, reconnect=False),
-            tool_count=len(PUBLIC_TOOL_NAMES),
+            tool_count=len(TOOL_CATALOG),
         )
+
 
         _emit(result, as_json=bool(args.json))
         return 0 if result["bridge_available"] else 1
