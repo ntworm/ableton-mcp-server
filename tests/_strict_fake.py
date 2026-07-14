@@ -595,36 +595,28 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str, params: dict[st
         track, slot = params["track_index"], params["clip_index"]
         s["clips"].pop((track, slot), None)
         return {"deleted": True}
-    if command == "create_audio_track":
-        new_index = max(t["index"] for t in s["tracks"]) + 1
+    if command in ("create_audio_track", "create_midi_track"):
+        kind = "audio" if command == "create_audio_track" else "midi"
+        reg_tracks = [t for t in s["tracks"] if t.get("type") in ("midi", "audio")]
+        insert_idx = len(reg_tracks)
+        for t in s["tracks"]:
+            if t["index"] >= insert_idx:
+                t["index"] += 1
+                t["id"] = f"track:{t['index']}"
         s["tracks"].append(
             {
-                "index": new_index,
-                "type": "audio",
+                "index": insert_idx,
+                "type": kind,
                 "name": "",
-                "id": f"track:{new_index}",
+                "id": f"track:{insert_idx}",
                 "mute": False,
                 "solo": False,
                 "arm": False,
                 "devices": [],
             }
         )
-        return {"track_index": new_index}
-    if command == "create_midi_track":
-        new_index = max(t["index"] for t in s["tracks"]) + 1
-        s["tracks"].append(
-            {
-                "index": new_index,
-                "type": "midi",
-                "name": "",
-                "id": f"track:{new_index}",
-                "mute": False,
-                "solo": False,
-                "arm": False,
-                "devices": [],
-            }
-        )
-        return {"track_index": new_index}
+        s["tracks"].sort(key=lambda t: t["index"])
+        return {"track_index": insert_idx}
     if command == "set_parameter_value":
         track_id = f"track:{params['track_index']}"
         device_index = int(params.get("device_index", 0))
@@ -666,7 +658,7 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str, params: dict[st
         if bridge.save_set_response is not None:
             return dict(bridge.save_set_response)
         s.update({"is_dirty": False})
-        return {"saved": True, "song_save_available": True}
+        return {"saved": True, "api_available": True, "song_save_available": True}
     if command == "take_snapshot":
         return {
             "schema_version": 1,

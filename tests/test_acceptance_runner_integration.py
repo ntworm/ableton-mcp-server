@@ -938,7 +938,7 @@ def test_create_track_existing_index_or_inconsistent_type_causes_failure() -> No
     cert = result["certification"]
     row = next(r for r in cert["tools"] if r["tool"] == "create_audio_track")
     assert row["status"] == "failed"
-    assert "which existed in prior snapshot" in row["evidence"]
+    assert "returned track_index 0, expected" in row["evidence"]
 
 
 def test_live_fade_restore_uses_fallback_track_index() -> None:
@@ -1134,3 +1134,63 @@ def test_track_creation_negative_matrix(tool_name: str, subclass_behavior: str) 
     cert = result["certification"]
     row = next(r for r in cert["tools"] if r["tool"] == tool_name)
     assert row["status"] == "failed"
+
+
+def test_save_set_api_unavailable_recorded_as_manual_required_and_release_ready() -> None:
+    """Verify save_set api_available=false is manual_required and permits release_ready."""
+    class ApiUnavailSaveBridge(StrictFakeBridge):
+        def call(self, command_type: str, params: Any = None, *, timeout: Any = None) -> Any:
+            if command_type == "save_set":
+                return {
+                    "saved": False,
+                    "api_available": False,
+                    "gui_workflow": {"save": ["File -> Save"]},
+                }
+            return super().call(command_type, params, timeout=timeout)
+
+    bridge = ApiUnavailSaveBridge()
+    result = asyncio.run(
+        run_live_acceptance(
+            bridge,
+            confirm_project_name="TESTE_CODEX",
+            track_index=0,
+            clip_index=3,
+            audio_track_index=1,
+            audio_clip_index=0,
+            fire_clip=True,
+        )
+    )
+    cert = result["certification"]
+    save_row = next(r for r in cert["tools"] if r["tool"] == "save_set")
+    assert save_row["status"] == "manual_required"
+    assert "Host does not expose Song.save API" in save_row["evidence"]
+    assert cert["release_ready"] is True
+
+
+def test_track_creation_insertion_with_return_and_master_tracks() -> None:
+    """Verify track creation inserts regular tracks at pre_regular_count and shifts returns."""
+    bridge = StrictFakeBridge()
+    bridge.state["tracks"].extend(
+        [
+            {"index": 3, "type": "return", "name": "A-Reverb", "id": "track:3", "devices": []},
+            {"index": 4, "type": "return", "name": "B-Delay", "id": "track:4", "devices": []},
+            {"index": 5, "type": "master", "name": "Main", "id": "track:5", "devices": []},
+        ]
+    )
+    result = asyncio.run(
+        run_live_acceptance(
+            bridge,
+            confirm_project_name="TESTE_CODEX",
+            track_index=0,
+            clip_index=3,
+            audio_track_index=1,
+            audio_clip_index=0,
+            fire_clip=True,
+        )
+    )
+    cert = result["certification"]
+    audio_row = next(r for r in cert["tools"] if r["tool"] == "create_audio_track")
+    midi_row = next(r for r in cert["tools"] if r["tool"] == "create_midi_track")
+    assert audio_row["status"] == "live_passed"
+    assert midi_row["status"] == "live_passed"
+    assert cert["release_ready"] is True

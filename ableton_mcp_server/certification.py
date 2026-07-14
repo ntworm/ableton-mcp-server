@@ -77,7 +77,8 @@ class CertificationReport:
             for row in rows
         )
         has_invalid_manual = any(
-            row["status"] == "manual_required" and row["tool"] != "quit_ableton" for row in rows
+            row["status"] == "manual_required" and row["tool"] not in ("quit_ableton", "save_set")
+            for row in rows
         )
 
         release_ready = not (

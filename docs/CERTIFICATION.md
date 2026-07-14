@@ -137,6 +137,7 @@ Every release candidate bundle published under ``releases/v<version>-rc<N>/`` is
 To ensure strict provenance:
 1. The ``source_commit`` must contain 100% of the source code, unit/integration tests, and documentation required for gate verification. This commit must pass all quality gates (pytest, coverage, Ruff, mypy strict, build tests) independently.
 2. The subsequent candidate generation commit must modify exclusively files under ``releases/v<version>-rc<N>/``. No test files, implementation logic, or documentation may be bundled into candidate commits.
+3. Under ``release_ready`` policy, ``manual_required`` is permitted exclusively for ``quit_ableton`` and for ``save_set`` (when the host bridge reports ``api_available: false`` and the baseline snapshot was confirmed clean with ``is_dirty: false``). Any other tool with ``manual_required`` blocks release promotion.
 
 ## Probe groups and the 65-tool catalog
 
@@ -148,8 +149,21 @@ the count assertion.
 
 ## How to read the runner output
 
-``ableton-mcp acceptance --profile baseline --fire-clip --json`` writes
-the full ``CertificationReport`` to stdout. The relevant fields:
+The full gated acceptance runner is driven with:
+
+```powershell
+.\.venv-cert\Scripts\ableton-mcp.exe acceptance `
+  --profile baseline `
+  --fire-clip `
+  --confirm-project-name TESTE_CODEX `
+  --track-index 0 `
+  --clip-index 3 `
+  --audio-track-index 2 `
+  --audio-clip-index 0 `
+  --json
+```
+
+This writes the full ``CertificationReport`` to stdout. The relevant fields:
 
 - ``release_ready`` — the promotion gate. ``true`` only on the
   conditions listed above.

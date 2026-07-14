@@ -133,9 +133,8 @@ MIDI clip slot are required before any mutation is sent:
 ```
 
 The runner exercises transport, loop state, cue creation/deletion, clip creation,
-Python-LOM MIDI note insertion, clip firing, and partial-batch semantics. It
-restores transport and loop state, but the created clip intentionally remains in
-the disposable Set.
+Python-LOM MIDI note insertion, clip firing, device parameter writes, warp reading/mutations, and partial-batch semantics. It
+restores transport, loop state, mixer levels, and deletes the test clip. Structural in-memory additions (loaded Operator device, extra appended tracks) persist in the open session; closing Live without saving cleanly reverts the project file on disk.
 
 ## Development verification
 

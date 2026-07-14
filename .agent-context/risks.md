@@ -41,7 +41,7 @@ Tool discovery and TCP `doctor` do not prove the Extension WebSocket bridge is l
 
 ## Medium: acceptance testing mutates a real Set
 
-The acceptance runner requires an exact project-name confirmation and empty MIDI clip slot. Use a disposable Set. It restores transport/loop state, but intentionally leaves the created clip.
+The acceptance runner requires an exact project-name confirmation and empty MIDI clip slot. Use a disposable Set. It restores transport/loop state and deletes the test clip. Structural additions (loaded Operator device, newly created audio and MIDI tracks) remain only in the unsaved session memory; closing Live without saving cleanly reverts the project file on disk.
 
 ## Medium: proposals can be stale
 
