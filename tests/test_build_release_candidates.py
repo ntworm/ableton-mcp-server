@@ -277,8 +277,9 @@ def test_builder_invokes_npm_with_list_argv(
     output_directory = tmp_path / "rc-out"
     build_release(
         root=fake_project, output_directory=output_directory,
-        source_commit="0123456789abcdef0123456789abcdef01234567",
+        source_commit="f2a1ff840d93592e085b6f8ad5af1fdb27bfd61b",
     )
+
     # ``argv`` must be a list (``check=True`` semantics) and target
     # ``run package``. ``shell=True`` must not be set. The first
     # captured call is the ``git rev-parse HEAD`` resolution path; the
@@ -512,6 +513,33 @@ def test_build_release_manifest_records_real_commit_when_invoked_directly(
     assert manifest["source_commit"] == fake_hash
 
 
+def test_build_release_rejects_source_commit_mismatching_head(
+    fake_project: Path, tmp_path: Path,
+) -> None:
+    """Proves that supplying a valid commit that does not match active HEAD aborts build."""
+    head_commit = "f2a1ff840d93592e085b6f8ad5af1fdb27bfd61b"
+    other_commit = "1111111111111111111111111111111111111111"
+
+    def fake_git(cmd: list[str], *_args: Any, **_kwargs: Any) -> _FakeCompletedProcess:
+        if "rev-parse" in cmd:
+            return _FakeCompletedProcess(returncode=0, stdout=head_commit + "\n")
+        if "cat-file" in cmd:
+            return _FakeCompletedProcess(returncode=0)
+        return _FakeCompletedProcess(returncode=0)
+
+    output_directory = tmp_path / "rc-out"
+    with pytest.raises(ValueError, match="does not match worktree HEAD"):
+        build_release(
+            root=fake_project,
+            output_directory=output_directory,
+            source_commit=other_commit,
+            git_runner=fake_git,
+        )
+    assert not (output_directory / "manifest.json").exists(), (
+        "manifest must not be created when source_commit does not match HEAD"
+    )
+
+
 def test_build_release_manifest_rejects_unknown_source_commit(
     fake_project: Path, tmp_path: Path,
 ) -> None:
@@ -527,6 +555,7 @@ def test_build_release_manifest_rejects_unknown_source_commit(
     assert not (output_directory / "manifest.json").exists(), (
         "manifest must not be written when source_commit is invalid"
     )
+
 
 
 def test_main_cli_passes_explicit_source_commit_to_builder(

@@ -23,12 +23,12 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
 import zipfile
-
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -357,14 +357,24 @@ def build_release(*, root: Path = ROOT,
     """
     if subprocess_runner is None:
         subprocess_runner = subprocess.run
+
+    resolved_head = _resolve_source_commit(root=root, runner=git_runner)
+
     if source_commit is None:
-        source_commit = _resolve_source_commit(
-            root=root, runner=git_runner,
-        )
+        source_commit = resolved_head
     else:
-        source_commit = _validate_source_commit(
-            source_commit, root=root, git_runner=git_runner,
+        validated_commit = _validate_source_commit(
+            source_commit, root=root, git_runner=git_runner
         )
+        if validated_commit != resolved_head:
+            raise ValueError(
+                f"source_commit {validated_commit!r} does not match "
+                f"worktree HEAD {resolved_head!r}; release candidates must be "
+                "produced strictly from the active HEAD"
+            )
+
+        source_commit = validated_commit
+
 
     output_directory = output_directory or DEFAULT_RELEASE_DIR
     output_directory.mkdir(parents=True, exist_ok=True)

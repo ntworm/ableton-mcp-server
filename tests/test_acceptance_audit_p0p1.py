@@ -871,16 +871,28 @@ def test_p1_7_build_release_persists_source_commit(
     the commit that produced them.
     """
     from scripts.build_release_candidates import build_release
+
     out = tmp_path / "rc"
+    commit_hash = "deadbeef12345678901234567890123456789012"
+
+    def fake_git(*_args: Any, **_kwargs: Any) -> Any:
+        class _Proc:
+            returncode = 0
+            stdout = commit_hash + "\n"
+            stderr = ""
+
+        return _Proc()
+
+
     summary = build_release(
         root=fake_project,
         output_directory=out,
-        source_commit="deadbeef12345678901234567890123456789012",
-
+        source_commit=commit_hash,
+        git_runner=fake_git,
     )
-    assert summary["source_commit"] == "deadbeef12345678901234567890123456789012"
+    assert summary["source_commit"] == commit_hash
 
     on_disk = json.loads(
         (out / "manifest.json").read_text(encoding="utf-8")
     )
-    assert on_disk["source_commit"] == "deadbeef12345678901234567890123456789012"
+    assert on_disk["source_commit"] == commit_hash
