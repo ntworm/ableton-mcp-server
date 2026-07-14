@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`ableton-mcp-server` v0.3.0 exposes 46 MCP tools for inspecting and safely mutating an Ableton Live Set. A Python FastMCP process coordinates a Live MIDI Remote Script over TCP and an Ableton Extension over WebSocket. The repository is MIT-licensed and targets Windows-hosted Ableton Live; WSL clients must launch the Windows-native executable.
+`ableton-mcp-server` v0.5.1 exposes 65 MCP tools for inspecting and safely mutating an Ableton Live Set. A Python FastMCP process coordinates a Live MIDI Remote Script over TCP and an Ableton Extension over WebSocket. The repository is MIT-licensed and targets Windows-hosted Ableton Live; WSL clients must launch the Windows-native executable.
 
 ## Read order
 
@@ -32,7 +32,7 @@ Detailed boundaries and state ownership: `.agent-context/architecture.md`.
 
 | Path | Responsibility |
 |---|---|
-| `ableton_mcp_server/server.py` | Registers the 46 public MCP tools. |
+| `ableton_mcp_server/server.py` | Registers the 65 public MCP tools. |
 | `ableton_mcp_server/models.py` | Pydantic request models and batch validation. |
 | `ableton_mcp_server/client.py` | Routes commands to TCP or WebSocket clients. |
 | `AbletonMCPServer_RemoteScript/__init__.py` | Queues socket requests and touches Python LOM only on Live's UI thread. |

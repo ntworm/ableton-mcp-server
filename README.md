@@ -10,6 +10,11 @@ immutable 65-tool catalog and a per-tool certification report driven by
 `ableton-mcp acceptance --profile baseline`. See the [v0.5.1] entry in
 `CHANGELOG.md` for the corrections applied on top of the v0.5.0 surface.
 
+The certification policy — what each row status means, how
+`release_ready` is computed, and which `environment_unavailable` rows
+are explicitly allowed — lives in [`docs/CERTIFICATION.md`](docs/CERTIFICATION.md).
+That document is canonical for promotion decisions.
+
 The v0.5.0 additions are `lifecycle_status`, `save_set`, `quit_ableton`,
 `live_fade`, `create_audio_track`, `analyze_audio`, `find_frequency_masking`,
 `analyze_mix`, and `extract_single_cycle`. `live_fade` distributes its

@@ -2,6 +2,12 @@
 
 The FastMCP server exposes 65 snake_case tools. Remote examples below show the JSONL command envelope after MCP/Pydantic validation. All error responses use `{"status":"error","code","message","hint?"}`.
 
+The promotion gates that consume the per-tool status rows recorded by
+the acceptance runner are documented in
+[`docs/CERTIFICATION.md`](CERTIFICATION.md). That document is canonical
+for what each status means and which `environment_unavailable` rows
+are explicitly allowed.
+
 ## v0.5.0 set lifecycle
 
 ### `lifecycle_status()`

@@ -78,12 +78,26 @@ def _request_work_units(command_name: str, params: object) -> int:
 
 
 def request_timeout_seconds(command_name: str, params: object) -> float:
-    """Return a shared client/server deadline scaled to serialized UI work."""
+    """Return a shared client/server deadline scaled to serialized UI work.
+
+    ``live_fade`` is special: its deadline must exceed the requested
+    ``duration`` by enough overhead to absorb Live's ``update_display``
+    tick jitter. With ``duration=60, steps=1`` the previous formula
+    returned exactly ``60.0``, leaving zero margin and timing out under
+    normal scheduler jitter. We now add ``REQUEST_TIMEOUT_SECONDS`` of
+    slack on top of the requested ``duration`` for ``live_fade``.
+    """
 
     work_units = _request_work_units(command_name, params)
     scaled = REQUEST_TIMEOUT_SECONDS + (work_units - 1) * REQUEST_TIMEOUT_PER_WORK_UNIT_SECONDS
     override = COMMAND_TIMEOUT_OVERRIDES.get(command_name.strip().lower(), 0.0)
-    return max(scaled, override)
+    base = max(scaled, override)
+    normalized = command_name.strip().lower()
+    if normalized == "live_fade" and isinstance(params, dict):
+        duration = params.get("duration")
+        if isinstance(duration, (int, float)) and float(duration) > 0.0:
+            return max(base, float(duration) + REQUEST_TIMEOUT_SECONDS)
+    return base
 
 READ_COMMANDS = frozenset(
     {

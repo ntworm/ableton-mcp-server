@@ -1,10 +1,9 @@
 # Risks
 
-## Critical: WebSocket bind does not explicitly enforce loopback
+## Resolved / Verified: WebSocket bind code-enforces loopback
 
-`AbletonMCPServer_Extension/src/index.ts` constructs `new WebSocketServer({ port: 9889 })` without a `host` option and implements no authentication. Documentation describes the bridge as local-only, while only the Python TCP listener and Python client explicitly use/reject non-loopback hosts.
+`AbletonMCPServer_Extension/src/index.ts` explicitly binds `new WebSocketServer({ host: '127.0.0.1', port: 9889 })`. The listener is code-enforced loopback-only and covered by `tests/test_extension_loopback.py`.
 
-Until verified or fixed, do not claim the Extension listener is code-enforced loopback-only. Do not expose port 9889 through firewall, LAN forwarding, containers, or tunneling. A product fix should bind `127.0.0.1` explicitly and add a regression test appropriate to the Extension runtime.
 
 ## Critical: Python LOM thread affinity
 

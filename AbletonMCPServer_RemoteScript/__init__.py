@@ -1985,6 +1985,8 @@ def live_fade_steps(
     song: Any,
     _application: Any,
     params: dict[str, Any],
+    *,
+    clock: Callable[[], float] | None = None,
 ) -> Generator[None, None, dict[str, Any]]:
     """Interpolate one track's volume to a target value over ``duration`` seconds.
 
@@ -1995,6 +1997,11 @@ def live_fade_steps(
     freeze the GUI. Instead each step waits until its monotonic deadline
     before requesting the next ``yield``. ``duration=0`` short-circuits the
     wait entirely and finishes in a single Live tick.
+
+    ``clock`` is injectable for tests; it defaults to :func:`time.monotonic`
+    so production behaviour is unchanged. ``steps=1`` with ``duration>0``
+    still waits the requested duration before finishing — it writes the
+    target once and yields until the deadline.
     """
 
     track_index = _required(params, "track_index")
@@ -2049,7 +2056,8 @@ def live_fade_steps(
             "curve must be smoothstep or linear",
         )
     start = float(param.value)
-    if duration == 0.0 or steps <= 1:
+    effective_clock: Callable[[], float] = clock or time.monotonic
+    if duration == 0.0:
         # ``duration=0`` short-circuits: still write the target value so the
         # documented contract holds, but never wait.
         t = 1.0
@@ -2057,23 +2065,25 @@ def live_fade_steps(
         param.value = start + (target - start) * shaped
         yield
     else:
-        step_deadline = time.monotonic()
         step_interval = duration / float(steps)
         for step in range(1, steps + 1):
+            # Wait until the monotonic clock has advanced to this step's
+            # deadline before writing the new value. Writes therefore land at
+            # ``step * step_interval`` (i.e. ``0.25 / 0.50 / 0.75 / 1.00`` for
+            # ``steps=4, duration=1``) — never earlier. We never call
+            # ``time.sleep``; we yield so Live's ``update_display`` tick loop
+            # runs other work. Blocking the Live main thread is forbidden by
+            # an AST invariant in ``tests/test_transport_retry.py``. The RPC
+            # timeout override in ``COMMAND_TIMEOUT_OVERRIDES`` leaves room
+            # for long multi-step faders, but the work itself stays
+            # responsive.
+            deadline = effective_clock() + step_interval
+            while effective_clock() < deadline:
+                yield
             t = step / float(steps)
             shaped = t * t * (3.0 - 2.0 * t) if curve == "smoothstep" else t
             param.value = start + (target - start) * shaped
-            # Wait until the monotonic clock has advanced to this step's
-            # deadline, but yield at least once so Live's ``update_display``
-            # tick loop runs other work. We never call ``time.sleep`` —
-            # blocking the Live main thread is forbidden by an AST invariant
-            # in ``tests/test_transport_retry.py``. The RPC timeout override
-            # in ``COMMAND_TIMEOUT_OVERRIDES`` leaves room for long
-            # multi-step faders, but the work itself stays responsive.
-            step_deadline += step_interval
-            while time.monotonic() < step_deadline:
-                yield
-            yield
+
     final_value = float(param.value)
     result: dict[str, Any] = {
         "track": str(_safe(lambda: track.name, "")),

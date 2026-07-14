@@ -1,0 +1,641 @@
+"""Strict fake bridge used by the acceptance runner tests.
+
+This fake mirrors the real bridge contracts documented in
+``ableton_mcp_server.contracts``:
+
+- Unknown commands / methods raise ``RuntimeError("UNKNOWN_COMMAND")`` so
+  the runner cannot greenwash by relying on a permissive fallback.
+- Required fields per command are enforced; the real contract quirks
+  (``automation_points`` vs ``points``, ``property+value`` vs ``name``,
+  ``track_id`` vs ``track_index/device_index``) are validated.
+- TCP vs WebSocket routing is recorded per call so the runner cannot
+  silently route a WS tool over TCP.
+
+The fake also simulates a small three-track disposable Set:
+
+- Track 0 (midi) "Bass" with slot 3 empty for the MIDI mutation surface.
+- Track 1 (audio) "Drums" with slot 0 occupied by an audio clip with
+  warp disabled.
+- Track 2 (audio) "Samp" with slot 0 occupied by an audio clip with
+  warp disabled (this is the ``audio_track_index`` for warp/load tests).
+- Each track carries one device with one named parameter so
+  ``list_device_params`` and ``set_parameter_value`` can run honestly.
+
+This file is imported by both ``test_acceptance_runner_integration.py``
+and ``test_fake_bridge_strict.py``.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from typing import Any
+
+# ---------------------------------------------------------------------------
+# Contract specs
+# ---------------------------------------------------------------------------
+
+_TCP_COMMAND_FIELDS: dict[str, dict[str, Any]] = {
+    "get_session_info": {},
+    "get_track_list": {},
+    "get_track_state": {"track_index": int},
+    "get_locators": {},
+    "take_snapshot": {},
+    "get_control_surfaces": {},
+    "get_scenes": {},
+    "get_scene_state": {"scene_index": int},
+    "get_project_metadata": {},
+    "get_loop_settings": {},
+    "get_selected_context": {},
+    "get_clip_summary": {"track_index": int},
+    "get_clip_notes": {"track_index": int, "clip_index": int},
+    "get_clip_info": {"track_index": int, "clip_index": int},
+    "get_device_list": {"track_index": int},
+    "get_parameter_value": {
+        "track_index": int, "device_index": int, "parameter_name": str,
+    },
+    "get_routing": {"track_index": int},
+    "get_browser_categories": {},
+    "search_browser": {"query": str, "limit": int},
+    "get_song_length": {},
+    "live_find_track": {"query": str},
+    "list_device_params": {"track_id": str},
+    "get_composition_structure": {},
+    "diagnose_midi_clip": {"track_index": int, "clip_index": int},
+    "lifecycle_status": {},
+    "create_cue_point": {"name": str, "time": float},
+    "bulk_create_cue_points": {"items": list},
+    "delete_cue_point": {"time": float},
+    "set_current_song_time": {"time": float},
+    "set_tempo": {"tempo": float},
+    "start_playback": {},
+    "stop_playback": {},
+    "set_loop": {"enabled": bool},
+    "set_loop_start": {"start_beat": float},
+    "set_loop_length": {"length_beats": float},
+    "run_batch": {"commands": list},
+    "add_notes_to_clip": {
+        "track_index": int, "clip_index": int, "notes": list,
+    },
+    "fire_clip": {"track_index": int, "clip_index": int},
+    "create_clip": {
+        "track_index": int, "clip_index": int, "length_beats": float,
+    },
+    "delete_clip": {"track_index": int, "clip_index": int},
+    "clear_clip_notes": {"track_index": int, "clip_index": int},
+    "fire_scene": {"scene_index": int},
+    "set_track_property": {
+        "track_index": int, "property": str, "value": bool,
+    },
+    "set_clip_properties": {
+        "track_index": int, "clip_index": int,
+    },
+    "create_clip_automation": {
+        "track_index": int, "clip_index": int,
+        "parameter_name": str, "automation_points": list,
+    },
+    "create_midi_track": {},
+    "create_audio_track": {},
+    "rename_track": {"track_index": int, "new_name": str},
+    "set_parameter_value": {
+        "track_index": int, "device_index": int,
+        "parameter_name": str, "value": float,
+    },
+    "save_set": {},
+    "live_fade": {
+        "track_index": int, "target_percent": (int, float),
+        "duration": (int, float), "steps": int,
+    },
+}
+
+
+_WS_METHOD_FIELDS: dict[str, dict[str, Any]] = {
+    "get_warp_state": {"track_index": int, "clip_index": int},
+    "set_warp_state": {"track_index": int, "clip_index": int,
+                       "warping": bool},
+    "load_device_to_track": {"track_index": int, "device_name": str},
+}
+
+
+# ---------------------------------------------------------------------------
+# The fake itself
+# ---------------------------------------------------------------------------
+
+
+class StrictFakeBridge:
+    """In-process fake that mirrors the real bridge contracts."""
+
+    def __init__(self) -> None:
+        self.host = "127.0.0.1"
+        self.port = 9888
+        self.fail_tool: str | None = None
+        self.save_set_response: dict[str, Any] | None = None
+        self.tcp_calls: list[tuple[str, dict[str, Any]]] = []
+        self.ws_calls: list[tuple[str, dict[str, Any]]] = []
+        self.state: dict[str, Any] = self._initial_state()
+
+    @staticmethod
+    def _initial_state() -> dict[str, Any]:
+        # Three-track disposable Set: Bass (midi, no clip), Drums (audio,
+        # one clip), Samp (audio, one clip with warp disabled).
+        return {
+            "tempo": 120.0,
+            "current_song_time": 0.0,
+            "loop": False,
+            "loop_start": 0.0,
+            "loop_length": 4.0,
+            "is_playing": False,
+            "locators": [],
+            "tracks": [
+                {"index": 0, "type": "midi", "name": "Bass",
+                 "id": "track:0", "mute": False, "solo": False,
+                 "arm": False, "devices": [{"name": "MIDI Device"}]},
+                {"index": 1, "type": "audio", "name": "Drums",
+                 "id": "track:1", "mute": False, "solo": False,
+                 "arm": False,
+                 "devices": [{"name": "Audio Device",
+                              "parameters": ["Volume"]}]},
+                {"index": 2, "type": "audio", "name": "Samp",
+                 "id": "track:2", "mute": False, "solo": False,
+                 "arm": False,
+                 "devices": [{"name": "Sampler",
+                              "parameters": ["Volume"]}]},
+            ],
+            "clips": {
+                (1, 0): {"name": "Drums Clip", "is_audio_clip": True,
+                          "is_midi_clip": False, "has_clip": True,
+                          "length": 4.0, "notes": []},
+                (2, 0): {"name": "Samp Clip", "is_audio_clip": True,
+                          "is_midi_clip": False, "has_clip": True,
+                          "length": 4.0, "notes": []},
+            },
+            "browser_categories": ["Audio Effects", "MIDI Effects",
+                                    "Instruments", "Samples"],
+            "device_parameters": {
+                "track:0": [{"name": "Device On", "value": 1.0}],
+                "track:1": [{"name": "Volume", "value": 0.85}],
+                "track:2": [{"name": "Volume", "value": 0.85}],
+            },
+            "warp": {"warping": False, "warp_mode": "beats"},
+            "search_browser_queries": [],
+        }
+
+    # --- AcceptanceClient surface ---
+
+    def call(
+        self,
+        command_type: str,
+        params: Mapping[str, Any] | None = None,
+        *,
+        timeout: float | None = None,
+    ) -> Any:
+        params = dict(params or {})
+        self.tcp_calls.append((command_type, params))
+        if self.fail_tool and command_type == self.fail_tool:
+            raise RuntimeError(f"forced failure on {command_type}")
+        return _strict_tcp_dispatch(self, command_type, params)
+
+    async def call_ws(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        *,
+        timeout: float = 2.0,
+    ) -> Any:
+        params = dict(params or {})
+        self.ws_calls.append((method, params))
+        if self.fail_tool and method == self.fail_tool:
+            raise RuntimeError(f"forced failure on {method}")
+        return _strict_ws_dispatch(self, method, params)
+
+
+# ---------------------------------------------------------------------------
+# TCP dispatch
+# ---------------------------------------------------------------------------
+
+
+def _validate_tcp(command: str, params: dict[str, Any]) -> None:
+    spec = _TCP_COMMAND_FIELDS.get(command)
+    if spec is None:
+        raise RuntimeError(f"UNKNOWN_COMMAND: {command}")
+    for field, expected in spec.items():
+        if field not in params:
+            # ``live_fade`` accepts either ``target_percent`` OR
+            # ``target_value`` (validated by the Remote Script
+            # generator); the strict fake mirrors that flexibility.
+            if (
+                command == "live_fade"
+                and field in ("target_percent", "target_value")
+                and (
+                    "target_percent" in params
+                    or "target_value" in params
+                )
+            ):
+                continue
+            raise RuntimeError(f"MISSING_FIELD: {command}.{field}")
+        if isinstance(expected, type):
+            if not isinstance(params[field], expected):
+                raise RuntimeError(
+                    f"BAD_FIELD_TYPE: {command}.{field} expected "
+                    f"{expected.__name__}"
+                )
+        elif isinstance(expected, tuple) and not isinstance(params[field], expected):
+            raise RuntimeError(
+                f"BAD_FIELD_TYPE: {command}.{field}"
+            )
+    # Per-command field quirks. Each command has its own ``if`` because the
+    # rejection conditions and error messages differ. Combining them
+    # would obscure which contract each guard belongs to.
+    if command == "set_track_property" and "name" in params:  # noqa: SIM102
+        raise RuntimeError(
+            "BAD_FIELD: set_track_property uses property+value, not name"
+        )
+    if command == "create_clip_automation" and "points" in params:  # noqa: SIM102
+        raise RuntimeError(
+            "BAD_FIELD: create_clip_automation uses automation_points, "
+            "not points"
+        )
+    if (command == "list_device_params"
+            and ("track_index" in params or "device_index" in params)):  # noqa: SIM102
+        raise RuntimeError(
+            "BAD_FIELD: list_device_params uses track_id, "
+            "not track_index/device_index"
+        )
+
+
+def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str,
+                         params: dict[str, Any]) -> Any:
+    _validate_tcp(command, params)
+    s = bridge.state
+    if command == "get_project_metadata":
+        return {"song_name": "TESTE_CODEX"}
+    if command == "get_track_list":
+        # The real ``get_track_list`` contract returns only
+        # ``id``/``index``/``name``/``type``. Mixer state (mute, solo,
+        # arm, volume) lives on ``get_track_state``; including those
+        # fields here would let the runner invent defaults that bypass
+        # the mixer readback.
+        return [
+            {k: t[k] for k in ("id", "index", "name", "type") if k in t}
+            for t in s["tracks"]
+        ]
+    if command == "get_track_state":
+        idx = params["track_index"]
+        track = next((t for t in s["tracks"] if t["index"] == idx), None)
+        if track is None:
+            return {"track_index": idx, "exists": False}
+        # Mixer volume lives on ``track.mixer_device.volume`` — a
+        # separate channel from device parameters. The fake keeps it
+        # on ``state["mixer_volumes"][track_id]`` and falls back to the
+        # track's own field, then to Live's default unity (0.85).
+        mixer_volume = float(
+            s.get("mixer_volumes", {}).get(f"track:{idx}", 0.85)
+        )
+        return {
+            "track_index": idx,
+            "name": track["name"],
+            "type": track["type"],
+            "mute": track.get("mute", False),
+            "solo": track.get("solo", False),
+            "arm": track.get("arm", False),
+            "device_count": len(track.get("devices", [])),
+            "volume": mixer_volume,
+        }
+    if command == "get_clip_summary":
+        track = params["track_index"]
+        slots = []
+        for i in range(8):
+            clip = s["clips"].get((track, i))
+            slots.append({
+                "index": i,
+                "has_clip": clip is not None,
+                "is_midi_clip": clip is not None
+                and clip.get("is_midi_clip", False),
+            })
+        return slots
+    if command == "get_session_info":
+        return {"tempo": s["tempo"],
+                "current_song_time": s["current_song_time"],
+                "is_playing": s.get("is_playing", False)}
+    if command == "get_loop_settings":
+        return {"loop": s["loop"], "loop_start": s["loop_start"],
+                "loop_length": s["loop_length"]}
+    if command == "get_locators":
+        return list(s["locators"])
+    if command == "get_scenes":
+        return [{"index": 0, "name": "Scene 1"}]
+    if command == "get_scene_state":
+        return {"scene_index": params["scene_index"], "tracks": []}
+    if command == "get_clip_notes":
+        track, slot = params["track_index"], params["clip_index"]
+        clip = s["clips"].get((track, slot))
+        return list(clip.get("notes", [])) if clip else []
+    if command == "get_clip_info":
+        track, slot = params["track_index"], params["clip_index"]
+        clip = s["clips"].get((track, slot))
+        if clip is None:
+            return {"track_index": track, "clip_index": slot,
+                    "has_clip": False, "name": "", "is_audio_clip": False,
+                    "is_midi_clip": False}
+        return {
+            "track_index": track,
+            "clip_index": slot,
+            "has_clip": True,
+            "name": clip.get("name", ""),
+            "length": clip.get("length", 4.0),
+            "is_audio_clip": clip.get("is_audio_clip", False),
+            "is_midi_clip": clip.get("is_midi_clip", False),
+        }
+    if command == "get_device_list":
+        track = params["track_index"]
+        for t in s["tracks"]:
+            if t["index"] == track:
+                return list(t.get("devices", []))
+        return []
+    if command == "get_parameter_value":
+        track_id = f"track:{params['track_index']}"
+        device_index = int(params.get("device_index", 0))
+        entries = s["device_parameters"].get(track_id, [])
+        if device_index < 0 or device_index >= len(entries):
+            raise RuntimeError(
+                f"BAD_DEVICE_INDEX: {device_index} (track has "
+                f"{len(entries)} devices)"
+            )
+        entry = entries[device_index]
+        name = params["parameter_name"]
+        if "parameters" in entry:
+            for nested in entry["parameters"]:
+                if nested.get("name") == name:
+                    return {"value": nested.get("value", 0.0)}
+        elif entry.get("name") == name:
+            return {"value": entry.get("value", 0.0)}
+        raise RuntimeError(
+            f"PARAMETER_NOT_FOUND: {name} on {track_id}/device:{device_index}"
+        )
+    if command == "get_routing":
+        return {"input_routing": "In 1", "output_routing": "Master"}
+    if command == "get_browser_categories":
+        return list(s["browser_categories"])
+    if command == "search_browser":
+        s["search_browser_queries"].append(params["query"])
+        # For the runner's query "o" return some results; otherwise empty.
+        if params.get("query") == "o":
+            return [{"name": "Operator", "uri": "query:Operator#0"}]
+        return []
+    if command == "get_song_length":
+        return {"song_length": 64.0}
+    if command == "live_find_track":
+        q = params["query"].lower()
+        return [t for t in s["tracks"] if q in t["name"].lower()]
+    if command == "list_device_params":
+        # Mirrors the real handler: ``[{device_id, device_name,
+        # parameters: [{name, value, min, max}]}]``. The runner must
+        # descend into the nested ``parameters`` list to discover
+        # writable parameters, and remember each entry's position as
+        # the device_index to use on subsequent writes. ``device_id``
+        # is unique per device (not always ``device:0``).
+        track_id = params["track_id"]
+        entries = []
+        for entry_index, entry in enumerate(
+                s["device_parameters"].get(track_id, [])):
+            if "parameters" in entry:
+                nested = entry["parameters"]
+            elif "name" in entry:
+                nested = [{
+                    "name": entry["name"],
+                    "value": entry.get("value", 0.0),
+                    "min": 0.0,
+                    "max": 1.0,
+                }]
+            else:
+                nested = []
+            entries.append({
+                "device_id": f"{track_id}/device:{entry_index}",
+                "device_name": entry.get("device_name",
+                                          f"Device of {track_id}"),
+                "parameters": nested,
+            })
+        return entries
+    if command == "get_composition_structure":
+        return {"track_count": len(s["tracks"]),
+                "scene_count": 1, "unnamed_tracks": []}
+    if command == "diagnose_midi_clip":
+        return {"issues": [], "scale_conformant": True}
+    if command == "lifecycle_status":
+        return {"song_save_available": True, "app_quit_available": False}
+    if command == "set_tempo":
+        s["tempo"] = params["tempo"]
+        return {"tempo": s["tempo"]}
+    if command == "set_current_song_time":
+        s["current_song_time"] = params["time"]
+        return {"time": s["current_song_time"]}
+    if command == "set_loop":
+        s["loop"] = params["enabled"]
+        return {"loop": s["loop"]}
+    if command == "set_loop_start":
+        s["loop_start"] = params["start_beat"]
+        return {"loop_start": s["loop_start"]}
+    if command == "set_loop_length":
+        s["loop_length"] = params["length_beats"]
+        return {"loop_length": s["loop_length"]}
+    if command == "create_cue_point":
+        cue = {"name": params["name"], "time": params["time"]}
+        s["locators"].append(cue)
+        return {"name": cue["name"], "time": cue["time"]}
+    if command == "delete_cue_point":
+        before = len(s["locators"])
+        s["locators"] = [
+            c for c in s["locators"]
+            if abs(c["time"] - params["time"]) > 0.01
+        ]
+        return {"deleted": len(s["locators"]) < before}
+    if command == "bulk_create_cue_points":
+        for item in params["items"]:
+            s["locators"].append({"name": item["name"], "time": item["time"]})
+        return {"created": len(params["items"])}
+    if command == "create_clip":
+        track, slot = params["track_index"], params["clip_index"]
+        s["clips"][(track, slot)] = {
+            "name": "", "is_audio_clip": False, "is_midi_clip": True,
+            "has_clip": True, "length": params.get("length_beats", 4.0),
+            "notes": [],
+        }
+        return {"track_index": track, "clip_index": slot}
+    if command == "add_notes_to_clip":
+        track, slot = params["track_index"], params["clip_index"]
+        s["clips"].setdefault((track, slot), {
+            "name": "", "is_audio_clip": False, "is_midi_clip": True,
+            "has_clip": True, "length": 4.0, "notes": [],
+        })
+        s["clips"][(track, slot)]["notes"] = list(params["notes"])
+        return {"added": len(params["notes"])}
+    if command == "clear_clip_notes":
+        track, slot = params["track_index"], params["clip_index"]
+        if (track, slot) in s["clips"]:
+            s["clips"][(track, slot)]["notes"] = []
+        return {"cleared": True}
+    if command == "set_clip_properties":
+        track, slot = params["track_index"], params["clip_index"]
+        s["clips"].setdefault((track, slot), {
+            "name": "", "is_audio_clip": False, "is_midi_clip": True,
+            "has_clip": True, "length": 4.0, "notes": [],
+        })
+        if "name" in params:
+            s["clips"][(track, slot)]["name"] = params["name"]
+        return {"name": params.get("name", "")}
+    if command == "create_clip_automation":
+        return {"points": len(params["automation_points"])}
+    if command == "start_playback":
+        s["is_playing"] = True
+        return {"playing": True}
+    if command == "stop_playback":
+        s["is_playing"] = False
+        return {"playing": False}
+    if command == "fire_clip":
+        track, slot = params["track_index"], params["clip_index"]
+        clip = s["clips"].get((track, slot))
+        if clip is None:
+            raise RuntimeError(
+                f"fire_clip: empty slot {track}:{slot}"
+            )
+        s["is_playing"] = True
+        return {"fired": True, "track_index": track, "clip_index": slot}
+    if command == "run_batch":
+        # Honest partial-batch: create_clip after populated slot fails at
+        # index 2 (commands[2]).
+        return {"completed": 2, "aborted_at": 2, "rolled_back": False}
+    if command == "fire_scene":
+        s["is_playing"] = True
+        return {"scene_index": params["scene_index"], "fired": True}
+    if command == "set_track_property":
+        idx = params["track_index"]
+        for track in s["tracks"]:
+            if track["index"] == idx:
+                track[params["property"]] = params["value"]
+        return {"property": params["property"], "value": params["value"]}
+    if command == "rename_track":
+        idx = params["track_index"]
+        for track in s["tracks"]:
+            if track["index"] == idx:
+                track["name"] = params["new_name"]
+        return {"new_name": params["new_name"]}
+    if command == "delete_clip":
+        track, slot = params["track_index"], params["clip_index"]
+        s["clips"].pop((track, slot), None)
+        return {"deleted": True}
+    if command == "create_audio_track":
+        new_index = max(t["index"] for t in s["tracks"]) + 1
+        s["tracks"].append({"index": new_index, "type": "audio",
+                            "name": "", "id": f"track:{new_index}",
+                            "mute": False, "solo": False, "arm": False,
+                            "devices": []})
+        return {"track_index": new_index}
+    if command == "create_midi_track":
+        new_index = max(t["index"] for t in s["tracks"]) + 1
+        s["tracks"].append({"index": new_index, "type": "midi",
+                            "name": "", "id": f"track:{new_index}",
+                            "mute": False, "solo": False, "arm": False,
+                            "devices": []})
+        return {"track_index": new_index}
+    if command == "set_parameter_value":
+        track_id = f"track:{params['track_index']}"
+        device_index = int(params.get("device_index", 0))
+        entries = s["device_parameters"].get(track_id, [])
+        if device_index < 0 or device_index >= len(entries):
+            raise RuntimeError(
+                f"BAD_DEVICE_INDEX: {device_index} (track has "
+                f"{len(entries)} devices)"
+            )
+        entry = entries[device_index]
+        name = params["parameter_name"]
+        if "parameters" in entry:
+            for nested in entry["parameters"]:
+                if nested.get("name") == name:
+                    nested["value"] = float(params["value"])
+                    return {"value": float(params["value"])}
+        elif entry.get("name") == name:
+            entry["value"] = float(params["value"])
+            return {"value": float(params["value"])}
+        raise RuntimeError(
+            f"PARAMETER_NOT_FOUND: {name} on {track_id}/device:{device_index}"
+        )
+    if command == "live_fade":
+        # Honest live_fade: update the track's mixer volume so the
+        # runner's post-fade readback can verify the target landed.
+        # The mixer is NOT a device parameter — the real bridge writes
+        # to ``track.mixer_device.volume`` directly. We mirror that
+        # by keeping a separate ``mixer_volumes`` dict on state.
+        track_id = f"track:{params['track_index']}"
+        target_percent = params.get("target_percent")
+        target_value = params.get("target_value")
+        if target_percent is not None:
+            target_value = float(target_percent) / 100.0
+        if target_value is not None:
+            target_value = float(target_value)
+            s.setdefault("mixer_volumes", {})[track_id] = max(
+                0.0, min(1.0, target_value),
+            )
+        return {"final_value": target_value}
+    if command == "save_set":
+        if bridge.save_set_response is not None:
+            return dict(bridge.save_set_response)
+        return {"saved": True, "song_save_available": True}
+    if command == "take_snapshot":
+        return {
+            "schema_version": 1,
+            "captured_at_unix_ms": 0,
+            "live_version": "12.0",
+            "tempo": float(s["tempo"]),
+            "signature_numerator": 4,
+            "signature_denominator": 4,
+            "is_playing": bool(s.get("is_playing", False)),
+            "current_song_time": float(s["current_song_time"]),
+            "tracks": [
+                {"index": t["index"], "name": t["name"],
+                 "type": t["type"]}
+                for t in s["tracks"]
+            ],
+            "control_surfaces": list(s.get("control_surfaces", [])),
+            "browser_categories_count": len(s["browser_categories"]),
+        }
+    if command == "get_control_surfaces":
+        return list(s.get("control_surfaces", []))
+    if command == "get_selected_context":
+        return {"track": None, "scene": None, "device": None}
+    raise RuntimeError(f"UNKNOWN_TCP_COMMAND: {command}")
+
+
+# ---------------------------------------------------------------------------
+# WebSocket dispatch
+# ---------------------------------------------------------------------------
+
+
+def _strict_ws_dispatch(bridge: StrictFakeBridge, method: str,
+                        params: dict[str, Any]) -> Any:
+    spec = _WS_METHOD_FIELDS.get(method)
+    if spec is None:
+        raise RuntimeError(f"UNKNOWN_WS_METHOD: {method}")
+    for field, expected in spec.items():
+        if field not in params:
+            raise RuntimeError(f"MISSING_FIELD: {method}.{field}")
+        if isinstance(expected, type) and not isinstance(params[field], expected):
+            raise RuntimeError(
+                f"BAD_FIELD_TYPE: {method}.{field} expected "
+                f"{expected.__name__}"
+            )
+    s = bridge.state
+    if method == "get_warp_state":
+        return dict(s["warp"])
+    if method == "set_warp_state":
+        s["warp"]["warping"] = params["warping"]
+        return dict(s["warp"])
+    if method == "load_device_to_track":
+        target = params["track_index"]
+        for track in s["tracks"]:
+            if track["index"] == target:
+                track.setdefault("devices", []).append({
+                    "name": params["device_name"],
+                })
+                break
+        return {"device_name": params["device_name"],
+                "track_index": target}
+    raise RuntimeError(f"UNKNOWN_WS_METHOD: {method}")

@@ -9,6 +9,8 @@ Statuses
 - ``offline_passed`` — local-only probe (file or pure-Python) succeeded.
 - ``live_passed`` — bridge mutation + readback succeeded.
 - ``manual_passed`` — owner manually confirmed.
+- ``manual_required`` — operation was not executed; out-of-band owner
+  confirmation is required before this row can flip to ``manual_passed``.
 - ``host_unavailable`` — host does not expose the seam; verified by probe.
 - ``environment_unavailable`` — environment (Node, audio clip, etc.) missing.
 - ``failed`` — probe reached but readback failed; release blocker.
@@ -21,6 +23,7 @@ _ALLOWED_STATUSES = {
     "offline_passed",
     "live_passed",
     "manual_passed",
+    "manual_required",
     "host_unavailable",
     "environment_unavailable",
     "failed",

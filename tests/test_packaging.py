@@ -131,6 +131,30 @@ def test_wheel_configuration_includes_contracts_and_remote_script() -> None:
         '"AbletonMCPServer_RemoteScript" = "ableton_mcp_server/_remote_script"'
         in pyproject
     )
+    assert (
+        '"AbletonMCPServer_Extension/vendor" = "ableton_mcp_server/_extension_vendor"'
+        in pyproject
+    )
+
+
+def test_built_wheel_contains_extension_vendor_tarballs(tmp_path: Path) -> None:
+    """The built wheel MUST contain both extension vendor tarballs inside
+    ableton_mcp_server/_extension_vendor/ directory."""
+    import zipfile
+
+    from scripts.build_release_candidates import _build_python_wheel
+
+    wheel_path = _build_python_wheel(ROOT, tmp_path)
+    with zipfile.ZipFile(wheel_path, "r") as zf:
+        names = zf.namelist()
+        sdk_prefix = "ableton_mcp_server/_extension_vendor/ableton-extensions-sdk-"
+        cli_prefix = "ableton_mcp_server/_extension_vendor/ableton-extensions-cli-"
+        sdk = next((n for n in names if n.startswith(sdk_prefix)), None)
+        cli = next((n for n in names if n.startswith(cli_prefix)), None)
+        assert sdk is not None, f"SDK tarball missing from wheel entries: {names}"
+        assert cli is not None, f"CLI tarball missing from wheel entries: {names}"
+
+
 
 
 def test_windows_bootstrap_uses_a_distinct_native_virtualenv() -> None:

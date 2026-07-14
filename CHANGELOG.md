@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+The canonical certification policy that governs the promotion decision
+(see `ableton-mcp acceptance --profile baseline` below) lives in
+[`docs/CERTIFICATION.md`](docs/CERTIFICATION.md).
+
 ## [0.5.1] - 2026-07-13
 
 ### Added

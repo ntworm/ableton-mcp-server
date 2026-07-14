@@ -36,6 +36,8 @@ packages = ["ableton_mcp_server"]
 [tool.hatch.build.targets.wheel.force-include]
 "contracts.py" = "contracts.py"
 "AbletonMCPServer_RemoteScript" = "ableton_mcp_server/_remote_script"
+"AbletonMCPServer_Extension/vendor" = "ableton_mcp_server/_extension_vendor"
+
 
 [tool.ruff]
 line-length = 100
