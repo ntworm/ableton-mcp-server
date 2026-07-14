@@ -12,6 +12,6 @@ This release candidate bundles the Slice 1 corrections on top of v0.5.0. It is *
 
 ## Artifacts
 
-- `ableton_mcp_server-0.5.1-py3-none-any.whl` (sha256 `c19a2b893c364e387335b50ccc1503f890703318e1383088be5c69d12bc74369`)
-- `AbletonMCPServer_RemoteScript-0.5.1.zip` (sha256 `5a70b3ba3387f6975723dcb428ccee8a924cb2e95296255a6ce2d5ecdd652ab9`)
-- `AbletonMCPServer-Extension-0.5.1.ablx` (sha256 `f1fb1c1008e486f09c8cf83045a64cab963bee514e154e3c66655da36417d7f6`)
+- `ableton_mcp_server-0.5.1-py3-none-any.whl` (sha256 `3b3ec2adc095525b76787497dcc57415b40f6d3ec7d1d8b3ee0026f0407ee915`)
+- `AbletonMCPServer_RemoteScript-0.5.1.zip` (sha256 `01d83e8aacb7848237a0522496ce875fd2fece46306e9630ee10ace72fef178d`)
+- `AbletonMCPServer-Extension-0.5.1.ablx` (sha256 `2b4448cb263c338aed4d1f4697badb5f2b3715ea955513987e84ce7eab5265e4`)
