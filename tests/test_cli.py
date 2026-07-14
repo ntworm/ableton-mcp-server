@@ -28,6 +28,27 @@ def test_doctor_returns_nonzero_only_when_live_bridge_is_unavailable(
     assert mock_client.call_count == 2
 
 
+@patch("ableton_mcp_server.cli.bridge_status")
+@patch("ableton_mcp_server.cli.Client")
+def test_doctor_passes_catalog_tool_count_to_bridge_status(
+    mock_client: MagicMock,
+    mock_status: MagicMock,
+) -> None:
+    from ableton_mcp_server.catalog import TOOL_CATALOG
+
+    mock_status.return_value = {
+        "status": "ok",
+        "bridge_available": True,
+        "tool_count": len(TOOL_CATALOG),
+    }
+
+    assert main(["doctor", "--json"]) == 0
+    mock_status.assert_called_once()
+    assert mock_status.call_args.kwargs.get("tool_count") == len(TOOL_CATALOG)
+    assert mock_status.call_args.kwargs.get("tool_count") == 65
+
+
+
 def test_cli_installs_and_checks_remote_script(tmp_path: Path, capsys: MagicMock) -> None:
     source = tmp_path / "source"
     source.mkdir()

@@ -19,6 +19,7 @@ from .diagnostics import (
     install_remote_script,
     remote_script_status,
 )
+from .server import PUBLIC_TOOL_NAMES
 
 
 def _emit(result: dict[str, Any], *, as_json: bool) -> None:
@@ -78,7 +79,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "doctor":
         host = os.environ.get("ABLETON_MCP_SERVER_HOST", DEFAULT_HOST)
         port = int(os.environ.get("ABLETON_MCP_SERVER_PORT", str(DEFAULT_PORT)))
-        result = bridge_status(Client(host=host, port=port, reconnect=False))
+        result = bridge_status(
+            Client(host=host, port=port, reconnect=False),
+            tool_count=len(PUBLIC_TOOL_NAMES),
+        )
+
         _emit(result, as_json=bool(args.json))
         return 0 if result["bridge_available"] else 1
 
