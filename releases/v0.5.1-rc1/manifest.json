@@ -1,0 +1,24 @@
+{
+  "version": "0.5.1",
+  "candidate": "rc1",
+  "source_commit": "f4d9789532cef9dfa7168d41c985a34a670b880a",
+  "artifacts": {
+    "wheel": {
+      "path": "ableton_mcp_server-0.5.1-py3-none-any.whl",
+      "sha256": "e5e6033970da554eca99dd1cb92507cef124f1e335113a21d4867e0570199a7a",
+      "bytes": 159815
+    },
+    "remote_script_zip": {
+      "path": "AbletonMCPServer_RemoteScript-0.5.1.zip",
+      "sha256": "5a70b3ba3387f6975723dcb428ccee8a924cb2e95296255a6ce2d5ecdd652ab9",
+      "bytes": 25037
+    },
+    "extension_ablx": {
+      "path": "AbletonMCPServer-Extension-0.5.1.ablx",
+      "sha256": "911760a11972b29fb0e914ceceaf5285ac69d9e09e51a51d47d0ce711a8a645d",
+      "bytes": 32052
+    }
+  },
+  "live_certified": false,
+  "promotion_ready": false
+}
