@@ -1,7 +1,7 @@
 {
   "version": "0.5.1",
   "candidate": "rc1",
-  "source_commit": "415d3cb96c558191a78757531eb4ac9896888991",
+  "source_commit": "ba5c4d31e267e8cbb4a9595104177d2035e100b8",
   "artifacts": {
     "wheel": {
       "path": "ableton_mcp_server-0.5.1-py3-none-any.whl",
@@ -15,7 +15,7 @@
     },
     "extension_ablx": {
       "path": "AbletonMCPServer-Extension-0.5.1.ablx",
-      "sha256": "ca176055f1d08805bf61314e34acb40fbc1fb4d7ec7e75abd56b0698d23c2788",
+      "sha256": "42a11fb4f7c1ca0f3215b9f82cc2470a08cc59bd7f140695e46d69ac3df28d12",
       "bytes": 32052
     }
   },
