@@ -128,7 +128,15 @@ Before any mutation occurs, ``save_set`` certifies the clean baseline state of t
 
 Every in-place reversible mutation (tempo, song position, loop boundaries, cue points, mixer properties, parameter values, and warp state) is captured in baseline snapshots and explicitly restored during cleanup. Each restoration is followed by a readback check; a readback mismatch — even when the initial mutation succeeded — downgrades the affected tool's status to ``failed``.
 
-Structural additions (such as loading a device via ``load_device_to_track`` or creating new tracks via ``create_audio_track`` / ``create_midi_track``) persist as unsaved in-memory modifications in the open Live session. Because ``save_set`` runs prior to all mutations, closing Live without saving guarantees that the project on disk reverts cleanly to the saved baseline state. Manual cleanup instructions are also recorded in the audit artifact as a operational fallback reference. See ``tests/test_acceptance_audit_p0p1.py::test_p1_6_set_tempo_readback_fails_only_during_restore`` for the regression guard.
+Structural additions (such as loading a device via ``load_device_to_track`` or creating new tracks via ``create_audio_track`` / ``create_midi_track``) persist as unsaved in-memory modifications in the open Live session. Because ``save_set`` runs prior to all mutations, closing Live without saving guarantees that the project on disk reverts cleanly to the saved baseline state. Manual cleanup instructions are also recorded in the audit artifact as an operational fallback reference. See ``tests/test_acceptance_audit_p0p1.py::test_p1_6_set_tempo_readback_fails_only_during_restore`` for the regression guard.
+
+## Release candidate provenance & integrity
+
+Every release candidate bundle published under ``releases/v<version>-rc<N>/`` is bound to a specific ``source_commit`` SHA-256 in its ``manifest.json``.
+
+To ensure strict provenance:
+1. The ``source_commit`` must contain 100% of the source code, unit/integration tests, and documentation required for gate verification. This commit must pass all quality gates (pytest, coverage, Ruff, mypy strict, build tests) independently.
+2. The subsequent candidate generation commit must modify exclusively files under ``releases/v<version>-rc<N>/``. No test files, implementation logic, or documentation may be bundled into candidate commits.
 
 ## Probe groups and the 65-tool catalog
 
