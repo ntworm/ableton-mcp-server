@@ -124,17 +124,11 @@ blocker (effectively a ``failed`` row). The runner enforces this in
 
 ## Cleanup restore semantics
 
-Every mutation that touches the disposable Set is paired with a
-baseline capture so the cleanup path can roll the Set back to its
-pre-run state. The cleanup step records a readback for each
-restored value; a readback mismatch — even when the original mutation
-readback was clean — downgrades the affected tool's row to
-``failed`` with evidence that mentions ``cleanup`` / ``readback`` /
-``restore``. The runner never introduces a separate
-``cleanup_failed`` status: ``failed`` plus explicit evidence is the
-single source of truth for promotion blockers. See
-``tests/test_acceptance_audit_p0p1.py::test_p1_6_set_tempo_readback_fails_only_during_restore``
-for the regression guard.
+Before any mutation occurs, ``save_set`` certifies the clean baseline state of the loaded project file.
+
+Every in-place reversible mutation (tempo, song position, loop boundaries, cue points, mixer properties, parameter values, and warp state) is captured in baseline snapshots and explicitly restored during cleanup. Each restoration is followed by a readback check; a readback mismatch — even when the initial mutation succeeded — downgrades the affected tool's status to ``failed``.
+
+Structural additions (such as loading a device via ``load_device_to_track`` or creating new tracks via ``create_audio_track`` / ``create_midi_track``) persist as unsaved in-memory modifications in the open Live session. Because ``save_set`` runs prior to all mutations, closing Live without saving guarantees that the project on disk reverts cleanly to the saved baseline state. Manual cleanup instructions are also recorded in the audit artifact as a operational fallback reference. See ``tests/test_acceptance_audit_p0p1.py::test_p1_6_set_tempo_readback_fails_only_during_restore`` for the regression guard.
 
 ## Probe groups and the 65-tool catalog
 

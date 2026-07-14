@@ -145,6 +145,7 @@ class StrictFakeBridge:
         self.save_set_response: dict[str, Any] | None = None
         self.tcp_calls: list[tuple[str, dict[str, Any]]] = []
         self.ws_calls: list[tuple[str, dict[str, Any]]] = []
+        self.timeline_calls: list[tuple[str, str, dict[str, Any]]] = []
         self.state: dict[str, Any] = self._initial_state()
 
     @staticmethod
@@ -168,7 +169,7 @@ class StrictFakeBridge:
                     "mute": False,
                     "solo": False,
                     "arm": False,
-                    "devices": [{"name": "MIDI Device"}],
+                    "devices": [{"name": "MIDI Device", "parameters": ["Device On"]}],
                 },
                 {
                     "index": 1,
@@ -217,6 +218,7 @@ class StrictFakeBridge:
             },
             "warp": {"warping": False, "warp_mode": "beats"},
             "search_browser_queries": [],
+            "is_dirty": False,
         }
 
     # --- AcceptanceClient surface ---
@@ -230,6 +232,7 @@ class StrictFakeBridge:
     ) -> Any:
         params = dict(params or {})
         self.tcp_calls.append((command_type, params))
+        self.timeline_calls.append(("tcp", command_type, params))
         if self.fail_tool and command_type == self.fail_tool:
             raise RuntimeError(f"forced failure on {command_type}")
         return _strict_tcp_dispatch(self, command_type, params)
@@ -243,6 +246,7 @@ class StrictFakeBridge:
     ) -> Any:
         params = dict(params or {})
         self.ws_calls.append((method, params))
+        self.timeline_calls.append(("ws", method, params))
         if self.fail_tool and method == self.fail_tool:
             raise RuntimeError(f"forced failure on {method}")
         return _strict_ws_dispatch(self, method, params)
@@ -289,11 +293,42 @@ def _validate_tcp(command: str, params: dict[str, Any]) -> None:
         )
 
 
+_READ_ONLY_TCP_COMMANDS = {
+    "get_project_metadata",
+    "get_track_list",
+    "get_track_state",
+    "get_clip_summary",
+    "get_session_info",
+    "get_loop_settings",
+    "get_locators",
+    "get_scenes",
+    "get_scene_state",
+    "get_clip_notes",
+    "get_clip_info",
+    "get_device_list",
+    "get_parameter_value",
+    "get_routing",
+    "get_browser_categories",
+    "search_browser",
+    "get_song_length",
+    "live_find_track",
+    "list_device_params",
+    "get_composition_structure",
+    "diagnose_midi_clip",
+    "lifecycle_status",
+    "take_snapshot",
+    "get_control_surfaces",
+    "get_selected_context",
+}
+
+
 def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str, params: dict[str, Any]) -> Any:
     _validate_tcp(command, params)
     s = bridge.state
+    if command not in _READ_ONLY_TCP_COMMANDS and command != "save_set":
+        s.update({"is_dirty": True})
     if command == "get_project_metadata":
-        return {"song_name": "TESTE_CODEX"}
+        return {"song_name": "TESTE_CODEX", "is_dirty": bool(s.get("is_dirty", False))}
     if command == "get_track_list":
         # The real ``get_track_list`` contract returns only
         # ``id``/``index``/``name``/``type``. Mixer state (mute, solo,
@@ -630,6 +665,7 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str, params: dict[st
     if command == "save_set":
         if bridge.save_set_response is not None:
             return dict(bridge.save_set_response)
+        s.update({"is_dirty": False})
         return {"saved": True, "song_save_available": True}
     if command == "take_snapshot":
         return {
@@ -669,6 +705,8 @@ def _strict_ws_dispatch(bridge: StrictFakeBridge, method: str, params: dict[str,
         if isinstance(expected, type) and not isinstance(params[field], expected):
             raise RuntimeError(f"BAD_FIELD_TYPE: {method}.{field} expected {expected.__name__}")
     s = bridge.state
+    if method in ("set_warp_state", "load_device_to_track"):
+        s.update({"is_dirty": True})
     if method == "get_warp_state":
         return dict(s["warp"])
     if method == "set_warp_state":
@@ -676,13 +714,18 @@ def _strict_ws_dispatch(bridge: StrictFakeBridge, method: str, params: dict[str,
         return dict(s["warp"])
     if method == "load_device_to_track":
         target = params["track_index"]
+        device_name = params["device_name"]
+        device_index = None
         for track in s["tracks"]:
             if track["index"] == target:
-                track.setdefault("devices", []).append(
-                    {
-                        "name": params["device_name"],
-                    }
-                )
+                devs = track.setdefault("devices", [])
+                device_index = len(devs)
+                devs.append({"name": device_name})
                 break
-        return {"device_name": params["device_name"], "track_index": target}
+        return {
+            "status": "loaded",
+            "track_index": target,
+            "device_name": device_name,
+            "device_index": device_index,
+        }
     raise RuntimeError(f"UNKNOWN_WS_METHOD: {method}")

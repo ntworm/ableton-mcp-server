@@ -17,12 +17,13 @@ import pytest
 
 from ableton_mcp_server.acceptance import (
     BASELINE_PROBE_GROUPS,
+    AcceptanceSafetyError,
     run_live_acceptance,
 )
 from ableton_mcp_server.catalog import TOOL_CATALOG
 
 from ._offline_probe_fixture import fast_offline_probes
-from ._strict_fake import StrictFakeBridge
+from ._strict_fake import _READ_ONLY_TCP_COMMANDS, StrictFakeBridge
 
 
 @pytest.fixture(autouse=True)
@@ -226,44 +227,24 @@ def test_fake_runner_baseline_records_only_known_unavailable() -> None:
 
 
 def test_fake_runner_readback_failure_flips_tool_to_failed() -> None:
-    """Inject a readback mismatch and prove the tool becomes ``failed``.
-
-    The fake exposes a knob via ``state`` overrides. Here we set the
-    audio track index to a non-existent track; the runner's audio clip
-    guard must refuse the run with ``AcceptanceSafetyError`` and every
-    mutation tool must be marked ``failed`` — not ``live_passed``.
-    """
+    """Inject a readback mismatch and prove the tool becomes ``failed``."""
     bridge = StrictFakeBridge()
-    bridge.state["tracks"] = [
-        {
-            "index": 0,
-            "type": "midi",
-            "name": "Bass",
-            "id": "track:0",
-            "mute": False,
-            "solo": False,
-            "arm": False,
-            "devices": [{"name": "MIDI Device"}],
-        },
-    ]
-    # No audio track exists; the runner should refuse on the audio
-    # clip guard.
-    import pytest
-
-    with pytest.raises(  # noqa: B017 — broad to catch any refusal path
-        RuntimeError, match="audio_track_index"
-    ):
-        asyncio.run(
-            run_live_acceptance(
-                bridge,
-                confirm_project_name="TESTE_CODEX",
-                track_index=0,
-                clip_index=3,
-                audio_track_index=2,
-                audio_clip_index=0,
-                fire_clip=True,
-            )
+    bridge.fail_tool = "set_tempo"
+    result = asyncio.run(
+        run_live_acceptance(
+            bridge,
+            confirm_project_name="TESTE_CODEX",
+            track_index=0,
+            clip_index=3,
+            audio_track_index=1,
+            audio_clip_index=0,
+            fire_clip=True,
         )
+    )
+    cert = result["certification"]
+    statuses = {row["tool"]: row["status"] for row in cert["tools"]}
+    assert cert["release_ready"] is False
+    assert statuses["set_tempo"] == "failed"
 
 
 def test_fake_runner_save_set_requires_explicit_saved_true() -> None:
@@ -480,3 +461,676 @@ def test_release_ready_policy_matrix() -> None:
     report4.record(Verification("build_extension", "environment_unavailable", "reason"))
     report4.record(Verification("get_session_info", "manual_required", "reason"))
     assert report4.finish()["release_ready"] is False
+
+
+def test_save_set_order_and_is_dirty_checking() -> None:
+    """Verify that save_set executes before other mutations.
+
+    Also verify that preflight blocks if project is dirty.
+    """
+    bridge = StrictFakeBridge()
+    # 1. Verify preflight safety check blocks when is_dirty is True
+    bridge.state["is_dirty"] = True
+    with pytest.raises(AcceptanceSafetyError, match="Loaded project dirty state is non-clean"):
+        asyncio.run(
+            run_live_acceptance(
+                bridge,
+                confirm_project_name="TESTE_CODEX",
+                track_index=0,
+                clip_index=3,
+                audio_track_index=2,
+                audio_clip_index=0,
+                fire_clip=True,
+            )
+        )
+
+
+def test_preflight_is_dirty_missing_or_ambiguous() -> None:
+    """Verify that metadata missing is_dirty or non-False value raises error."""
+    class MissingDirtyBridge(StrictFakeBridge):
+        def call(self, command_type: str, params: Any = None, *, timeout: Any = None) -> Any:
+            if command_type == "get_project_metadata":
+                return {"song_name": "TESTE_CODEX"}
+            return super().call(command_type, params, timeout=timeout)
+
+    bridge = MissingDirtyBridge()
+    with pytest.raises(AcceptanceSafetyError, match="non-clean"):
+        asyncio.run(
+            run_live_acceptance(
+                bridge,
+                confirm_project_name="TESTE_CODEX",
+                track_index=0,
+                clip_index=3,
+                audio_track_index=1,
+                audio_clip_index=0,
+            )
+        )
+
+    # 2. Reset and verify the order of calls
+    bridge = StrictFakeBridge()
+    asyncio.run(
+        run_live_acceptance(
+            bridge,
+            confirm_project_name="TESTE_CODEX",
+            track_index=0,
+            clip_index=3,
+            audio_track_index=2,
+            audio_clip_index=0,
+            fire_clip=True,
+        )
+    )
+
+    calls = [c[0] for c in bridge.tcp_calls]
+    save_set_idx = calls.index("save_set")
+    create_cue_idx = calls.index("create_cue_point")
+    set_tempo_idx = calls.index("set_tempo")
+    create_audio_idx = calls.index("create_audio_track")
+
+    assert save_set_idx < create_cue_idx
+    assert save_set_idx < set_tempo_idx
+    assert save_set_idx < create_audio_idx
+
+
+def test_parameter_discovery_case1_first_disabled_second_enabled() -> None:
+    """Case 1: First parameter is disabled, second is enabled."""
+    bridge = StrictFakeBridge()
+    bridge.state["device_parameters"] = {
+        "track:0": [
+            {
+                "device_name": "DeviceA",
+                "parameters": [
+                    {
+                        "name": "DisabledParam",
+                        "value": 0.5,
+                        "min": 0.0,
+                        "max": 1.0,
+                        "is_enabled": False,
+                        "is_quantized": False,
+                    },
+                    {
+                        "name": "EnabledParam",
+                        "value": 0.3,
+                        "min": 0.0,
+                        "max": 1.0,
+                        "is_enabled": True,
+                        "is_quantized": False,
+                    },
+                ],
+            }
+        ]
+    }
+    result = asyncio.run(
+        run_live_acceptance(
+            bridge,
+            confirm_project_name="TESTE_CODEX",
+            track_index=0,
+            clip_index=3,
+            audio_track_index=1,
+            audio_clip_index=0,
+            profiles=("mutations",),
+        )
+    )
+    cert = result["certification"]
+    row = next(r for r in cert["tools"] if r["tool"] == "set_parameter_value")
+    assert row["status"] == "live_passed"
+    restored = bridge.state["device_parameters"]["track:0"][0]["parameters"][1]["value"]
+    assert abs(restored - 0.3) < 0.01
+
+
+def test_parameter_discovery_case2_already_at_max() -> None:
+    """Case 2: First parameter is already at 1.0.
+
+    Verification should choose a different target value.
+    """
+    bridge = StrictFakeBridge()
+    bridge.state["device_parameters"] = {
+        "track:0": [
+            {
+                "device_name": "DeviceA",
+                "parameters": [
+                    {
+                        "name": "MaxParam",
+                        "value": 1.0,
+                        "min": 0.0,
+                        "max": 1.0,
+                        "is_enabled": True,
+                        "is_quantized": False,
+                    }
+                ],
+            }
+        ]
+    }
+    result = asyncio.run(
+        run_live_acceptance(
+            bridge,
+            confirm_project_name="TESTE_CODEX",
+            track_index=0,
+            clip_index=3,
+            audio_track_index=1,
+            audio_clip_index=0,
+            profiles=("mutations",),
+        )
+    )
+    cert = result["certification"]
+    row = next(r for r in cert["tools"] if r["tool"] == "set_parameter_value")
+    assert row["status"] == "live_passed"
+    set_calls = [c for c in bridge.tcp_calls if c[0] == "set_parameter_value"]
+    assert len(set_calls) >= 2
+    assert abs(float(set_calls[0][1]["value"]) - 0.0) < 0.01
+
+
+def test_parameter_discovery_case3_non_standard_range() -> None:
+    """Case 3: Non-standard range (e.g. 100 to 20000)."""
+    bridge = StrictFakeBridge()
+    bridge.state["device_parameters"] = {
+        "track:0": [
+            {
+                "device_name": "DeviceA",
+                "parameters": [
+                    {
+                        "name": "FreqParam",
+                        "value": 1000.0,
+                        "min": 100.0,
+                        "max": 20000.0,
+                        "is_enabled": True,
+                        "is_quantized": False,
+                    }
+                ],
+            }
+        ]
+    }
+    result = asyncio.run(
+        run_live_acceptance(
+            bridge,
+            confirm_project_name="TESTE_CODEX",
+            track_index=0,
+            clip_index=3,
+            audio_track_index=1,
+            audio_clip_index=0,
+            profiles=("mutations",),
+        )
+    )
+    cert = result["certification"]
+    row = next(r for r in cert["tools"] if r["tool"] == "set_parameter_value")
+    assert row["status"] == "live_passed"
+    set_calls = [c for c in bridge.tcp_calls if c[0] == "set_parameter_value"]
+    target = float(set_calls[0][1]["value"])
+    assert target in (100.0, 20000.0)
+
+
+def test_parameter_discovery_case4_quantized() -> None:
+    """Case 4: Quantized parameter."""
+    bridge = StrictFakeBridge()
+    bridge.state["device_parameters"] = {
+        "track:0": [
+            {
+                "device_name": "DeviceA",
+                "parameters": [
+                    {
+                        "name": "QuantParam",
+                        "value": 2.0,
+                        "min": 0.0,
+                        "max": 5.0,
+                        "is_enabled": True,
+                        "is_quantized": True,
+                    }
+                ],
+            }
+        ]
+    }
+    result = asyncio.run(
+        run_live_acceptance(
+            bridge,
+            confirm_project_name="TESTE_CODEX",
+            track_index=0,
+            clip_index=3,
+            audio_track_index=1,
+            audio_clip_index=0,
+            profiles=("mutations",),
+        )
+    )
+    cert = result["certification"]
+    row = next(r for r in cert["tools"] if r["tool"] == "set_parameter_value")
+    assert row["status"] == "live_passed"
+    set_calls = [c for c in bridge.tcp_calls if c[0] == "set_parameter_value"]
+    target = float(set_calls[0][1]["value"])
+    assert target in (0.0, 5.0)
+
+
+def test_parameter_discovery_case5_none_writable() -> None:
+    """Case 5: Absence of writable parameters (should record environment_unavailable)."""
+    bridge = StrictFakeBridge()
+    bridge.state["device_parameters"] = {
+        "track:0": [
+            {
+                "device_name": "DeviceA",
+                "parameters": [],
+            }
+        ]
+    }
+    result = asyncio.run(
+        run_live_acceptance(
+            bridge,
+            confirm_project_name="TESTE_CODEX",
+            track_index=0,
+            clip_index=3,
+            audio_track_index=1,
+            audio_clip_index=0,
+            profiles=("mutations",),
+        )
+    )
+    cert = result["certification"]
+    row = next(r for r in cert["tools"] if r["tool"] == "set_parameter_value")
+    assert row["status"] == "environment_unavailable"
+    assert "no writable parameter found" in row["evidence"].lower()
+
+
+def test_parameter_discovery_case6_proof_of_change() -> None:
+    """Case 6: Verification that a real change occurred and was restored."""
+    bridge = StrictFakeBridge()
+    bridge.state["device_parameters"] = {
+        "track:0": [
+            {
+                "device_name": "DeviceA",
+                "parameters": [
+                    {
+                        "name": "MyParam",
+                        "value": 0.4,
+                        "min": 0.0,
+                        "max": 1.0,
+                        "is_enabled": True,
+                        "is_quantized": False,
+                    }
+                ],
+            }
+        ]
+    }
+    asyncio.run(
+        run_live_acceptance(
+            bridge,
+            confirm_project_name="TESTE_CODEX",
+            track_index=0,
+            clip_index=3,
+            audio_track_index=1,
+            audio_clip_index=0,
+            profiles=("mutations",),
+        )
+    )
+    final_val = bridge.state["device_parameters"]["track:0"][0]["parameters"][0]["value"]
+    assert abs(final_val - 0.4) < 0.01
+
+    set_calls = [c for c in bridge.tcp_calls if c[0] == "set_parameter_value"]
+    mutation_val = float(set_calls[0][1]["value"])
+    assert abs(mutation_val - 0.4) > 0.1
+
+
+def test_websocket_warp_failure_isolation() -> None:
+    """Verify that a failure in get_warp_state (WebSocket down) only fails warp tools.
+
+    It must not crash the TCP mutations run.
+    """
+    bridge = StrictFakeBridge()
+    bridge.fail_tool = "get_warp_state"
+
+    result = asyncio.run(
+        run_live_acceptance(
+            bridge,
+            confirm_project_name="TESTE_CODEX",
+            track_index=0,
+            clip_index=3,
+            audio_track_index=1,
+            audio_clip_index=0,
+            fire_clip=True,
+        )
+    )
+    cert = result["certification"]
+    statuses = {row["tool"]: row["status"] for row in cert["tools"]}
+
+    assert statuses["get_warp_state"] in ("failed", "host_unavailable")
+    assert statuses["set_warp_state"] == "failed"
+    assert statuses["load_device_to_track"] == "live_passed"
+    assert statuses["set_tempo"] == "live_passed"
+    assert statuses["create_audio_track"] == "live_passed"
+    assert statuses["create_midi_track"] == "live_passed"
+    assert statuses["save_set"] == "live_passed"
+
+
+def test_audio_decoupling_empty_or_non_audio_slot() -> None:
+    """Verify that empty/non-audio slot fails warp without stopping TCP mutations."""
+    bridge = StrictFakeBridge()
+    result = asyncio.run(
+        run_live_acceptance(
+            bridge,
+            confirm_project_name="TESTE_CODEX",
+            track_index=0,
+            clip_index=3,
+            audio_track_index=1,
+            audio_clip_index=99,
+            fire_clip=True,
+        )
+    )
+    cert = result["certification"]
+    statuses = {row["tool"]: row["status"] for row in cert["tools"]}
+    evidences = {row["tool"]: row["evidence"] for row in cert["tools"]}
+
+    assert statuses["set_warp_state"] == "failed"
+    assert "warp setup failed" in evidences["set_warp_state"]
+    assert statuses["set_tempo"] == "live_passed"
+    assert statuses["create_audio_track"] == "live_passed"
+    assert statuses["create_midi_track"] == "live_passed"
+    assert statuses["load_device_to_track"] == "live_passed"
+    assert statuses["set_parameter_value"] == "live_passed"
+    assert statuses["save_set"] == "live_passed"
+
+
+def test_parameter_discovery_stale_list_device_params_and_small_range() -> None:
+    """Verify micro range (0.0-0.001) and live readback computation."""
+    bridge = StrictFakeBridge()
+    bridge.state["device_parameters"] = {
+        "track:0": [
+            {
+                "device_name": "MicroDevice",
+                "parameters": [
+                    {
+                        "name": "MicroParam",
+                        "value": 0.001,
+                        "min": 0.0,
+                        "max": 0.001,
+                        "is_enabled": True,
+                        "is_quantized": False,
+                    }
+                ],
+            }
+        ]
+    }
+    result = asyncio.run(
+        run_live_acceptance(
+            bridge,
+            confirm_project_name="TESTE_CODEX",
+            track_index=0,
+            clip_index=3,
+            audio_track_index=1,
+            audio_clip_index=0,
+            profiles=("mutations",),
+        )
+    )
+    cert = result["certification"]
+    row = next(r for r in cert["tools"] if r["tool"] == "set_parameter_value")
+    assert row["status"] == "live_passed"
+
+
+def test_parameter_write_ignored_by_fake_causes_probe_failure() -> None:
+    """Verify that if set_parameter_value fails to apply on host, the probe records failed."""
+    class RefusingParamBridge(StrictFakeBridge):
+        def call(self, command_type: str, params: Any = None, *, timeout: Any = None) -> Any:
+            if command_type == "set_parameter_value":
+                return {"value": 0.0}
+            return super().call(command_type, params, timeout=timeout)
+
+    bridge = RefusingParamBridge()
+    result = asyncio.run(
+        run_live_acceptance(
+            bridge,
+            confirm_project_name="TESTE_CODEX",
+            track_index=0,
+            clip_index=3,
+            audio_track_index=1,
+            audio_clip_index=0,
+            profiles=("mutations",),
+        )
+    )
+    cert = result["certification"]
+    row = next(r for r in cert["tools"] if r["tool"] == "set_parameter_value")
+    assert row["status"] == "failed"
+
+
+def test_load_device_to_track_preexisting_operator_causes_failure() -> None:
+    """Verify that returning success without increasing device count fails load_device_to_track."""
+    class NoOpLoadBridge(StrictFakeBridge):
+        async def call_ws(self, method: str, params: Any = None, *, timeout: float = 2.0) -> Any:
+            if method == "load_device_to_track":
+                return {
+                    "status": "loaded",
+                    "track_index": params["track_index"],
+                    "device_name": params["device_name"],
+                    "device_index": 0,
+                }
+            return await super().call_ws(method, params, timeout=timeout)
+
+    bridge = NoOpLoadBridge()
+    result = asyncio.run(
+        run_live_acceptance(
+            bridge,
+            confirm_project_name="TESTE_CODEX",
+            track_index=0,
+            clip_index=3,
+            audio_track_index=1,
+            audio_clip_index=0,
+            profiles=("mutations",),
+        )
+    )
+    cert = result["certification"]
+    row = next(r for r in cert["tools"] if r["tool"] == "load_device_to_track")
+    assert row["status"] == "failed"
+    assert "did not increase device count by 1" in row["evidence"]
+
+
+def test_create_track_existing_index_or_inconsistent_type_causes_failure() -> None:
+    """Verify that returning existing track index for create_audio_track fails the probe."""
+    class ExistingIndexTrackBridge(StrictFakeBridge):
+        def call(self, command_type: str, params: Any = None, *, timeout: Any = None) -> Any:
+            if command_type == "create_audio_track":
+                return {"track_index": 0}
+            return super().call(command_type, params, timeout=timeout)
+
+    bridge = ExistingIndexTrackBridge()
+    result = asyncio.run(
+        run_live_acceptance(
+            bridge,
+            confirm_project_name="TESTE_CODEX",
+            track_index=0,
+            clip_index=3,
+            audio_track_index=1,
+            audio_clip_index=0,
+            profiles=("mutations",),
+        )
+    )
+    cert = result["certification"]
+    row = next(r for r in cert["tools"] if r["tool"] == "create_audio_track")
+    assert row["status"] == "failed"
+    assert "which existed in prior snapshot" in row["evidence"]
+
+
+def test_live_fade_restore_uses_fallback_track_index() -> None:
+    """Verify that when audio_track_index is invalid, live_fade uses fallback track for restore."""
+    bridge = StrictFakeBridge()
+    result = asyncio.run(
+        run_live_acceptance(
+            bridge,
+            confirm_project_name="TESTE_CODEX",
+            track_index=0,
+            clip_index=3,
+            audio_track_index=99,
+            audio_clip_index=0,
+            fire_clip=True,
+        )
+    )
+    cert = result["certification"]
+    statuses = {row["tool"]: row["status"] for row in cert["tools"]}
+    assert statuses["live_fade"] == "live_passed"
+    assert statuses["set_warp_state"] == "failed"
+
+
+def test_small_parameter_range_write_failure() -> None:
+    """Verify write failure on micro range (0.0 to 0.000001) is detected."""
+    class RefusingMicroBridge(StrictFakeBridge):
+        def call(self, command_type: str, params: Any = None, *, timeout: Any = None) -> Any:
+            if command_type == "set_parameter_value":
+                return {"value": 0.0}
+            return super().call(command_type, params, timeout=timeout)
+
+    bridge = RefusingMicroBridge()
+    bridge.state["device_parameters"] = {
+        "track:0": [
+            {
+                "device_name": "MicroDev",
+                "parameters": [
+                    {
+                        "name": "MicroParam",
+                        "value": 0.0,
+                        "min": 0.0,
+                        "max": 0.000001,
+                        "is_enabled": True,
+                        "is_quantized": False,
+                    }
+                ],
+            }
+        ]
+    }
+    result = asyncio.run(
+        run_live_acceptance(
+            bridge,
+            confirm_project_name="TESTE_CODEX",
+            track_index=0,
+            clip_index=3,
+            audio_track_index=1,
+            audio_clip_index=0,
+            profiles=("mutations",),
+        )
+    )
+    cert = result["certification"]
+    row = next(r for r in cert["tools"] if r["tool"] == "set_parameter_value")
+    assert row["status"] == "failed"
+
+
+@pytest.mark.parametrize(
+    ("t_case", "expected_err"),
+    [
+        ("non_list_devs", "returned non-list"),
+        ("negative_index", "is not Operator"),
+    ],
+)
+def test_load_device_to_track_contract_robustness(t_case: str, expected_err: str) -> None:
+    """Verify load_device_to_track fails when pre-query is non-list or index is negative."""
+    class RobustnessBridge(StrictFakeBridge):
+        def call(self, command_type: str, params: Any = None, *, timeout: Any = None) -> Any:
+            if command_type == "get_device_list" and t_case == "non_list_devs":
+                return {"error": "invalid_track"}
+            return super().call(command_type, params, timeout=timeout)
+
+        async def call_ws(self, method: str, params: Any = None, *, timeout: float = 2.0) -> Any:
+            if method == "load_device_to_track" and t_case == "negative_index":
+                target = params["track_index"]
+                for t in self.state["tracks"]:
+                    if t["index"] == target:
+                        t.setdefault("devices", []).append({"name": "Operator"})
+                        break
+                return {
+                    "status": "loaded",
+                    "track_index": target,
+                    "device_name": params["device_name"],
+                    "device_index": -1,
+                }
+            return await super().call_ws(method, params, timeout=timeout)
+
+    bridge = RobustnessBridge()
+    result = asyncio.run(
+        run_live_acceptance(
+            bridge,
+            confirm_project_name="TESTE_CODEX",
+            track_index=0,
+            clip_index=3,
+            audio_track_index=1,
+            audio_clip_index=0,
+            profiles=("mutations",),
+        )
+    )
+    cert = result["certification"]
+    row = next(r for r in cert["tools"] if r["tool"] == "load_device_to_track")
+    assert row["status"] == "failed"
+    assert expected_err in row["evidence"]
+
+
+def test_save_set_precedes_all_mutations_global_timeline() -> None:
+    """Verify save_set appears in global timeline before first mutation."""
+    bridge = StrictFakeBridge()
+    asyncio.run(
+        run_live_acceptance(
+            bridge,
+            confirm_project_name="TESTE_CODEX",
+            track_index=0,
+            clip_index=3,
+            audio_track_index=1,
+            audio_clip_index=0,
+            fire_clip=True,
+        )
+    )
+    mutations = [
+        t for t in bridge.timeline_calls
+        if t[1] not in _READ_ONLY_TCP_COMMANDS and t[1] != "get_warp_state"
+    ]
+    assert mutations[0][1] == "save_set"
+
+    save_idx = next(i for i, c in enumerate(bridge.timeline_calls) if c[1] == "save_set")
+    warp_idx = next(i for i, c in enumerate(bridge.timeline_calls) if c[1] == "set_warp_state")
+    load_idx = next(
+        i for i, c in enumerate(bridge.timeline_calls) if c[1] == "load_device_to_track"
+    )
+    assert save_idx < warp_idx
+    assert save_idx < load_idx
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "subclass_behavior"),
+    [
+        ("create_audio_track", "existing_index"),
+        ("create_audio_track", "wrong_type"),
+        ("create_audio_track", "no_count_increase"),
+        ("create_midi_track", "existing_index"),
+        ("create_midi_track", "wrong_type"),
+        ("create_midi_track", "no_count_increase"),
+    ],
+)
+def test_track_creation_negative_matrix(tool_name: str, subclass_behavior: str) -> None:
+    """Verify track creation negative cases result in probe failure."""
+    class TrackCreationBadBridge(StrictFakeBridge):
+        def call(self, command_type: str, params: Any = None, *, timeout: Any = None) -> Any:
+            if command_type == tool_name:
+                if subclass_behavior == "existing_index":
+                    return {"track_index": 0}
+                if subclass_behavior == "no_count_increase":
+                    return {"track_index": 99}
+                if subclass_behavior == "wrong_type":
+                    opp_type = "midi" if tool_name == "create_audio_track" else "audio"
+                    self.state["tracks"].append(
+                        {
+                            "index": 99,
+                            "type": opp_type,
+                            "name": "WrongTypeTrack",
+                            "id": "track:99",
+                            "devices": [],
+                        }
+                    )
+                    return {"track_index": 99}
+            if command_type == "get_track_list" and subclass_behavior == "no_count_increase":
+                return [
+                    {k: t[k] for k in ("id", "index", "name", "type") if k in t}
+                    for t in self.state["tracks"]
+                ]
+            return super().call(command_type, params, timeout=timeout)
+
+    bridge = TrackCreationBadBridge()
+    result = asyncio.run(
+        run_live_acceptance(
+            bridge,
+            confirm_project_name="TESTE_CODEX",
+            track_index=0,
+            clip_index=3,
+            audio_track_index=1,
+            audio_clip_index=0,
+            profiles=("mutations",),
+        )
+    )
+    cert = result["certification"]
+    row = next(r for r in cert["tools"] if r["tool"] == tool_name)
+    assert row["status"] == "failed"

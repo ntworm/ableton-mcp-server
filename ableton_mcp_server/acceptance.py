@@ -246,6 +246,11 @@ def _expand_profiles(profiles: tuple[str, ...]) -> tuple[str, ...]:
     return profiles
 
 
+def _parameter_tolerance(min_val: float, max_val: float) -> float:
+    """Compute range-proportional tolerance with a numeric precision floor (1e-12)."""
+    return max(1e-12, abs(max_val - min_val) * 0.01)
+
+
 # ---------------------------------------------------------------------------
 # Verification recording
 # ---------------------------------------------------------------------------
@@ -743,11 +748,19 @@ async def run_live_acceptance(
                         f"confirmation {confirm_project_name!r}; no "
                         "mutations were sent."
                     )
+                if metadata.get("is_dirty") is not False:
+                    raise AcceptanceSafetyError(
+                        f"Loaded project dirty state is non-clean ({metadata.get('is_dirty')!r}); "
+                        "acceptance requires a saved, clean project baseline."
+                    )
                 baseline = _discover_baseline(client)
 
                 discovered_param_track_index = None
                 discovered_param_device_index = None
                 discovered_param_name = None
+                discovered_param_min = 0.0
+                discovered_param_max = 1.0
+                discovered_param_is_quantized = False
 
                 search_tracks = []
                 if audio_track_index in baseline["track_names"]:
@@ -766,12 +779,30 @@ async def run_live_acceptance(
                                 for dev_idx, dev_entry in enumerate(device_params):
                                     if isinstance(dev_entry, dict) and dev_entry.get("parameters"):
                                         params_list = dev_entry.get("parameters")
-                                        if isinstance(params_list, list) and params_list:
-                                            p_name = params_list[0].get("name")
-                                            if isinstance(p_name, str) and p_name:
+                                        if isinstance(params_list, list):
+                                            for p in params_list:
+                                                if not isinstance(p, dict):
+                                                    continue
+                                                if (
+                                                    p.get("is_enabled") is False
+                                                    or p.get("enabled") is False
+                                                ):
+                                                    continue
+                                                p_name = p.get("name")
+                                                if not isinstance(p_name, str) or not p_name:
+                                                    continue
+                                                min_val = float(p.get("min", 0.0))
+                                                max_val = float(p.get("max", 1.0))
+                                                is_quant = bool(p.get("is_quantized", False))
+
                                                 discovered_param_track_index = t_idx
                                                 discovered_param_device_index = dev_idx
                                                 discovered_param_name = p_name
+                                                discovered_param_min = min_val
+                                                discovered_param_max = max_val
+                                                discovered_param_is_quantized = is_quant
+                                                break
+                                            if discovered_param_name is not None:
                                                 break
                                 if discovered_param_name is not None:
                                     break
@@ -1010,6 +1041,14 @@ async def run_live_acceptance(
                                     f"{error.code}: {error}",
                                 )
                             )
+                    except Exception as error:
+                        report.record(
+                            Verification(
+                                "get_warp_state",
+                                "failed",
+                                f"{type(error).__name__}: {error}",
+                            )
+                        )
 
                 if "mutations" in expanded:
                     # ----- mutation surface -----
@@ -1032,24 +1071,13 @@ async def run_live_acceptance(
                     )
                     artifacts["tags"].append(f"midi_track_index={midi_track_index}")
 
-                    # Audio track for warp / load_device_to_track.
-                    audio_tracks = [
-                        idx for idx, kind in baseline["track_types"].items() if kind == "audio"
-                    ]
-                    if not audio_tracks:
-                        # The runner can create one later, but for the
-                        # ``audio_track_index`` provided we require the
-                        # owner to have set up the disposable Set
-                        # correctly.
-                        raise AcceptanceSafetyError(
-                            f"audio_track_index={audio_track_index} not "
-                            "available; disposable Set must include an "
-                            "audio track"
-                        )
-                    if baseline["track_types"].get(audio_track_index) != "audio":
-                        raise AcceptanceSafetyError(
-                            f"audio_track_index={audio_track_index} is not an audio track"
-                        )
+                    # Track for live_fade readback/mutation (prefers
+                    # audio_track_index, falls back to midi_track_index).
+                    fade_track_index = (
+                        audio_track_index
+                        if audio_track_index in baseline["track_names"]
+                        else midi_track_index
+                    )
 
                     # Verify the MIDI slot is empty before mutating.
                     slots = call("get_clip_summary", {"track_index": midi_track_index})
@@ -1081,33 +1109,6 @@ async def run_live_acceptance(
                     artifacts["tags"].extend([cue_name, bulk_cue_name])
                     cue_created = False
 
-                    # Audio clip guard: requires an actual audio clip at
-                    # the configured slot, verified via
-                    # ``get_clip_info.is_audio_clip``.
-                    audio_slots = call("get_clip_summary", {"track_index": audio_track_index})
-                    audio_slot = next(
-                        (item for item in audio_slots if item.get("index") == audio_clip_index),
-                        None,
-                    )
-                    if audio_slot is None or not bool(audio_slot.get("has_clip")):
-                        raise AcceptanceSafetyError(
-                            f"audio slot {audio_track_index}:{audio_clip_index} "
-                            "is empty; refusing warp certification"
-                        )
-                    audio_info = call(
-                        "get_clip_info",
-                        {
-                            "track_index": audio_track_index,
-                            "clip_index": audio_clip_index,
-                        },
-                    )
-                    if not bool(audio_info.get("is_audio_clip", False)):
-                        raise AcceptanceSafetyError(
-                            f"slot {audio_track_index}:{audio_clip_index} "
-                            "is not an audio clip; refusing warp "
-                            "certification"
-                        )
-
                     # Audio warp readback helper.
                     async def read_warp() -> dict[str, Any]:
                         raw = await call_ws(
@@ -1124,12 +1125,62 @@ async def run_live_acceptance(
                         return dict(raw or {})
 
                     # Original warp state for restore.
-                    original_warp = await read_warp()
-                    artifacts["manual_cleanup"].append(
-                        "restore warp_state from original_warp snapshot"
-                    )
+                    original_warp = None
+                    if (
+                        baseline["track_types"].get(audio_track_index) == "audio"
+                    ):
+                        try:
+                            audio_slots = call(
+                                "get_clip_summary", {"track_index": audio_track_index}
+                            )
+                            audio_slot = next(
+                                (
+                                    item
+                                    for item in audio_slots
+                                    if item.get("index") == audio_clip_index
+                                ),
+                                None,
+                            )
+                            if audio_slot is not None and bool(audio_slot.get("has_clip")):
+                                audio_info = call(
+                                    "get_clip_info",
+                                    {
+                                        "track_index": audio_track_index,
+                                        "clip_index": audio_clip_index,
+                                    },
+                                )
+                                if bool(audio_info.get("is_audio_clip", False)):
+                                    original_warp = await read_warp()
+                                    artifacts["manual_cleanup"].append(
+                                        "restore warp_state from original_warp snapshot"
+                                    )
+                        except Exception:
+                            pass
 
                     try:
+                        # ----- save_set -----
+                        async def run_save_set() -> str:
+                            save_result = call("save_set")
+                            if not isinstance(save_result, dict):
+                                raise AssertionError(
+                                    f"unexpected save_set response: {save_result!r}"
+                                )
+                            if save_result.get("saved") is True:
+                                meta = call("get_project_metadata")
+                                if meta.get("is_dirty") is not False:
+                                    dirty_val = meta.get("is_dirty")
+                                    raise AssertionError(
+                                        "save_set returned saved=true but "
+                                        f"get_project_metadata still shows is_dirty={dirty_val}"
+                                    )
+                                return "saved=true"
+                            if save_result.get("song_save_available") is False:
+                                raise BridgeError(
+                                    "Song.save API not exposed", code="CAPABILITY_UNAVAILABLE"
+                                )
+                            raise AssertionError(f"ambiguous save_set response: {save_result}")
+
+                        await _record_call(report, "save_set", run_save_set)
                         # ----- cue points -----
                         async def run_create_cue() -> str:
                             call("create_cue_point", {"name": cue_name, "time": cue_time})
@@ -1616,8 +1667,8 @@ async def run_live_acceptance(
                             report.record(
                                 Verification(
                                     "set_parameter_value",
-                                    "failed",
-                                    "Skipped: parameter discovery failed",
+                                    "environment_unavailable",
+                                    "No writable parameter found in the loaded project devices",
                                 )
                             )
                         else:
@@ -1633,12 +1684,54 @@ async def run_live_acceptance(
                                 )
                                 if not isinstance(original_param_resp, dict):
                                     raise AssertionError("get_parameter_value must return a dict")
-                                original_param_value = float(original_param_resp.get("value", 0.0))
+                                live_val = float(original_param_resp.get("value", 0.0))
+                                min_val = float(discovered_param_min)
+                                max_val = float(discovered_param_max)
+                                is_quant = bool(discovered_param_is_quantized)
+
+                                prop_tol = _parameter_tolerance(min_val, max_val)
+
+                                target = None
+                                if is_quant:
+                                    for c in [min_val, max_val]:
+                                        if abs(c - live_val) > prop_tol:
+                                            target = c
+                                            break
+                                    if target is None:
+                                        i_min = int(min_val)
+                                        i_max = int(max_val)
+                                        for c in range(i_min, i_max + 1):
+                                            if abs(float(c) - live_val) > prop_tol:
+                                                target = float(c)
+                                                break
+                                else:
+                                    range_val = abs(max_val - min_val)
+                                    for c in [min_val, max_val]:
+                                        if abs(c - live_val) > range_val * 0.1:
+                                            target = c
+                                            break
+                                    if target is None:
+                                        mid = (min_val + max_val) / 2.0
+                                        if abs(mid - live_val) > prop_tol:
+                                            target = mid
+                                        elif abs(max_val - live_val) > prop_tol:
+                                            target = max_val
+                                        elif abs(min_val - live_val) > prop_tol:
+                                            target = min_val
+
+                                if target is None:
+                                    raise AssertionError(
+                                        "could not compute valid target value for parameter write"
+                                    )
+
                                 artifacts["set_parameter_value_restore"] = {
                                     "track_index": discovered_param_track_index,
                                     "device_index": discovered_param_device_index,
                                     "parameter_name": discovered_param_name,
-                                    "original": original_param_value,
+                                    "original": live_val,
+                                    "min": min_val,
+                                    "max": max_val,
+                                    "is_quantized": is_quant,
                                 }
                                 call(
                                     "set_parameter_value",
@@ -1646,7 +1739,7 @@ async def run_live_acceptance(
                                         "track_index": discovered_param_track_index,
                                         "device_index": discovered_param_device_index,
                                         "parameter_name": discovered_param_name,
-                                        "value": 1.0,
+                                        "value": target,
                                     },
                                 )
                                 rb_value = call(
@@ -1662,9 +1755,16 @@ async def run_live_acceptance(
                                         "set_parameter_value readback failed "
                                         "(no dict response)"
                                     )
-                                if abs(float(rb_value.get("value", 0)) - 1.0) > 0.01:
-                                    raise AssertionError("set_parameter_value readback failed")
-                                return f"param={discovered_param_name} value=1.0"
+                                rb_val = float(rb_value.get("value", 0.0))
+                                if abs(rb_val - target) > prop_tol:
+                                    raise AssertionError(
+                                        f"set_parameter_value readback failed: "
+                                        f"expected {target} but got {rb_val} (tol {prop_tol})"
+                                    )
+                                return (
+                                    f"param={discovered_param_name} "
+                                    f"live_val={live_val} target={target}"
+                                )
 
                             await _record_call(
                                 report, "set_parameter_value", run_set_parameter_value
@@ -1672,7 +1772,7 @@ async def run_live_acceptance(
 
                         # ----- live_fade -----
                         async def run_live_fade() -> str:
-                            pre_state = call("get_track_state", {"track_index": audio_track_index})
+                            pre_state = call("get_track_state", {"track_index": fade_track_index})
                             if not isinstance(pre_state, dict) or "volume" not in pre_state:
                                 raise AssertionError(
                                     "live_fade pre-readback failed "
@@ -1680,18 +1780,19 @@ async def run_live_acceptance(
                                 )
                             original_volume = float(pre_state["volume"])
                             artifacts["live_fade_volume_original"] = original_volume
+                            artifacts["live_fade_track_index"] = fade_track_index
 
                             call(
                                 "live_fade",
                                 {
-                                    "track_index": audio_track_index,
+                                    "track_index": fade_track_index,
                                     "target_percent": 50.0,
                                     "duration": 0.0,
                                     "steps": 1,
                                 },
                             )
                             post_immediate = call(
-                                "get_track_state", {"track_index": audio_track_index}
+                                "get_track_state", {"track_index": fade_track_index}
                             )
                             if (
                                 not isinstance(post_immediate, dict)
@@ -1704,13 +1805,13 @@ async def run_live_acceptance(
                             call(
                                 "live_fade",
                                 {
-                                    "track_index": audio_track_index,
+                                    "track_index": fade_track_index,
                                     "target_percent": 80.0,
                                     "duration": 0.2,
                                     "steps": 4,
                                 },
                             )
-                            post_fade = call("get_track_state", {"track_index": audio_track_index})
+                            post_fade = call("get_track_state", {"track_index": fade_track_index})
                             if not isinstance(post_fade, dict) or "volume" not in post_fade:
                                 raise AssertionError("live_fade timed readback failed")
                             if abs(float(post_fade["volume"]) - 0.8) > 0.05:
@@ -1721,6 +1822,11 @@ async def run_live_acceptance(
 
                         # ----- set_warp_state + readback -----
                         async def run_set_warp_state() -> str:
+                            if original_warp is None:
+                                raise AssertionError(
+                                    "warp setup failed "
+                                    "(audio clip missing or WebSocket unreachable)"
+                                )
                             await call_ws(
                                 "set_warp_state",
                                 {
@@ -1739,6 +1845,14 @@ async def run_live_acceptance(
                         # ----- load_device_to_track + readback -----
                         async def run_load_device() -> str:
                             load_target = midi_track_index
+                            devs_before = call("get_device_list", {"track_index": load_target})
+                            if not isinstance(devs_before, list):
+                                raise AssertionError(
+                                    "get_device_list prior to load_device_to_track "
+                                    f"returned non-list: {devs_before!r}"
+                                )
+                            count_before = len(devs_before)
+
                             load_result = await call_ws(
                                 "load_device_to_track",
                                 {
@@ -1750,21 +1864,59 @@ async def run_live_acceptance(
 
                             if isinstance(load_result, str):
                                 load_result = _json.loads(load_result)
-                            dev_list = call("get_device_list", {"track_index": load_target})
-                            names = (
-                                [str(d.get("name", "")) for d in dev_list]
-                                if isinstance(dev_list, list)
-                                else []
-                            )
-                            if "Operator" not in names:
+
+                            if not isinstance(load_result, dict):
                                 raise AssertionError(
-                                    f"load_device_to_track readback missing Operator in {names}"
+                                    f"load_device_to_track non-dict response: {load_result!r}"
                                 )
+                            if load_result.get("status") != "loaded":
+                                raise AssertionError(
+                                    f"load_device_to_track unexpected status: {load_result}"
+                                )
+                            if load_result.get("track_index") != load_target:
+                                raise AssertionError(
+                                    f"load_device_to_track track_index mismatch: {load_result}"
+                                )
+                            if load_result.get("device_name") != "Operator":
+                                raise AssertionError(
+                                    f"load_device_to_track device_name mismatch: {load_result}"
+                                )
+                            dev_idx = load_result.get("device_index")
+                            if not isinstance(dev_idx, int):
+                                raise AssertionError(
+                                    f"load_device_to_track missing device_index: {load_result}"
+                                )
+
+                            devs_after = call("get_device_list", {"track_index": load_target})
+                            if (
+                                not isinstance(devs_after, list)
+                                or len(devs_after) != count_before + 1
+                            ):
+                                post_str = (
+                                    len(devs_after)
+                                    if isinstance(devs_after, list)
+                                    else "non-list"
+                                )
+                                raise AssertionError(
+                                    "load_device_to_track did not increase device count by 1: "
+                                    f"before={count_before}, after={post_str}"
+                                )
+
+                            if (
+                                dev_idx < 0
+                                or dev_idx >= len(devs_after)
+                                or devs_after[dev_idx].get("name") != "Operator"
+                            ):
+                                raise AssertionError(
+                                    f"load_device_to_track device at index {dev_idx} "
+                                    f"is not Operator: {devs_after}"
+                                )
+
                             artifacts["manual_cleanup"].append(
                                 f"Operator loaded on track {load_target}; "
                                 "remove via Live UI or Undo"
                             )
-                            return f"Operator on track {load_target}"
+                            return f"Operator loaded at index {dev_idx} on track {load_target}"
 
                         await _record_call(report, "load_device_to_track", run_load_device)
 
@@ -1778,64 +1930,116 @@ async def run_live_acceptance(
                             )
 
                         async def run_create_audio_track() -> str:
+                            pre_tracks = call("get_track_list")
+                            if not isinstance(pre_tracks, list):
+                                raise AssertionError(
+                                    "get_track_list prior to create_audio_track returned non-list"
+                                )
+                            pre_count = len(pre_tracks)
+                            pre_indices = {int(t.get("index", -1)) for t in pre_tracks}
+
                             new_audio = call("create_audio_track", {"index": -1})
                             if not isinstance(new_audio, dict):
                                 raise AssertionError("create_audio_track must return a dict")
                             new_audio_index = new_audio.get("track_index")
                             if not isinstance(new_audio_index, int):
                                 raise AssertionError("create_audio_track missing track_index")
-                            post_tracks = call("get_track_list")
-                            if not any(
-                                int(t.get("index", -1)) == new_audio_index
-                                and t.get("type") == "audio"
-                                for t in post_tracks
-                            ):
+
+                            if new_audio_index in pre_indices:
                                 raise AssertionError(
-                                    f"create_audio_track {new_audio_index} "
-                                    "missing from get_track_list"
+                                    f"create_audio_track returned track_index {new_audio_index} "
+                                    "which existed in prior snapshot"
                                 )
+
+                            post_tracks = call("get_track_list")
+                            if (
+                                not isinstance(post_tracks, list)
+                                or len(post_tracks) != pre_count + 1
+                            ):
+                                post_str = (
+                                    len(post_tracks)
+                                    if isinstance(post_tracks, list)
+                                    else "non-list"
+                                )
+                                raise AssertionError(
+                                    "create_audio_track did not increase total track count by 1: "
+                                    f"pre={pre_count}, post={post_str}"
+                                )
+
+                            created_track = next(
+                                (
+                                    t
+                                    for t in post_tracks
+                                    if int(t.get("index", -1)) == new_audio_index
+                                ),
+                                None,
+                            )
+                            if created_track is None or created_track.get("type") != "audio":
+                                raise AssertionError(
+                                    f"create_audio_track {new_audio_index} missing or not "
+                                    f"audio in get_track_list"
+                                )
+
                             artifacts["tracks_created"].append(f"audio:{new_audio_index}")
-                            return f"new index={new_audio_index}"
+                            return f"new audio track index={new_audio_index}"
 
                         await _record_call(report, "create_audio_track", run_create_audio_track)
 
                         async def run_create_midi_track() -> str:
+                            pre_tracks = call("get_track_list")
+                            if not isinstance(pre_tracks, list):
+                                raise AssertionError(
+                                    "get_track_list prior to create_midi_track returned non-list"
+                                )
+                            pre_count = len(pre_tracks)
+                            pre_indices = {int(t.get("index", -1)) for t in pre_tracks}
+
                             new_midi = call("create_midi_track", {"index": -1})
                             if not isinstance(new_midi, dict):
                                 raise AssertionError("create_midi_track must return a dict")
                             new_midi_index = new_midi.get("track_index")
                             if not isinstance(new_midi_index, int):
                                 raise AssertionError("create_midi_track missing track_index")
-                            post_tracks = call("get_track_list")
-                            if not any(
-                                int(t.get("index", -1)) == new_midi_index
-                                and t.get("type") == "midi"
-                                for t in post_tracks
-                            ):
+
+                            if new_midi_index in pre_indices:
                                 raise AssertionError(
-                                    f"create_midi_track {new_midi_index} "
-                                    "missing from get_track_list"
+                                    f"create_midi_track returned track_index {new_midi_index} "
+                                    "which existed in prior snapshot"
                                 )
+
+                            post_tracks = call("get_track_list")
+                            if (
+                                not isinstance(post_tracks, list)
+                                or len(post_tracks) != pre_count + 1
+                            ):
+                                post_str = (
+                                    len(post_tracks)
+                                    if isinstance(post_tracks, list)
+                                    else "non-list"
+                                )
+                                raise AssertionError(
+                                    "create_midi_track did not increase total track count by 1: "
+                                    f"pre={pre_count}, post={post_str}"
+                                )
+
+                            created_track = next(
+                                (
+                                    t
+                                    for t in post_tracks
+                                    if int(t.get("index", -1)) == new_midi_index
+                                ),
+                                None,
+                            )
+                            if created_track is None or created_track.get("type") != "midi":
+                                raise AssertionError(
+                                    f"create_midi_track {new_midi_index} missing or not "
+                                    f"midi in get_track_list"
+                                )
+
                             artifacts["tracks_created"].append(f"midi:{new_midi_index}")
-                            return f"new index={new_midi_index}"
+                            return f"new midi track index={new_midi_index}"
 
                         await _record_call(report, "create_midi_track", run_create_midi_track)
-
-                        async def run_save_set() -> str:
-                            save_result = call("save_set")
-                            if not isinstance(save_result, dict):
-                                raise AssertionError(
-                                    f"unexpected save_set response: {save_result!r}"
-                                )
-                            if save_result.get("saved") is True:
-                                return "saved=true"
-                            if save_result.get("song_save_available") is False:
-                                raise BridgeError(
-                                    "Song.save API not exposed", code="CAPABILITY_UNAVAILABLE"
-                                )
-                            raise AssertionError(f"ambiguous save_set response: {save_result}")
-
-                        await _record_call(report, "save_set", run_save_set)
 
                     except Exception as mutations_error:
                         for tool in BASELINE_PROBE_GROUPS.get("mutations", ()):
@@ -2142,22 +2346,26 @@ async def run_live_acceptance(
                         # ``set_parameter_value`` on a device.
                         if "live_fade_volume_original" in artifacts:
                             restore_target = artifacts["live_fade_volume_original"]
+                            target_track = int(
+                                artifacts.get(
+                                    "live_fade_track_index", fade_track_index
+                                )
+                            )
 
                             def _verify_volume(_o: Any) -> None:
                                 state = call(
                                     "get_track_state",
-                                    {"track_index": audio_track_index},
+                                    {"track_index": target_track},
                                 )
                                 if not isinstance(state, dict) or ("volume" not in state):
                                     raise AssertionError(
-                                        "live_fade restore readback "
-                                        "missing 'volume' from "
-                                        "get_track_state"
+                                        "live_fade restore readback missing 'volume' "
+                                        "from get_track_state"
                                     )
                                 _eq(
                                     float(state["volume"]),
                                     restore_target,
-                                    f"track:{audio_track_index}.volume",
+                                    f"track:{target_track}.volume",
                                 )
 
                             _restore_call(
@@ -2166,7 +2374,7 @@ async def run_live_acceptance(
                                 lambda: call(
                                     "live_fade",
                                     {
-                                        "track_index": audio_track_index,
+                                        "track_index": target_track,
                                         "target_value": restore_target,
                                         "duration": 0.0,
                                         "steps": 1,
@@ -2184,6 +2392,29 @@ async def run_live_acceptance(
                             else None
                         )
                         if param_restore is not None:
+                            p_min = float(param_restore.get("min", 0.0))
+                            p_max = float(param_restore.get("max", 1.0))
+                            p_tol = _parameter_tolerance(p_min, p_max)
+
+                            def _verify_param_restore(_o: Any) -> None:
+                                observed_val = float(
+                                    call(
+                                        "get_parameter_value",
+                                        {
+                                            "track_index": param_restore["track_index"],
+                                            "device_index": param_restore["device_index"],
+                                            "parameter_name": param_restore["parameter_name"],
+                                        },
+                                    ).get("value", 0.0)
+                                )
+                                expected_val = float(param_restore["original"])
+                                if abs(observed_val - expected_val) > p_tol:
+                                    raise AssertionError(
+                                        "set_parameter_value restore readback mismatch: "
+                                        f"observed={observed_val} expected={expected_val} "
+                                        f"(tol {p_tol})"
+                                    )
+
                             _restore_call(
                                 "set_parameter_value restore",
                                 "set_parameter_value",
@@ -2196,21 +2427,7 @@ async def run_live_acceptance(
                                         "value": param_restore["original"],
                                     },
                                 ),
-                                verify=lambda _o: _eq(
-                                    float(
-                                        call(
-                                            "get_parameter_value",
-                                            {
-                                                "track_index": param_restore["track_index"],
-                                                "device_index": param_restore["device_index"],
-                                                "parameter_name": param_restore["parameter_name"],
-                                            },
-                                        ).get("value", 0.0)
-                                    ),
-                                    float(param_restore["original"]),
-                                    f"{param_restore['parameter_name']}"
-                                    f"@track:{param_restore['track_index']}",
-                                ),
+                                verify=_verify_param_restore,
                             )
                         # Delete tracks the runner created. ``index=-1``
                         # appends, so the new indexes are at the tail.
