@@ -19,9 +19,7 @@ def test_release_version_is_aligned_across_package_metadata() -> None:
         (ROOT / "AbletonMCPServer_Extension" / "manifest.json").read_text(encoding="utf-8")
     )
     extension_lock = json.loads(
-        (ROOT / "AbletonMCPServer_Extension" / "package-lock.json").read_text(
-            encoding="utf-8"
-        )
+        (ROOT / "AbletonMCPServer_Extension" / "package-lock.json").read_text(encoding="utf-8")
     )
     assert __version__ == "0.5.1"
     assert manifest["version"] == "0.5.1"
@@ -57,24 +55,21 @@ def test_baseline_docs_match_current_state() -> None:
     ):
         # The count must be present; the wording may be "65 tools" or
         # "65 snake_case tools" / "65 cataloged public tools".
-        assert re.search(r"\b65\b", text), (
-            f"{label} should advertise the 65-tool baseline"
-        )
+        assert re.search(r"\b65\b", text), f"{label} should advertise the 65-tool baseline"
         assert "37 registered tools" not in text, (
             f"{label} still references the stale 37-tool count"
         )
 
     assert "device_name" in readme, "README must document device_name primary"
-    assert (
-        "warp_markers" in tool_reference or "warp_markers are read-only" in tool_reference
-    ), "TOOL_REFERENCE must mention warp markers are read-only"
-    assert (
-        "CAPABILITY_UNAVAILABLE" in architecture
-        or "CAPABILITY_UNAVAILABLE" in readme
-    ), "docs must surface the new CAPABILITY_UNAVAILABLE error code"
-    assert (
-        "verify_clean_install" in readme or "verify_clean_install" in architecture
-    ), "docs must surface the clean-install command"
+    assert "warp_markers" in tool_reference or "warp_markers are read-only" in tool_reference, (
+        "TOOL_REFERENCE must mention warp markers are read-only"
+    )
+    assert "CAPABILITY_UNAVAILABLE" in architecture or "CAPABILITY_UNAVAILABLE" in readme, (
+        "docs must surface the new CAPABILITY_UNAVAILABLE error code"
+    )
+    assert "verify_clean_install" in readme or "verify_clean_install" in architecture, (
+        "docs must surface the clean-install command"
+    )
 
 
 def test_v040_public_docs_cover_tools_and_attribution() -> None:
@@ -127,13 +122,9 @@ def test_wheel_configuration_includes_contracts_and_remote_script() -> None:
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert 'ableton-mcp = "ableton_mcp_server.cli:main"' in pyproject
     assert '"contracts.py" = "contracts.py"' in pyproject
+    assert '"AbletonMCPServer_RemoteScript" = "ableton_mcp_server/_remote_script"' in pyproject
     assert (
-        '"AbletonMCPServer_RemoteScript" = "ableton_mcp_server/_remote_script"'
-        in pyproject
-    )
-    assert (
-        '"AbletonMCPServer_Extension/vendor" = "ableton_mcp_server/_extension_vendor"'
-        in pyproject
+        '"AbletonMCPServer_Extension/vendor" = "ableton_mcp_server/_extension_vendor"' in pyproject
     )
 
 
@@ -153,8 +144,6 @@ def test_built_wheel_contains_extension_vendor_tarballs(tmp_path: Path) -> None:
         cli = next((n for n in names if n.startswith(cli_prefix)), None)
         assert sdk is not None, f"SDK tarball missing from wheel entries: {names}"
         assert cli is not None, f"CLI tarball missing from wheel entries: {names}"
-
-
 
 
 def test_windows_bootstrap_uses_a_distinct_native_virtualenv() -> None:

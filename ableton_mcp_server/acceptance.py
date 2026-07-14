@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any, Protocol, cast
 
 from .certification import CertificationReport, Verification
+from .errors import BridgeError
 
 
 class AcceptanceClient(Protocol):
@@ -73,15 +74,14 @@ def _test_tempo(original: float, offset: float) -> float:
 
 def _acceptance_cue_time(locators: list[Mapping[str, Any]]) -> float:
     candidate = 256.0
-    while any(
-        abs(float(item.get("time", -1.0)) - candidate) < 0.01 for item in locators
-    ):
+    while any(abs(float(item.get("time", -1.0)) - candidate) < 0.01 for item in locators):
         candidate += 256.0
     return candidate
 
 
-def _write_sine_wav(path: Path, *, hz: float, amplitude: float, seconds: float,
-                    sample_rate: int = 44100) -> Path:
+def _write_sine_wav(
+    path: Path, *, hz: float, amplitude: float, seconds: float, sample_rate: int = 44100
+) -> Path:
     import math
 
     nframes = int(seconds * sample_rate)
@@ -98,14 +98,12 @@ def _write_sine_wav(path: Path, *, hz: float, amplitude: float, seconds: float,
 def _synthesize_offline_inputs(directory: Path) -> dict[str, Path]:
     directory.mkdir(parents=True, exist_ok=True)
     return {
-        "target": _write_sine_wav(directory / "target.wav", hz=1000.0,
-                                  amplitude=0.8, seconds=1.0),
-        "reference": _write_sine_wav(directory / "reference.wav", hz=1000.0,
-                                     amplitude=0.2, seconds=1.0),
-        "short": _write_sine_wav(directory / "short.wav", hz=440.0,
-                                 amplitude=0.5, seconds=0.5),
-        "long": _write_sine_wav(directory / "long.wav", hz=440.0,
-                                amplitude=0.25, seconds=1.0),
+        "target": _write_sine_wav(directory / "target.wav", hz=1000.0, amplitude=0.8, seconds=1.0),
+        "reference": _write_sine_wav(
+            directory / "reference.wav", hz=1000.0, amplitude=0.2, seconds=1.0
+        ),
+        "short": _write_sine_wav(directory / "short.wav", hz=440.0, amplitude=0.5, seconds=0.5),
+        "long": _write_sine_wav(directory / "long.wav", hz=440.0, amplitude=0.25, seconds=1.0),
     }
 
 
@@ -219,6 +217,7 @@ BASELINE_PROBE_GROUPS: dict[str, tuple[str, ...]] = {
 
 def _baseline_tool_names() -> tuple[str, ...]:
     from .server import PUBLIC_TOOL_NAMES
+
     return tuple(PUBLIC_TOOL_NAMES)
 
 
@@ -233,8 +232,7 @@ def assert_baseline_probe_coverage() -> None:
     flat = set(_baseline_probe_names())
     catalog_names = set(_baseline_tool_names())
     assert flat == catalog_names, (
-        f"baseline probe mismatch: "
-        f"missing={catalog_names - flat}, extra={flat - catalog_names}"
+        f"baseline probe mismatch: missing={catalog_names - flat}, extra={flat - catalog_names}"
     )
 
 
@@ -274,23 +272,23 @@ async def _record_call(
         if inspect.isawaitable(value):
             value = await value
     except Exception as error:  # noqa: BLE001 — recording layer swallows all
-        from .errors import BridgeError
 
-        if isinstance(error, BridgeError) and error.code == "CAPABILITY_UNAVAILABLE":
+        if getattr(error, "code", None) == "CAPABILITY_UNAVAILABLE":
             report.record(
-                Verification(tool, "host_unavailable", f"{error.code}: {error}")
+                Verification(
+                    tool,
+                    "host_unavailable",
+                    f"{getattr(error, 'code', 'CAPABILITY_UNAVAILABLE')}: {error}",
+                )
             )
         else:
-            report.record(
-                Verification(tool, "failed", f"{type(error).__name__}: {error}")
-            )
+            report.record(Verification(tool, "failed", f"{type(error).__name__}: {error}"))
         return None
     report.record(Verification(tool, passed, "call and readback completed"))
     return value
 
 
-def _record_unavailable(report: CertificationReport, tool: str,
-                        reason: str) -> None:
+def _record_unavailable(report: CertificationReport, tool: str, reason: str) -> None:
     report.record(Verification(tool, "environment_unavailable", reason))
 
 
@@ -321,8 +319,9 @@ def _is_full_baseline(profiles: tuple[str, ...]) -> bool:
     return set(expanded) == set(BASELINE_PROBE_GROUPS)
 
 
-def _release_ready(report: CertificationReport, profiles: tuple[str, ...],
-                   *, fire_clip: bool) -> bool:
+def _release_ready(
+    report: CertificationReport, profiles: tuple[str, ...], *, fire_clip: bool
+) -> bool:
     """Compute the final ``release_ready`` decision.
 
     Rules (in order):
@@ -330,13 +329,30 @@ def _release_ready(report: CertificationReport, profiles: tuple[str, ...],
     1. Any ``failed`` row blocks promotion.
     2. Partial profiles (not full baseline) are never release-ready.
     3. ``fire_clip`` must have been exercised (the flag toggled on).
-    4. Otherwise the report is release-ready.
+    4. ``host_unavailable`` blocks promotion.
+    5. ``environment_unavailable`` blocks promotion, except ``build_extension``.
+    6. ``manual_required`` blocks promotion, except ``quit_ableton``.
+    7. Otherwise the report is release-ready.
     """
-    if any(row.status == "failed" for row in report.recorded.values()):
+    rows = list(report.recorded.values())
+    if any(row.status == "failed" for row in rows):
         return False
     if not _is_full_baseline(profiles):
         return False
-    return fire_clip
+    if not fire_clip:
+        return False
+    if any(row.status == "host_unavailable" for row in rows):
+        return False
+    if any(
+        row.status == "environment_unavailable"
+        and row.tool != "build_extension"
+        for row in rows
+    ):
+        return False
+    return not any(
+        row.status == "manual_required" and row.tool != "quit_ableton"
+        for row in rows
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -357,34 +373,35 @@ async def run_offline_probes(report: CertificationReport, workdir: Path) -> None
 
     def analyze() -> dict[str, Any]:
         from .analysis import audio as analysis_audio
+
         return analysis_audio.analyze_audio(str(inputs["target"]))
 
     def masking() -> dict[str, Any]:
         from .analysis import audio as analysis_audio
+
         return analysis_audio.find_frequency_masking(
             str(inputs["target"]), str(inputs["reference"])
         )
 
     def mix() -> dict[str, Any]:
         from .analysis import audio as analysis_audio
-        return analysis_audio.analyze_mix(
-            [str(inputs["target"]), str(inputs["reference"])]
-        )
+
+        return analysis_audio.analyze_mix([str(inputs["target"]), str(inputs["reference"])])
 
     def single_cycle() -> dict[str, Any]:
         from .analysis import audio as analysis_audio
+
         return analysis_audio.extract_single_cycle(str(inputs["short"]))
 
     await _record_call(report, "analyze_audio", analyze, passed="offline_passed")
-    await _record_call(report, "find_frequency_masking", masking,
-                       passed="offline_passed")
+    await _record_call(report, "find_frequency_masking", masking, passed="offline_passed")
     await _record_call(report, "analyze_mix", mix, passed="offline_passed")
-    await _record_call(report, "extract_single_cycle", single_cycle,
-                       passed="offline_passed")
+    await _record_call(report, "extract_single_cycle", single_cycle, passed="offline_passed")
 
     def logs() -> str:
         """Real ``get_ableton_logs`` impl: read the tail of Log.txt."""
         from .diagnostics import find_ableton_log_path
+
         path = find_ableton_log_path()
         if path is None:
             return "Ableton Log.txt path could not be resolved."
@@ -399,6 +416,7 @@ async def run_offline_probes(report: CertificationReport, workdir: Path) -> None
     def diff_tool() -> dict[str, Any]:
         """Compare two snapshots through the real ``diff_snapshots`` impl."""
         from .diff import diff_snapshots
+
         # Build two snapshots via ``take_snapshot`` semantics — same shape
         # the runner would observe; equality is preserved so the diff is
         # honest.
@@ -419,14 +437,14 @@ async def run_offline_probes(report: CertificationReport, workdir: Path) -> None
         snapshot_b["tempo"] = 121.0
         return diff_snapshots(snapshot_a, snapshot_b)
 
-    await _record_call(report, "diff_snapshots_tool", diff_tool,
-                       passed="offline_passed")
+    await _record_call(report, "diff_snapshots_tool", diff_tool, passed="offline_passed")
 
     def scaffold() -> dict[str, Any]:
         """Real ``scaffold_extension`` impl, validated by file presence."""
         import json
 
         from .server import scaffold_extension
+
         out_dir = workdir / "scaffold"
         out_dir.mkdir(parents=True, exist_ok=True)
         result = scaffold_extension(
@@ -438,17 +456,14 @@ async def run_offline_probes(report: CertificationReport, workdir: Path) -> None
         project_path = Path(parsed["project_path"])
         # Verify the actual files exist on disk.
         for name in parsed.get("files", []):
-            assert (project_path / name).is_file(), (
-                f"scaffold_extension did not create {name}"
-            )
+            assert (project_path / name).is_file(), f"scaffold_extension did not create {name}"
         # Tag the directory as MCP acceptance artifact.
         (project_path / "MCP_ACCEPTANCE_ARTIFACT").write_text(
             "acceptance scaffold output", encoding="utf-8"
         )
         return cast(dict[str, Any], parsed)
 
-    await _record_call(report, "scaffold_extension", scaffold,
-                       passed="offline_passed")
+    await _record_call(report, "scaffold_extension", scaffold, passed="offline_passed")
 
     # ``build_extension`` runs ``npm install`` + ``tsc``. It is only
     # ``environment_unavailable`` when Node is genuinely absent; otherwise
@@ -456,7 +471,9 @@ async def run_offline_probes(report: CertificationReport, workdir: Path) -> None
     # wrote so the runner proves the build actually completes.
     if shutil.which("node") is None:
         _record_unavailable(
-            report, "build_extension", "node executable not found on PATH",
+            report,
+            "build_extension",
+            "node executable not found on PATH",
         )
         return
 
@@ -464,6 +481,7 @@ async def run_offline_probes(report: CertificationReport, workdir: Path) -> None
         import json
 
         from .server import build_extension
+
         scaffold_dir = workdir / "scaffold"
         scaffold_dirs = [p for p in scaffold_dir.iterdir() if p.is_dir()]
         if not scaffold_dirs:
@@ -481,15 +499,10 @@ async def run_offline_probes(report: CertificationReport, workdir: Path) -> None
         # the contract — the runner does not require one.
         status = str(parsed.get("status", "")).strip().lower()
         if status != "built":
-            raise AssertionError(
-                f"build_extension status={status!r} expected 'built': "
-                f"{parsed}"
-            )
+            raise AssertionError(f"build_extension status={status!r} expected 'built': {parsed}")
         steps = parsed.get("steps", [])
         if not isinstance(steps, list) or not steps:
-            raise AssertionError(
-                f"build_extension missing steps list: {parsed}"
-            )
+            raise AssertionError(f"build_extension missing steps list: {parsed}")
         for index, step in enumerate(steps):
             if int(step.get("returncode", -1)) != 0:
                 raise AssertionError(
@@ -498,16 +511,12 @@ async def run_offline_probes(report: CertificationReport, workdir: Path) -> None
                 )
         entrypoint = parsed.get("entrypoint")
         if not isinstance(entrypoint, str) or not entrypoint.strip():
-            raise AssertionError(
-                f"build_extension response missing entrypoint: {parsed}"
-            )
+            raise AssertionError(f"build_extension response missing entrypoint: {parsed}")
         entrypoint_rel = entrypoint.strip()
         # Top-level artefacts must include the declared entrypoint.
         artifacts = parsed.get("artifacts", [])
         if not isinstance(artifacts, list) or not artifacts:
-            raise AssertionError(
-                f"build_extension produced no artifacts: {parsed}"
-            )
+            raise AssertionError(f"build_extension produced no artifacts: {parsed}")
         if entrypoint_rel not in artifacts:
             raise AssertionError(
                 f"build_extension artifacts missing declared entrypoint "
@@ -515,9 +524,7 @@ async def run_offline_probes(report: CertificationReport, workdir: Path) -> None
             )
         canonical = project / entrypoint_rel
         if not canonical.is_file():
-            raise AssertionError(
-                f"build_extension entrypoint not on disk: {canonical}"
-            )
+            raise AssertionError(f"build_extension entrypoint not on disk: {canonical}")
         # Tag built artefacts for cleanup.
         for artefact in artifacts:
             target = project / artefact
@@ -527,8 +534,7 @@ async def run_offline_probes(report: CertificationReport, workdir: Path) -> None
                 )
         return cast(dict[str, Any], parsed)
 
-    await _record_call(report, "build_extension", build_ext,
-                       passed="offline_passed")
+    await _record_call(report, "build_extension", build_ext, passed="offline_passed")
 
 
 # ---------------------------------------------------------------------------
@@ -576,9 +582,7 @@ def _discover_baseline(client: AcceptanceClient) -> dict[str, Any]:
         # state — read it from ``get_track_state``.
         state = client.call("get_track_state", {"track_index": idx})
         if not isinstance(state, dict):
-            raise AcceptanceSafetyError(
-                f"get_track_state({idx}) returned non-dict: {state!r}"
-            )
+            raise AcceptanceSafetyError(f"get_track_state({idx}) returned non-dict: {state!r}")
         if "mute" not in state or "solo" not in state or "arm" not in state:
             raise AcceptanceSafetyError(
                 f"get_track_state({idx}) missing mute/solo/arm; "
@@ -629,9 +633,7 @@ async def run_live_acceptance(
     audio_clip_index: int | None = None,
     profiles: tuple[str, ...] = ("baseline",),
     fire_clip: bool = False,
-    offline_probes: Callable[
-        [CertificationReport, Path], Awaitable[None]
-    ] | None = None,
+    offline_probes: Callable[[CertificationReport, Path], Awaitable[None]] | None = None,
 ) -> dict[str, Any]:
     """Exercise the real bridge after exact disposable-project confirmation.
 
@@ -641,7 +643,6 @@ async def run_live_acceptance(
     propagate to ``release_ready=False`` and to a non-zero CLI exit code.
     """
     from .diagnostics import bridge_status as _bridge_status_fn
-    from .errors import BridgeError
 
     expanded = _expand_profiles(profiles)
 
@@ -651,18 +652,16 @@ async def run_live_acceptance(
     def call(command: str, params: Mapping[str, Any] | None = None) -> Any:
         return client.call(command, dict(params or {}), timeout=None)
 
-    audio_track_index = int(audio_track_index if audio_track_index is not None
-                            else track_index)
-    audio_clip_index = int(audio_clip_index if audio_clip_index is not None
-                           else clip_index)
+    audio_track_index = int(audio_track_index if audio_track_index is not None else track_index)
+    audio_clip_index = int(audio_clip_index if audio_clip_index is not None else clip_index)
 
     report = build_baseline_report(profiles=profiles)
 
     # Track every artifact the runner persists to disk so the owner can
     # decide what to undo / clean up after the run.
     artifacts: dict[str, Any] = {
-        "tags": [],            # MCP_ACCEPTANCE_* names placed in the Set
-        "files": [],           # files created on disk (scaffold, build, etc.)
+        "tags": [],  # MCP_ACCEPTANCE_* names placed in the Set
+        "files": [],  # files created on disk (scaffold, build, etc.)
         "tracks_created": [],  # track indexes that the runner appended
         "manual_cleanup": [],  # anything requiring owner-side cleanup
     }
@@ -692,6 +691,7 @@ async def run_live_acceptance(
                         artifacts["files"].append(str(path))
 
         if "composed" in expanded:
+
             def bridge_status_probe() -> dict[str, Any]:
                 # ``get_bridge_status`` is a composed tool that wraps
                 # ``diagnostics.bridge_status(client, tool_count=...)``.
@@ -710,24 +710,27 @@ async def run_live_acceptance(
                     "scenes": call("get_scenes", {}),
                 }
 
-            await _record_call(report, "get_bridge_status", bridge_status_probe,
-                               passed="live_passed")
-            await _record_call(report, "get_session_overview",
-                               session_overview_probe, passed="live_passed")
+            await _record_call(
+                report, "get_bridge_status", bridge_status_probe, passed="live_passed"
+            )
+            await _record_call(
+                report, "get_session_overview", session_overview_probe, passed="live_passed"
+            )
 
-        if ("quit" in profiles
-                and not {"tcp_reads", "mutations",
-                         "websocket_reads"} & set(expanded)):
+        if "quit" in profiles and not {"tcp_reads", "mutations", "websocket_reads"} & set(expanded):
             # ``quit`` profile without tcp_reads/mutations: record the
             # ``quit_ableton`` row as ``manual_required``. The runner does
             # not invoke the bridge here — invoking it would close the host
             # and prevent any subsequent probe from running, so the row
             # never claims ``live_passed`` without an out-of-band owner
             # confirmation.
-            report.record(Verification(
-                "quit_ableton", "manual_required",
-                QUIT_ABLETON_MANUAL_REASON,
-            ))
+            report.record(
+                Verification(
+                    "quit_ableton",
+                    "manual_required",
+                    QUIT_ABLETON_MANUAL_REASON,
+                )
+            )
 
         if {"tcp_reads", "mutations", "websocket_reads"} & set(expanded):
             baseline: dict[str, Any] | None = None
@@ -741,84 +744,173 @@ async def run_live_acceptance(
                         "mutations were sent."
                     )
                 baseline = _discover_baseline(client)
+
+                discovered_param_track_index = None
+                discovered_param_device_index = None
+                discovered_param_name = None
+
+                search_tracks = []
+                if audio_track_index in baseline["track_names"]:
+                    search_tracks.append(audio_track_index)
+                for t_idx in sorted(baseline["track_names"].keys()):
+                    if t_idx not in search_tracks:
+                        search_tracks.append(t_idx)
+
+                for t_idx in search_tracks:
+                    try:
+                        dev_list = call("get_device_list", {"track_index": t_idx})
+                        if isinstance(dev_list, list) and dev_list:
+                            t_id = _resolve_track_id(client, t_idx)
+                            device_params = call("list_device_params", {"track_id": t_id})
+                            if isinstance(device_params, list):
+                                for dev_idx, dev_entry in enumerate(device_params):
+                                    if isinstance(dev_entry, dict) and dev_entry.get("parameters"):
+                                        params_list = dev_entry.get("parameters")
+                                        if isinstance(params_list, list) and params_list:
+                                            p_name = params_list[0].get("name")
+                                            if isinstance(p_name, str) and p_name:
+                                                discovered_param_track_index = t_idx
+                                                discovered_param_device_index = dev_idx
+                                                discovered_param_name = p_name
+                                                break
+                                if discovered_param_name is not None:
+                                    break
+                    except Exception:
+                        pass
+
                 if "tcp_reads" in expanded:
-                    await _record_call(report, "get_project_metadata",
-                                       lambda: metadata, passed="live_passed")
-                    await _record_call(report, "get_session_info",
-                                       lambda: call("get_session_info"),
-                                       passed="live_passed")
-                    await _record_call(report, "get_track_list",
-                                       lambda: call("get_track_list"),
-                                       passed="live_passed")
-                    await _record_call(report, "get_track_state",
-                                       lambda: call("get_track_state",
-                                                    {"track_index": track_index}),
-                                       passed="live_passed")
-                    await _record_call(report, "get_locators",
-                                       lambda: call("get_locators"),
-                                       passed="live_passed")
-                    await _record_call(report, "take_snapshot",
-                                       lambda: call("take_snapshot"),
-                                       passed="live_passed")
-                    await _record_call(report, "get_control_surfaces",
-                                       lambda: call("get_control_surfaces"),
-                                       passed="live_passed")
-                    await _record_call(report, "get_scenes",
-                                       lambda: call("get_scenes"),
-                                       passed="live_passed")
-                    await _record_call(report, "get_scene_state",
-                                       lambda: call("get_scene_state",
-                                                    {"scene_index": 0}),
-                                       passed="live_passed")
-                    await _record_call(report, "get_loop_settings",
-                                       lambda: call("get_loop_settings"),
-                                       passed="live_passed")
-                    await _record_call(report, "get_selected_context",
-                                       lambda: call("get_selected_context"),
-                                       passed="live_passed")
-                    await _record_call(report, "get_clip_summary",
-                                       lambda: call("get_clip_summary",
-                                                    {"track_index": track_index}),
-                                       passed="live_passed")
-                    await _record_call(report, "get_clip_notes",
-                                       lambda: call("get_clip_notes",
-                                                    {"track_index": track_index,
-                                                     "clip_index": clip_index}),
-                                       passed="live_passed")
-                    await _record_call(report, "get_clip_info",
-                                       lambda: call("get_clip_info",
-                                                    {"track_index": track_index,
-                                                     "clip_index": clip_index}),
-                                       passed="live_passed")
-                    await _record_call(report, "get_device_list",
-                                       lambda: call("get_device_list",
-                                                    {"track_index": track_index}),
-                                       passed="live_passed")
-                    await _record_call(report, "get_parameter_value",
-                                       lambda: call("get_parameter_value", {
-                                                         "track_index": track_index,
-                                                         "device_index": 0,
-                                                         "parameter_name": "Device On"}),
-                                       passed="live_passed")
-                    await _record_call(report, "get_routing",
-                                       lambda: call("get_routing",
-                                                    {"track_index": track_index}),
-                                       passed="live_passed")
-                    await _record_call(report, "get_browser_categories",
-                                       lambda: call("get_browser_categories"),
-                                       passed="live_passed")
+                    await _record_call(
+                        report, "get_project_metadata", lambda: metadata, passed="live_passed"
+                    )
+                    await _record_call(
+                        report,
+                        "get_session_info",
+                        lambda: call("get_session_info"),
+                        passed="live_passed",
+                    )
+                    await _record_call(
+                        report,
+                        "get_track_list",
+                        lambda: call("get_track_list"),
+                        passed="live_passed",
+                    )
+                    await _record_call(
+                        report,
+                        "get_track_state",
+                        lambda: call("get_track_state", {"track_index": track_index}),
+                        passed="live_passed",
+                    )
+                    await _record_call(
+                        report, "get_locators", lambda: call("get_locators"), passed="live_passed"
+                    )
+                    await _record_call(
+                        report, "take_snapshot", lambda: call("take_snapshot"), passed="live_passed"
+                    )
+                    await _record_call(
+                        report,
+                        "get_control_surfaces",
+                        lambda: call("get_control_surfaces"),
+                        passed="live_passed",
+                    )
+                    await _record_call(
+                        report, "get_scenes", lambda: call("get_scenes"), passed="live_passed"
+                    )
+                    await _record_call(
+                        report,
+                        "get_scene_state",
+                        lambda: call("get_scene_state", {"scene_index": 0}),
+                        passed="live_passed",
+                    )
+                    await _record_call(
+                        report,
+                        "get_loop_settings",
+                        lambda: call("get_loop_settings"),
+                        passed="live_passed",
+                    )
+                    await _record_call(
+                        report,
+                        "get_selected_context",
+                        lambda: call("get_selected_context"),
+                        passed="live_passed",
+                    )
+                    await _record_call(
+                        report,
+                        "get_clip_summary",
+                        lambda: call("get_clip_summary", {"track_index": track_index}),
+                        passed="live_passed",
+                    )
+                    await _record_call(
+                        report,
+                        "get_clip_notes",
+                        lambda: call(
+                            "get_clip_notes", {"track_index": track_index, "clip_index": clip_index}
+                        ),
+                        passed="live_passed",
+                    )
+                    await _record_call(
+                        report,
+                        "get_clip_info",
+                        lambda: call(
+                            "get_clip_info", {"track_index": track_index, "clip_index": clip_index}
+                        ),
+                        passed="live_passed",
+                    )
+                    await _record_call(
+                        report,
+                        "get_device_list",
+                        lambda: call("get_device_list", {"track_index": track_index}),
+                        passed="live_passed",
+                    )
+                    if discovered_param_track_index is not None:
+                        await _record_call(
+                            report,
+                            "get_parameter_value",
+                            lambda: call(
+                                "get_parameter_value",
+                                {
+                                    "track_index": discovered_param_track_index,
+                                    "device_index": discovered_param_device_index,
+                                    "parameter_name": discovered_param_name,
+                                },
+                            ),
+                            passed="live_passed",
+                        )
+                    else:
+                        report.record(
+                            Verification(
+                                "get_parameter_value",
+                                "environment_unavailable",
+                                "no device parameter found in current Set",
+                            )
+                        )
+                    await _record_call(
+                        report,
+                        "get_routing",
+                        lambda: call("get_routing", {"track_index": track_index}),
+                        passed="live_passed",
+                    )
+                    await _record_call(
+                        report,
+                        "get_browser_categories",
+                        lambda: call("get_browser_categories"),
+                        passed="live_passed",
+                    )
                     # ``search_browser`` should be a small query against a
                     # category the runner proves is present, not a guess.
                     categories = call("get_browser_categories")
                     query = "o" if categories else ""
-                    await _record_call(report, "search_browser",
-                                       lambda: call("search_browser",
-                                                    {"query": query,
-                                                     "limit": 10}),
-                                       passed="live_passed")
-                    await _record_call(report, "get_song_length",
-                                       lambda: call("get_song_length"),
-                                       passed="live_passed")
+                    await _record_call(
+                        report,
+                        "search_browser",
+                        lambda: call("search_browser", {"query": query, "limit": 10}),
+                        passed="live_passed",
+                    )
+                    await _record_call(
+                        report,
+                        "get_song_length",
+                        lambda: call("get_song_length"),
+                        passed="live_passed",
+                    )
                     # Discover the actual track that contains "bass" so we
                     # do not hard-code a name the owner might have changed.
                     matches = call("live_find_track", {"query": "bass"})
@@ -828,68 +920,96 @@ async def run_live_acceptance(
                         if isinstance(idx, int):
                             discovered_track = idx
                     artifacts["tags"].append(
-                        f"live_find_track resolved bass track index="
-                        f"{discovered_track}"
+                        f"live_find_track resolved bass track index={discovered_track}"
                     )
-                    await _record_call(report, "live_find_track",
-                                       lambda: matches,
-                                       passed="live_passed")
+                    await _record_call(
+                        report, "live_find_track", lambda: matches, passed="live_passed"
+                    )
                     # ``list_device_params`` requires ``track_id``, not
                     # ``track_index/device_index``.
                     track_id = _resolve_track_id(client, track_index)
-                    await _record_call(report, "list_device_params",
-                                       lambda: call("list_device_params",
-                                                    {"track_id": track_id}),
-                                       passed="live_passed")
-                    await _record_call(report, "get_composition_structure",
-                                       lambda: call("get_composition_structure"),
-                                       passed="live_passed")
-                    await _record_call(report, "diagnose_midi_clip",
-                                       lambda: call("diagnose_midi_clip",
-                                                    {"track_index": track_index,
-                                                     "clip_index": clip_index}),
-                                       passed="live_passed")
-                    await _record_call(report, "lifecycle_status",
-                                       lambda: call("lifecycle_status"),
-                                       passed="live_passed")
+                    await _record_call(
+                        report,
+                        "list_device_params",
+                        lambda: call("list_device_params", {"track_id": track_id}),
+                        passed="live_passed",
+                    )
+                    await _record_call(
+                        report,
+                        "get_composition_structure",
+                        lambda: call("get_composition_structure"),
+                        passed="live_passed",
+                    )
+                    await _record_call(
+                        report,
+                        "diagnose_midi_clip",
+                        lambda: call(
+                            "diagnose_midi_clip",
+                            {"track_index": track_index, "clip_index": clip_index},
+                        ),
+                        passed="live_passed",
+                    )
+                    await _record_call(
+                        report,
+                        "lifecycle_status",
+                        lambda: call("lifecycle_status"),
+                        passed="live_passed",
+                    )
                 else:
                     # ``mutations`` / ``websocket_reads`` profiles still
                     # need a recorded ``get_project_metadata`` row to
                     # satisfy the catalog but do not certify the read.
-                    report.record(Verification(
-                        "get_project_metadata", "live_passed",
-                        f"song_name={actual_name}",
-                    ))
+                    report.record(
+                        Verification(
+                            "get_project_metadata",
+                            "live_passed",
+                            f"song_name={actual_name}",
+                        )
+                    )
 
                 if "websocket_reads" in expanded:
+
                     async def get_warp_readback() -> dict[str, Any]:
-                        warp = await call_ws("get_warp_state", {
-                            "track_index": audio_track_index,
-                            "clip_index": audio_clip_index,
-                        })
+                        warp = await call_ws(
+                            "get_warp_state",
+                            {
+                                "track_index": audio_track_index,
+                                "clip_index": audio_clip_index,
+                            },
+                        )
                         # WS tools serialize to JSON strings — normalize.
                         if isinstance(warp, str):
                             import json as _json
-                            return cast(dict[str, Any],
-                                        _json.loads(warp))
+
+                            return cast(dict[str, Any], _json.loads(warp))
                         return dict(warp or {})
+
                     try:
                         warp = await get_warp_readback()
-                        report.record(Verification(
-                            "get_warp_state", "live_passed",
-                            f"warping={warp.get('warping', False)}",
-                        ))
+                        report.record(
+                            Verification(
+                                "get_warp_state",
+                                "live_passed",
+                                f"warping={warp.get('warping', False)}",
+                            )
+                        )
                     except BridgeError as error:
                         if error.code == "CAPABILITY_UNAVAILABLE":
-                            report.record(Verification(
-                                "get_warp_state", "host_unavailable",
-                                f"{error.code}: {error}",
-                            ))
+                            report.record(
+                                Verification(
+                                    "get_warp_state",
+                                    "host_unavailable",
+                                    f"{error.code}: {error}",
+                                )
+                            )
                         else:
-                            report.record(Verification(
-                                "get_warp_state", "failed",
-                                f"{error.code}: {error}",
-                            ))
+                            report.record(
+                                Verification(
+                                    "get_warp_state",
+                                    "failed",
+                                    f"{error.code}: {error}",
+                                )
+                            )
 
                 if "mutations" in expanded:
                     # ----- mutation surface -----
@@ -901,24 +1021,20 @@ async def run_live_acceptance(
 
                     # Discover a usable MIDI track for the clip mutations.
                     midi_tracks = [
-                        idx for idx, kind in baseline["track_types"].items()
-                        if kind == "midi"
+                        idx for idx, kind in baseline["track_types"].items() if kind == "midi"
                     ]
                     if not midi_tracks:
-                        raise AcceptanceSafetyError(
-                            "no MIDI track available in disposable Set"
-                        )
-                    midi_track_index = track_index if (
-                        baseline["track_types"].get(track_index) == "midi"
-                    ) else midi_tracks[0]
-                    artifacts["tags"].append(
-                        f"midi_track_index={midi_track_index}"
+                        raise AcceptanceSafetyError("no MIDI track available in disposable Set")
+                    midi_track_index = (
+                        track_index
+                        if (baseline["track_types"].get(track_index) == "midi")
+                        else midi_tracks[0]
                     )
+                    artifacts["tags"].append(f"midi_track_index={midi_track_index}")
 
                     # Audio track for warp / load_device_to_track.
                     audio_tracks = [
-                        idx for idx, kind in baseline["track_types"].items()
-                        if kind == "audio"
+                        idx for idx, kind in baseline["track_types"].items() if kind == "audio"
                     ]
                     if not audio_tracks:
                         # The runner can create one later, but for the
@@ -932,16 +1048,13 @@ async def run_live_acceptance(
                         )
                     if baseline["track_types"].get(audio_track_index) != "audio":
                         raise AcceptanceSafetyError(
-                            f"audio_track_index={audio_track_index} is "
-                            "not an audio track"
+                            f"audio_track_index={audio_track_index} is not an audio track"
                         )
 
                     # Verify the MIDI slot is empty before mutating.
-                    slots = call("get_clip_summary",
-                                 {"track_index": midi_track_index})
+                    slots = call("get_clip_summary", {"track_index": midi_track_index})
                     slot = next(
-                        (item for item in slots
-                         if item.get("index") == clip_index),
+                        (item for item in slots if item.get("index") == clip_index),
                         None,
                     )
                     if slot is None:
@@ -965,31 +1078,29 @@ async def run_live_acceptance(
                     tempo_two = _test_tempo(original_tempo, 2.0)
                     cue_name = "ABLETON_MCP_ACCEPTANCE"
                     bulk_cue_name = "ABLETON_MCP_ACCEPTANCE_BULK"
-                    artifacts["tags"].extend(
-                        [cue_name, bulk_cue_name]
-                    )
+                    artifacts["tags"].extend([cue_name, bulk_cue_name])
                     cue_created = False
 
                     # Audio clip guard: requires an actual audio clip at
                     # the configured slot, verified via
                     # ``get_clip_info.is_audio_clip``.
-                    audio_slots = call("get_clip_summary",
-                                       {"track_index": audio_track_index})
+                    audio_slots = call("get_clip_summary", {"track_index": audio_track_index})
                     audio_slot = next(
-                        (item for item in audio_slots
-                         if item.get("index") == audio_clip_index),
+                        (item for item in audio_slots if item.get("index") == audio_clip_index),
                         None,
                     )
-                    if audio_slot is None or not bool(
-                            audio_slot.get("has_clip")):
+                    if audio_slot is None or not bool(audio_slot.get("has_clip")):
                         raise AcceptanceSafetyError(
                             f"audio slot {audio_track_index}:{audio_clip_index} "
                             "is empty; refusing warp certification"
                         )
-                    audio_info = call("get_clip_info", {
-                        "track_index": audio_track_index,
-                        "clip_index": audio_clip_index,
-                    })
+                    audio_info = call(
+                        "get_clip_info",
+                        {
+                            "track_index": audio_track_index,
+                            "clip_index": audio_clip_index,
+                        },
+                    )
                     if not bool(audio_info.get("is_audio_clip", False)):
                         raise AcceptanceSafetyError(
                             f"slot {audio_track_index}:{audio_clip_index} "
@@ -999,11 +1110,15 @@ async def run_live_acceptance(
 
                     # Audio warp readback helper.
                     async def read_warp() -> dict[str, Any]:
-                        raw = await call_ws("get_warp_state", {
-                            "track_index": audio_track_index,
-                            "clip_index": audio_clip_index,
-                        })
+                        raw = await call_ws(
+                            "get_warp_state",
+                            {
+                                "track_index": audio_track_index,
+                                "clip_index": audio_clip_index,
+                            },
+                        )
                         import json as _json
+
                         if isinstance(raw, str):
                             return cast(dict[str, Any], _json.loads(raw))
                         return dict(raw or {})
@@ -1016,811 +1131,722 @@ async def run_live_acceptance(
 
                     try:
                         # ----- cue points -----
-                        call("create_cue_point",
-                             {"name": cue_name, "time": cue_time})
-                        # Readback: cue exists.
-                        locators = call("get_locators")
-                        if not any(
-                            abs(float(item.get("time", -1)) - cue_time) < 0.01
-                            and item.get("name") == cue_name
-                            for item in locators
-                        ):
-                            raise AssertionError(
-                                "create_cue_point readback failed"
-                            )
-                        report.record(Verification(
-                            "create_cue_point", "live_passed",
-                            f"name={cue_name} time={cue_time}",
-                        ))
-                        cue_created = True
+                        async def run_create_cue() -> str:
+                            call("create_cue_point", {"name": cue_name, "time": cue_time})
+                            locators = call("get_locators")
+                            if not any(
+                                abs(float(item.get("time", -1)) - cue_time) < 0.01
+                                and item.get("name") == cue_name
+                                for item in locators
+                            ):
+                                raise AssertionError("create_cue_point readback failed")
+                            return f"name={cue_name} time={cue_time}"
 
-                        bulk_targets = [
-                            {"name": bulk_cue_name,
-                             "time": cue_time + 64.0},
-                        ]
-                        call("bulk_create_cue_points",
-                             {"items": bulk_targets})
-                        locators = call("get_locators")
-                        if not any(
-                            item.get("name") == bulk_cue_name
-                            for item in locators
-                        ):
-                            raise AssertionError(
-                                "bulk_create_cue_points readback failed"
-                            )
-                        report.record(Verification(
-                            "bulk_create_cue_points", "live_passed",
-                            f"created={len(bulk_targets)}",
-                        ))
+                        await _record_call(report, "create_cue_point", run_create_cue)
+                        cue_created = (
+                            "create_cue_point" in report.recorded
+                            and report.recorded["create_cue_point"].status == "live_passed"
+                        )
 
-                        delete_result = call("delete_cue_point",
-                                              {"time": cue_time})
-                        if not bool(delete_result.get("deleted", False)):
-                            raise AssertionError(
-                                "delete_cue_point did not return deleted=true"
-                            )
-                        locators = call("get_locators")
-                        if any(
-                            abs(float(item.get("time", -1)) - cue_time) < 0.01
-                            for item in locators
-                        ):
-                            raise AssertionError(
-                                "delete_cue_point readback left cue in place"
-                            )
+                        async def run_bulk_cue() -> str:
+                            bulk_targets = [
+                                {"name": bulk_cue_name, "time": cue_time + 64.0},
+                            ]
+                            call("bulk_create_cue_points", {"items": bulk_targets})
+                            locators = call("get_locators")
+                            if not any(item.get("name") == bulk_cue_name for item in locators):
+                                raise AssertionError("bulk_create_cue_points readback failed")
+                            return f"created={len(bulk_targets)}"
+
+                        await _record_call(report, "bulk_create_cue_points", run_bulk_cue)
+
+                        async def run_delete_cue() -> str:
+                            delete_result = call("delete_cue_point", {"time": cue_time})
+                            if not bool(delete_result.get("deleted", False)):
+                                raise AssertionError("delete_cue_point did not return deleted=true")
+                            locators = call("get_locators")
+                            if any(
+                                abs(float(item.get("time", -1)) - cue_time) < 0.01
+                                for item in locators
+                            ):
+                                raise AssertionError("delete_cue_point readback left cue in place")
+
+                            # Second delete: bulk cue.
+                            delete_bulk = call("delete_cue_point", {"time": cue_time + 64.0})
+                            if not bool(delete_bulk.get("deleted", False)):
+                                raise AssertionError("delete_cue_point (bulk) readback failed")
+                            return f"deleted={delete_result.get('deleted')}"
+
+                        await _record_call(report, "delete_cue_point", run_delete_cue)
+                        # Assume deleted (restore will clean up if still present anyway)
                         cue_created = False
-                        report.record(Verification(
-                            "delete_cue_point", "live_passed",
-                            f"deleted={delete_result.get('deleted')}",
-                        ))
-
-                        # Second delete: bulk cue.
-                        delete_bulk = call("delete_cue_point",
-                                           {"time": cue_time + 64.0})
-                        if not bool(delete_bulk.get("deleted", False)):
-                            raise AssertionError(
-                                "delete_cue_point (bulk) readback failed"
-                            )
-                        report.record(Verification(
-                            "delete_cue_point", "live_passed",
-                            f"deleted={delete_bulk.get('deleted')}",
-                        ))
 
                         # ----- transport -----
-                        call("set_tempo", {"tempo": tempo_one})
-                        rb_tempo = float(
-                            call("get_session_info")["tempo"]
-                        )
-                        if abs(rb_tempo - tempo_one) > 0.01:
-                            raise AssertionError(
-                                "set_tempo readback mismatch"
-                            )
-                        report.record(Verification(
-                            "set_tempo", "live_passed",
-                            f"tempo={tempo_one} readback={rb_tempo}",
-                        ))
+                        async def run_set_tempo() -> str:
+                            call("set_tempo", {"tempo": tempo_one})
+                            rb_tempo = float(call("get_session_info")["tempo"])
+                            if abs(rb_tempo - tempo_one) > 0.01:
+                                raise AssertionError("set_tempo readback mismatch")
+                            return f"tempo={tempo_one} readback={rb_tempo}"
 
-                        call("set_current_song_time", {"time": 8.0})
-                        rb_time = float(
-                            call("get_session_info")["current_song_time"]
-                        )
-                        # Readback tolerance: arrangement-grid snap may
-                        # land the playhead on the nearest beat.
-                        if abs(rb_time - 8.0) > 0.5:
-                            raise AssertionError(
-                                f"set_current_song_time readback "
-                                f"{rb_time} far from 8.0"
-                            )
-                        report.record(Verification(
-                            "set_current_song_time", "live_passed",
-                            f"time=8.0 readback={rb_time}",
-                        ))
+                        await _record_call(report, "set_tempo", run_set_tempo)
 
-                        call("set_loop_start", {"start_beat": 4.0})
-                        rb_loop_start = float(
-                            call("get_loop_settings")["loop_start"]
-                        )
-                        if abs(rb_loop_start - 4.0) > 0.01:
-                            raise AssertionError(
-                                "set_loop_start readback mismatch"
-                            )
-                        report.record(Verification(
-                            "set_loop_start", "live_passed",
-                            f"start_beat=4.0 readback={rb_loop_start}",
-                        ))
+                        async def run_set_time() -> str:
+                            call("set_current_song_time", {"time": 8.0})
+                            rb_time = float(call("get_session_info")["current_song_time"])
+                            if abs(rb_time - 8.0) > 0.5:
+                                raise AssertionError(
+                                    f"set_current_song_time readback {rb_time} far from 8.0"
+                                )
+                            return f"time=8.0 readback={rb_time}"
 
-                        call("set_loop_length", {"length_beats": 8.0})
-                        rb_loop_length = float(
-                            call("get_loop_settings")["loop_length"]
-                        )
-                        if abs(rb_loop_length - 8.0) > 0.01:
-                            raise AssertionError(
-                                "set_loop_length readback mismatch"
-                            )
-                        report.record(Verification(
-                            "set_loop_length", "live_passed",
-                            f"length_beats=8.0 readback={rb_loop_length}",
-                        ))
+                        await _record_call(report, "set_current_song_time", run_set_time)
 
-                        call("set_loop", {"enabled": True})
-                        rb_loop = bool(
-                            call("get_loop_settings")["loop"]
-                        )
-                        if not rb_loop:
-                            raise AssertionError(
-                                "set_loop readback did not enable loop"
-                            )
-                        report.record(Verification(
-                            "set_loop", "live_passed",
-                            f"enabled=True readback={rb_loop}",
-                        ))
+                        async def run_set_loop_start() -> str:
+                            call("set_loop_start", {"start_beat": 4.0})
+                            rb_loop_start = float(call("get_loop_settings")["loop_start"])
+                            if abs(rb_loop_start - 4.0) > 0.01:
+                                raise AssertionError("set_loop_start readback mismatch")
+                            return f"start_beat=4.0 readback={rb_loop_start}"
+
+                        await _record_call(report, "set_loop_start", run_set_loop_start)
+
+                        async def run_set_loop_length() -> str:
+                            call("set_loop_length", {"length_beats": 8.0})
+                            rb_loop_length = float(call("get_loop_settings")["loop_length"])
+                            if abs(rb_loop_length - 8.0) > 0.01:
+                                raise AssertionError("set_loop_length readback mismatch")
+                            return f"length_beats=8.0 readback={rb_loop_length}"
+
+                        await _record_call(report, "set_loop_length", run_set_loop_length)
+
+                        async def run_set_loop() -> str:
+                            call("set_loop", {"enabled": True})
+                            rb_loop = bool(call("get_loop_settings")["loop"])
+                            if not rb_loop:
+                                raise AssertionError("set_loop readback did not enable loop")
+                            return f"enabled=True readback={rb_loop}"
+
+                        await _record_call(report, "set_loop", run_set_loop)
 
                         # ----- clip + notes mutations -----
-                        call("create_clip", {
-                            "track_index": midi_track_index,
-                            "clip_index": clip_index,
-                            "length_beats": 4.0,
-                        })
-                        clip_info = call("get_clip_info", {
-                            "track_index": midi_track_index,
-                            "clip_index": clip_index,
-                        })
-                        if not bool(clip_info.get("has_clip", False)):
-                            raise AssertionError(
-                                "create_clip readback failed"
+                        async def run_create_clip() -> str:
+                            call(
+                                "create_clip",
+                                {
+                                    "track_index": midi_track_index,
+                                    "clip_index": clip_index,
+                                    "length_beats": 4.0,
+                                },
                             )
-                        report.record(Verification(
-                            "create_clip", "live_passed",
-                            f"track={midi_track_index} slot={clip_index}",
-                        ))
+                            clip_info = call(
+                                "get_clip_info",
+                                {
+                                    "track_index": midi_track_index,
+                                    "clip_index": clip_index,
+                                },
+                            )
+                            if not bool(clip_info.get("has_clip", False)):
+                                raise AssertionError("create_clip readback failed")
+                            return f"track={midi_track_index} slot={clip_index}"
 
-                        notes = [
-                            {"pitch": pitch,
-                             "start_time": float(index),
-                             "duration": 0.75,
-                             "velocity": 72 + index * 4,
-                             "mute": False}
-                            for index, pitch in enumerate((60, 64, 67, 72))
-                        ]
-                        added = call("add_notes_to_clip", {
-                            "track_index": midi_track_index,
-                            "clip_index": clip_index,
-                            "notes": notes,
-                        })
-                        if int(added.get("added", 0)) != 4:
-                            raise AssertionError(
-                                f"add_notes_to_clip added="
-                                f"{added.get('added')} expected 4"
-                            )
-                        observed = call("get_clip_notes", {
-                            "track_index": midi_track_index,
-                            "clip_index": clip_index,
-                        })
-                        if len(observed) != 4:
-                            raise AssertionError(
-                                "add_notes_to_clip readback failed"
-                            )
-                        report.record(Verification(
-                            "add_notes_to_clip", "live_passed",
-                            "added=4, observed=4",
-                        ))
-
-                        call("clear_clip_notes", {
-                            "track_index": midi_track_index,
-                            "clip_index": clip_index,
-                        })
-                        cleared = call("get_clip_notes", {
-                            "track_index": midi_track_index,
-                            "clip_index": clip_index,
-                        })
-                        if cleared:
-                            raise AssertionError(
-                                "clear_clip_notes did not empty clip"
-                            )
-                        report.record(Verification(
-                            "clear_clip_notes", "live_passed",
-                            "notes cleared (0)",
-                        ))
-
-                        call("set_clip_properties", {
-                            "track_index": midi_track_index,
-                            "clip_index": clip_index,
-                            "name": "ABLETON_MCP_ACCEPTANCE",
-                        })
-                        info = call("get_clip_info", {
-                            "track_index": midi_track_index,
-                            "clip_index": clip_index,
-                        })
-                        if info.get("name") != "ABLETON_MCP_ACCEPTANCE":
-                            raise AssertionError(
-                                "set_clip_properties did not rename clip"
-                            )
-                        report.record(Verification(
-                            "set_clip_properties", "live_passed",
-                            "name=ABLETON_MCP_ACCEPTANCE",
-                        ))
-                        artifacts["tags"].append(
-                            "clip:ABLETON_MCP_ACCEPTANCE"
+                        await _record_call(report, "create_clip", run_create_clip)
+                        create_clip_ok = (
+                            "create_clip" in report.recorded
+                            and report.recorded["create_clip"].status == "live_passed"
                         )
 
-                        # ``create_clip_automation`` uses
-                        # ``automation_points`` (real contract). The
-                        # handler returns ``{"points": N}``; the runner
-                        # asserts that the count matches the request.
-                        auto_points = [
-                            {"time": 0.0, "value": 0.0},
-                            {"time": 1.0, "value": 1.0},
-                        ]
-                        auto_resp = call("create_clip_automation", {
-                            "track_index": midi_track_index,
-                            "clip_index": clip_index,
-                            "parameter_name": "volume",
-                            "automation_points": auto_points,
-                        })
-                        if not isinstance(auto_resp, dict):
-                            raise AssertionError(
-                                "create_clip_automation must return a "
-                                "dict with 'points'"
+                        if not create_clip_ok:
+                            report.record(
+                                Verification(
+                                    "add_notes_to_clip",
+                                    "failed",
+                                    "Skipped: create_clip dependency failed",
+                                )
                             )
-                        if int(auto_resp.get("points", -1)) != len(
-                                auto_points):
-                            raise AssertionError(
-                                "create_clip_automation points readback "
-                                f"mismatch: {auto_resp}"
+                        else:
+
+                            async def run_add_notes() -> str:
+                                notes = [
+                                    {
+                                        "pitch": pitch,
+                                        "start_time": float(index),
+                                        "duration": 0.75,
+                                        "velocity": 72 + index * 4,
+                                        "mute": False,
+                                    }
+                                    for index, pitch in enumerate((60, 64, 67, 72))
+                                ]
+                                added = call(
+                                    "add_notes_to_clip",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "clip_index": clip_index,
+                                        "notes": notes,
+                                    },
+                                )
+                                if int(added.get("added", 0)) != 4:
+                                    raise AssertionError(
+                                        f"add_notes_to_clip added={added.get('added')} expected 4"
+                                    )
+                                observed = call(
+                                    "get_clip_notes",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "clip_index": clip_index,
+                                    },
+                                )
+                                if len(observed) != 4:
+                                    raise AssertionError("add_notes_to_clip readback failed")
+                                return "added=4, observed=4"
+
+                            await _record_call(report, "add_notes_to_clip", run_add_notes)
+
+                        if not create_clip_ok:
+                            report.record(
+                                Verification(
+                                    "clear_clip_notes",
+                                    "failed",
+                                    "Skipped: create_clip dependency failed",
+                                )
                             )
-                        report.record(Verification(
-                            "create_clip_automation", "live_passed",
-                            f"points={auto_resp.get('points')}",
-                        ))
+                        else:
+
+                            async def run_clear_notes() -> str:
+                                call(
+                                    "clear_clip_notes",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "clip_index": clip_index,
+                                    },
+                                )
+                                cleared = call(
+                                    "get_clip_notes",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "clip_index": clip_index,
+                                    },
+                                )
+                                if cleared:
+                                    raise AssertionError("clear_clip_notes did not empty clip")
+                                return "notes cleared (0)"
+
+                            await _record_call(report, "clear_clip_notes", run_clear_notes)
+
+                        if not create_clip_ok:
+                            report.record(
+                                Verification(
+                                    "set_clip_properties",
+                                    "failed",
+                                    "Skipped: create_clip dependency failed",
+                                )
+                            )
+                        else:
+
+                            async def run_set_clip_props() -> str:
+                                call(
+                                    "set_clip_properties",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "clip_index": clip_index,
+                                        "name": "ABLETON_MCP_ACCEPTANCE",
+                                    },
+                                )
+                                info = call(
+                                    "get_clip_info",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "clip_index": clip_index,
+                                    },
+                                )
+                                if info.get("name") != "ABLETON_MCP_ACCEPTANCE":
+                                    raise AssertionError("set_clip_properties did not rename clip")
+                                artifacts["tags"].append("clip:ABLETON_MCP_ACCEPTANCE")
+                                return "name=ABLETON_MCP_ACCEPTANCE"
+
+                            await _record_call(report, "set_clip_properties", run_set_clip_props)
+
+                        if not create_clip_ok:
+                            report.record(
+                                Verification(
+                                    "create_clip_automation",
+                                    "failed",
+                                    "Skipped: create_clip dependency failed",
+                                )
+                            )
+                        else:
+
+                            async def run_clip_automation() -> str:
+                                auto_points = [
+                                    {"time": 0.0, "value": 0.0},
+                                    {"time": 1.0, "value": 1.0},
+                                ]
+                                auto_resp = call(
+                                    "create_clip_automation",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "clip_index": clip_index,
+                                        "parameter_name": "volume",
+                                        "automation_points": auto_points,
+                                    },
+                                )
+                                if not isinstance(auto_resp, dict):
+                                    raise AssertionError(
+                                        "create_clip_automation must return a dict "
+                                        "with 'points_written'"
+                                    )
+                                if int(auto_resp.get("points_written", -1)) != len(auto_points):
+                                    raise AssertionError(
+                                        "create_clip_automation points readback "
+                                        f"mismatch: {auto_resp}"
+                                    )
+                                return f"points_written={auto_resp.get('points_written')}"
+
+                            await _record_call(
+                                report, "create_clip_automation", run_clip_automation
+                            )
 
                         # ----- transport fire/stop -----
-                        call("start_playback")
-                        playback_state = call("get_session_info")
-                        if not bool(
-                                playback_state.get("is_playing", False)):
-                            raise AssertionError(
-                                "start_playback did not engage transport"
-                            )
-                        report.record(Verification(
-                            "start_playback", "live_passed",
-                            f"is_playing={playback_state.get('is_playing')}",
-                        ))
-                        call("stop_playback")
-                        stop_state = call("get_session_info")
-                        if bool(stop_state.get("is_playing", False)):
-                            raise AssertionError(
-                                "stop_playback left transport playing"
-                            )
-                        report.record(Verification(
-                            "stop_playback", "live_passed",
-                            "transport stopped and readback confirmed",
-                        ))
+                        async def run_start_playback() -> str:
+                            call("start_playback")
+                            playback_state = call("get_session_info")
+                            if not bool(playback_state.get("is_playing", False)):
+                                raise AssertionError("start_playback did not engage transport")
+                            return f"is_playing={playback_state.get('is_playing')}"
+
+                        await _record_call(report, "start_playback", run_start_playback)
+
+                        async def run_stop_playback() -> str:
+                            call("stop_playback")
+                            stop_state = call("get_session_info")
+                            if bool(stop_state.get("is_playing", False)):
+                                raise AssertionError("stop_playback left transport playing")
+                            return "transport stopped and readback confirmed"
+
+                        await _record_call(report, "stop_playback", run_stop_playback)
 
                         # ----- run_batch -----
-                        batch = call("run_batch", {
-                            "commands": [
-                                {"type": "set_tempo",
-                                 "params": {"tempo": tempo_two}},
-                                {"type": "set_loop",
-                                 "params": {"enabled": True}},
-                                {"type": "create_clip",
-                                 "params": {
-                                     "track_index": midi_track_index,
-                                     "clip_index": clip_index,
-                                     "length_beats": 4.0,
-                                 }},
-                                {"type": "set_tempo",
-                                 "params": {"tempo": tempo_one}},
-                            ],
-                        })
-                        # Partial-batch invariant: first error aborts,
-                        # previous mutations stay. ``create_clip`` after a
-                        # populated slot will fail; the runner validates
-                        # the abort index, not the success count.
-                        if (int(batch.get("completed", 0)) < 2
-                                or int(batch.get("aborted_at", -1)) < 2
-                                or bool(batch.get("rolled_back", True))):
-                            raise AssertionError(
-                                f"Unexpected run_batch result: {batch}"
+                        async def run_run_batch() -> str:
+                            batch = call(
+                                "run_batch",
+                                {
+                                    "commands": [
+                                        {"type": "set_tempo", "params": {"tempo": tempo_two}},
+                                        {"type": "set_loop", "params": {"enabled": True}},
+                                        {
+                                            "type": "create_clip",
+                                            "params": {
+                                                "track_index": midi_track_index,
+                                                "clip_index": clip_index,
+                                                "length_beats": 4.0,
+                                            },
+                                        },
+                                        {"type": "set_tempo", "params": {"tempo": tempo_one}},
+                                    ],
+                                },
                             )
-                        report.record(Verification(
-                            "run_batch", "live_passed",
-                            f"completed={batch.get('completed')} "
-                            f"aborted_at={batch.get('aborted_at')}",
-                        ))
+                            if (
+                                int(batch.get("completed", 0)) < 2
+                                or int(batch.get("aborted_at", -1)) < 2
+                                or bool(batch.get("rolled_back", True))
+                            ):
+                                raise AssertionError(f"Unexpected run_batch result: {batch}")
+                            return (
+                                f"completed={batch.get('completed')} "
+                                f"aborted_at={batch.get('aborted_at')}"
+                            )
+
+                        await _record_call(report, "run_batch", run_run_batch)
 
                         # ----- fire_clip (optional) -----
-                        if fire_clip:
-                            fire_resp = call("fire_clip", {
-                                "track_index": midi_track_index,
-                                "clip_index": clip_index,
-                            })
-                            if not isinstance(fire_resp, dict):
-                                raise AssertionError(
-                                    "fire_clip must return a dict"
-                                )
-                            if not bool(fire_resp.get("fired", False)):
-                                raise AssertionError(
-                                    "fire_clip did not return fired=true"
-                                )
-                            playing = call("get_session_info").get(
-                                "is_playing", False)
-                            if not bool(playing):
-                                raise AssertionError(
-                                    "fire_clip left transport stopped"
-                                )
-                            report.record(Verification(
-                                "fire_clip", "live_passed",
-                                f"track={midi_track_index} "
-                                f"slot={clip_index}",
-                            ))
-                            call("stop_playback")
-                        else:
+                        if not fire_clip:
                             _record_unavailable(
-                                report, "fire_clip",
+                                report,
+                                "fire_clip",
                                 "fire_clip requires --fire-clip flag",
                             )
+                        elif not create_clip_ok:
+                            report.record(
+                                Verification(
+                                    "fire_clip", "failed", "Skipped: create_clip dependency failed"
+                                )
+                            )
+                        else:
+
+                            async def run_fire_clip() -> str:
+                                fire_resp = call(
+                                    "fire_clip",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "clip_index": clip_index,
+                                    },
+                                )
+                                if not isinstance(fire_resp, dict):
+                                    raise AssertionError("fire_clip must return a dict")
+                                if not bool(fire_resp.get("fired", False)):
+                                    raise AssertionError("fire_clip did not return fired=true")
+                                playing = call("get_session_info").get("is_playing", False)
+                                if not bool(playing):
+                                    raise AssertionError("fire_clip left transport stopped")
+                                return f"track={midi_track_index} slot={clip_index}"
+
+                            await _record_call(report, "fire_clip", run_fire_clip)
+                            import contextlib
+
+                            with contextlib.suppress(Exception):
+                                call("stop_playback")
 
                         # ----- fire_scene -----
-                        scene_resp = call("fire_scene",
-                                          {"scene_index": 0})
-                        if not isinstance(scene_resp, dict):
-                            raise AssertionError(
-                                "fire_scene must return a dict"
-                            )
-                        if "scene_index" not in scene_resp:
-                            raise AssertionError(
-                                "fire_scene response missing scene_index"
-                            )
-                        scene_playing = call("get_session_info").get(
-                            "is_playing", False)
-                        if not bool(scene_playing):
-                            raise AssertionError(
-                                "fire_scene left transport stopped"
-                            )
-                        report.record(Verification(
-                            "fire_scene", "live_passed", "scene=0",
-                        ))
+                        async def run_fire_scene() -> str:
+                            scene_resp = call("fire_scene", {"scene_index": 0})
+                            if not isinstance(scene_resp, dict):
+                                raise AssertionError("fire_scene must return a dict")
+                            if "scene_index" not in scene_resp:
+                                raise AssertionError("fire_scene response missing scene_index")
+                            scene_playing = call("get_session_info").get("is_playing", False)
+                            if not bool(scene_playing):
+                                raise AssertionError("fire_scene left transport stopped")
+                            return "scene=0"
+
+                        await _record_call(report, "fire_scene", run_fire_scene)
+                        import contextlib
+
+                        with contextlib.suppress(Exception):
+                            call("stop_playback")
 
                         # ----- set_track_property + readback -----
-                        # ``set_track_property`` uses ``property+value``,
-                        # not ``name``.
-                        call("set_track_property", {
-                            "track_index": midi_track_index,
-                            "property": "mute",
-                            "value": True,
-                        })
-                        state = call("get_track_state",
-                                      {"track_index": midi_track_index})
-                        if not bool(state.get("mute", False)):
-                            raise AssertionError(
-                                "set_track_property mute readback failed"
+                        async def run_set_track_prop() -> str:
+                            call(
+                                "set_track_property",
+                                {
+                                    "track_index": midi_track_index,
+                                    "property": "mute",
+                                    "value": True,
+                                },
                             )
-                        report.record(Verification(
-                            "set_track_property", "live_passed",
-                            "mute=True readback OK",
-                        ))
+                            state = call("get_track_state", {"track_index": midi_track_index})
+                            if not bool(state.get("mute", False)):
+                                raise AssertionError("set_track_property mute readback failed")
+                            return "mute=True readback OK"
 
-                        # Restore mute to the original state.
-                        original_mute = bool(
-                            baseline.get("track_mutes", {}).get(
-                                midi_track_index, False
+                        await _record_call(report, "set_track_property", run_set_track_prop)
+                        try:
+                            original_mute = bool(
+                                baseline.get("track_mutes", {}).get(midi_track_index, False)
                             )
-                        )
-                        call("set_track_property", {
-                            "track_index": midi_track_index,
-                            "property": "mute",
-                            "value": original_mute,
-                        })
+                            call(
+                                "set_track_property",
+                                {
+                                    "track_index": midi_track_index,
+                                    "property": "mute",
+                                    "value": original_mute,
+                                },
+                            )
+                        except Exception:
+                            pass
 
                         # ----- rename_track + readback -----
-                        # We rename to a temporary tag, read back, and
-                        # restore the **original** name (never "Bass").
-                        original_track_name = baseline["track_names"].get(
-                            midi_track_index, ""
-                        )
-                        tag_name = "ABLETON_MCP_ACCEPTANCE"
-                        call("rename_track", {
-                            "track_index": midi_track_index,
-                            "new_name": tag_name,
-                        })
-                        tracks = call("get_track_list")
-                        renamed = next(
-                            (t for t in tracks
-                             if int(t.get("index", -1)) == midi_track_index),
-                            None,
-                        )
-                        if renamed is None or renamed.get("name") != tag_name:
-                            raise AssertionError(
-                                "rename_track readback failed"
+                        async def run_rename_track() -> str:
+                            tag_name = "ABLETON_MCP_ACCEPTANCE"
+                            call(
+                                "rename_track",
+                                {
+                                    "track_index": midi_track_index,
+                                    "new_name": tag_name,
+                                },
                             )
-                        report.record(Verification(
-                            "rename_track", "live_passed",
-                            f"renamed to {tag_name}",
-                        ))
-                        artifacts["tags"].append(f"track:{tag_name}")
+                            tracks = call("get_track_list")
+                            renamed = next(
+                                (t for t in tracks if int(t.get("index", -1)) == midi_track_index),
+                                None,
+                            )
+                            if renamed is None or renamed.get("name") != tag_name:
+                                raise AssertionError("rename_track readback failed")
+                            artifacts["tags"].append(f"track:{tag_name}")
+                            return f"renamed to {tag_name}"
 
-                        # Restore the original track name from baseline.
-                        if original_track_name:
-                            call("rename_track", {
-                                "track_index": midi_track_index,
-                                "new_name": original_track_name,
-                            })
+                        await _record_call(report, "rename_track", run_rename_track)
+                        try:
+                            original_track_name = baseline["track_names"].get(midi_track_index, "")
+                            if original_track_name:
+                                call(
+                                    "rename_track",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "new_name": original_track_name,
+                                    },
+                                )
+                        except Exception:
+                            pass
 
                         # ----- delete_clip + readback -----
-                        call("delete_clip", {
-                            "track_index": midi_track_index,
-                            "clip_index": clip_index,
-                        })
-                        info_after_delete = call("get_clip_info", {
-                            "track_index": midi_track_index,
-                            "clip_index": clip_index,
-                        })
-                        if bool(info_after_delete.get("has_clip", False)):
-                            raise AssertionError(
-                                "delete_clip did not remove clip"
+                        if not create_clip_ok:
+                            report.record(
+                                Verification(
+                                    "delete_clip",
+                                    "failed",
+                                    "Skipped: create_clip dependency failed",
+                                )
                             )
-                        report.record(Verification(
-                            "delete_clip", "live_passed",
-                            f"track={midi_track_index} slot={clip_index}",
-                        ))
+                        else:
+
+                            async def run_delete_clip() -> str:
+                                call(
+                                    "delete_clip",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "clip_index": clip_index,
+                                    },
+                                )
+                                info_after_delete = call(
+                                    "get_clip_info",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "clip_index": clip_index,
+                                    },
+                                )
+                                if bool(info_after_delete.get("has_clip", False)):
+                                    raise AssertionError("delete_clip did not remove clip")
+                                return f"track={midi_track_index} slot={clip_index}"
+
+                            await _record_call(report, "delete_clip", run_delete_clip)
 
                         # ----- set_parameter_value + readback -----
-                        # Discover a parameter on the audio track via
-                        # ``list_device_params``. The real handler
-                        # returns ``[{device_id, device_name,
-                        # parameters:[{name, value, min, max}]}]`` —
-                        # one entry per device, with the device index
-                        # implicit in the entry's position. We must
-                        # remember that index and use it on every
-                        # subsequent ``get_parameter_value`` /
-                        # ``set_parameter_value`` call.
-                        track_id = _resolve_track_id(
-                            client, audio_track_index
-                        )
-                        device_params = call(
-                            "list_device_params", {"track_id": track_id},
-                        )
-                        first_param: str | None = None
-                        first_device_index: int | None = None
-                        if isinstance(device_params, list):
-                            for entry_index, entry in enumerate(device_params):
-                                if not isinstance(entry, dict):
-                                    continue
-                                inner = entry.get("parameters")
-                                if not isinstance(inner, list):
-                                    continue
-                                for nested in inner:
-                                    name = nested.get("name")
-                                    if isinstance(name, str) and name:
-                                        first_param = name
-                                        first_device_index = entry_index
-                                        break
-                                if first_param is not None:
-                                    break
-                        if first_param is None or (
-                                first_device_index is None):
-                            raise AcceptanceSafetyError(
-                                f"audio track {audio_track_index} has no "
-                                "parameter exposed by list_device_params; "
-                                "disposable Set must include at least one "
-                                "device with a parameter"
+                        if discovered_param_track_index is None:
+                            report.record(
+                                Verification(
+                                    "set_parameter_value",
+                                    "failed",
+                                    "Skipped: parameter discovery failed",
+                                )
                             )
-                        # Capture the original value before the write so the restore step
-                        # can return to it deterministically. Use the
-                        # discovered ``device_index`` — never a
-                        # hard-coded ``0``.
-                        original_param_resp = call("get_parameter_value", {
-                            "track_index": audio_track_index,
-                            "device_index": first_device_index,
-                            "parameter_name": first_param,
-                        })
-                        if not isinstance(original_param_resp, dict):
-                            raise AssertionError(
-                                "get_parameter_value must return a dict"
+                        else:
+
+                            async def run_set_parameter_value() -> str:
+                                original_param_resp = call(
+                                    "get_parameter_value",
+                                    {
+                                        "track_index": discovered_param_track_index,
+                                        "device_index": discovered_param_device_index,
+                                        "parameter_name": discovered_param_name,
+                                    },
+                                )
+                                if not isinstance(original_param_resp, dict):
+                                    raise AssertionError("get_parameter_value must return a dict")
+                                original_param_value = float(original_param_resp.get("value", 0.0))
+                                artifacts["set_parameter_value_restore"] = {
+                                    "track_index": discovered_param_track_index,
+                                    "device_index": discovered_param_device_index,
+                                    "parameter_name": discovered_param_name,
+                                    "original": original_param_value,
+                                }
+                                call(
+                                    "set_parameter_value",
+                                    {
+                                        "track_index": discovered_param_track_index,
+                                        "device_index": discovered_param_device_index,
+                                        "parameter_name": discovered_param_name,
+                                        "value": 1.0,
+                                    },
+                                )
+                                rb_value = call(
+                                    "get_parameter_value",
+                                    {
+                                        "track_index": discovered_param_track_index,
+                                        "device_index": discovered_param_device_index,
+                                        "parameter_name": discovered_param_name,
+                                    },
+                                )
+                                if not isinstance(rb_value, dict):
+                                    raise AssertionError(
+                                        "set_parameter_value readback failed "
+                                        "(no dict response)"
+                                    )
+                                if abs(float(rb_value.get("value", 0)) - 1.0) > 0.01:
+                                    raise AssertionError("set_parameter_value readback failed")
+                                return f"param={discovered_param_name} value=1.0"
+
+                            await _record_call(
+                                report, "set_parameter_value", run_set_parameter_value
                             )
-                        original_param_value = float(
-                            original_param_resp.get("value", 0.0))
-                        artifacts["set_parameter_value_restore"] = {
-                            "track_index": audio_track_index,
-                            "device_index": first_device_index,
-                            "parameter_name": first_param,
-                            "original": original_param_value,
-                        }
-                        call("set_parameter_value", {
-                            "track_index": audio_track_index,
-                            "device_index": first_device_index,
-                            "parameter_name": first_param,
-                            "value": 1.0,
-                        })
-                        rb_value = call("get_parameter_value", {
-                            "track_index": audio_track_index,
-                            "device_index": first_device_index,
-                            "parameter_name": first_param,
-                        })
-                        if not isinstance(rb_value, dict):
-                            raise AssertionError(
-                                "set_parameter_value readback failed "
-                                "(no dict response)"
-                            )
-                        if abs(float(rb_value.get("value", 0)) - 1.0) > 0.01:
-                            raise AssertionError(
-                                "set_parameter_value readback failed"
-                            )
-                        report.record(Verification(
-                            "set_parameter_value", "live_passed",
-                            f"param={first_param} value=1.0",
-                        ))
 
                         # ----- live_fade -----
-                        # Capture the mixer volume we are about to
-                        # drive so the restore step knows the original
-                        # target. ``live_fade`` mutates
-                        # ``track.mixer_device.volume``; the canonical
-                        # readback is ``get_track_state(
-                        # track_index)["volume"]`` — **not** a device
-                        # parameter.
-                        pre_state = call(
-                            "get_track_state",
-                            {"track_index": audio_track_index},
-                        )
-                        if not isinstance(pre_state, dict) or (
-                                "volume" not in pre_state):
-                            raise AssertionError(
-                                "live_fade pre-readback failed "
-                                "(get_track_state missing 'volume')"
-                            )
-                        original_volume = float(pre_state["volume"])
-                        artifacts["live_fade_volume_original"] = (
-                            original_volume)
-                        # Track this as the live_fade restore, not
-                        # ``set_parameter_value``: the cleanup path
-                        # below will re-issue a ``live_fade`` to roll
-                        # back, instead of writing a device parameter.
+                        async def run_live_fade() -> str:
+                            pre_state = call("get_track_state", {"track_index": audio_track_index})
+                            if not isinstance(pre_state, dict) or "volume" not in pre_state:
+                                raise AssertionError(
+                                    "live_fade pre-readback failed "
+                                    "(get_track_state missing 'volume')"
+                                )
+                            original_volume = float(pre_state["volume"])
+                            artifacts["live_fade_volume_original"] = original_volume
 
-                        # duration=0 + steps=1 is the immediate path;
-                        # the post-fade readback must observe the mixer
-                        # ``volume`` field reaching the requested
-                        # target, not a device parameter.
-                        call("live_fade", {
-                            "track_index": audio_track_index,
-                            "target_percent": 50.0,
-                            "duration": 0.0,
-                            "steps": 1,
-                        })
-                        post_immediate = call(
-                            "get_track_state",
-                            {"track_index": audio_track_index},
-                        )
-                        if not isinstance(post_immediate, dict) or (
-                                "volume" not in post_immediate):
-                            raise AssertionError(
-                                "live_fade immediate readback failed "
-                                "(get_track_state missing 'volume')"
+                            call(
+                                "live_fade",
+                                {
+                                    "track_index": audio_track_index,
+                                    "target_percent": 50.0,
+                                    "duration": 0.0,
+                                    "steps": 1,
+                                },
                             )
-                        if abs(
-                            float(post_immediate["volume"]) - 0.5
-                        ) > 0.05:
-                            raise AssertionError(
-                                "live_fade immediate target mismatch"
+                            post_immediate = call(
+                                "get_track_state", {"track_index": audio_track_index}
                             )
-                        report.record(Verification(
-                            "live_fade", "live_passed",
-                            "duration=0 immediate path readback OK",
-                        ))
-                        call("live_fade", {
-                            "track_index": audio_track_index,
-                            "target_percent": 80.0,
-                            "duration": 0.2,
-                            "steps": 4,
-                        })
-                        post_fade = call(
-                            "get_track_state",
-                            {"track_index": audio_track_index},
-                        )
-                        if not isinstance(post_fade, dict) or (
-                                "volume" not in post_fade):
-                            raise AssertionError(
-                                "live_fade timed readback failed "
-                                "(get_track_state missing 'volume')"
+                            if (
+                                not isinstance(post_immediate, dict)
+                                or "volume" not in post_immediate
+                            ):
+                                raise AssertionError("live_fade immediate readback failed")
+                            if abs(float(post_immediate["volume"]) - 0.5) > 0.05:
+                                raise AssertionError("live_fade immediate target mismatch")
+
+                            call(
+                                "live_fade",
+                                {
+                                    "track_index": audio_track_index,
+                                    "target_percent": 80.0,
+                                    "duration": 0.2,
+                                    "steps": 4,
+                                },
                             )
-                        if abs(
-                            float(post_fade["volume"]) - 0.8
-                        ) > 0.05:
-                            raise AssertionError(
-                                "live_fade timed target mismatch"
-                            )
-                        report.record(Verification(
-                            "live_fade", "live_passed",
-                            "duration=0.2 monotonic fade readback OK",
-                        ))
+                            post_fade = call("get_track_state", {"track_index": audio_track_index})
+                            if not isinstance(post_fade, dict) or "volume" not in post_fade:
+                                raise AssertionError("live_fade timed readback failed")
+                            if abs(float(post_fade["volume"]) - 0.8) > 0.05:
+                                raise AssertionError("live_fade timed target mismatch")
+                            return "duration=0.2 monotonic fade readback OK"
+
+                        await _record_call(report, "live_fade", run_live_fade)
 
                         # ----- set_warp_state + readback -----
-                        try:
-                            await call_ws("set_warp_state", {
-                                "track_index": audio_track_index,
-                                "clip_index": audio_clip_index,
-                                "warping": True,
-                            })
+                        async def run_set_warp_state() -> str:
+                            await call_ws(
+                                "set_warp_state",
+                                {
+                                    "track_index": audio_track_index,
+                                    "clip_index": audio_clip_index,
+                                    "warping": True,
+                                },
+                            )
                             rb_warp = await read_warp()
                             if not bool(rb_warp.get("warping", False)):
-                                raise AssertionError(
-                                    "set_warp_state readback failed"
-                                )
-                            report.record(Verification(
-                                "set_warp_state", "live_passed",
-                                f"warping=True readback={rb_warp}",
-                            ))
-                        except BridgeError as error:
-                            if error.code == "CAPABILITY_UNAVAILABLE":
-                                report.record(Verification(
-                                    "set_warp_state", "host_unavailable",
-                                    f"{error.code}: {error}",
-                                ))
-                            else:
-                                report.record(Verification(
-                                    "set_warp_state", "failed",
-                                    f"{error.code}: {error}",
-                                ))
+                                raise AssertionError("set_warp_state readback failed")
+                            return f"warping=True readback={rb_warp}"
+
+                        await _record_call(report, "set_warp_state", run_set_warp_state)
 
                         # ----- load_device_to_track + readback -----
-                        # Load onto a MIDI track (Operator is an
-                        # instrument and lives on MIDI tracks). The
-                        # runner discovers a MIDI track; falls back to
-                        # ``midi_track_index`` when one exists.
-                        load_target = midi_track_index
-                        try:
+                        async def run_load_device() -> str:
+                            load_target = midi_track_index
                             load_result = await call_ws(
-                                "load_device_to_track", {
+                                "load_device_to_track",
+                                {
                                     "track_index": load_target,
                                     "device_name": "Operator",
                                 },
                             )
-                            # WS tools serialize to JSON strings.
                             import json as _json
+
                             if isinstance(load_result, str):
                                 load_result = _json.loads(load_result)
-                            # Readback: Operator must appear in the
-                            # device list of the target track.
-                            dev_list = call("get_device_list", {
-                                "track_index": load_target,
-                            })
-                            names = [
-                                str(d.get("name", "")) for d in dev_list
-                            ] if isinstance(dev_list, list) else []
+                            dev_list = call("get_device_list", {"track_index": load_target})
+                            names = (
+                                [str(d.get("name", "")) for d in dev_list]
+                                if isinstance(dev_list, list)
+                                else []
+                            )
                             if "Operator" not in names:
                                 raise AssertionError(
-                                    f"load_device_to_track readback "
-                                    f"missing Operator in {names}"
+                                    f"load_device_to_track readback missing Operator in {names}"
                                 )
-                            report.record(Verification(
-                                "load_device_to_track", "live_passed",
-                                f"Operator on track {load_target}",
-                            ))
                             artifacts["manual_cleanup"].append(
                                 f"Operator loaded on track {load_target}; "
                                 "remove via Live UI or Undo"
                             )
-                        except BridgeError as error:
-                            if error.code == "CAPABILITY_UNAVAILABLE":
-                                report.record(Verification(
-                                    "load_device_to_track",
-                                    "host_unavailable",
-                                    f"{error.code}: {error}",
-                                ))
-                            else:
-                                report.record(Verification(
-                                    "load_device_to_track", "failed",
-                                    f"{error.code}: {error}",
-                                ))
+                            return f"Operator on track {load_target}"
 
-                        # quit_ableton is recorded in the quit-only branch above. The
-                        # mutations branch itself never marks quit_ableton
-                        # as passed: invoking it would close the host
-                        # before any other probe ran, and we never
-                        # certify an operation that was not executed.
-                        if "quit" not in profiles and (
-                                "quit_ableton" not in report.recorded):
-                            report.record(Verification(
-                                "quit_ableton", "manual_required",
-                                QUIT_ABLETON_MANUAL_REASON,
-                            ))
-                        new_audio = call("create_audio_track", {"index": -1})
-                        if not isinstance(new_audio, dict):
-                            raise AssertionError(
-                                "create_audio_track must return a dict"
-                            )
-                        new_audio_index = new_audio.get("track_index")
-                        if not isinstance(new_audio_index, int):
-                            raise AssertionError(
-                                "create_audio_track missing track_index"
-                            )
-                        post_tracks = call("get_track_list")
-                        if not any(
-                            int(t.get("index", -1)) == new_audio_index
-                            and t.get("type") == "audio"
-                            for t in post_tracks
-                        ):
-                            raise AssertionError(
-                                f"create_audio_track {new_audio_index} "
-                                "missing from get_track_list"
-                            )
-                        artifacts["tracks_created"].append(
-                            f"audio:{new_audio_index}"
-                        )
-                        report.record(Verification(
-                            "create_audio_track", "live_passed",
-                            f"new index={new_audio_index}",
-                        ))
-                        new_midi = call("create_midi_track", {"index": -1})
-                        if not isinstance(new_midi, dict):
-                            raise AssertionError(
-                                "create_midi_track must return a dict"
-                            )
-                        new_midi_index = new_midi.get("track_index")
-                        if not isinstance(new_midi_index, int):
-                            raise AssertionError(
-                                "create_midi_track missing track_index"
-                            )
-                        post_tracks = call("get_track_list")
-                        if not any(
-                            int(t.get("index", -1)) == new_midi_index
-                            and t.get("type") == "midi"
-                            for t in post_tracks
-                        ):
-                            raise AssertionError(
-                                f"create_midi_track {new_midi_index} "
-                                "missing from get_track_list"
-                            )
-                        artifacts["tracks_created"].append(
-                            f"midi:{new_midi_index}"
-                        )
-                        report.record(Verification(
-                            "create_midi_track", "live_passed",
-                            f"new index={new_midi_index}",
-                        ))
+                        await _record_call(report, "load_device_to_track", run_load_device)
 
-                        # ----- save_set with explicit result inspection
-                        # ``save_set`` is only ``live_passed`` when the
-                        # bridge returns ``saved=true``; otherwise the
-                        # response is treated as ``host_unavailable`` or
-                        # ``failed`` based on the API surface.
-                        try:
+                        if "quit" not in profiles and "quit_ableton" not in report.recorded:
+                            report.record(
+                                Verification(
+                                    "quit_ableton",
+                                    "manual_required",
+                                    QUIT_ABLETON_MANUAL_REASON,
+                                )
+                            )
+
+                        async def run_create_audio_track() -> str:
+                            new_audio = call("create_audio_track", {"index": -1})
+                            if not isinstance(new_audio, dict):
+                                raise AssertionError("create_audio_track must return a dict")
+                            new_audio_index = new_audio.get("track_index")
+                            if not isinstance(new_audio_index, int):
+                                raise AssertionError("create_audio_track missing track_index")
+                            post_tracks = call("get_track_list")
+                            if not any(
+                                int(t.get("index", -1)) == new_audio_index
+                                and t.get("type") == "audio"
+                                for t in post_tracks
+                            ):
+                                raise AssertionError(
+                                    f"create_audio_track {new_audio_index} "
+                                    "missing from get_track_list"
+                                )
+                            artifacts["tracks_created"].append(f"audio:{new_audio_index}")
+                            return f"new index={new_audio_index}"
+
+                        await _record_call(report, "create_audio_track", run_create_audio_track)
+
+                        async def run_create_midi_track() -> str:
+                            new_midi = call("create_midi_track", {"index": -1})
+                            if not isinstance(new_midi, dict):
+                                raise AssertionError("create_midi_track must return a dict")
+                            new_midi_index = new_midi.get("track_index")
+                            if not isinstance(new_midi_index, int):
+                                raise AssertionError("create_midi_track missing track_index")
+                            post_tracks = call("get_track_list")
+                            if not any(
+                                int(t.get("index", -1)) == new_midi_index
+                                and t.get("type") == "midi"
+                                for t in post_tracks
+                            ):
+                                raise AssertionError(
+                                    f"create_midi_track {new_midi_index} "
+                                    "missing from get_track_list"
+                                )
+                            artifacts["tracks_created"].append(f"midi:{new_midi_index}")
+                            return f"new index={new_midi_index}"
+
+                        await _record_call(report, "create_midi_track", run_create_midi_track)
+
+                        async def run_save_set() -> str:
                             save_result = call("save_set")
-                            if isinstance(save_result, dict):
-                                if save_result.get("saved") is True:
-                                    report.record(Verification(
-                                        "save_set", "live_passed",
-                                        "saved=true",
-                                    ))
-                                elif save_result.get(
-                                        "song_save_available") is False:
-                                    report.record(Verification(
-                                        "save_set", "host_unavailable",
-                                        "Song.save API not exposed",
-                                    ))
-                                else:
-                                    report.record(Verification(
-                                        "save_set", "failed",
-                                        f"ambiguous save_set response: "
-                                        f"{save_result}",
-                                    ))
-                            else:
-                                report.record(Verification(
-                                    "save_set", "failed",
-                                    f"unexpected save_set response: "
-                                    f"{save_result!r}",
-                                ))
-                        except BridgeError as error:
-                            if error.code == "CAPABILITY_UNAVAILABLE":
-                                report.record(Verification(
-                                    "save_set", "host_unavailable",
-                                    f"{error.code}: {error}",
-                                ))
-                            else:
-                                report.record(Verification(
-                                    "save_set", "failed",
-                                    f"{error.code}: {error}",
-                                ))
+                            if not isinstance(save_result, dict):
+                                raise AssertionError(
+                                    f"unexpected save_set response: {save_result!r}"
+                                )
+                            if save_result.get("saved") is True:
+                                return "saved=true"
+                            if save_result.get("song_save_available") is False:
+                                raise BridgeError(
+                                    "Song.save API not exposed", code="CAPABILITY_UNAVAILABLE"
+                                )
+                            raise AssertionError(f"ambiguous save_set response: {save_result}")
+
+                        await _record_call(report, "save_set", run_save_set)
+
+                    except Exception as mutations_error:
+                        for tool in BASELINE_PROBE_GROUPS.get("mutations", ()):
+                            if tool not in report.recorded:
+                                report.record(
+                                    Verification(
+                                        tool,
+                                        "failed",
+                                        f"mutations setup failed: {mutations_error}",
+                                    )
+                                )
 
                     finally:
                         # ----- cleanup restore -----
@@ -1841,19 +1867,22 @@ async def run_live_acceptance(
                             try:
                                 observed = restore()
                             except Exception as error:  # noqa: BLE001
-                                cleanup_failures.append((
-                                    tool,
-                                    f"{action} raised "
-                                    f"{type(error).__name__}: {error}",
-                                ))
+                                cleanup_failures.append(
+                                    (
+                                        tool,
+                                        f"{action} raised {type(error).__name__}: {error}",
+                                    )
+                                )
                                 return
                             try:
                                 verify(observed)
                             except Exception as error:  # noqa: BLE001
-                                cleanup_failures.append((
-                                    tool,
-                                    f"{action} readback failed: {error}",
-                                ))
+                                cleanup_failures.append(
+                                    (
+                                        tool,
+                                        f"{action} readback failed: {error}",
+                                    )
+                                )
 
                         async def _restore_ws(
                             action: str,
@@ -1865,22 +1894,24 @@ async def run_live_acceptance(
                             try:
                                 observed = await restore()
                             except Exception as error:  # noqa: BLE001
-                                cleanup_failures.append((
-                                    tool,
-                                    f"{action} raised "
-                                    f"{type(error).__name__}: {error}",
-                                ))
+                                cleanup_failures.append(
+                                    (
+                                        tool,
+                                        f"{action} raised {type(error).__name__}: {error}",
+                                    )
+                                )
                                 return
                             try:
                                 await verify(observed)
                             except Exception as error:  # noqa: BLE001
-                                cleanup_failures.append((
-                                    tool,
-                                    f"{action} readback failed: {error}",
-                                ))
+                                cleanup_failures.append(
+                                    (
+                                        tool,
+                                        f"{action} readback failed: {error}",
+                                    )
+                                )
 
-                        def _eq(observed: Any, expected: Any,
-                                label: str) -> None:
+                        def _eq(observed: Any, expected: Any, label: str) -> None:
                             if observed != expected:
                                 raise AssertionError(
                                     f"{label} readback mismatch: "
@@ -1889,86 +1920,88 @@ async def run_live_acceptance(
                                 )
 
                         _restore_call(
-                            "stop_playback", "stop_playback",
+                            "stop_playback",
+                            "stop_playback",
                             lambda: call("stop_playback"),
                             verify=lambda _o: _eq(
-                                bool(call("get_session_info").get(
-                                    "is_playing", False)),
-                                False, "is_playing"),
+                                bool(call("get_session_info").get("is_playing", False)),
+                                False,
+                                "is_playing",
+                            ),
                         )
                         _restore_call(
-                            "set_loop", "set_loop",
-                            lambda: call("set_loop",
-                                         {"enabled": original_loop}),
+                            "set_loop",
+                            "set_loop",
+                            lambda: call("set_loop", {"enabled": original_loop}),
                             verify=lambda _o: _eq(
-                                bool(call("get_loop_settings").get(
-                                    "loop", False)),
-                                original_loop, "loop"),
+                                bool(call("get_loop_settings").get("loop", False)),
+                                original_loop,
+                                "loop",
+                            ),
                         )
                         _restore_call(
-                            "set_loop_start", "set_loop_start",
-                            lambda: call("set_loop_start",
-                                         {"start_beat": original_loop_start}),
+                            "set_loop_start",
+                            "set_loop_start",
+                            lambda: call("set_loop_start", {"start_beat": original_loop_start}),
                             verify=lambda _o: _eq(
-                                float(call("get_loop_settings").get(
-                                    "loop_start", 0.0)),
-                                original_loop_start, "loop_start"),
+                                float(call("get_loop_settings").get("loop_start", 0.0)),
+                                original_loop_start,
+                                "loop_start",
+                            ),
                         )
                         _restore_call(
-                            "set_loop_length", "set_loop_length",
-                            lambda: call("set_loop_length",
-                                         {"length_beats":
-                                          original_loop_length}),
+                            "set_loop_length",
+                            "set_loop_length",
+                            lambda: call("set_loop_length", {"length_beats": original_loop_length}),
                             verify=lambda _o: _eq(
-                                float(call("get_loop_settings").get(
-                                    "loop_length", 0.0)),
-                                original_loop_length, "loop_length"),
+                                float(call("get_loop_settings").get("loop_length", 0.0)),
+                                original_loop_length,
+                                "loop_length",
+                            ),
                         )
                         _restore_call(
-                            "set_tempo", "set_tempo",
-                            lambda: call("set_tempo",
-                                         {"tempo": original_tempo}),
+                            "set_tempo",
+                            "set_tempo",
+                            lambda: call("set_tempo", {"tempo": original_tempo}),
                             verify=lambda _o: _eq(
-                                float(call("get_session_info").get(
-                                    "tempo", 0.0)),
-                                original_tempo, "tempo"),
+                                float(call("get_session_info").get("tempo", 0.0)),
+                                original_tempo,
+                                "tempo",
+                            ),
                         )
                         _restore_call(
                             "set_current_song_time",
                             "set_current_song_time",
-                            lambda: call("set_current_song_time",
-                                         {"time": original_time}),
+                            lambda: call("set_current_song_time", {"time": original_time}),
                             verify=lambda _o: _eq(
-                                float(call("get_session_info").get(
-                                    "current_song_time", 0.0)),
-                                original_time, "current_song_time"),
+                                float(call("get_session_info").get("current_song_time", 0.0)),
+                                original_time,
+                                "current_song_time",
+                            ),
                         )
                         if cue_created:
+
                             def _verify_cue_absent(_observed: Any) -> None:
                                 if any(
-                                    abs(float(item.get("time", -1))
-                                        - cue_time) < 0.01
+                                    abs(float(item.get("time", -1)) - cue_time) < 0.01
                                     for item in call("get_locators")
                                 ):
                                     raise AssertionError(
-                                        f"cue at {cue_time} still "
-                                        "present after delete"
+                                        f"cue at {cue_time} still present after delete"
                                     )
 
                             _restore_call(
-                                "delete_cue_point", "delete_cue_point",
-                                lambda: call("delete_cue_point",
-                                             {"time": cue_time}),
+                                "delete_cue_point",
+                                "delete_cue_point",
+                                lambda: call("delete_cue_point", {"time": cue_time}),
                                 verify=_verify_cue_absent,
                             )
                         if original_warp is not None:
-                            expected_warp = bool(original_warp.get(
-                                "warping", False))
+                            expected_warp = bool(original_warp.get("warping", False))
 
                             async def _verify_warp(_observed: Any) -> None:
                                 rb = await read_warp()
-                                if bool(rb.get("warping", False)) != (
-                                        expected_warp):
+                                if bool(rb.get("warping", False)) != (expected_warp):
                                     raise AssertionError(
                                         f"warp restore: observed="
                                         f"{rb.get('warping')!r} expected="
@@ -1976,27 +2009,34 @@ async def run_live_acceptance(
                                     )
 
                             await _restore_ws(
-                                "set_warp_state", "set_warp_state",
-                                lambda: call_ws("set_warp_state", {
-                                    "track_index": audio_track_index,
-                                    "clip_index": audio_clip_index,
-                                    "warping": expected_warp,
-                                }),
+                                "set_warp_state",
+                                "set_warp_state",
+                                lambda: call_ws(
+                                    "set_warp_state",
+                                    {
+                                        "track_index": audio_track_index,
+                                        "clip_index": audio_clip_index,
+                                        "warping": expected_warp,
+                                    },
+                                ),
                                 verify=_verify_warp,
                             )
                         # Restore per-track mute/solo/arm so the
                         # disposable Set comes back to its pre-run state.
-                        for idx, original in baseline.get(
-                                "track_mutes", {}).items():
+                        for idx, original in baseline.get("track_mutes", {}).items():
+
                             def _restore_mute(
                                 _idx: int = idx,
                                 _original: bool = original,
                             ) -> Any:
-                                return call("set_track_property", {
-                                    "track_index": _idx,
-                                    "property": "mute",
-                                    "value": _original,
-                                })
+                                return call(
+                                    "set_track_property",
+                                    {
+                                        "track_index": _idx,
+                                        "property": "mute",
+                                        "value": _original,
+                                    },
+                                )
 
                             def _verify_mute(
                                 _observed: Any,
@@ -2004,10 +2044,14 @@ async def run_live_acceptance(
                                 _original: bool = original,
                             ) -> None:
                                 _eq(
-                                    bool(call("get_track_state", {
-                                        "track_index": _idx}).get(
-                                            "mute", False)),
-                                    _original, f"track:{_idx}.mute")
+                                    bool(
+                                        call("get_track_state", {"track_index": _idx}).get(
+                                            "mute", False
+                                        )
+                                    ),
+                                    _original,
+                                    f"track:{_idx}.mute",
+                                )
 
                             _restore_call(
                                 f"set_track_property(mute:{idx})",
@@ -2015,17 +2059,20 @@ async def run_live_acceptance(
                                 _restore_mute,
                                 verify=_verify_mute,
                             )
-                        for idx, original in baseline.get(
-                                "track_solos", {}).items():
+                        for idx, original in baseline.get("track_solos", {}).items():
+
                             def _restore_solo(
                                 _idx: int = idx,
                                 _original: bool = original,
                             ) -> Any:
-                                return call("set_track_property", {
-                                    "track_index": _idx,
-                                    "property": "solo",
-                                    "value": _original,
-                                })
+                                return call(
+                                    "set_track_property",
+                                    {
+                                        "track_index": _idx,
+                                        "property": "solo",
+                                        "value": _original,
+                                    },
+                                )
 
                             def _verify_solo(
                                 _observed: Any,
@@ -2033,10 +2080,14 @@ async def run_live_acceptance(
                                 _original: bool = original,
                             ) -> None:
                                 _eq(
-                                    bool(call("get_track_state", {
-                                        "track_index": _idx}).get(
-                                            "solo", False)),
-                                    _original, f"track:{_idx}.solo")
+                                    bool(
+                                        call("get_track_state", {"track_index": _idx}).get(
+                                            "solo", False
+                                        )
+                                    ),
+                                    _original,
+                                    f"track:{_idx}.solo",
+                                )
 
                             _restore_call(
                                 f"set_track_property(solo:{idx})",
@@ -2044,17 +2095,20 @@ async def run_live_acceptance(
                                 _restore_solo,
                                 verify=_verify_solo,
                             )
-                        for idx, original in baseline.get(
-                                "track_arms", {}).items():
+                        for idx, original in baseline.get("track_arms", {}).items():
+
                             def _restore_arm(
                                 _idx: int = idx,
                                 _original: bool = original,
                             ) -> Any:
-                                return call("set_track_property", {
-                                    "track_index": _idx,
-                                    "property": "arm",
-                                    "value": _original,
-                                })
+                                return call(
+                                    "set_track_property",
+                                    {
+                                        "track_index": _idx,
+                                        "property": "arm",
+                                        "value": _original,
+                                    },
+                                )
 
                             def _verify_arm(
                                 _observed: Any,
@@ -2062,10 +2116,14 @@ async def run_live_acceptance(
                                 _original: bool = original,
                             ) -> None:
                                 _eq(
-                                    bool(call("get_track_state", {
-                                        "track_index": _idx}).get(
-                                            "arm", False)),
-                                    _original, f"track:{_idx}.arm")
+                                    bool(
+                                        call("get_track_state", {"track_index": _idx}).get(
+                                            "arm", False
+                                        )
+                                    ),
+                                    _original,
+                                    f"track:{_idx}.arm",
+                                )
 
                             _restore_call(
                                 f"set_track_property(arm:{idx})",
@@ -2083,16 +2141,14 @@ async def run_live_acceptance(
                         # path as the original mutation — never via
                         # ``set_parameter_value`` on a device.
                         if "live_fade_volume_original" in artifacts:
-                            restore_target = artifacts[
-                                "live_fade_volume_original"]
+                            restore_target = artifacts["live_fade_volume_original"]
 
                             def _verify_volume(_o: Any) -> None:
                                 state = call(
                                     "get_track_state",
                                     {"track_index": audio_track_index},
                                 )
-                                if not isinstance(state, dict) or (
-                                        "volume" not in state):
+                                if not isinstance(state, dict) or ("volume" not in state):
                                     raise AssertionError(
                                         "live_fade restore readback "
                                         "missing 'volume' from "
@@ -2107,19 +2163,21 @@ async def run_live_acceptance(
                             _restore_call(
                                 "live_fade volume restore",
                                 "live_fade",
-                                lambda: call("live_fade", {
-                                    "track_index": audio_track_index,
-                                    "target_value": restore_target,
-                                    "duration": 0.0,
-                                    "steps": 1,
-                                }),
+                                lambda: call(
+                                    "live_fade",
+                                    {
+                                        "track_index": audio_track_index,
+                                        "target_value": restore_target,
+                                        "duration": 0.0,
+                                        "steps": 1,
+                                    },
+                                ),
                                 verify=_verify_volume,
                             )
                         # Restore the parameter the mutation probe
                         # touched, using the snapshot captured before the
                         # write.
-                        param_restore_raw = artifacts.get(
-                            "set_parameter_value_restore")
+                        param_restore_raw = artifacts.get("set_parameter_value_restore")
                         param_restore: dict[str, Any] | None = (
                             cast(dict[str, Any], param_restore_raw)
                             if isinstance(param_restore_raw, dict)
@@ -2129,25 +2187,26 @@ async def run_live_acceptance(
                             _restore_call(
                                 "set_parameter_value restore",
                                 "set_parameter_value",
-                                lambda: call("set_parameter_value", {
-                                    "track_index":
-                                    param_restore["track_index"],
-                                    "device_index":
-                                    param_restore["device_index"],
-                                    "parameter_name":
-                                    param_restore["parameter_name"],
-                                    "value":
-                                    param_restore["original"],
-                                }),
+                                lambda: call(
+                                    "set_parameter_value",
+                                    {
+                                        "track_index": param_restore["track_index"],
+                                        "device_index": param_restore["device_index"],
+                                        "parameter_name": param_restore["parameter_name"],
+                                        "value": param_restore["original"],
+                                    },
+                                ),
                                 verify=lambda _o: _eq(
-                                    float(call("get_parameter_value", {
-                                        "track_index":
-                                        param_restore["track_index"],
-                                        "device_index":
-                                        param_restore["device_index"],
-                                        "parameter_name":
-                                        param_restore["parameter_name"],
-                                    }).get("value", 0.0)),
+                                    float(
+                                        call(
+                                            "get_parameter_value",
+                                            {
+                                                "track_index": param_restore["track_index"],
+                                                "device_index": param_restore["device_index"],
+                                                "parameter_name": param_restore["parameter_name"],
+                                            },
+                                        ).get("value", 0.0)
+                                    ),
                                     float(param_restore["original"]),
                                     f"{param_restore['parameter_name']}"
                                     f"@track:{param_restore['track_index']}",
@@ -2174,21 +2233,21 @@ async def run_live_acceptance(
                         # explicitly preferred ``failed`` plus
                         # ``cleanup/readback failed`` evidence.
                         if cleanup_failures:
-                            affected = sorted({tool for tool, _
-                                               in cleanup_failures})
+                            affected = sorted({tool for tool, _ in cleanup_failures})
                             details = "; ".join(
-                                f"{tool}: {reason}"
-                                for tool, reason in cleanup_failures
+                                f"{tool}: {reason}" for tool, reason in cleanup_failures
                             )
                             for tool in affected:
                                 if tool in report.recorded and (
-                                        report.recorded[tool].status
-                                        == "live_passed"):
-                                    report.record(Verification(
-                                        tool, "failed",
-                                        f"cleanup/readback failed "
-                                        f"({details})",
-                                    ))
+                                    report.recorded[tool].status == "live_passed"
+                                ):
+                                    report.record(
+                                        Verification(
+                                            tool,
+                                            "failed",
+                                            f"cleanup/readback failed ({details})",
+                                        )
+                                    )
 
                 if "quit" in profiles and "mutations" not in expanded:
                     # ``quit`` profile without ``mutations``: record the
@@ -2197,10 +2256,13 @@ async def run_live_acceptance(
                     # invoking ``quit_ableton`` would close the host and
                     # prevent any other probe from running, and we never
                     # certify an operation that was not executed.
-                    report.record(Verification(
-                        "quit_ableton", "manual_required",
-                        QUIT_ABLETON_MANUAL_REASON,
-                    ))
+                    report.record(
+                        Verification(
+                            "quit_ableton",
+                            "manual_required",
+                            QUIT_ABLETON_MANUAL_REASON,
+                        )
+                    )
 
             except AcceptanceSafetyError as safety_error:
                 # Bridge refused to send mutations. Mark every selected
@@ -2209,30 +2271,35 @@ async def run_live_acceptance(
                 # refusal.
                 for tool in BASELINE_PROBE_GROUPS.get("mutations", ()):
                     if tool not in report.recorded:
-                        report.record(Verification(
-                            tool, "failed",
-                            f"bridge refused to send mutations: "
-                            f"{safety_error}",
-                        ))
+                        report.record(
+                            Verification(
+                                tool,
+                                "failed",
+                                f"bridge refused to send mutations: {safety_error}",
+                            )
+                        )
                 # Also mark websocket_reads when refused.
-                for tool in BASELINE_PROBE_GROUPS.get(
-                        "websocket_reads", ()):
+                for tool in BASELINE_PROBE_GROUPS.get("websocket_reads", ()):
                     if tool not in report.recorded:
-                        report.record(Verification(
-                            tool, "failed",
-                            f"bridge refused to send mutations: "
-                            f"{safety_error}",
-                        ))
+                        report.record(
+                            Verification(
+                                tool,
+                                "failed",
+                                f"bridge refused to send mutations: {safety_error}",
+                            )
+                        )
                 # ``quit_ableton`` is never invoked when refused. Until an
                 # out-of-band owner confirmation arrives, the row reads
                 # ``manual_required`` rather than claiming success for an
                 # operation that was never executed.
-                if "quit" not in profiles and (
-                        "quit_ableton" not in report.recorded):
-                    report.record(Verification(
-                        "quit_ableton", "manual_required",
-                        QUIT_ABLETON_MANUAL_REASON,
-                    ))
+                if "quit" not in profiles and ("quit_ableton" not in report.recorded):
+                    report.record(
+                        Verification(
+                            "quit_ableton",
+                            "manual_required",
+                            QUIT_ABLETON_MANUAL_REASON,
+                        )
+                    )
                 raise safety_error
             except Exception as outer_error:  # noqa: BLE001
                 # Any uncaught failure during the live probe phase marks
@@ -2241,21 +2308,25 @@ async def run_live_acceptance(
                 for group in ("mutations", "websocket_reads"):
                     for tool in BASELINE_PROBE_GROUPS.get(group, ()):
                         if tool not in report.recorded:
-                            report.record(Verification(
-                                tool, "failed",
-                                f"{type(outer_error).__name__}: "
-                                f"{outer_error}",
-                            ))
+                            report.record(
+                                Verification(
+                                    tool,
+                                    "failed",
+                                    f"{type(outer_error).__name__}: {outer_error}",
+                                )
+                            )
                 # ``quit_ableton`` is unavailable under any non-quit
                 # profile regardless of readback outcome; until an
                 # out-of-band owner confirmation arrives it reads
                 # ``manual_required`` instead of being green-washed.
-                if "quit" not in profiles and (
-                        "quit_ableton" not in report.recorded):
-                    report.record(Verification(
-                        "quit_ableton", "manual_required",
-                        QUIT_ABLETON_MANUAL_REASON,
-                    ))
+                if "quit" not in profiles and ("quit_ableton" not in report.recorded):
+                    report.record(
+                        Verification(
+                            "quit_ableton",
+                            "manual_required",
+                            QUIT_ABLETON_MANUAL_REASON,
+                        )
+                    )
 
     # Compute the set of selected tools (resolved across profiles).
     selected_tools: set[str] = set()
@@ -2272,10 +2343,13 @@ async def run_live_acceptance(
             continue
         if tool in selected_tools:
             continue
-        report.record(Verification(
-            tool, "environment_unavailable",
-            f"not covered by selected profiles: {list(expanded)}",
-        ))
+        report.record(
+            Verification(
+                tool,
+                "environment_unavailable",
+                f"not covered by selected profiles: {list(expanded)}",
+            )
+        )
 
     # Compute ``release_ready`` using the documented policy.
     ready = _release_ready(report, profiles, fire_clip=fire_clip)

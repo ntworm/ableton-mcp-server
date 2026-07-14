@@ -6,6 +6,7 @@ approximations, true-peak, RMS, per-band energy summaries, masking scores,
 and single-cycle wavetable candidates. All public functions return plain
 dicts; the MCP layer wraps them in tools.
 """
+
 from __future__ import annotations
 
 import math
@@ -74,16 +75,12 @@ def analyze_audio(path: str) -> dict[str, Any]:
     }
 
 
-def _stft_power(
-    samples: np.ndarray, window_size: int = 4096, hop: int = 1024
-) -> np.ndarray:
+def _stft_power(samples: np.ndarray, window_size: int = 4096, hop: int = 1024) -> np.ndarray:
     if samples.size < window_size:
         samples = np.pad(samples, (0, window_size - samples.size))
     starts = range(0, samples.size - window_size + 1, hop)
     window = np.hanning(window_size)
-    frames = np.stack(
-        [samples[start : start + window_size] * window for start in starts]
-    )
+    frames = np.stack([samples[start : start + window_size] * window for start in starts])
     return np.median(np.abs(np.fft.rfft(frames, axis=1)) ** 2, axis=0)
 
 
@@ -156,12 +153,8 @@ def find_frequency_masking(
     freqs = np.fft.rfftfreq(4096, d=1.0 / sr_t).astype(np.float64)
     bands = [
         _band_mask(freqs, target_power, reference_power, 0.0, LOW_HZ, threshold_db),
-        _band_mask(
-            freqs, target_power, reference_power, LOW_HZ, HIGH_HZ, threshold_db
-        ),
-        _band_mask(
-            freqs, target_power, reference_power, HIGH_HZ, sr_t / 2, threshold_db
-        ),
+        _band_mask(freqs, target_power, reference_power, LOW_HZ, HIGH_HZ, threshold_db),
+        _band_mask(freqs, target_power, reference_power, HIGH_HZ, sr_t / 2, threshold_db),
     ]
     excess = [b["excess_db"] for b in bands if b["excess_db"] is not None]
     return {"bands": bands, "score": float(max(excess) if excess else 0.0)}
@@ -175,9 +168,7 @@ def analyze_mix(stems: Sequence[str]) -> dict[str, Any]:
     for i, stem_a in enumerate(stems):
         for stem_b in stems[i + 1 :]:
             result = find_frequency_masking(stem_a, stem_b, threshold_db=3.0)
-            pairwise.append(
-                {"target": stem_a, "reference": stem_b, "score": result["score"]}
-            )
+            pairwise.append({"target": stem_a, "reference": stem_b, "score": result["score"]})
     return {
         "stems": stem_metrics,
         "pairwise_masking": pairwise,
@@ -195,9 +186,7 @@ SINGLE_CYCLE_MIN_LAG = 2
 SINGLE_CYCLE_CLARITY = 0.5
 
 
-def extract_single_cycle(
-    path: str, frame_size: int = SINGLE_CYCLE_DEFAULT_FRAME
-) -> dict[str, Any]:
+def extract_single_cycle(path: str, frame_size: int = SINGLE_CYCLE_DEFAULT_FRAME) -> dict[str, Any]:
     samples, sample_rate = _load_mono(path)
     probe_samples = min(int(SINGLE_CYCLE_PROBE_S * sample_rate), samples.size)
     head = samples[:probe_samples]

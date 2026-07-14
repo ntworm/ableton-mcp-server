@@ -68,9 +68,7 @@ def fake_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     # Python package: a single module + version + pyproject marker.
     pkg = project / "ableton_mcp_server"
     pkg.mkdir()
-    (pkg / "__init__.py").write_text(
-        f'__version__ = "{VERSION}"\n', encoding="utf-8"
-    )
+    (pkg / "__init__.py").write_text(f'__version__ = "{VERSION}"\n', encoding="utf-8")
     (project / "pyproject.toml").write_text(
         "[project]\nname='ableton_mcp_server'\nversion='0.5.1'\n",
         encoding="utf-8",
@@ -83,19 +81,23 @@ def fake_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     ext = project / "AbletonMCPServer_Extension"
     ext.mkdir()
     (ext / "manifest.json").write_text(
-        json.dumps({
-            "name": "AbletonMCPServer",
-            "version": VERSION,
-            "host": "127.0.0.1",
-        }),
+        json.dumps(
+            {
+                "name": "AbletonMCPServer",
+                "version": VERSION,
+                "host": "127.0.0.1",
+            }
+        ),
         encoding="utf-8",
     )
     (ext / "package.json").write_text(
-        json.dumps({
-            "name": "AbletonMCPServer",
-            "version": VERSION,
-            "scripts": {"package": "extensions-cli package"},
-        }),
+        json.dumps(
+            {
+                "name": "AbletonMCPServer",
+                "version": VERSION,
+                "scripts": {"package": "extensions-cli package"},
+            }
+        ),
         encoding="utf-8",
     )
     dist = ext / "dist"
@@ -106,9 +108,7 @@ def fake_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     )
     # Pre-existing stale artifact from a previous build — the builder
     # must remove it before choosing the fresh candidate.
-    (ext / f"AbletonMCPServer-Extension-{VERSION}.ablx").write_text(
-        "stale-ablx", encoding="utf-8"
-    )
+    (ext / f"AbletonMCPServer-Extension-{VERSION}.ablx").write_text("stale-ablx", encoding="utf-8")
 
     # The builder also needs to run ``python -m build --wheel``. We
     # stub that out by replacing ``_build_python_wheel`` directly.
@@ -118,17 +118,15 @@ def fake_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         wheel_name = f"ableton_mcp_server-{VERSION}-py3-none-any.whl"
         wheel = output_directory / wheel_name
         import zipfile as _zf
+
         if wheel.exists():
             wheel.unlink()
         with _zf.ZipFile(wheel, "w", _zf.ZIP_DEFLATED) as zf:
             zf.writestr(
                 "ableton_mcp_server-0.5.1.dist-info/METADATA",
-                "Metadata-Version: 2.1\n"
-                "Name: ableton_mcp_server\n"
-                f"Version: {VERSION}\n",
+                f"Metadata-Version: 2.1\nName: ableton_mcp_server\nVersion: {VERSION}\n",
             )
-            zf.writestr("ableton_mcp_server/__init__.py",
-                        f'__version__ = "{VERSION}"\n')
+            zf.writestr("ableton_mcp_server/__init__.py", f'__version__ = "{VERSION}"\n')
         return wheel
 
     monkeypatch.setattr(brc, "_build_python_wheel", fake_build_wheel)
@@ -160,8 +158,7 @@ class _FakeSubprocessModule:
 
 
 @pytest.fixture(autouse=True)
-def fake_npm_runner(fake_project: Path, monkeypatch: pytest.MonkeyPatch
-                    ) -> dict[str, Any]:
+def fake_npm_runner(fake_project: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     """Mock ``subprocess.run`` for ``npm run package`` AND ``git rev-parse``.
 
     Records every invocation so tests can assert ``argv``/``cwd``/
@@ -184,24 +181,22 @@ def fake_npm_runner(fake_project: Path, monkeypatch: pytest.MonkeyPatch
     fake_commit = "f2a1ff840d93592e085b6f8ad5af1fdb27bfd61b"
 
     def runner(argv: list[str] | str, *args: Any, **kwargs: Any) -> Any:
-        argv_list = (
-            list(argv) if isinstance(argv, (list, tuple)) else argv
+        argv_list = list(argv) if isinstance(argv, (list, tuple)) else argv
+        calls.append(
+            {
+                "argv": argv_list,
+                "kwargs": {k: v for k, v in kwargs.items()},
+            }
         )
-        calls.append({
-            "argv": argv_list,
-            "kwargs": {k: v for k, v in kwargs.items()},
-        })
         # ``git rev-parse HEAD`` is the call site used by the builder
         # to resolve ``source_commit``. Return a valid hex hash so
         # validation passes without touching the worktree.
-        if (
-            isinstance(argv_list, list)
-            and len(argv_list) >= 3
-            and argv_list[0] == "git"
-        ):
+        if isinstance(argv_list, list) and len(argv_list) >= 3 and argv_list[0] == "git":
             if argv_list[1] == "rev-parse":
                 return _FakeCompletedProcess(
-                    returncode=0, stdout=fake_commit + "\n", stderr="",
+                    returncode=0,
+                    stdout=fake_commit + "\n",
+                    stderr="",
                 )
             if argv_list[1] == "cat-file":
                 target_arg = argv_list[-1]
@@ -217,18 +212,19 @@ def fake_npm_runner(fake_project: Path, monkeypatch: pytest.MonkeyPatch
         return _FakeCompletedProcess(returncode=0)
 
     monkeypatch.setattr(brc, "subprocess", _FakeSubprocessModule(runner))
-    monkeypatch.setattr(brc.shutil, "which",
-                        lambda _name: "")  # avoid hitting the real npm
+    monkeypatch.setattr(brc.shutil, "which", lambda _name: "")  # avoid hitting the real npm
     return {"calls": calls, "ext_dir": ext_dir}
 
 
 def test_builder_writes_only_to_injected_output_directory(
-    fake_project: Path, tmp_path: Path,
+    fake_project: Path,
+    tmp_path: Path,
 ) -> None:
     """The builder must not touch ``releases/v0.5.1-rc1`` when given a tmp dir."""
     output_directory = tmp_path / "rc-out"
     summary = build_release(
-        root=fake_project, output_directory=output_directory,
+        root=fake_project,
+        output_directory=output_directory,
     )
     # Stale artifacts inside the project must not leak in.
     assert output_directory.exists()
@@ -241,21 +237,21 @@ def test_builder_writes_only_to_injected_output_directory(
     assert summary["promotion_ready"] is False
 
 
-def test_builder_removes_stale_candidates(fake_project: Path, tmp_path: Path,
-                                          ) -> None:
+def test_builder_removes_stale_candidates(
+    fake_project: Path,
+    tmp_path: Path,
+) -> None:
     """Stale .ablx from a previous run must not be selected as the artifact."""
     output_directory = tmp_path / "rc-out"
     output_directory.mkdir()
     # Drop a stale ``.ablx`` into the **output** directory too — the
     # builder should clear stale entries before writing new ones.
-    stale_zip = (
-        output_directory
-        / f"AbletonMCPServer-Extension-{VERSION}.ablx"
-    )
+    stale_zip = output_directory / f"AbletonMCPServer-Extension-{VERSION}.ablx"
     stale_zip.write_bytes(b"definitely-stale")
 
     summary = build_release(
-        root=fake_project, output_directory=output_directory,
+        root=fake_project,
+        output_directory=output_directory,
     )
     # Path in the manifest is **relative to the output directory**, so
     # the test resolves it against ``output_directory`` (not the CWD).
@@ -266,7 +262,9 @@ def test_builder_removes_stale_candidates(fake_project: Path, tmp_path: Path,
 
 
 def test_builder_invokes_npm_with_list_argv(
-    fake_project: Path, tmp_path: Path, fake_npm_runner: dict[str, Any],
+    fake_project: Path,
+    tmp_path: Path,
+    fake_npm_runner: dict[str, Any],
 ) -> None:
     """``npm run package`` must run via list-form argv, no shell, cwd set.
 
@@ -276,7 +274,8 @@ def test_builder_invokes_npm_with_list_argv(
     """
     output_directory = tmp_path / "rc-out"
     build_release(
-        root=fake_project, output_directory=output_directory,
+        root=fake_project,
+        output_directory=output_directory,
         source_commit="f2a1ff840d93592e085b6f8ad5af1fdb27bfd61b",
     )
 
@@ -285,23 +284,20 @@ def test_builder_invokes_npm_with_list_argv(
     # captured call is the ``git rev-parse HEAD`` resolution path; the
     # npm call follows.
     npm_call = next(
-        call for call in fake_npm_runner["calls"]
+        call
+        for call in fake_npm_runner["calls"]
         if isinstance(call["argv"], list)
         and len(call["argv"]) >= 2
         and call["argv"][0] not in ("git",)
     )
     argv = npm_call["argv"]
     assert isinstance(argv, list), f"argv must be list-form, got {argv!r}"
-    assert "run" in argv and "package" in argv, (
-        f"argv must invoke 'run package', got {argv!r}"
-    )
+    assert "run" in argv and "package" in argv, f"argv must invoke 'run package', got {argv!r}"
     kwargs = npm_call["kwargs"]
     assert "shell" not in kwargs or kwargs["shell"] is False, (
         "subprocess.run must not use shell=True"
     )
-    assert kwargs.get("check") is True, (
-        "subprocess.run must be invoked with check=True"
-    )
+    assert kwargs.get("check") is True, "subprocess.run must be invoked with check=True"
     cwd = kwargs.get("cwd", "")
     assert str(fake_project / "AbletonMCPServer_Extension") in cwd, (
         f"cwd must target the Extension dir, got {cwd!r}"
@@ -309,30 +305,30 @@ def test_builder_invokes_npm_with_list_argv(
 
 
 def test_manifest_paths_use_forward_slashes(
-    fake_project: Path, tmp_path: Path,
+    fake_project: Path,
+    tmp_path: Path,
 ) -> None:
     """Manifest paths must use POSIX separators via ``as_posix()``."""
     output_directory = tmp_path / "rc-out"
     summary = build_release(
-        root=fake_project, output_directory=output_directory,
+        root=fake_project,
+        output_directory=output_directory,
     )
     for entry in summary["artifacts"].values():
-        assert "\\" not in entry["path"], (
-            f"path {entry['path']} uses backslashes"
-        )
+        assert "\\" not in entry["path"], f"path {entry['path']} uses backslashes"
 
 
 def test_manifest_matches_sha256_and_files(
-    fake_project: Path, tmp_path: Path,
+    fake_project: Path,
+    tmp_path: Path,
 ) -> None:
     """The SHA256SUMS file must list exactly the artifacts in the manifest."""
     output_directory = tmp_path / "rc-out"
     summary = build_release(
-        root=fake_project, output_directory=output_directory,
+        root=fake_project,
+        output_directory=output_directory,
     )
-    sha_lines = (output_directory / "SHA256SUMS").read_text(
-        encoding="utf-8"
-    ).splitlines()
+    sha_lines = (output_directory / "SHA256SUMS").read_text(encoding="utf-8").splitlines()
     sha_map = {}
     for line in sha_lines:
         sha, name = line.split("  ", 1)
@@ -351,26 +347,27 @@ def test_wheel_metadata_and_version(fake_project: Path, tmp_path: Path) -> None:
     """Wheel METADATA must declare the version, and ``__init__.py`` must match."""
     output_directory = tmp_path / "rc-out"
     summary = build_release(
-        root=fake_project, output_directory=output_directory,
+        root=fake_project,
+        output_directory=output_directory,
     )
     wheel_name = Path(summary["artifacts"]["wheel"]["path"]).name
     wheel_path = output_directory / wheel_name
     with zipfile.ZipFile(wheel_path) as zf:
-        metadata = zf.read(
-            "ableton_mcp_server-0.5.1.dist-info/METADATA"
-        ).decode("utf-8")
+        metadata = zf.read("ableton_mcp_server-0.5.1.dist-info/METADATA").decode("utf-8")
         init_py = zf.read("ableton_mcp_server/__init__.py").decode("utf-8")
     assert f"Version: {VERSION}" in metadata
     assert f'__version__ = "{VERSION}"' in init_py
 
 
 def test_remote_script_zip_excludes_pycache(
-    fake_project: Path, tmp_path: Path,
+    fake_project: Path,
+    tmp_path: Path,
 ) -> None:
     """The Remote Script ZIP must not include ``__pycache__`` or ``.pyc``."""
     output_directory = tmp_path / "rc-out"
     summary = build_release(
-        root=fake_project, output_directory=output_directory,
+        root=fake_project,
+        output_directory=output_directory,
     )
     zip_name = Path(summary["artifacts"]["remote_script_zip"]["path"]).name
     zip_path = output_directory / zip_name
@@ -384,32 +381,34 @@ def test_remote_script_zip_excludes_pycache(
 
 
 def test_manifest_flags_promotion_blocked_until_live_certified(
-    fake_project: Path, tmp_path: Path,
+    fake_project: Path,
+    tmp_path: Path,
 ) -> None:
     """The manifest must flag ``promotion_ready=false`` until Live runs."""
     output_directory = tmp_path / "rc-out"
     summary = build_release(
-        root=fake_project, output_directory=output_directory,
+        root=fake_project,
+        output_directory=output_directory,
     )
     assert summary["live_certified"] is False
     assert summary["promotion_ready"] is False
-    manifest = json.loads((output_directory / "manifest.json").read_text(
-        encoding="utf-8"
-    ))
+    manifest = json.loads((output_directory / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["live_certified"] is False
     assert manifest["promotion_ready"] is False
     assert manifest["candidate"] == "rc1"
 
 
 def test_summary_does_not_modify_real_release_dir(
-    fake_project: Path, tmp_path: Path,
+    fake_project: Path,
+    tmp_path: Path,
 ) -> None:
     """Calling the builder with an injected ``output_directory`` must not write
     to ``releases/v0.5.1-rc1/`` inside the project tree."""
     real_release_dir = fake_project / "releases" / f"v{VERSION}-rc1"
     output_directory = tmp_path / "rc-out"
     build_release(
-        root=fake_project, output_directory=output_directory,
+        root=fake_project,
+        output_directory=output_directory,
     )
     assert not real_release_dir.exists(), (
         "the builder wrote into the project's releases/ directory even "
@@ -418,11 +417,13 @@ def test_summary_does_not_modify_real_release_dir(
 
 
 def test_manifest_paths_are_relative_to_output_directory(
-    fake_project: Path, tmp_path: Path,
+    fake_project: Path,
+    tmp_path: Path,
 ) -> None:
     output_directory = tmp_path / "rc-out"
     summary = build_release(
-        root=fake_project, output_directory=output_directory,
+        root=fake_project,
+        output_directory=output_directory,
     )
     for entry in summary["artifacts"].values():
         # Paths must be relative to the output directory, not absolute.
@@ -460,12 +461,8 @@ def test_validate_source_commit_rejects_non_existent_commit() -> None:
         return _FakeCompletedProcess(returncode=1, stderr="Not found")
 
     non_existent_hash = "ffffffffffffffffffffffffffffffffffffffff"
-    with pytest.raises(
-        ValueError, match="does not correspond to an existing git commit object"
-    ):
+    with pytest.raises(ValueError, match="does not correspond to an existing git commit object"):
         _validate_source_commit(non_existent_hash, git_runner=fake_failing_git)
-
-
 
 
 def test_validate_source_commit_rejects_unknown_placeholder() -> None:
@@ -486,7 +483,8 @@ def test_validate_source_commit_rejects_non_hex() -> None:
 
 
 def test_build_release_manifest_records_real_commit_when_invoked_directly(
-    fake_project: Path, tmp_path: Path,
+    fake_project: Path,
+    tmp_path: Path,
 ) -> None:
     """Direct ``build_release`` call without ``source_commit`` must
     resolve the worktree HEAD via ``git rev-parse HEAD`` and record it
@@ -504,17 +502,15 @@ def test_build_release_manifest_records_real_commit_when_invoked_directly(
         git_runner=fake_git,
     )
     assert summary["source_commit"] == fake_hash, (
-        f"manifest must record the real git hash, not 'unknown': "
-        f"{summary['source_commit']!r}"
+        f"manifest must record the real git hash, not 'unknown': {summary['source_commit']!r}"
     )
-    manifest = json.loads((output_directory / "manifest.json").read_text(
-        encoding="utf-8"
-    ))
+    manifest = json.loads((output_directory / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["source_commit"] == fake_hash
 
 
 def test_build_release_rejects_source_commit_mismatching_head(
-    fake_project: Path, tmp_path: Path,
+    fake_project: Path,
+    tmp_path: Path,
 ) -> None:
     """Proves that supplying a valid commit that does not match active HEAD aborts build."""
     head_commit = "f2a1ff840d93592e085b6f8ad5af1fdb27bfd61b"
@@ -541,7 +537,8 @@ def test_build_release_rejects_source_commit_mismatching_head(
 
 
 def test_build_release_manifest_rejects_unknown_source_commit(
-    fake_project: Path, tmp_path: Path,
+    fake_project: Path,
+    tmp_path: Path,
 ) -> None:
     """Passing ``source_commit='unknown'`` explicitly must abort the
     build — the manifest is never written with the placeholder."""
@@ -557,9 +554,9 @@ def test_build_release_manifest_rejects_unknown_source_commit(
     )
 
 
-
 def test_main_cli_passes_explicit_source_commit_to_builder(
-    fake_project: Path, tmp_path: Path,
+    fake_project: Path,
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """``main(['--source-commit', '<hash>'])` must forward the hash to
@@ -587,19 +584,23 @@ def test_main_cli_passes_explicit_source_commit_to_builder(
         return _real_build_release(**kwargs)
 
     monkeypatch.setattr(brc, "build_release", fake_build_release)
-    rc = main([
-        "--source-commit", fake_hash,
-        "--output-directory", str(output_directory),
-    ])
+    rc = main(
+        [
+            "--source-commit",
+            fake_hash,
+            "--output-directory",
+            str(output_directory),
+        ]
+    )
     assert rc == 0
     assert captured["kwargs"].get("source_commit") == fake_hash, (
-        f"main() must forward --source-commit to build_release: "
-        f"{captured['kwargs']!r}"
+        f"main() must forward --source-commit to build_release: {captured['kwargs']!r}"
     )
 
 
 def test_main_cli_resolves_source_commit_when_not_provided(
-    fake_project: Path, tmp_path: Path,
+    fake_project: Path,
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """When ``--source-commit`` is omitted, ``main()`` must let
@@ -614,21 +615,16 @@ def test_main_cli_resolves_source_commit_when_not_provided(
     def fake_build_release(**kwargs: Any) -> dict[str, Any]:
         # Resolve via the injected git_runner so the test never depends
         # on the worktree's actual git state.
-        kwargs["git_runner"] = (
-            lambda *a, **k: _CapturedProcess(fake_hash + "\n")
-        )
+        kwargs["git_runner"] = lambda *a, **k: _CapturedProcess(fake_hash + "\n")
         kwargs["root"] = fake_project
         return _real_build_release(**kwargs)
 
     monkeypatch.setattr(brc, "build_release", fake_build_release)
     rc = main(["--output-directory", str(output_directory)])
     assert rc == 0
-    manifest = json.loads((output_directory / "manifest.json").read_text(
-        encoding="utf-8"
-    ))
+    manifest = json.loads((output_directory / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["source_commit"] == fake_hash, (
-        f"resolved source_commit must reach the manifest, got "
-        f"{manifest['source_commit']!r}"
+        f"resolved source_commit must reach the manifest, got {manifest['source_commit']!r}"
     )
 
 
@@ -639,13 +635,15 @@ def test_main_cli_rejects_unknown_source_commit(
     never write a manifest with the placeholder.
     """
     output_directory = tmp_path / "rc-out"
-    rc = main([
-        "--source-commit", "unknown",
-        "--output-directory", str(output_directory),
-    ])
-    assert rc != 0, (
-        "main() must exit non-zero when --source-commit is 'unknown'"
+    rc = main(
+        [
+            "--source-commit",
+            "unknown",
+            "--output-directory",
+            str(output_directory),
+        ]
     )
+    assert rc != 0, "main() must exit non-zero when --source-commit is 'unknown'"
     assert not (output_directory / "manifest.json").exists(), (
         "manifest must not be written when --source-commit is invalid"
     )

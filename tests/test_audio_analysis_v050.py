@@ -1,4 +1,5 @@
 """v0.5.0 offline mix-analysis module tests (LUFS, masking, single-cycle)."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -54,8 +55,7 @@ def test_find_frequency_masking_reports_excess_band(tmp_path) -> None:
     result = find_frequency_masking(str(target), str(reference), threshold_db=6.0)
 
     assert any(
-        band["excess_db"] is not None and band["excess_db"] >= 6.0
-        for band in result["bands"]
+        band["excess_db"] is not None and band["excess_db"] >= 6.0 for band in result["bands"]
     )
     assert result["score"] >= 6.0
 

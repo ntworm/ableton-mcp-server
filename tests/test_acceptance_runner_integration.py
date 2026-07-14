@@ -39,8 +39,8 @@ def _inject_fast_offline_probes(monkeypatch: pytest.MonkeyPatch) -> None:
     because they do not pass ``offline_probes``.
     """
     import ableton_mcp_server.acceptance as acceptance_module
-    monkeypatch.setattr(acceptance_module, "run_offline_probes", fast_offline_probes)
 
+    monkeypatch.setattr(acceptance_module, "run_offline_probes", fast_offline_probes)
 
 
 def test_fake_runner_returns_65_certification_rows() -> None:
@@ -69,8 +69,7 @@ def test_fake_runner_returns_65_certification_rows() -> None:
     # The runner never auto-closes the host, and the row only flips to
     # ``manual_passed`` after an out-of-band owner confirmation.
     assert any(
-        row["tool"] == "quit_ableton"
-        and row["status"] == "manual_required"
+        row["tool"] == "quit_ableton" and row["status"] == "manual_required"
         for row in cert["tools"]
     )
     # No tool is silently dropped from the report.
@@ -100,15 +99,13 @@ def test_fake_runner_release_ready_true_when_baseline_complete() -> None:
         )
     )
     cert = result["certification"]
-    build_row = next(r for r in cert["tools"]
-                     if r["tool"] == "build_extension")
+    build_row = next(r for r in cert["tools"] if r["tool"] == "build_extension")
     # ``build_extension`` is the gate: if the local TypeScript toolchain
     # is broken we never claim release_ready, even when every other
     # probe passed.
     if build_row["status"] != "offline_passed":
         assert cert["release_ready"] is False, (
-            "release_ready must be False when build_extension did "
-            f"not pass: {build_row}"
+            f"release_ready must be False when build_extension did not pass: {build_row}"
         )
         return
     assert cert["release_ready"] is True
@@ -133,9 +130,7 @@ def test_fake_runner_release_ready_false_without_fire_clip() -> None:
         )
     )
     cert = result["certification"]
-    assert cert["release_ready"] is False, (
-        "baseline without --fire-clip must not be release-ready"
-    )
+    assert cert["release_ready"] is False, "baseline without --fire-clip must not be release-ready"
     statuses = {row["tool"]: row["status"] for row in cert["tools"]}
     assert statuses["fire_clip"] == "environment_unavailable"
 
@@ -186,8 +181,7 @@ def test_fake_runner_release_ready_false_when_one_tool_fails() -> None:
     )
     cert = result["certification"]
     assert cert["release_ready"] is False
-    failed_names = [row["tool"] for row in cert["tools"]
-                    if row["status"] == "failed"]
+    failed_names = [row["tool"] for row in cert["tools"] if row["status"] == "failed"]
     assert "set_tempo" in failed_names
 
 
@@ -214,14 +208,11 @@ def test_fake_runner_baseline_records_only_known_unavailable() -> None:
     cert = result["certification"]
     statuses = {row["tool"]: row["status"] for row in cert["tools"]}
     unavailable = sorted(
-        tool for tool, status in statuses.items()
-        if status == "environment_unavailable"
+        tool for tool, status in statuses.items() if status == "environment_unavailable"
     )
     # Without ``--fire-clip``, fire_clip is also unavailable.
     allowed = {"fire_clip", "build_extension"}
-    assert set(unavailable) <= allowed, (
-        f"unexpected unavailable tools: {unavailable}"
-    )
+    assert set(unavailable) <= allowed, f"unexpected unavailable tools: {unavailable}"
     for tool, status in statuses.items():
         if tool in allowed:
             continue
@@ -229,13 +220,9 @@ def test_fake_runner_baseline_records_only_known_unavailable() -> None:
             # ``quit_ableton`` is the only tool currently classified as
             # ``manual_required``; other rows must not be silently
             # downgraded without an out-of-band signal.
-            assert tool == "quit_ableton", (
-                f"unexpected manual_required row: {tool}"
-            )
+            assert tool == "quit_ableton", f"unexpected manual_required row: {tool}"
             continue
-        assert status in {"live_passed", "offline_passed"}, (
-            f"{tool} unexpectedly {status!r}"
-        )
+        assert status in {"live_passed", "offline_passed"}, f"{tool} unexpectedly {status!r}"
 
 
 def test_fake_runner_readback_failure_flips_tool_to_failed() -> None:
@@ -248,13 +235,21 @@ def test_fake_runner_readback_failure_flips_tool_to_failed() -> None:
     """
     bridge = StrictFakeBridge()
     bridge.state["tracks"] = [
-        {"index": 0, "type": "midi", "name": "Bass",
-         "id": "track:0", "mute": False, "solo": False, "arm": False,
-         "devices": [{"name": "MIDI Device"}]},
+        {
+            "index": 0,
+            "type": "midi",
+            "name": "Bass",
+            "id": "track:0",
+            "mute": False,
+            "solo": False,
+            "arm": False,
+            "devices": [{"name": "MIDI Device"}],
+        },
     ]
     # No audio track exists; the runner should refuse on the audio
     # clip guard.
     import pytest
+
     with pytest.raises(  # noqa: B017 — broad to catch any refusal path
         RuntimeError, match="audio_track_index"
     ):
@@ -334,15 +329,13 @@ def test_fake_runner_reports_reserved_artifacts() -> None:
     assert "tracks_created" in artifacts
     assert "manual_cleanup" in artifacts
     # The runner tagged at least one cue point.
-    assert any("ABLETON_MCP_ACCEPTANCE" in tag
-               for tag in artifacts["tags"])
+    assert any("ABLETON_MCP_ACCEPTANCE" in tag for tag in artifacts["tags"])
     # The runner created the audio + midi tracks.
     assert any("audio:" in t for t in artifacts["tracks_created"])
     assert any("midi:" in t for t in artifacts["tracks_created"])
 
 
-def test_fake_runner_quit_profile_marks_quit_ableton_manual_required(
-) -> None:
+def test_fake_runner_quit_profile_marks_quit_ableton_manual_required() -> None:
     """``quit_ableton`` runs only under the ``quit`` profile, and only
     as ``manual_required`` — never as ``live_passed`` without an
     out-of-band owner confirmation that the host was actually closed.
@@ -370,8 +363,7 @@ def test_fake_runner_quit_profile_marks_quit_ableton_manual_required(
 
 def test_baseline_probe_coverage_matches_catalog() -> None:
     """Defensive guard: the probe map must cover every catalogued tool."""
-    flat = {name for group in BASELINE_PROBE_GROUPS.values()
-            for name in group}
+    flat = {name for group in BASELINE_PROBE_GROUPS.values() for name in group}
     catalog_names = {item.name for item in TOOL_CATALOG}
     assert flat == catalog_names
     assert len(flat) == 65
@@ -404,3 +396,87 @@ def test_spy_proves_fast_offline_probes_is_called(
         )
     )
     assert spy_called, "fast_offline_probes spy was not invoked during run_live_acceptance"
+
+
+def test_acceptance_probes_isolation_from_clip_automation_failure() -> None:
+    """FASE 2 Regression Guard.
+
+    Prove that if `create_clip_automation` fails, it does not cascade/abort
+    other independent probes. They should be attempted, and only tools dependent
+    on create_clip should be skipped cleanly with a clear status/message.
+    """
+    bridge = StrictFakeBridge()
+    # Inject failure ONLY for create_clip_automation
+    bridge.fail_tool = "create_clip_automation"
+
+    result = asyncio.run(
+        run_live_acceptance(
+            bridge,
+            confirm_project_name="TESTE_CODEX",
+            track_index=0,
+            clip_index=3,
+            audio_track_index=2,
+            audio_clip_index=0,
+            fire_clip=True,
+        )
+    )
+    cert = result["certification"]
+    assert cert["release_ready"] is False
+
+    statuses = {row["tool"]: row["status"] for row in cert["tools"]}
+    # create_clip_automation failed
+    assert statuses["create_clip_automation"] == "failed"
+    # start_playback, stop_playback, rename_track, etc. succeeded!
+    assert statuses["start_playback"] == "live_passed"
+    assert statuses["stop_playback"] == "live_passed"
+    assert statuses["rename_track"] == "live_passed"
+    assert statuses["save_set"] == "live_passed"
+
+
+def test_release_ready_policy_matrix() -> None:
+    """FASE 4 Policy Matrix verification.
+
+    Verify that:
+    1. host_unavailable blocks release_ready.
+    2. environment_unavailable blocks except build_extension.
+    3. manual_required blocks except quit_ableton.
+    """
+    from ableton_mcp_server.certification import CertificationReport, Verification
+
+    # 1. Standard report with only allowed exceptions: quit_ableton as manual_required
+    # and build_extension as environment_unavailable (or offline_passed)
+    report1 = CertificationReport(
+        tool_names=("quit_ableton", "build_extension", "get_session_info")
+    )
+    report1.record(Verification("quit_ableton", "manual_required", "reason"))
+    report1.record(Verification("build_extension", "environment_unavailable", "reason"))
+    report1.record(Verification("get_session_info", "live_passed", "reason"))
+    # finish should have release_ready = True
+    assert report1.finish()["release_ready"] is True
+
+    # 2. host_unavailable blocks
+    report2 = CertificationReport(
+        tool_names=("quit_ableton", "build_extension", "get_session_info")
+    )
+    report2.record(Verification("quit_ableton", "manual_required", "reason"))
+    report2.record(Verification("build_extension", "environment_unavailable", "reason"))
+    report2.record(Verification("get_session_info", "host_unavailable", "reason"))
+    assert report2.finish()["release_ready"] is False
+
+    # 3. environment_unavailable blocks for non-build_extension
+    report3 = CertificationReport(
+        tool_names=("quit_ableton", "build_extension", "get_session_info")
+    )
+    report3.record(Verification("quit_ableton", "manual_required", "reason"))
+    report3.record(Verification("build_extension", "environment_unavailable", "reason"))
+    report3.record(Verification("get_session_info", "environment_unavailable", "reason"))
+    assert report3.finish()["release_ready"] is False
+
+    # 4. manual_required blocks for non-quit_ableton
+    report4 = CertificationReport(
+        tool_names=("quit_ableton", "build_extension", "get_session_info")
+    )
+    report4.record(Verification("quit_ableton", "manual_required", "reason"))
+    report4.record(Verification("build_extension", "environment_unavailable", "reason"))
+    report4.record(Verification("get_session_info", "manual_required", "reason"))
+    assert report4.finish()["release_ready"] is False

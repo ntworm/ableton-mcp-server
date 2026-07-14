@@ -162,17 +162,21 @@ class FakeClip:
     ) -> None:
         self.notes.clear()
 
-    def automation_envelope_for_parameter(
-        self, parameter: FakeParameter
-    ) -> FakeAutomationEnvelope:
+    def automation_envelope(self, parameter: FakeParameter) -> FakeAutomationEnvelope | None:
+        return self._automation_envelopes.get(parameter)
+
+    def create_automation_envelope(self, parameter: FakeParameter) -> FakeAutomationEnvelope:
         if parameter not in self._automation_envelopes:
             self._automation_envelopes[parameter] = FakeAutomationEnvelope(
                 lambda: setattr(self, "has_envelopes", True)
             )
+        self.has_envelopes = True
         return self._automation_envelopes[parameter]
 
     def clear_envelope(self, parameter: FakeParameter) -> None:
-        self.automation_envelope_for_parameter(parameter).steps.clear()
+        if parameter in self._automation_envelopes:
+            self._automation_envelopes[parameter].steps.clear()
+            del self._automation_envelopes[parameter]
         self.has_envelopes = False
 
 

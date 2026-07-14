@@ -50,11 +50,15 @@ def _parser() -> argparse.ArgumentParser:
     acceptance.add_argument("--track-index", required=True, type=int)
     acceptance.add_argument("--clip-index", required=True, type=int)
     acceptance.add_argument(
-        "--audio-track-index", type=int, default=None,
+        "--audio-track-index",
+        type=int,
+        default=None,
         help="Track index used for warp/audio probes (defaults to track-index)",
     )
     acceptance.add_argument(
-        "--audio-clip-index", type=int, default=None,
+        "--audio-clip-index",
+        type=int,
+        default=None,
         help="Clip-slot index used for warp/audio probes (defaults to clip-index)",
     )
     acceptance.add_argument(
@@ -83,7 +87,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             Client(host=host, port=port, reconnect=False),
             tool_count=len(TOOL_CATALOG),
         )
-
 
         _emit(result, as_json=bool(args.json))
         return 0 if result["bridge_available"] else 1
@@ -123,9 +126,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0 if result.get("status") == "ok" else 1
 
     source = bundled_remote_script_path() if args.source is None else args.source
-    destination = (
-        default_remote_scripts_root() if args.destination is None else args.destination
-    )
+    destination = default_remote_scripts_root() if args.destination is None else args.destination
     if args.command == "install-script":
         result = install_remote_script(source, destination)
         _emit(result, as_json=bool(args.json))

@@ -80,12 +80,18 @@ def test_v040_remote_reads_are_explicitly_registered() -> None:
 def test_v040_work_units_and_slow_command_timeouts_are_bounded() -> None:
     assert contracts.request_timeout_seconds("load_device_to_track", {}) == 30.0
     assert contracts.request_timeout_seconds("search_browser", {"query": "Operator"}) == 30.0
-    assert contracts.request_timeout_seconds(
-        "set_clip_properties",
-        {"loop_start": 0, "loop_end": 8, "name": "Verse"},
-    ) == 24.0
+    assert (
+        contracts.request_timeout_seconds(
+            "set_clip_properties",
+            {"loop_start": 0, "loop_end": 8, "name": "Verse"},
+        )
+        == 24.0
+    )
     assert contracts.request_timeout_seconds("clear_clip_notes", {}) == 22.0
-    assert contracts.request_timeout_seconds(
-        "create_clip_automation",
-        {"automation_points": [{"time": index, "value": 0.5} for index in range(20)]},
-    ) == 38.0
+    assert (
+        contracts.request_timeout_seconds(
+            "create_clip_automation",
+            {"automation_points": [{"time": index, "value": 0.5} for index in range(20)]},
+        )
+        == 38.0
+    )

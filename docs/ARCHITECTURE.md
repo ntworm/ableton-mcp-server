@@ -6,7 +6,7 @@ The repository contains three cooperating components:
 
 1. `ableton_mcp_server/` is the stdio FastMCP server. It owns Pydantic validation, JSONL encoding, reconnect policy, local log reading, and snapshot diffing. It imports no Ableton module.
 2. `AbletonMCPServer_RemoteScript/` runs inside Live. It owns the loopback socket, the main-thread request queue, command handlers, Live Object Model access, and undo grouping.
-3. `AbletonMCPServer_Extension/` is the TypeScript Ableton Live Extension. It compiles into a `.ablx` file running inside the Node.js Extension Host, hosting a WebSocket server on port `9889` to expose warping properties and device insertion. Loopback use is required, but the current Node server does not explicitly set its bind host.
+3. `AbletonMCPServer_Extension/` is the TypeScript Ableton Live Extension. It compiles into a `.ablx` file running inside the Node.js Extension Host, hosting a WebSocket server on port `9889` to expose warping properties and device insertion. Loopback use is required, and the Node server explicitly binds to `127.0.0.1`.
 
 ## Data Flow and Thread Safety
 

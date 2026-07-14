@@ -152,7 +152,8 @@ def test_automation_rejects_empty_arrangement_and_disabled_targets() -> None:
 def test_automation_reports_insertion_and_readback_capability_failures() -> None:
     song = FakeSong()
     clip = song.tracks[0].clip_slots[0].clip
-    clip.automation_envelope_for_parameter = lambda _parameter: object()
+    clip.automation_envelope = lambda _parameter: object()
+    clip.create_automation_envelope = lambda _parameter: object()
     clip.clear_envelope = lambda _parameter: None
     with pytest.raises(RemoteError) as insertion_error:
         execute_command(song, FakeApplication(), "create_clip_automation", _automation_params())
@@ -164,7 +165,8 @@ def test_automation_reports_insertion_and_readback_capability_failures() -> None
 
     song = FakeSong()
     clip = song.tracks[0].clip_slots[0].clip
-    clip.automation_envelope_for_parameter = lambda _parameter: SilentEnvelope()
+    clip.automation_envelope = lambda _parameter: SilentEnvelope()
+    clip.create_automation_envelope = lambda _parameter: SilentEnvelope()
     clip.clear_envelope = lambda _parameter: None
     clip.has_envelopes = False
     with pytest.raises(RemoteError) as readback_error:
@@ -191,9 +193,7 @@ def test_browser_and_model_edge_validation() -> None:
         lambda: SearchBrowserRequest(query=" "),
         lambda: SearchBrowserRequest(query="x", category_type=" "),
         lambda: SetClipPropertiesRequest(track_index=0, clip_index=0),
-        lambda: SetClipPropertiesRequest(
-            track_index=0, clip_index=0, loop_start=2, loop_end=1
-        ),
+        lambda: SetClipPropertiesRequest(track_index=0, clip_index=0, loop_start=2, loop_end=1),
         lambda: SetParameterValueRequest(
             track_index=0,
             device_index=0,

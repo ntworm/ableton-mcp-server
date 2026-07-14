@@ -51,7 +51,9 @@ _TCP_COMMAND_FIELDS: dict[str, dict[str, Any]] = {
     "get_clip_info": {"track_index": int, "clip_index": int},
     "get_device_list": {"track_index": int},
     "get_parameter_value": {
-        "track_index": int, "device_index": int, "parameter_name": str,
+        "track_index": int,
+        "device_index": int,
+        "parameter_name": str,
     },
     "get_routing": {"track_index": int},
     "get_browser_categories": {},
@@ -74,44 +76,56 @@ _TCP_COMMAND_FIELDS: dict[str, dict[str, Any]] = {
     "set_loop_length": {"length_beats": float},
     "run_batch": {"commands": list},
     "add_notes_to_clip": {
-        "track_index": int, "clip_index": int, "notes": list,
+        "track_index": int,
+        "clip_index": int,
+        "notes": list,
     },
     "fire_clip": {"track_index": int, "clip_index": int},
     "create_clip": {
-        "track_index": int, "clip_index": int, "length_beats": float,
+        "track_index": int,
+        "clip_index": int,
+        "length_beats": float,
     },
     "delete_clip": {"track_index": int, "clip_index": int},
     "clear_clip_notes": {"track_index": int, "clip_index": int},
     "fire_scene": {"scene_index": int},
     "set_track_property": {
-        "track_index": int, "property": str, "value": bool,
+        "track_index": int,
+        "property": str,
+        "value": bool,
     },
     "set_clip_properties": {
-        "track_index": int, "clip_index": int,
+        "track_index": int,
+        "clip_index": int,
     },
     "create_clip_automation": {
-        "track_index": int, "clip_index": int,
-        "parameter_name": str, "automation_points": list,
+        "track_index": int,
+        "clip_index": int,
+        "parameter_name": str,
+        "automation_points": list,
     },
     "create_midi_track": {},
     "create_audio_track": {},
     "rename_track": {"track_index": int, "new_name": str},
     "set_parameter_value": {
-        "track_index": int, "device_index": int,
-        "parameter_name": str, "value": float,
+        "track_index": int,
+        "device_index": int,
+        "parameter_name": str,
+        "value": float,
     },
     "save_set": {},
     "live_fade": {
-        "track_index": int, "target_percent": (int, float),
-        "duration": (int, float), "steps": int,
+        "track_index": int,
+        "target_percent": (int, float),
+        "duration": (int, float),
+        "steps": int,
     },
 }
 
 
 _WS_METHOD_FIELDS: dict[str, dict[str, Any]] = {
     "get_warp_state": {"track_index": int, "clip_index": int},
-    "set_warp_state": {"track_index": int, "clip_index": int,
-                       "warping": bool},
+    "set_warp_state": {"track_index": int, "clip_index": int, "warping": bool},
     "load_device_to_track": {"track_index": int, "device_name": str},
 }
 
@@ -146,30 +160,56 @@ class StrictFakeBridge:
             "is_playing": False,
             "locators": [],
             "tracks": [
-                {"index": 0, "type": "midi", "name": "Bass",
-                 "id": "track:0", "mute": False, "solo": False,
-                 "arm": False, "devices": [{"name": "MIDI Device"}]},
-                {"index": 1, "type": "audio", "name": "Drums",
-                 "id": "track:1", "mute": False, "solo": False,
-                 "arm": False,
-                 "devices": [{"name": "Audio Device",
-                              "parameters": ["Volume"]}]},
-                {"index": 2, "type": "audio", "name": "Samp",
-                 "id": "track:2", "mute": False, "solo": False,
-                 "arm": False,
-                 "devices": [{"name": "Sampler",
-                              "parameters": ["Volume"]}]},
+                {
+                    "index": 0,
+                    "type": "midi",
+                    "name": "Bass",
+                    "id": "track:0",
+                    "mute": False,
+                    "solo": False,
+                    "arm": False,
+                    "devices": [{"name": "MIDI Device"}],
+                },
+                {
+                    "index": 1,
+                    "type": "audio",
+                    "name": "Drums",
+                    "id": "track:1",
+                    "mute": False,
+                    "solo": False,
+                    "arm": False,
+                    "devices": [{"name": "Audio Device", "parameters": ["Volume"]}],
+                },
+                {
+                    "index": 2,
+                    "type": "audio",
+                    "name": "Samp",
+                    "id": "track:2",
+                    "mute": False,
+                    "solo": False,
+                    "arm": False,
+                    "devices": [{"name": "Sampler", "parameters": ["Volume"]}],
+                },
             ],
             "clips": {
-                (1, 0): {"name": "Drums Clip", "is_audio_clip": True,
-                          "is_midi_clip": False, "has_clip": True,
-                          "length": 4.0, "notes": []},
-                (2, 0): {"name": "Samp Clip", "is_audio_clip": True,
-                          "is_midi_clip": False, "has_clip": True,
-                          "length": 4.0, "notes": []},
+                (1, 0): {
+                    "name": "Drums Clip",
+                    "is_audio_clip": True,
+                    "is_midi_clip": False,
+                    "has_clip": True,
+                    "length": 4.0,
+                    "notes": [],
+                },
+                (2, 0): {
+                    "name": "Samp Clip",
+                    "is_audio_clip": True,
+                    "is_midi_clip": False,
+                    "has_clip": True,
+                    "length": 4.0,
+                    "notes": [],
+                },
             },
-            "browser_categories": ["Audio Effects", "MIDI Effects",
-                                    "Instruments", "Samples"],
+            "browser_categories": ["Audio Effects", "MIDI Effects", "Instruments", "Samples"],
             "device_parameters": {
                 "track:0": [{"name": "Device On", "value": 1.0}],
                 "track:1": [{"name": "Volume", "value": 0.85}],
@@ -225,45 +265,31 @@ def _validate_tcp(command: str, params: dict[str, Any]) -> None:
             if (
                 command == "live_fade"
                 and field in ("target_percent", "target_value")
-                and (
-                    "target_percent" in params
-                    or "target_value" in params
-                )
+                and ("target_percent" in params or "target_value" in params)
             ):
                 continue
             raise RuntimeError(f"MISSING_FIELD: {command}.{field}")
         if isinstance(expected, type):
             if not isinstance(params[field], expected):
                 raise RuntimeError(
-                    f"BAD_FIELD_TYPE: {command}.{field} expected "
-                    f"{expected.__name__}"
+                    f"BAD_FIELD_TYPE: {command}.{field} expected {expected.__name__}"
                 )
         elif isinstance(expected, tuple) and not isinstance(params[field], expected):
-            raise RuntimeError(
-                f"BAD_FIELD_TYPE: {command}.{field}"
-            )
+            raise RuntimeError(f"BAD_FIELD_TYPE: {command}.{field}")
     # Per-command field quirks. Each command has its own ``if`` because the
     # rejection conditions and error messages differ. Combining them
     # would obscure which contract each guard belongs to.
     if command == "set_track_property" and "name" in params:  # noqa: SIM102
-        raise RuntimeError(
-            "BAD_FIELD: set_track_property uses property+value, not name"
-        )
+        raise RuntimeError("BAD_FIELD: set_track_property uses property+value, not name")
     if command == "create_clip_automation" and "points" in params:  # noqa: SIM102
+        raise RuntimeError("BAD_FIELD: create_clip_automation uses automation_points, not points")
+    if command == "list_device_params" and ("track_index" in params or "device_index" in params):  # noqa: SIM102
         raise RuntimeError(
-            "BAD_FIELD: create_clip_automation uses automation_points, "
-            "not points"
-        )
-    if (command == "list_device_params"
-            and ("track_index" in params or "device_index" in params)):  # noqa: SIM102
-        raise RuntimeError(
-            "BAD_FIELD: list_device_params uses track_id, "
-            "not track_index/device_index"
+            "BAD_FIELD: list_device_params uses track_id, not track_index/device_index"
         )
 
 
-def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str,
-                         params: dict[str, Any]) -> Any:
+def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str, params: dict[str, Any]) -> Any:
     _validate_tcp(command, params)
     s = bridge.state
     if command == "get_project_metadata":
@@ -274,10 +300,7 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str,
         # arm, volume) lives on ``get_track_state``; including those
         # fields here would let the runner invent defaults that bypass
         # the mixer readback.
-        return [
-            {k: t[k] for k in ("id", "index", "name", "type") if k in t}
-            for t in s["tracks"]
-        ]
+        return [{k: t[k] for k in ("id", "index", "name", "type") if k in t} for t in s["tracks"]]
     if command == "get_track_state":
         idx = params["track_index"]
         track = next((t for t in s["tracks"] if t["index"] == idx), None)
@@ -287,9 +310,7 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str,
         # separate channel from device parameters. The fake keeps it
         # on ``state["mixer_volumes"][track_id]`` and falls back to the
         # track's own field, then to Live's default unity (0.85).
-        mixer_volume = float(
-            s.get("mixer_volumes", {}).get(f"track:{idx}", 0.85)
-        )
+        mixer_volume = float(s.get("mixer_volumes", {}).get(f"track:{idx}", 0.85))
         return {
             "track_index": idx,
             "name": track["name"],
@@ -305,20 +326,22 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str,
         slots = []
         for i in range(8):
             clip = s["clips"].get((track, i))
-            slots.append({
-                "index": i,
-                "has_clip": clip is not None,
-                "is_midi_clip": clip is not None
-                and clip.get("is_midi_clip", False),
-            })
+            slots.append(
+                {
+                    "index": i,
+                    "has_clip": clip is not None,
+                    "is_midi_clip": clip is not None and clip.get("is_midi_clip", False),
+                }
+            )
         return slots
     if command == "get_session_info":
-        return {"tempo": s["tempo"],
-                "current_song_time": s["current_song_time"],
-                "is_playing": s.get("is_playing", False)}
+        return {
+            "tempo": s["tempo"],
+            "current_song_time": s["current_song_time"],
+            "is_playing": s.get("is_playing", False),
+        }
     if command == "get_loop_settings":
-        return {"loop": s["loop"], "loop_start": s["loop_start"],
-                "loop_length": s["loop_length"]}
+        return {"loop": s["loop"], "loop_start": s["loop_start"], "loop_length": s["loop_length"]}
     if command == "get_locators":
         return list(s["locators"])
     if command == "get_scenes":
@@ -333,9 +356,14 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str,
         track, slot = params["track_index"], params["clip_index"]
         clip = s["clips"].get((track, slot))
         if clip is None:
-            return {"track_index": track, "clip_index": slot,
-                    "has_clip": False, "name": "", "is_audio_clip": False,
-                    "is_midi_clip": False}
+            return {
+                "track_index": track,
+                "clip_index": slot,
+                "has_clip": False,
+                "name": "",
+                "is_audio_clip": False,
+                "is_midi_clip": False,
+            }
         return {
             "track_index": track,
             "clip_index": slot,
@@ -357,8 +385,7 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str,
         entries = s["device_parameters"].get(track_id, [])
         if device_index < 0 or device_index >= len(entries):
             raise RuntimeError(
-                f"BAD_DEVICE_INDEX: {device_index} (track has "
-                f"{len(entries)} devices)"
+                f"BAD_DEVICE_INDEX: {device_index} (track has {len(entries)} devices)"
             )
         entry = entries[device_index]
         name = params["parameter_name"]
@@ -368,9 +395,7 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str,
                     return {"value": nested.get("value", 0.0)}
         elif entry.get("name") == name:
             return {"value": entry.get("value", 0.0)}
-        raise RuntimeError(
-            f"PARAMETER_NOT_FOUND: {name} on {track_id}/device:{device_index}"
-        )
+        raise RuntimeError(f"PARAMETER_NOT_FOUND: {name} on {track_id}/device:{device_index}")
     if command == "get_routing":
         return {"input_routing": "In 1", "output_routing": "Master"}
     if command == "get_browser_categories":
@@ -395,29 +420,30 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str,
         # is unique per device (not always ``device:0``).
         track_id = params["track_id"]
         entries = []
-        for entry_index, entry in enumerate(
-                s["device_parameters"].get(track_id, [])):
+        for entry_index, entry in enumerate(s["device_parameters"].get(track_id, [])):
             if "parameters" in entry:
                 nested = entry["parameters"]
             elif "name" in entry:
-                nested = [{
-                    "name": entry["name"],
-                    "value": entry.get("value", 0.0),
-                    "min": 0.0,
-                    "max": 1.0,
-                }]
+                nested = [
+                    {
+                        "name": entry["name"],
+                        "value": entry.get("value", 0.0),
+                        "min": 0.0,
+                        "max": 1.0,
+                    }
+                ]
             else:
                 nested = []
-            entries.append({
-                "device_id": f"{track_id}/device:{entry_index}",
-                "device_name": entry.get("device_name",
-                                          f"Device of {track_id}"),
-                "parameters": nested,
-            })
+            entries.append(
+                {
+                    "device_id": f"{track_id}/device:{entry_index}",
+                    "device_name": entry.get("device_name", f"Device of {track_id}"),
+                    "parameters": nested,
+                }
+            )
         return entries
     if command == "get_composition_structure":
-        return {"track_count": len(s["tracks"]),
-                "scene_count": 1, "unnamed_tracks": []}
+        return {"track_count": len(s["tracks"]), "scene_count": 1, "unnamed_tracks": []}
     if command == "diagnose_midi_clip":
         return {"issues": [], "scale_conformant": True}
     if command == "lifecycle_status":
@@ -443,10 +469,7 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str,
         return {"name": cue["name"], "time": cue["time"]}
     if command == "delete_cue_point":
         before = len(s["locators"])
-        s["locators"] = [
-            c for c in s["locators"]
-            if abs(c["time"] - params["time"]) > 0.01
-        ]
+        s["locators"] = [c for c in s["locators"] if abs(c["time"] - params["time"]) > 0.01]
         return {"deleted": len(s["locators"]) < before}
     if command == "bulk_create_cue_points":
         for item in params["items"]:
@@ -455,17 +478,27 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str,
     if command == "create_clip":
         track, slot = params["track_index"], params["clip_index"]
         s["clips"][(track, slot)] = {
-            "name": "", "is_audio_clip": False, "is_midi_clip": True,
-            "has_clip": True, "length": params.get("length_beats", 4.0),
+            "name": "",
+            "is_audio_clip": False,
+            "is_midi_clip": True,
+            "has_clip": True,
+            "length": params.get("length_beats", 4.0),
             "notes": [],
         }
         return {"track_index": track, "clip_index": slot}
     if command == "add_notes_to_clip":
         track, slot = params["track_index"], params["clip_index"]
-        s["clips"].setdefault((track, slot), {
-            "name": "", "is_audio_clip": False, "is_midi_clip": True,
-            "has_clip": True, "length": 4.0, "notes": [],
-        })
+        s["clips"].setdefault(
+            (track, slot),
+            {
+                "name": "",
+                "is_audio_clip": False,
+                "is_midi_clip": True,
+                "has_clip": True,
+                "length": 4.0,
+                "notes": [],
+            },
+        )
         s["clips"][(track, slot)]["notes"] = list(params["notes"])
         return {"added": len(params["notes"])}
     if command == "clear_clip_notes":
@@ -475,15 +508,22 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str,
         return {"cleared": True}
     if command == "set_clip_properties":
         track, slot = params["track_index"], params["clip_index"]
-        s["clips"].setdefault((track, slot), {
-            "name": "", "is_audio_clip": False, "is_midi_clip": True,
-            "has_clip": True, "length": 4.0, "notes": [],
-        })
+        s["clips"].setdefault(
+            (track, slot),
+            {
+                "name": "",
+                "is_audio_clip": False,
+                "is_midi_clip": True,
+                "has_clip": True,
+                "length": 4.0,
+                "notes": [],
+            },
+        )
         if "name" in params:
             s["clips"][(track, slot)]["name"] = params["name"]
         return {"name": params.get("name", "")}
     if command == "create_clip_automation":
-        return {"points": len(params["automation_points"])}
+        return {"points_written": len(params["automation_points"])}
     if command == "start_playback":
         s["is_playing"] = True
         return {"playing": True}
@@ -494,9 +534,7 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str,
         track, slot = params["track_index"], params["clip_index"]
         clip = s["clips"].get((track, slot))
         if clip is None:
-            raise RuntimeError(
-                f"fire_clip: empty slot {track}:{slot}"
-            )
+            raise RuntimeError(f"fire_clip: empty slot {track}:{slot}")
         s["is_playing"] = True
         return {"fired": True, "track_index": track, "clip_index": slot}
     if command == "run_batch":
@@ -524,17 +562,33 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str,
         return {"deleted": True}
     if command == "create_audio_track":
         new_index = max(t["index"] for t in s["tracks"]) + 1
-        s["tracks"].append({"index": new_index, "type": "audio",
-                            "name": "", "id": f"track:{new_index}",
-                            "mute": False, "solo": False, "arm": False,
-                            "devices": []})
+        s["tracks"].append(
+            {
+                "index": new_index,
+                "type": "audio",
+                "name": "",
+                "id": f"track:{new_index}",
+                "mute": False,
+                "solo": False,
+                "arm": False,
+                "devices": [],
+            }
+        )
         return {"track_index": new_index}
     if command == "create_midi_track":
         new_index = max(t["index"] for t in s["tracks"]) + 1
-        s["tracks"].append({"index": new_index, "type": "midi",
-                            "name": "", "id": f"track:{new_index}",
-                            "mute": False, "solo": False, "arm": False,
-                            "devices": []})
+        s["tracks"].append(
+            {
+                "index": new_index,
+                "type": "midi",
+                "name": "",
+                "id": f"track:{new_index}",
+                "mute": False,
+                "solo": False,
+                "arm": False,
+                "devices": [],
+            }
+        )
         return {"track_index": new_index}
     if command == "set_parameter_value":
         track_id = f"track:{params['track_index']}"
@@ -542,8 +596,7 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str,
         entries = s["device_parameters"].get(track_id, [])
         if device_index < 0 or device_index >= len(entries):
             raise RuntimeError(
-                f"BAD_DEVICE_INDEX: {device_index} (track has "
-                f"{len(entries)} devices)"
+                f"BAD_DEVICE_INDEX: {device_index} (track has {len(entries)} devices)"
             )
         entry = entries[device_index]
         name = params["parameter_name"]
@@ -555,9 +608,7 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str,
         elif entry.get("name") == name:
             entry["value"] = float(params["value"])
             return {"value": float(params["value"])}
-        raise RuntimeError(
-            f"PARAMETER_NOT_FOUND: {name} on {track_id}/device:{device_index}"
-        )
+        raise RuntimeError(f"PARAMETER_NOT_FOUND: {name} on {track_id}/device:{device_index}")
     if command == "live_fade":
         # Honest live_fade: update the track's mixer volume so the
         # runner's post-fade readback can verify the target landed.
@@ -572,7 +623,8 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str,
         if target_value is not None:
             target_value = float(target_value)
             s.setdefault("mixer_volumes", {})[track_id] = max(
-                0.0, min(1.0, target_value),
+                0.0,
+                min(1.0, target_value),
             )
         return {"final_value": target_value}
     if command == "save_set":
@@ -590,9 +642,7 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str,
             "is_playing": bool(s.get("is_playing", False)),
             "current_song_time": float(s["current_song_time"]),
             "tracks": [
-                {"index": t["index"], "name": t["name"],
-                 "type": t["type"]}
-                for t in s["tracks"]
+                {"index": t["index"], "name": t["name"], "type": t["type"]} for t in s["tracks"]
             ],
             "control_surfaces": list(s.get("control_surfaces", [])),
             "browser_categories_count": len(s["browser_categories"]),
@@ -609,8 +659,7 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str,
 # ---------------------------------------------------------------------------
 
 
-def _strict_ws_dispatch(bridge: StrictFakeBridge, method: str,
-                        params: dict[str, Any]) -> Any:
+def _strict_ws_dispatch(bridge: StrictFakeBridge, method: str, params: dict[str, Any]) -> Any:
     spec = _WS_METHOD_FIELDS.get(method)
     if spec is None:
         raise RuntimeError(f"UNKNOWN_WS_METHOD: {method}")
@@ -618,10 +667,7 @@ def _strict_ws_dispatch(bridge: StrictFakeBridge, method: str,
         if field not in params:
             raise RuntimeError(f"MISSING_FIELD: {method}.{field}")
         if isinstance(expected, type) and not isinstance(params[field], expected):
-            raise RuntimeError(
-                f"BAD_FIELD_TYPE: {method}.{field} expected "
-                f"{expected.__name__}"
-            )
+            raise RuntimeError(f"BAD_FIELD_TYPE: {method}.{field} expected {expected.__name__}")
     s = bridge.state
     if method == "get_warp_state":
         return dict(s["warp"])
@@ -632,10 +678,11 @@ def _strict_ws_dispatch(bridge: StrictFakeBridge, method: str,
         target = params["track_index"]
         for track in s["tracks"]:
             if track["index"] == target:
-                track.setdefault("devices", []).append({
-                    "name": params["device_name"],
-                })
+                track.setdefault("devices", []).append(
+                    {
+                        "name": params["device_name"],
+                    }
+                )
                 break
-        return {"device_name": params["device_name"],
-                "track_index": target}
+        return {"device_name": params["device_name"], "track_index": target}
     raise RuntimeError(f"UNKNOWN_WS_METHOD: {method}")

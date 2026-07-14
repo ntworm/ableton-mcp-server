@@ -99,6 +99,7 @@ def request_timeout_seconds(command_name: str, params: object) -> float:
             return max(base, float(duration) + REQUEST_TIMEOUT_SECONDS)
     return base
 
+
 READ_COMMANDS = frozenset(
     {
         "get_session_info",
@@ -216,6 +217,7 @@ def assert_not_blocked(command_name: str) -> None:
         raise ValueError(
             "Command %r is blocked: creative mutation is not available." % command_name
         )
+
 
 # Set lifecycle and fader fade (v0.5.0)
 COMMAND_LIFECYCLE_STATUS = "lifecycle_status"

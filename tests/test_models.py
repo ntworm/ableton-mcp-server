@@ -101,16 +101,11 @@ def test_device_name_is_primary_and_uri_alias_is_compatible() -> None:
         LoadDeviceToTrackRequest(track_index=0, device_name=" Operator ").resolved_name
         == "Operator"
     )
-    assert (
-        LoadDeviceToTrackRequest(track_index=0, device_uri="Utility").resolved_name
-        == "Utility"
-    )
+    assert LoadDeviceToTrackRequest(track_index=0, device_uri="Utility").resolved_name == "Utility"
     with pytest.raises(ValidationError):
         LoadDeviceToTrackRequest(track_index=0)
 
 
 def test_device_request_rejects_both_name_and_uri() -> None:
     with pytest.raises(ValidationError):
-        LoadDeviceToTrackRequest(
-            track_index=0, device_name="Operator", device_uri="Utility"
-        )
+        LoadDeviceToTrackRequest(track_index=0, device_name="Operator", device_uri="Utility")

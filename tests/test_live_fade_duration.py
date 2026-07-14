@@ -59,9 +59,7 @@ def _drive_until_done(
             return stop.value
         clock["t"] += tick
         elapsed += tick
-    raise AssertionError(
-        f"live_fade_steps did not complete within {max_seconds}s of virtual time"
-    )
+    raise AssertionError(f"live_fade_steps did not complete within {max_seconds}s of virtual time")
 
 
 def test_live_fade_duration_zero_is_immediate(clock: dict[str, float]) -> None:

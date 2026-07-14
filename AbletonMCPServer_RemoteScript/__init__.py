@@ -691,9 +691,14 @@ def cmd_search_browser(
         while stack and len(results) < limit and len(visited) < budget:
             item, path, depth, ordinal_path = stack.pop()
             uri = str(_safe(lambda item=item: item.uri, ""))
-            key = "uri:" + uri if uri else "%s:%s" % (
-                category,
-                "/".join(str(part) for part in ordinal_path),
+            key = (
+                "uri:" + uri
+                if uri
+                else "%s:%s"
+                % (
+                    category,
+                    "/".join(str(part) for part in ordinal_path),
+                )
             )
             if key in visited:
                 continue
@@ -715,9 +720,7 @@ def cmd_search_browser(
             for child_index in range(len(children) - 1, -1, -1):
                 child = children[child_index]
                 child_name = str(_safe(lambda child=child: child.name, ""))
-                stack.append(
-                    (child, [*path, child_name], depth + 1, (*ordinal_path, child_index))
-                )
+                stack.append((child, [*path, child_name], depth + 1, (*ordinal_path, child_index)))
         if len(results) >= limit or len(visited) >= budget:
             break
     return results
@@ -920,8 +923,7 @@ def _verified_attribute_boolean_steps(
             return {result_key: actual}
     raise RemoteError(
         ERROR_LIVE_UNAVAILABLE,
-        "State setter for %s did not reach %s after %s UI ticks."
-        % (attribute, expected, retries),
+        "State setter for %s did not reach %s after %s UI ticks." % (attribute, expected, retries),
     )
 
 
@@ -944,8 +946,7 @@ def _verified_attribute_string_steps(
             return {result_key: actual}
     raise RemoteError(
         ERROR_LIVE_UNAVAILABLE,
-        "State setter for %s did not reach %r after %s UI ticks."
-        % (attribute, expected, retries),
+        "State setter for %s did not reach %r after %s UI ticks." % (attribute, expected, retries),
     )
 
 
@@ -1376,14 +1377,10 @@ def _set_clip_properties_steps(
     current_start = float(_safe(lambda: clip.loop_start, 0.0))
     current_end = float(_safe(lambda: clip.loop_end, _safe(lambda: clip.length, 0.0)))
     requested_start = (
-        _float_param(params, "loop_start", 0.0, 100000.0)
-        if "loop_start" in params
-        else None
+        _float_param(params, "loop_start", 0.0, 100000.0) if "loop_start" in params else None
     )
     requested_end = (
-        _float_param(params, "loop_end", 0.0, 100000.0)
-        if "loop_end" in params
-        else None
+        _float_param(params, "loop_end", 0.0, 100000.0) if "loop_end" in params else None
     )
     requested_name = _string_param(params, "name") if "name" in params else None
     final_start = requested_start if requested_start is not None else current_start
@@ -1476,15 +1473,27 @@ def _create_clip_automation_steps(
             )
         points.append((point_time, value))
     points.sort(key=lambda point: point[0])
-    envelope_getter = _safe(lambda: clip.automation_envelope_for_parameter, None)
+    envelope_getter = _safe(lambda: clip.automation_envelope, None)
+    envelope_creator = _safe(lambda: clip.create_automation_envelope, None)
     clear_envelope = _safe(lambda: clip.clear_envelope, None)
-    if not callable(envelope_getter) or not callable(clear_envelope):
+    if (not callable(envelope_getter) and not callable(envelope_creator)) or not callable(
+        clear_envelope
+    ):
         raise RemoteError(
             ERROR_LIVE_UNAVAILABLE,
             "Live runtime does not expose the clip automation envelope API.",
         )
     clear_envelope(parameter)
-    envelope = envelope_getter(parameter)
+    envelope = None
+    if callable(envelope_getter):
+        envelope = envelope_getter(parameter)
+    if envelope is None and callable(envelope_creator):
+        envelope = envelope_creator(parameter)
+    if envelope is None:
+        raise RemoteError(
+            ERROR_LIVE_UNAVAILABLE,
+            "Live runtime failed to retrieve or create the clip automation envelope.",
+        )
     insert_step = _safe(lambda: envelope.insert_step, None)
     if not callable(insert_step):
         raise RemoteError(
@@ -1829,9 +1838,7 @@ def cmd_create_audio_track(
         )
     created_index = len(tracks) - 1 if index == -1 else index
     if created_index < 0 or created_index >= len(tracks):
-        raise RemoteError(
-            ERROR_VERIFICATION_FAILED, "created track index is out of range"
-        )
+        raise RemoteError(ERROR_VERIFICATION_FAILED, "created track index is out of range")
     created = tracks[created_index]
     if name:
         created.name = str(name)
@@ -2229,9 +2236,7 @@ def _dispatch_command_steps(
 ) -> Generator[None, None, Any]:
     if normalized == "run_batch":
         return (
-            yield from _run_batch_steps(
-                song, application, params, undo_target, control_surface
-            )
+            yield from _run_batch_steps(song, application, params, undo_target, control_surface)
         )
     if normalized == "quit_ableton":
         # Give Live's UI thread one cycle before scheduling application quit.

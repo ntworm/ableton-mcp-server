@@ -48,7 +48,6 @@ def test_doctor_passes_catalog_tool_count_to_bridge_status(
     assert mock_status.call_args.kwargs.get("tool_count") == 65
 
 
-
 def test_cli_installs_and_checks_remote_script(tmp_path: Path, capsys: MagicMock) -> None:
     source = tmp_path / "source"
     source.mkdir()

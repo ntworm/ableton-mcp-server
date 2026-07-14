@@ -39,7 +39,7 @@ def test_create_clip_automation_clears_and_inserts_sorted_steps() -> None:
     }
     clip = song.tracks[0].clip_slots[0].clip
     parameter = song.tracks[0].devices[0].parameters[1]
-    assert clip.automation_envelope_for_parameter(parameter).steps == [
+    assert clip.automation_envelope(parameter).steps == [
         (0.0, 0.0, 0.2),
         (2.0, 0.0, 0.8),
     ]
@@ -68,7 +68,8 @@ def test_create_clip_automation_rejects_out_of_bounds_value() -> None:
 def test_create_clip_automation_reports_missing_host_capability() -> None:
     song = FakeSong()
     clip = song.tracks[0].clip_slots[0].clip
-    clip.automation_envelope_for_parameter = None
+    clip.automation_envelope = None
+    clip.create_automation_envelope = None
 
     with pytest.raises(RemoteError) as error:
         execute_command(song, FakeApplication(), "create_clip_automation", _params())

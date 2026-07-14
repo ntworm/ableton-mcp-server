@@ -112,9 +112,7 @@ class Client:
         may_retry = command_type not in ALLOWED_MUTATIONS
         request_params = dict(params or {})
         effective_timeout = (
-            request_timeout_seconds(command_type, request_params)
-            if timeout is None
-            else timeout
+            request_timeout_seconds(command_type, request_params) if timeout is None else timeout
         )
         with self._lock:
             while True:

@@ -6,6 +6,7 @@ implementation is correct. The file is intentionally separate from
 ``test_acceptance_runner_integration.py`` so the auditor can re-run
 just this set in isolation.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -33,13 +34,14 @@ from ._strict_fake import StrictFakeBridge
 def _inject_fast_offline_probes(monkeypatch: pytest.MonkeyPatch) -> None:
     """Inject ``fast_offline_probes`` for every runner-level audit test."""
     import ableton_mcp_server.acceptance as acceptance_module
-    monkeypatch.setattr(acceptance_module, "run_offline_probes", fast_offline_probes)
 
+    monkeypatch.setattr(acceptance_module, "run_offline_probes", fast_offline_probes)
 
 
 @pytest.fixture(autouse=True)
 def _audit_test_isolation(
-    fake_project: Path, monkeypatch: pytest.MonkeyPatch,
+    fake_project: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> dict[str, Any]:
     """Make sure no audit test accidentally invokes real ``npm`` or
     tries to spin up ``python -m build`` in the absence of a venv.
@@ -60,14 +62,17 @@ def _audit_test_isolation(
         if target.exists():
             target.unlink()
         target.write_bytes(b"fresh-ablx")
+
         class CP:
             returncode = 0
             stdout = ""
             stderr = ""
+
         return CP()
 
     class _FakeSubprocess:
         run = staticmethod(runner)
+
         def which(self, _name: str) -> str:
             return ""
 
@@ -75,18 +80,15 @@ def _audit_test_isolation(
     monkeypatch.setattr(brc.shutil, "which", lambda _n: "")
 
     def fake_build_wheel(_root: Path, output_directory: Path) -> Path:
-        wheel = output_directory / (
-            "ableton_mcp_server-0.5.1-py3-none-any.whl"
-        )
+        wheel = output_directory / ("ableton_mcp_server-0.5.1-py3-none-any.whl")
         import zipfile as _zf
+
         if wheel.exists():
             wheel.unlink()
         with _zf.ZipFile(wheel, "w", _zf.ZIP_DEFLATED) as zf:
             zf.writestr(
                 "ableton_mcp_server-0.5.1.dist-info/METADATA",
-                "Metadata-Version: 2.1\n"
-                "Name: ableton_mcp_server\n"
-                "Version: 0.5.1\n",
+                "Metadata-Version: 2.1\nName: ableton_mcp_server\nVersion: 0.5.1\n",
             )
             zf.writestr(
                 "ableton_mcp_server/__init__.py",
@@ -102,6 +104,7 @@ def _audit_test_isolation(
 def fake_project() -> Path:
     """Local minimal project tree, enough for ``build_release`` P1-7."""
     import tempfile
+
     with tempfile.TemporaryDirectory(prefix="audit-p1-7-") as tmp:
         project = Path(tmp) / "project"
         project.mkdir()
@@ -110,12 +113,10 @@ def fake_project() -> Path:
         (rs / "__init__.py").write_text("# rs\n", encoding="utf-8")
         pkg = project / "ableton_mcp_server"
         pkg.mkdir()
-        (pkg / "__init__.py").write_text(
-            '__version__ = "0.5.1"\n', encoding="utf-8"
-        )
+        (pkg / "__init__.py").write_text('__version__ = "0.5.1"\n', encoding="utf-8")
         (project / "pyproject.toml").write_text(
-            "[project]\nname='ableton_mcp_server'\n"
-            "version='0.5.1'\n", encoding="utf-8",
+            "[project]\nname='ableton_mcp_server'\nversion='0.5.1'\n",
+            encoding="utf-8",
         )
         ext = project / "AbletonMCPServer_Extension"
         ext.mkdir()
@@ -128,12 +129,8 @@ def fake_project() -> Path:
             encoding="utf-8",
         )
         (ext / "dist").mkdir()
-        (ext / "dist" / "extension.js").write_text(
-            "// built", encoding="utf-8"
-        )
-        (ext / "AbletonMCPServer-Extension-0.5.1.ablx").write_text(
-            "stale-ablx", encoding="utf-8"
-        )
+        (ext / "dist" / "extension.js").write_text("// built", encoding="utf-8")
+        (ext / "AbletonMCPServer-Extension-0.5.1.ablx").write_text("stale-ablx", encoding="utf-8")
         yield project
 
 
@@ -154,6 +151,7 @@ def test_p0_1_build_extension_contract_accepts_top_level_artifacts() -> None:
     row — no hardcoded ``dist/index.js`` is permitted.
     """
     import tempfile
+
     with tempfile.TemporaryDirectory(prefix="build-ext-") as tmp:
         project = Path(tmp) / "fake-ext"
         project.mkdir()
@@ -163,13 +161,9 @@ def test_p0_1_build_extension_contract_accepts_top_level_artifacts() -> None:
             "main": "dist/extension.js",
             "scripts": {"build": "echo build"},
         }
-        (project / "package.json").write_text(
-            json.dumps(pkg), encoding="utf-8"
-        )
+        (project / "package.json").write_text(json.dumps(pkg), encoding="utf-8")
         manifest = {"name": "fake-ext", "entry": "dist/extension.js"}
-        (project / "manifest.json").write_text(
-            json.dumps(manifest), encoding="utf-8"
-        )
+        (project / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
         # Pretend tsc just produced the declared entrypoint.
         dist = project / "dist"
         dist.mkdir()
@@ -177,6 +171,7 @@ def test_p0_1_build_extension_contract_accepts_top_level_artifacts() -> None:
 
         # Patch ``subprocess.run`` so we don't actually invoke npm.
         from ableton_mcp_server import server as _server
+
         real_run = _server.subprocess.run
 
         def fake_run(cmd: Any, *args: Any, **kwargs: Any) -> Any:
@@ -184,6 +179,7 @@ def test_p0_1_build_extension_contract_accepts_top_level_artifacts() -> None:
                 returncode = 0
                 stdout = ""
                 stderr = ""
+
             return CP()
 
         _server.subprocess.run = fake_run
@@ -196,13 +192,9 @@ def test_p0_1_build_extension_contract_accepts_top_level_artifacts() -> None:
         assert parsed["status"] == "built"
         assert parsed["entrypoint"] == "dist/extension.js"
         assert parsed["entrypoint_exists"] is True
-        assert isinstance(parsed["steps"], list) and parsed["steps"], (
-            f"steps missing: {parsed}"
-        )
+        assert isinstance(parsed["steps"], list) and parsed["steps"], f"steps missing: {parsed}"
         for index, step in enumerate(parsed["steps"]):
-            assert int(step.get("returncode", -1)) == 0, (
-                f"step {index} returncode != 0: {step}"
-            )
+            assert int(step.get("returncode", -1)) == 0, f"step {index} returncode != 0: {step}"
         # Top-level ``artifacts`` list with the declared entrypoint.
         assert isinstance(parsed.get("artifacts"), list), (
             f"artifacts missing or wrong shape: {parsed}"
@@ -233,14 +225,17 @@ def test_p0_1_run_offline_probes_records_build_extension_as_offline_passed(
         workdir = tmp_path / "offline-workdir"
         workdir.mkdir()
         all_offline_names = (
-            "get_ableton_logs", "diff_snapshots_tool",
-            "scaffold_extension", "build_extension",
-            "analyze_audio", "find_frequency_masking",
-            "analyze_mix", "extract_single_cycle",
+            "get_ableton_logs",
+            "diff_snapshots_tool",
+            "scaffold_extension",
+            "build_extension",
+            "analyze_audio",
+            "find_frequency_masking",
+            "analyze_mix",
+            "extract_single_cycle",
         )
         report = CertificationReport(tool_names=all_offline_names)
         await real_run_offline_probes(report, workdir)
-
 
         build_row = report.recorded.get("build_extension")
         scaffold_row = report.recorded.get("scaffold_extension")
@@ -274,8 +269,7 @@ def test_p0_1_run_offline_probes_records_build_extension_as_offline_passed(
 # ---------------------------------------------------------------------------
 
 
-def test_p0_2_baseline_captures_mute_solo_arm_volume_from_track_state(
-) -> None:
+def test_p0_2_baseline_captures_mute_solo_arm_volume_from_track_state() -> None:
     """Tracks starting with ``mute=True`` / ``solo=True`` / ``arm=True``
     must return to the exact original state after the mutation suite
     plus cleanup. ``get_track_list`` alone cannot drive these values —
@@ -302,18 +296,10 @@ def test_p0_2_baseline_captures_mute_solo_arm_volume_from_track_state(
     # The runner must have captured the original mute=True / solo=True
     # / arm=True for track 2 and restored them, regardless of how many
     # mutations flipped them in between.
-    track2 = next(
-        t for t in bridge.state["tracks"] if t["index"] == 2
-    )
-    assert track2.get("mute") is True, (
-        f"track 2 mute not restored: {track2}"
-    )
-    assert track2.get("solo") is True, (
-        f"track 2 solo not restored: {track2}"
-    )
-    assert track2.get("arm") is True, (
-        f"track 2 arm not restored: {track2}"
-    )
+    track2 = next(t for t in bridge.state["tracks"] if t["index"] == 2)
+    assert track2.get("mute") is True, f"track 2 mute not restored: {track2}"
+    assert track2.get("solo") is True, f"track 2 solo not restored: {track2}"
+    assert track2.get("arm") is True, f"track 2 arm not restored: {track2}"
 
 
 def test_p0_2_baseline_does_not_read_mixer_state_from_get_track_list() -> None:
@@ -357,10 +343,16 @@ def test_p0_2_baseline_does_not_read_mixer_state_from_get_track_list() -> None:
                 # Lie on purpose: report mute=False / solo=False /
                 # arm=False / volume=0.0 — none of which are real.
                 divergent = [
-                    {"id": t["id"], "index": t["index"],
-                     "name": t["name"], "type": t["type"],
-                     "mute": False, "solo": False, "arm": False,
-                     "volume": 0.0}
+                    {
+                        "id": t["id"],
+                        "index": t["index"],
+                        "name": t["name"],
+                        "type": t["type"],
+                        "mute": False,
+                        "solo": False,
+                        "arm": False,
+                        "volume": 0.0,
+                    }
                     for t in self.state["tracks"]
                 ]
                 self.divergent_lists.append(divergent)
@@ -389,24 +381,17 @@ def test_p0_2_baseline_does_not_read_mixer_state_from_get_track_list() -> None:
     # that source for mute/solo/arm/volume the restore step would have
     # applied False / False / False / 0.0 instead of the genuine
     # True / True / True / 0.42. The genuine state must still hold.
-    track2 = next(
-        t for t in bridge.state["tracks"] if t["index"] == 2
-    )
+    track2 = next(t for t in bridge.state["tracks"] if t["index"] == 2)
     assert track2.get("mute") is True, (
-        "baseline restored mute from get_track_list instead of "
-        f"get_track_state: {track2}"
+        f"baseline restored mute from get_track_list instead of get_track_state: {track2}"
     )
     assert track2.get("solo") is True, (
-        "baseline restored solo from get_track_list instead of "
-        f"get_track_state: {track2}"
+        f"baseline restored solo from get_track_list instead of get_track_state: {track2}"
     )
     assert track2.get("arm") is True, (
-        "baseline restored arm from get_track_list instead of "
-        f"get_track_state: {track2}"
+        f"baseline restored arm from get_track_list instead of get_track_state: {track2}"
     )
-    mixer_volume = bridge.state.get("mixer_volumes", {}).get(
-        "track:2", 0.85
-    )
+    mixer_volume = bridge.state.get("mixer_volumes", {}).get("track:2", 0.85)
     assert abs(float(mixer_volume) - 0.42) < 0.05, (
         "baseline restored volume from get_track_list instead of "
         f"get_track_state: {bridge.state['mixer_volumes']}"
@@ -415,8 +400,7 @@ def test_p0_2_baseline_does_not_read_mixer_state_from_get_track_list() -> None:
     # once — otherwise this test would not be exercising what it
     # claims to exercise.
     assert bridge.divergent_lists, (
-        "divergent get_track_list was never called; the regression "
-        "guard cannot prove its premise"
+        "divergent get_track_list was never called; the regression guard cannot prove its premise"
     )
 
 
@@ -450,10 +434,12 @@ def test_p0_3_live_fade_readback_uses_track_state_mixer_volume() -> None:
         timeout: float | None = None,
     ) -> Any:
         if command_type == "live_fade":
-            live_fade_calls.append({
-                "command": command_type,
-                "params": dict(params or {}),
-            })
+            live_fade_calls.append(
+                {
+                    "command": command_type,
+                    "params": dict(params or {}),
+                }
+            )
         return raw_call(command_type, params, timeout=timeout)
 
     bridge.call = wrap  # type: ignore[assignment]
@@ -473,8 +459,7 @@ def test_p0_3_live_fade_readback_uses_track_state_mixer_volume() -> None:
     # the restore. We assert the restore targets the original mixer
     # volume via ``target_value``.
     assert len(live_fade_calls) >= 3, (
-        f"expected at least 3 live_fade calls, got {len(live_fade_calls)}: "
-        f"{live_fade_calls}"
+        f"expected at least 3 live_fade calls, got {len(live_fade_calls)}: {live_fade_calls}"
     )
     restore_call = live_fade_calls[-1]
     assert "target_value" in restore_call["params"], (
@@ -482,12 +467,9 @@ def test_p0_3_live_fade_readback_uses_track_state_mixer_volume() -> None:
     )
     # After the run, mixer_volume must be restored to the original
     # 0.42 — the cleanup wrote it back through ``live_fade``.
-    mixer_volume = bridge.state.get("mixer_volumes", {}).get(
-        "track:2", 0.85
-    )
+    mixer_volume = bridge.state.get("mixer_volumes", {}).get("track:2", 0.85)
     assert abs(float(mixer_volume) - 0.42) < 0.05, (
-        f"track 2 mixer_volume not restored to original: "
-        f"{bridge.state['mixer_volumes']}"
+        f"track 2 mixer_volume not restored to original: {bridge.state['mixer_volumes']}"
     )
 
 
@@ -507,25 +489,23 @@ def test_p0_4_device_index_discovered_from_list_device_params() -> None:
     audio_state = bridge.state["tracks"][2]
     audio_state["devices"] = [
         {"name": "Empty", "parameters": []},
-        {"name": "Operator",
-         "parameters": [{"name": "Volume", "value": 0.42}]},
+        {"name": "Operator", "parameters": [{"name": "Volume", "value": 0.42}]},
     ]
     bridge.state["device_parameters"]["track:2"] = [
         {"name": "Empty", "parameters": []},
-        {"name": "Operator",
-         "parameters": [{"name": "Volume", "value": 0.42}]},
+        {"name": "Operator", "parameters": [{"name": "Volume", "value": 0.42}]},
     ]
     writes: list[dict[str, Any]] = []
     real = bridge.call
 
-    def tracking(
-        command_type: str, params: Any = None, **kw: Any
-    ) -> Any:
+    def tracking(command_type: str, params: Any = None, **kw: Any) -> Any:
         if command_type in {"set_parameter_value", "get_parameter_value"}:
-            writes.append({
-                "command": command_type,
-                "params": dict(params or {}),
-            })
+            writes.append(
+                {
+                    "command": command_type,
+                    "params": dict(params or {}),
+                }
+            )
         return real(command_type, params, **kw)
 
     bridge.call = tracking  # type: ignore[assignment]
@@ -542,13 +522,8 @@ def test_p0_4_device_index_discovered_from_list_device_params() -> None:
     )
     # Every ``set_parameter_value`` / ``get_parameter_value`` call must
     # target ``device_index=1`` (Operator), not ``device_index=0``.
-    targeted = [
-        w for w in writes
-        if w["params"].get("parameter_name") == "Volume"
-    ]
-    assert targeted, (
-        "no set/get_parameter_value Volume calls recorded by runner"
-    )
+    targeted = [w for w in writes if w["params"].get("parameter_name") == "Volume"]
+    assert targeted, "no set/get_parameter_value Volume calls recorded by runner"
     for w in targeted:
         assert int(w["params"].get("device_index", -1)) == 1, (
             f"runner targeted wrong device_index: {w}"
@@ -620,11 +595,15 @@ def test_p1_5_jsonl_socket_dispatch_round_trip(
                         try:
                             command, params = decode_request(line)
                         except ProtocolError as error:
-                            conn.sendall(encode_response({
-                                "status": "error",
-                                "code": "PROTOCOL_ERROR",
-                                "message": str(error),
-                            }))
+                            conn.sendall(
+                                encode_response(
+                                    {
+                                        "status": "error",
+                                        "code": "PROTOCOL_ERROR",
+                                        "message": str(error),
+                                    }
+                                )
+                            )
                             continue
                         try:
                             result = _strict_tcp_dispatch(bridge, command, params)
@@ -671,7 +650,10 @@ def test_p1_5_jsonl_socket_dispatch_round_trip(
             for track in track_list:
                 # Production contract: only id/index/name/type.
                 assert set(track.keys()) <= {
-                    "id", "index", "name", "type",
+                    "id",
+                    "index",
+                    "name",
+                    "type",
                 }, f"get_track_list leaked mixer fields: {track}"
         finally:
             c.close()
@@ -842,9 +824,7 @@ def test_p1_6_set_tempo_readback_fails_only_during_restore() -> None:
     )
     evidence_lower = set_tempo_row["evidence"].lower()
     assert (
-        "cleanup" in evidence_lower
-        or "readback" in evidence_lower
-        or "restore" in evidence_lower
+        "cleanup" in evidence_lower or "readback" in evidence_lower or "restore" in evidence_lower
     ), (
         "set_tempo failure evidence must reference cleanup / readback "
         f"/ restore so the failure mode is observable: {set_tempo_row}"
@@ -857,14 +837,14 @@ def test_p1_6_set_tempo_readback_fails_only_during_restore() -> None:
     assert cert["release_ready"] is False
 
 
-
 # ---------------------------------------------------------------------------
 # P1-7: build_release must accept and persist source_commit
 # ---------------------------------------------------------------------------
 
 
 def test_p1_7_build_release_persists_source_commit(
-    fake_project: Path, tmp_path: Path,
+    fake_project: Path,
+    tmp_path: Path,
 ) -> None:
     """``build_release`` must accept ``source_commit`` and write it to
     ``manifest.json`` so the candidate artefacts are traceable back to
@@ -883,7 +863,6 @@ def test_p1_7_build_release_persists_source_commit(
 
         return _Proc()
 
-
     summary = build_release(
         root=fake_project,
         output_directory=out,
@@ -892,7 +871,5 @@ def test_p1_7_build_release_persists_source_commit(
     )
     assert summary["source_commit"] == commit_hash
 
-    on_disk = json.loads(
-        (out / "manifest.json").read_text(encoding="utf-8")
-    )
+    on_disk = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
     assert on_disk["source_commit"] == commit_hash

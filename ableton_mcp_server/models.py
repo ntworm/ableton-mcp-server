@@ -373,8 +373,23 @@ class DiagnoseMidiClipRequest(RequestModel):
             return None
         value = value.strip().upper()
         if value not in (
-            "C", "C#", "Db", "D", "D#", "Eb", "E", "F",
-            "F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B",
+            "C",
+            "C#",
+            "Db",
+            "D",
+            "D#",
+            "Eb",
+            "E",
+            "F",
+            "F#",
+            "Gb",
+            "G",
+            "G#",
+            "Ab",
+            "A",
+            "A#",
+            "Bb",
+            "B",
         ):
             raise ValueError(f"Invalid scale root: {value!r}")
         return value
@@ -386,10 +401,20 @@ class DiagnoseMidiClipRequest(RequestModel):
             return None
         value = value.strip().lower()
         if value not in (
-            "major", "minor", "dorian", "phrygian", "lydian",
-            "mixolydian", "aeolian", "locrian", "harmonic_minor",
-            "melodic_minor", "pentatonic_major", "pentatonic_minor",
-            "blues", "chromatic",
+            "major",
+            "minor",
+            "dorian",
+            "phrygian",
+            "lydian",
+            "mixolydian",
+            "aeolian",
+            "locrian",
+            "harmonic_minor",
+            "melodic_minor",
+            "pentatonic_major",
+            "pentatonic_minor",
+            "blues",
+            "chromatic",
         ):
             raise ValueError(f"Invalid scale type: {value!r}")
         return value
@@ -476,9 +501,7 @@ class LoadDeviceToTrackRequest(RequestModel):
 
     @model_validator(mode="after")
     def exactly_one_name(self) -> LoadDeviceToTrackRequest:
-        values = [
-            value for value in (self.device_name, self.device_uri) if value is not None
-        ]
+        values = [value for value in (self.device_name, self.device_uri) if value is not None]
         if len(values) != 1:
             raise ValueError("provide exactly one of device_name or deprecated device_uri")
         resolved = values[0].strip()
@@ -558,9 +581,7 @@ class LiveFadeRequest(RequestModel):
     @model_validator(mode="after")
     def _exactly_one_target(self) -> LiveFadeRequest:
         if (self.target_percent is None) == (self.target_value is None):
-            raise ValueError(
-                "Provide exactly one of target_percent or target_value"
-            )
+            raise ValueError("Provide exactly one of target_percent or target_value")
         return self
 
 

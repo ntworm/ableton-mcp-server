@@ -15,6 +15,7 @@ Statuses
 - ``environment_unavailable`` — environment (Node, audio clip, etc.) missing.
 - ``failed`` — probe reached but readback failed; release blocker.
 """
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
@@ -66,12 +67,25 @@ class CertificationReport:
     def finish(self) -> dict[str, object]:
         missing = [name for name in self._tool_names if name not in self._rows]
         if missing:
-            raise ValueError(
-                f"{len(missing)} tools are unclassified: {', '.join(missing[:10])}"
-            )
+            raise ValueError(f"{len(missing)} tools are unclassified: {', '.join(missing[:10])}")
         rows = [asdict(self._rows[name]) for name in self._tool_names]
+
+        has_failed = any(row["status"] == "failed" for row in rows)
+        has_host_unavailable = any(row["status"] == "host_unavailable" for row in rows)
+        has_invalid_env_unavail = any(
+            row["status"] == "environment_unavailable" and row["tool"] != "build_extension"
+            for row in rows
+        )
+        has_invalid_manual = any(
+            row["status"] == "manual_required" and row["tool"] != "quit_ableton" for row in rows
+        )
+
+        release_ready = not (
+            has_failed or has_host_unavailable or has_invalid_env_unavail or has_invalid_manual
+        )
+
         return {
             "tool_count": len(rows),
-            "release_ready": not any(row["status"] == "failed" for row in rows),
+            "release_ready": release_ready,
             "tools": rows,
         }

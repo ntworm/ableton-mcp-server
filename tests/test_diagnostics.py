@@ -60,9 +60,7 @@ def test_bridge_status_probes_live_instead_of_tool_discovery() -> None:
 def test_bridge_status_explains_wsl_nat_failure_without_relaxing_loopback() -> None:
     result = bridge_status(
         BrokenClient(),
-        runtime=RuntimeInfo(
-            platform="linux", is_wsl=True, python_executable="/usr/bin/python3"
-        ),
+        runtime=RuntimeInfo(platform="linux", is_wsl=True, python_executable="/usr/bin/python3"),
     )
     assert result["status"] == "error"
     assert result["bridge_available"] is False
@@ -104,9 +102,7 @@ def test_log_discovery_uses_newest_candidate_across_roots(tmp_path: Path) -> Non
     os.utime(newer, (newer_mtime, newer_mtime))
 
     assert (
-        find_ableton_log_path(
-            env={}, ableton_roots=[tmp_path / "user-a", tmp_path / "user-b"]
-        )
+        find_ableton_log_path(env={}, ableton_roots=[tmp_path / "user-a", tmp_path / "user-b"])
         == newer
     )
 

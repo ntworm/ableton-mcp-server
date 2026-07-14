@@ -28,8 +28,8 @@ from ._strict_fake import StrictFakeBridge
 def _inject_fast_offline_probes(monkeypatch: pytest.MonkeyPatch) -> None:
     """Inject ``fast_offline_probes`` for every strict-fake runner test."""
     import ableton_mcp_server.acceptance as acceptance_module
-    monkeypatch.setattr(acceptance_module, "run_offline_probes", fast_offline_probes)
 
+    monkeypatch.setattr(acceptance_module, "run_offline_probes", fast_offline_probes)
 
 
 def test_fake_bridge_rejects_unknown_command() -> None:
@@ -43,32 +43,45 @@ def test_fake_bridge_rejects_set_track_property_with_name() -> None:
     """Real contract uses property+value; legacy ``name`` must be rejected."""
     bridge = StrictFakeBridge()
     with pytest.raises(RuntimeError, match="BAD_FIELD"):
-        bridge.call("set_track_property", {
-            "track_index": 0, "property": "mute", "value": True,
-            "name": "X",
-        })
+        bridge.call(
+            "set_track_property",
+            {
+                "track_index": 0,
+                "property": "mute",
+                "value": True,
+                "name": "X",
+            },
+        )
 
 
 def test_fake_bridge_rejects_create_clip_automation_with_points() -> None:
     """Real contract uses ``automation_points``, not ``points``."""
     bridge = StrictFakeBridge()
     with pytest.raises(RuntimeError, match="BAD_FIELD"):
-        bridge.call("create_clip_automation", {
-            "track_index": 0, "clip_index": 0,
-            "parameter_name": "volume",
-            "automation_points": [{"time": 0.0, "value": 0.0}],
-            "points": [{"time": 0.0, "value": 0.0}],
-        })
+        bridge.call(
+            "create_clip_automation",
+            {
+                "track_index": 0,
+                "clip_index": 0,
+                "parameter_name": "volume",
+                "automation_points": [{"time": 0.0, "value": 0.0}],
+                "points": [{"time": 0.0, "value": 0.0}],
+            },
+        )
 
 
 def test_fake_bridge_rejects_list_device_params_with_track_index() -> None:
     """Real contract uses ``track_id``, not ``track_index/device_index``."""
     bridge = StrictFakeBridge()
     with pytest.raises(RuntimeError, match="BAD_FIELD"):
-        bridge.call("list_device_params", {
-            "track_id": "track:0",
-            "track_index": 0, "device_index": 0,
-        })
+        bridge.call(
+            "list_device_params",
+            {
+                "track_id": "track:0",
+                "track_index": 0,
+                "device_index": 0,
+            },
+        )
 
 
 def test_fake_bridge_rejects_unknown_ws_method() -> None:
@@ -113,16 +126,15 @@ def test_runner_against_strict_fake_emits_no_unknown_commands() -> None:
     cert = result["certification"]
     failed = [row for row in cert["tools"] if row["status"] == "failed"]
     unknown = [
-        row for row in failed
-        if "UNKNOWN_COMMAND" in row["evidence"]
-        or "UNKNOWN_WS_METHOD" in row["evidence"]
+        row
+        for row in failed
+        if "UNKNOWN_COMMAND" in row["evidence"] or "UNKNOWN_WS_METHOD" in row["evidence"]
     ]
     assert unknown == [], (
         "runner emitted commands the strict fake did not recognize: "
         f"{[(row['tool'], row['evidence']) for row in unknown]}"
     )
-    build_row = next(r for r in cert["tools"]
-                     if r["tool"] == "build_extension")
+    build_row = next(r for r in cert["tools"] if r["tool"] == "build_extension")
     # ``build_extension`` is real now: the strict fake uses the same
     # status ladder as a real Live integration. When the local
     # TypeScript toolchain is healthy the runner records
@@ -161,12 +173,8 @@ def test_runner_load_device_to_track_uses_websocket_not_tcp() -> None:
     )
     tcp_names = {cmd for cmd, _ in bridge.tcp_calls}
     ws_names = {cmd for cmd, _ in bridge.ws_calls}
-    assert "load_device_to_track" not in tcp_names, (
-        "load_device_to_track must not be sent over TCP"
-    )
-    assert "load_device_to_track" in ws_names, (
-        "load_device_to_track must be sent over WebSocket"
-    )
+    assert "load_device_to_track" not in tcp_names, "load_device_to_track must not be sent over TCP"
+    assert "load_device_to_track" in ws_names, "load_device_to_track must be sent over WebSocket"
 
 
 def test_runner_warp_state_routed_via_websocket() -> None:

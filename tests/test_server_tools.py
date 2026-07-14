@@ -186,9 +186,7 @@ async def test_websocket_tools_validate_and_forward_exact_contract(
     ]
 
     assert json.loads(await server.get_warp_state(0, 1)) == {"warping": True}
-    assert json.loads(await server.set_warp_state(0, 1, False, "complex")) == {
-        "warping": False
-    }
+    assert json.loads(await server.set_warp_state(0, 1, False, "complex")) == {"warping": False}
     assert json.loads(await server.load_device_to_track(0, device_name=" Operator ")) == {
         "device_id": "track:0/device:1"
     }
@@ -236,9 +234,7 @@ async def test_load_device_to_track_sends_only_resolved_name_over_ws(
     # same body so the serialized JSON is identical.
     assert json.loads(by_name)["device_name"] == "Operator"
     assert json.loads(by_uri)["device_name"] == "Utility"
-    assert [
-        call.args for call in mock_remote_ws.await_args_list
-    ] == [
+    assert [call.args for call in mock_remote_ws.await_args_list] == [
         ("load_device_to_track", {"track_index": 0, "device_name": "Operator"}),
         ("load_device_to_track", {"track_index": 0, "device_name": "Utility"}),
     ]

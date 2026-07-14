@@ -30,9 +30,9 @@ class MetadataOnlyClient:
 
 def test_acceptance_uses_a_coarse_grid_aligned_free_cue_time() -> None:
     assert _acceptance_cue_time([]) == 256.0
-    assert _acceptance_cue_time(
-        [{"name": "A", "time": 256.0}, {"name": "B", "time": 512.0}]
-    ) == 768.0
+    assert (
+        _acceptance_cue_time([{"name": "A", "time": 256.0}, {"name": "B", "time": 512.0}]) == 768.0
+    )
 
 
 def test_acceptance_refuses_to_mutate_when_project_confirmation_does_not_match() -> None:

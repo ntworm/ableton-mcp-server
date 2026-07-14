@@ -107,8 +107,7 @@ def test_search_browser_finds_utility_under_midi_effects() -> None:
         "MIDI Effects",
         reproxy_children=True,
         children=[
-            FakeBrowserItem("Utility", uri="query:MIDI Effects#Utility",
-                            is_loadable=True),
+            FakeBrowserItem("Utility", uri="query:MIDI Effects#Utility", is_loadable=True),
         ],
     )
     app.browser.midi_effects = midi_effects_dynamic

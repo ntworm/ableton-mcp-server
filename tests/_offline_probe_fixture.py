@@ -34,7 +34,8 @@ _OFFLINE_TOOL_NAMES: tuple[str, ...] = (
 
 
 async def fast_offline_probes(
-    report: CertificationReport, workdir: Any,
+    report: CertificationReport,
+    workdir: Any,
 ) -> None:
     """Inject deterministic ``offline_passed`` rows for every offline tool.
 
@@ -48,8 +49,10 @@ async def fast_offline_probes(
     for tool in _OFFLINE_TOOL_NAMES:
         if tool not in report.tool_names:
             continue
-        report.record(Verification(
-            tool=tool,
-            status="offline_passed",
-            evidence="deterministic injection from fast_offline_probes",
-        ))
+        report.record(
+            Verification(
+                tool=tool,
+                status="offline_passed",
+                evidence="deterministic injection from fast_offline_probes",
+            )
+        )

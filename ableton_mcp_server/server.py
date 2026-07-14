@@ -1067,7 +1067,9 @@ def _read_extension_vendor_tarballs() -> dict[str, Path]:
 
 
 def _build_extension_package_json(
-    *, name: str, tarballs: dict[str, Path],
+    *,
+    name: str,
+    tarballs: dict[str, Path],
 ) -> dict[str, Any]:
     """Compose the ``package.json`` body for the scaffolded project.
 
@@ -1101,13 +1103,15 @@ def _build_extension_package_json(
         # scaffolded project type-checks even when the SDK tarball is
         # missing from the install environment.
         pkg["dependencies"]["ws"] = "^8.18.0"
-    pkg["devDependencies"].update({
-        "@types/node": "^24.1.0",
-        "@types/ws": "^8.5.13",
-        "esbuild": "0.28.1",
-        "tsx": "^4.19.0",
-        "typescript": "^5.9.3",
-    })
+    pkg["devDependencies"].update(
+        {
+            "@types/node": "^24.1.0",
+            "@types/ws": "^8.5.13",
+            "esbuild": "0.28.1",
+            "tsx": "^4.19.0",
+            "typescript": "^5.9.3",
+        }
+    )
     return pkg
 
 
@@ -1122,7 +1126,7 @@ def _build_extension_manifest(*, name: str, author: str) -> dict[str, Any]:
     }
 
 
-_EXTENSION_TEMPLATE_EXTENSION_TS = '''\
+_EXTENSION_TEMPLATE_EXTENSION_TS = """\
 import {{ initialize, type ActivationContext }} from '@ableton-extensions/sdk';
 
 /**
@@ -1154,10 +1158,10 @@ function deactivate(): void {{
 }}
 
 export {{ activate, deactivate }};
-'''
+"""
 
 
-_EXTENSION_TEMPLATE_BUILD_TS = '''\
+_EXTENSION_TEMPLATE_BUILD_TS = """\
 import * as esbuild from 'esbuild';
 import * as fs from 'node:fs';
 
@@ -1174,7 +1178,7 @@ await esbuild.build({
   logLevel: production ? 'silent' : 'info',
   sourcemap: !production,
 });
-'''
+"""
 
 
 @mcp.tool()
@@ -1202,14 +1206,16 @@ def scaffold_extension(name: str, author: str = "ntworm", output_directory: str 
         or "@ableton-extensions/sdk" not in tarballs
         or "@ableton-extensions/cli" not in tarballs
     ):
-        return json.dumps({
-            "status": "error",
-            "message": (
-                "vendor tarballs for @ableton-extensions/sdk and "
-                "@ableton-extensions/cli are missing"
-            ),
-        }, indent=2)
-
+        return json.dumps(
+            {
+                "status": "error",
+                "message": (
+                    "vendor tarballs for @ableton-extensions/sdk and "
+                    "@ableton-extensions/cli are missing"
+                ),
+            },
+            indent=2,
+        )
 
     request = models.ScaffoldExtensionRequest(
         name=name, author=author, output_directory=output_directory
@@ -1218,15 +1224,21 @@ def scaffold_extension(name: str, author: str = "ntworm", output_directory: str 
     try:
         project_dir.mkdir(parents=True, exist_ok=False)
     except FileExistsError:
-        return json.dumps({
-            "status": "error",
-            "message": f"project directory already exists: {project_dir}",
-        }, indent=2)
+        return json.dumps(
+            {
+                "status": "error",
+                "message": f"project directory already exists: {project_dir}",
+            },
+            indent=2,
+        )
     except OSError as error:
-        return json.dumps({
-            "status": "error",
-            "message": f"cannot create project directory: {error}",
-        }, indent=2)
+        return json.dumps(
+            {
+                "status": "error",
+                "message": f"cannot create project directory: {error}",
+            },
+            indent=2,
+        )
     src_dir = project_dir / "src"
     src_dir.mkdir(exist_ok=True)
 
@@ -1234,17 +1246,14 @@ def scaffold_extension(name: str, author: str = "ntworm", output_directory: str 
     vendor_target.mkdir(exist_ok=True)
     copied_vendor_files: list[str] = []
     for tarball in tarballs.values():
-        (vendor_target / tarball.name).write_bytes(
-            tarball.read_bytes()
-        )
+        (vendor_target / tarball.name).write_bytes(tarball.read_bytes())
         copied_vendor_files.append(f"vendor/{tarball.name}")
 
     pkg = _build_extension_package_json(
-        name=request.name, tarballs=tarballs,
+        name=request.name,
+        tarballs=tarballs,
     )
-    (project_dir / "package.json").write_text(
-        json.dumps(pkg, indent=2), encoding="utf-8"
-    )
+    (project_dir / "package.json").write_text(json.dumps(pkg, indent=2), encoding="utf-8")
     (project_dir / "tsconfig.json").write_text(
         json.dumps(_EXTENSION_TEMPLATE_TSCONFIG, indent=2), encoding="utf-8"
     )
@@ -1255,17 +1264,18 @@ def scaffold_extension(name: str, author: str = "ntworm", output_directory: str 
         ),
         encoding="utf-8",
     )
-    (project_dir / "build.ts").write_text(
-        _EXTENSION_TEMPLATE_BUILD_TS, encoding="utf-8"
-    )
+    (project_dir / "build.ts").write_text(_EXTENSION_TEMPLATE_BUILD_TS, encoding="utf-8")
     (src_dir / "extension.ts").write_text(
         _EXTENSION_TEMPLATE_EXTENSION_TS.format(name=request.name),
         encoding="utf-8",
     )
 
     files = [
-        "package.json", "tsconfig.json", "manifest.json",
-        "build.ts", "src/extension.ts",
+        "package.json",
+        "tsconfig.json",
+        "manifest.json",
+        "build.ts",
+        "src/extension.ts",
         *copied_vendor_files,
     ]
 
@@ -1326,13 +1336,16 @@ def build_extension(project_path: str) -> str:
 
     entrypoint_rel = _resolve_extension_entrypoint(project)
     if entrypoint_rel is None:
-        return json.dumps({
-            "status": "error",
-            "message": (
-                "package.json has no 'main' and manifest.json has no 'entry'; "
-                "cannot validate build artefact"
-            ),
-        }, indent=2)
+        return json.dumps(
+            {
+                "status": "error",
+                "message": (
+                    "package.json has no 'main' and manifest.json has no 'entry'; "
+                    "cannot validate build artefact"
+                ),
+            },
+            indent=2,
+        )
 
     steps: list[dict[str, Any]] = []
     for step_name, cmd in [
@@ -1356,34 +1369,36 @@ def build_extension(project_path: str) -> str:
             }
         )
         if result.returncode != 0:
-            return json.dumps({
-                "status": "error",
-                "entrypoint": entrypoint_rel,
-                "entrypoint_exists": (
-                    (project / entrypoint_rel).is_file()
-                ),
-                "steps": steps,
-                "artifacts": [],
-            }, indent=2)
+            return json.dumps(
+                {
+                    "status": "error",
+                    "entrypoint": entrypoint_rel,
+                    "entrypoint_exists": ((project / entrypoint_rel).is_file()),
+                    "steps": steps,
+                    "artifacts": [],
+                },
+                indent=2,
+            )
 
     dist_dir = project / "dist"
     artifacts: list[str] = []
     if dist_dir.is_dir():
         for candidate in sorted(dist_dir.rglob("*")):
             if candidate.is_file():
-                artifacts.append(
-                    candidate.relative_to(project).as_posix()
-                )
+                artifacts.append(candidate.relative_to(project).as_posix())
 
     entrypoint_exists = (project / entrypoint_rel).is_file()
     status = "built" if entrypoint_exists else "error"
-    return json.dumps({
-        "status": status,
-        "entrypoint": entrypoint_rel,
-        "entrypoint_exists": entrypoint_exists,
-        "steps": steps,
-        "artifacts": artifacts,
-    }, indent=2)
+    return json.dumps(
+        {
+            "status": status,
+            "entrypoint": entrypoint_rel,
+            "entrypoint_exists": entrypoint_exists,
+            "steps": steps,
+            "artifacts": artifacts,
+        },
+        indent=2,
+    )
 
 
 def _resolve_extension_entrypoint(project: Path) -> str | None:
@@ -1554,9 +1569,7 @@ def extract_single_cycle(path: str, frame_size: int = 2048) -> ToolResult:
     Edge cases: aperiodic content returns ``{"ok": False, "reason": ...}``
     instead of crashing.
     """
-    return _explicit_json_result(
-        _extract_single_cycle(path=path, frame_size=frame_size)
-    )
+    return _explicit_json_result(_extract_single_cycle(path=path, frame_size=frame_size))
 
 
 # Canonical ordered tuple of every public tool callable. Assembled after the

@@ -40,7 +40,6 @@ DEFAULT_RELEASE_DIR = ROOT / "releases" / f"v{VERSION}-rc1"
 _HEX_COMMIT_PATTERN = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
-
 def _run_git_command(
     args: list[str],
     *,
@@ -51,9 +50,7 @@ def _run_git_command(
     cwd_str = str(root) if root else None
     cmd = ["git"] + args
     try:
-        proc = exec_runner(
-            cmd, cwd=cwd_str, capture_output=True, text=True, check=False
-        )
+        proc = exec_runner(cmd, cwd=cwd_str, capture_output=True, text=True, check=False)
         if getattr(proc, "returncode", 1) == 0:
             return proc
     except Exception:
@@ -72,9 +69,7 @@ def _run_git_command(
         except Exception:
             pass
 
-    return exec_runner(
-        cmd, cwd=cwd_str, capture_output=True, text=True, check=False
-    )
+    return exec_runner(cmd, cwd=cwd_str, capture_output=True, text=True, check=False)
 
 
 def _validate_source_commit(
@@ -101,8 +96,7 @@ def _validate_source_commit(
         )
     if not _HEX_COMMIT_PATTERN.match(candidate):
         raise ValueError(
-            f"source_commit {candidate!r} is not a valid 40-character hexadecimal "
-            "git commit hash"
+            f"source_commit {candidate!r} is not a valid 40-character hexadecimal git commit hash"
         )
 
     proc = _run_git_command(
@@ -118,9 +112,7 @@ def _validate_source_commit(
     return candidate
 
 
-def _resolve_source_commit(
-    *, root: Path, runner: Callable[..., Any] | None = None
-) -> str:
+def _resolve_source_commit(*, root: Path, runner: Callable[..., Any] | None = None) -> str:
     """Resolve the source commit hash from the worktree.
 
     Production callers do not pass ``runner``; the helper invokes
@@ -135,13 +127,8 @@ def _resolve_source_commit(
             f"Failed to resolve git rev-parse HEAD in {root}: {getattr(proc, 'stderr', '')}"
         )
     raw_out = getattr(proc, "stdout", "")
-    raw_hash = (
-        raw_out.strip() if isinstance(raw_out, str) else str(raw_out).strip()
-    )
+    raw_hash = raw_out.strip() if isinstance(raw_out, str) else str(raw_out).strip()
     return _validate_source_commit(raw_hash, root=root, git_runner=runner)
-
-
-
 
 
 def _sha256(path: Path) -> str:
@@ -152,8 +139,7 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def _purge_stale_candidates(output_directory: Path, *,
-                            extensions: tuple[str, ...]) -> None:
+def _purge_stale_candidates(output_directory: Path, *, extensions: tuple[str, ...]) -> None:
     """Remove any pre-existing artifacts in the output directory.
 
     The builder must not pick up a stale wheel / .ablx / zip from a
@@ -186,11 +172,12 @@ def _build_python_wheel(root: Path, output_directory: Path) -> Path:
             "Neither .venv-win nor .venv found; create one with "
             "`python -m venv .venv && pip install -e .[dev]`."
         )
-    subprocess.run([str(py), "-m", "pip", "install", "--quiet",
-                    "build"], check=True)
-    subprocess.run([str(py), "-m", "build", "--wheel",
-                    "--outdir", str(output_directory)],
-                   cwd=str(root), check=True)
+    subprocess.run([str(py), "-m", "pip", "install", "--quiet", "build"], check=True)
+    subprocess.run(
+        [str(py), "-m", "build", "--wheel", "--outdir", str(output_directory)],
+        cwd=str(root),
+        check=True,
+    )
     wheels = sorted(output_directory.glob("ableton*.whl"))
     if not wheels:
         wheels = sorted(output_directory.glob("*.whl"))
@@ -200,8 +187,6 @@ def _build_python_wheel(root: Path, output_directory: Path) -> Path:
             f"found contents: {list(output_directory.iterdir())}"
         )
     return wheels[0]
-
-
 
 
 def _build_remote_script_zip(root: Path, output_directory: Path) -> Path:
@@ -224,9 +209,9 @@ def _build_remote_script_zip(root: Path, output_directory: Path) -> Path:
     return out
 
 
-def _build_extension_ablx(root: Path, output_directory: Path,
-                          *, subprocess_runner: Callable[..., Any]
-                          | None = None) -> Path:
+def _build_extension_ablx(
+    root: Path, output_directory: Path, *, subprocess_runner: Callable[..., Any] | None = None
+) -> Path:
     """Build the Extension Host ``.ablx`` payload using ``extensions-cli``.
 
     The ``extensions-cli package`` step is invoked through an injectable
@@ -257,8 +242,7 @@ def _build_extension_ablx(root: Path, output_directory: Path,
     return out
 
 
-def _write_sha256_sums(artifacts: list[Path],
-                       output_directory: Path) -> Path:
+def _write_sha256_sums(artifacts: list[Path], output_directory: Path) -> Path:
     """Write ``SHA256SUMS`` listing every artifact with its forward-slash name."""
     lines = []
     for path in sorted(artifacts):
@@ -285,11 +269,26 @@ def _write_install_md(output_directory: Path, root: Path) -> Path:
         "`%USERPROFILE%\\Documents\\Ableton\\User Library\\"
         "Remote Scripts\\`.\n\n"
         "## Extension Host\n\n"
-        f"Drop `AbletonMCPServer-Extension-{VERSION}.ablx` into the "
-        "Live Extensions folder. The Extension binds the WebSocket "
-        "bridge to `127.0.0.1:9889` (loopback only).\n\n"
-        "## Verification\n\n"
-        "After install:\n\n"
+        "### 1. Preferred Installation Flow (Auto)\n"
+        f"Double-click `AbletonMCPServer-Extension-{VERSION}.ablx` or drag and drop "
+        "it directly into the Ableton Live window to let Ableton install the "
+        "extension automatically.\n\n"
+        "### 2. Manual Extraction Fallback\n"
+        "If the preferred flow fails or is not supported by your Live version, "
+        "you can manually extract/unzip the `.ablx` file (which is a zip archive) "
+        "into the following directory:\n"
+        "- **Windows**: `%LOCALAPPDATA%\\Ableton\\Extensions\\"
+        "ntworm.abletonmcpserver-extension`\n"
+        "- **macOS**: `~/Library/Application Support/Ableton/Extensions/"
+        "ntworm.abletonmcpserver-extension`\n\n"
+        "## Restarting Requirement\n"
+        "**CRITICAL**: You MUST completely close and restart Ableton Live for the "
+        "new Extension and MIDI Remote Script to be registered and loaded.\n\n"
+        "## Verification\n"
+        "1. Verify that `manifest.json` in the installed extension folder "
+        "displays the correct version and metadata.\n"
+        "2. Ensure the installed files match the hashes in `SHA256SUMS`.\n"
+        "3. Run the following status commands to check the installation:\n"
         "```\n"
         ".venv-win\\Scripts\\ableton-mcp.exe install-status --json\n"
         ".venv-win\\Scripts\\ableton-mcp.exe doctor --json\n"
@@ -302,8 +301,7 @@ def _write_install_md(output_directory: Path, root: Path) -> Path:
     return out
 
 
-def _write_release_notes(artifacts: dict[str, Path],
-                         output_directory: Path) -> Path:
+def _write_release_notes(artifacts: dict[str, Path], output_directory: Path) -> Path:
     body = (
         f"# v{VERSION} — Slice 1 stabilization\n\n"
         "This release candidate bundles the Slice 1 corrections on top of "
@@ -335,12 +333,14 @@ def _write_release_notes(artifacts: dict[str, Path],
     return out
 
 
-def build_release(*, root: Path = ROOT,
-                  output_directory: Path | None = None,
-                  subprocess_runner: Callable[..., Any] | None = None,
-                  source_commit: str | None = None,
-                  git_runner: Callable[..., Any] | None = None,
-                  ) -> dict[str, Any]:
+def build_release(
+    *,
+    root: Path = ROOT,
+    output_directory: Path | None = None,
+    subprocess_runner: Callable[..., Any] | None = None,
+    source_commit: str | None = None,
+    git_runner: Callable[..., Any] | None = None,
+) -> dict[str, Any]:
     """Build the release candidates and return a structured summary.
 
     The summary mirrors the contents of ``manifest.json`` so tests can
@@ -363,9 +363,7 @@ def build_release(*, root: Path = ROOT,
     if source_commit is None:
         source_commit = resolved_head
     else:
-        validated_commit = _validate_source_commit(
-            source_commit, root=root, git_runner=git_runner
-        )
+        validated_commit = _validate_source_commit(source_commit, root=root, git_runner=git_runner)
         if validated_commit != resolved_head:
             raise ValueError(
                 f"source_commit {validated_commit!r} does not match "
@@ -375,14 +373,14 @@ def build_release(*, root: Path = ROOT,
 
         source_commit = validated_commit
 
-
     output_directory = output_directory or DEFAULT_RELEASE_DIR
     output_directory.mkdir(parents=True, exist_ok=True)
 
     # Always clear stale candidates before producing fresh ones so the
     # builder never picks up a previous run's ``.ablx`` / wheel / zip.
     _purge_stale_candidates(
-        output_directory, extensions=("whl", "zip", "ablx"),
+        output_directory,
+        extensions=("whl", "zip", "ablx"),
     )
     # Also clear stale artifacts inside the Extension source dir so the
     # ``npm run package`` step does not pick up a previous build. The
@@ -395,7 +393,9 @@ def build_release(*, root: Path = ROOT,
     wheel = _build_python_wheel(root, output_directory)
     remote_zip = _build_remote_script_zip(root, output_directory)
     ablx = _build_extension_ablx(
-        root, output_directory, subprocess_runner=subprocess_runner,
+        root,
+        output_directory,
+        subprocess_runner=subprocess_runner,
     )
 
     artifacts = {
@@ -404,7 +404,8 @@ def build_release(*, root: Path = ROOT,
         "extension_ablx": ablx,
     }
     sums = _write_sha256_sums(
-        [wheel, remote_zip, ablx], output_directory,
+        [wheel, remote_zip, ablx],
+        output_directory,
     )
     install = _write_install_md(output_directory, root)
     notes = _write_release_notes(artifacts, output_directory)
@@ -435,10 +436,8 @@ def build_release(*, root: Path = ROOT,
         **manifest,
         "files": {
             "sha256sums": str(sums.relative_to(output_directory).as_posix()),
-            "install_md": str(install.relative_to(
-                output_directory).as_posix()),
-            "release_notes": str(notes.relative_to(
-                output_directory).as_posix()),
+            "install_md": str(install.relative_to(output_directory).as_posix()),
+            "release_notes": str(notes.relative_to(output_directory).as_posix()),
             "manifest": "manifest.json",
         },
     }
@@ -473,10 +472,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output-directory",
         default=None,
-        help=(
-            "Optional output directory; defaults to "
-            "releases/v0.5.1-rc1/ in the worktree root."
-        ),
+        help=("Optional output directory; defaults to releases/v0.5.1-rc1/ in the worktree root."),
     )
     return parser
 
@@ -484,9 +480,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
-    output_directory = (
-        Path(args.output_directory) if args.output_directory else None
-    )
+    output_directory = Path(args.output_directory) if args.output_directory else None
     try:
         summary = build_release(
             output_directory=output_directory,

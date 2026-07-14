@@ -27,12 +27,12 @@ def test_report_rejects_missing_catalog_rows() -> None:
         report.finish()
 
 
-def test_release_ready_rejects_failed_but_allows_explicit_unavailable() -> None:
+def test_release_ready_rejects_failed_and_host_unavailable() -> None:
     names = ("a", "b")
     report = CertificationReport(tool_names=names)
     report.record(Verification("a", "offline_passed", "pytest"))
     report.record(Verification("b", "host_unavailable", "Song.save missing"))
-    assert report.finish()["release_ready"] is True
+    assert report.finish()["release_ready"] is False
 
 
 def test_verification_rejects_unknown_status() -> None:

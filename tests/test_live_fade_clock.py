@@ -30,8 +30,7 @@ from AbletonMCPServer_RemoteScript import live_fade_steps
 class _RecordingParameter:
     """Mock ``mixer_device.volume`` that records every write with its clock."""
 
-    def __init__(self, value: float = 0.85, lo: float = 0.0, hi: float = 1.0
-                 ) -> None:
+    def __init__(self, value: float = 0.85, lo: float = 0.0, hi: float = 1.0) -> None:
         self.value = value
         self.min = lo
         self.max = hi
@@ -42,9 +41,11 @@ class _RecordingParameter:
         return f"{value:.3f}"
 
     def __setattr__(self, name: str, value: Any) -> None:
-        if (name == "value"
-                and getattr(self, "_clock", None) is not None
-                and hasattr(self, "writes")):
+        if (
+            name == "value"
+            and getattr(self, "_clock", None) is not None
+            and hasattr(self, "writes")
+        ):
             self.writes.append((self._clock(), float(value)))
         super().__setattr__(name, value)
 
@@ -83,8 +84,9 @@ def clock() -> _VirtualClock:
     return _VirtualClock()
 
 
-def _drive(gen: Any, clock: _VirtualClock, *, tick: float,
-           max_seconds: float = 120.0) -> dict[str, Any]:
+def _drive(
+    gen: Any, clock: _VirtualClock, *, tick: float, max_seconds: float = 120.0
+) -> dict[str, Any]:
     """Advance the virtual clock per generator yield until completion."""
     elapsed = 0.0
     while elapsed <= max_seconds:
@@ -94,9 +96,7 @@ def _drive(gen: Any, clock: _VirtualClock, *, tick: float,
             return stop.value
         clock.advance(tick)
         elapsed += tick
-    raise AssertionError(
-        f"live_fade_steps did not complete within {max_seconds}s of virtual time"
-    )
+    raise AssertionError(f"live_fade_steps did not complete within {max_seconds}s of virtual time")
 
 
 def _song_with_clock(clock: _VirtualClock, value: float = 0.85) -> _RecordingSong:
@@ -109,9 +109,9 @@ def test_duration_zero_is_immediate(clock: _VirtualClock) -> None:
     """``duration=0`` must finish in a single tick — no waiting."""
     song = _song_with_clock(clock)
     gen = live_fade_steps(
-        song, None,
-        {"track_index": 0, "target_percent": 50.0,
-         "duration": 0.0, "steps": 10},
+        song,
+        None,
+        {"track_index": 0, "target_percent": 50.0, "duration": 0.0, "steps": 10},
         clock=clock,
     )
     # Drive without advancing the clock; must finish in one tick.
@@ -120,9 +120,7 @@ def test_duration_zero_is_immediate(clock: _VirtualClock) -> None:
     assert result["steps"] == 10
     # No waiting happened — only the final write should be on record.
     writes = song.tracks[0].mixer_device.volume.writes
-    assert len(writes) == 1, (
-        f"duration=0 should write exactly once, got {len(writes)}"
-    )
+    assert len(writes) == 1, f"duration=0 should write exactly once, got {len(writes)}"
 
 
 def test_steps_one_duration_one_second_waits_full_duration(
@@ -137,18 +135,16 @@ def test_steps_one_duration_one_second_waits_full_duration(
     song = _song_with_clock(clock, value=0.85)
     start = clock()
     gen = live_fade_steps(
-        song, None,
-        {"track_index": 0, "target_percent": 0.0,
-         "duration": 1.0, "steps": 1},
+        song,
+        None,
+        {"track_index": 0, "target_percent": 0.0, "duration": 1.0, "steps": 1},
         clock=clock,
     )
     tick = 0.01
     result = _drive(gen, clock, tick=tick)
     elapsed = clock() - start
     # Must span close to the full duration.
-    assert 0.85 <= elapsed <= 1.5, (
-        f"steps=1/duration=1 ignored duration; elapsed={elapsed:.3f}s"
-    )
+    assert 0.85 <= elapsed <= 1.5, f"steps=1/duration=1 ignored duration; elapsed={elapsed:.3f}s"
     assert result["duration"] == 1.0
     # The single write must reach (or essentially reach) the target.
     writes = song.tracks[0].mixer_device.volume.writes
@@ -165,18 +161,16 @@ def test_steps_four_duration_one_writes_at_quarter_intervals(
     song = _song_with_clock(clock, value=0.85)
     start = clock()
     gen = live_fade_steps(
-        song, None,
-        {"track_index": 0, "target_percent": 0.0,
-         "duration": 1.0, "steps": 4},
+        song,
+        None,
+        {"track_index": 0, "target_percent": 0.0, "duration": 1.0, "steps": 4},
         clock=clock,
     )
     # Drive with a fine tick so we can resolve the per-step deadlines.
     _drive(gen, clock, tick=0.005)
     elapsed = clock() - start
     # Must span the full duration within reasonable tolerance.
-    assert 0.85 <= elapsed <= 1.5, (
-        f"steps=4/duration=1 ignored duration; elapsed={elapsed:.3f}s"
-    )
+    assert 0.85 <= elapsed <= 1.5, f"steps=4/duration=1 ignored duration; elapsed={elapsed:.3f}s"
     # Writes should occur at the proportional step boundaries. The generator
     # waits for the deadline first and only then commits the value, so
     # step ``i`` lands at ``i * step_interval`` — never earlier.
@@ -187,18 +181,14 @@ def test_steps_four_duration_one_writes_at_quarter_intervals(
     # tick-driven rounding error (<= 0.01s).
     last_offset = writes[-1][0] - start
     assert last_offset >= 0.95, (
-        f"last write at {last_offset:.3f}s, expected ~1.0s "
-        "(target reached before its deadline)"
+        f"last write at {last_offset:.3f}s, expected ~1.0s (target reached before its deadline)"
     )
     assert last_offset <= 1.05, (
-        f"last write at {last_offset:.3f}s, expected ~1.0s "
-        "(target written after its deadline)"
+        f"last write at {last_offset:.3f}s, expected ~1.0s (target written after its deadline)"
     )
     # First write at step 1's deadline (0.25s for duration=1.0/steps=4).
     first_offset = writes[0][0] - start
-    assert 0.20 <= first_offset <= 0.30, (
-        f"first write at {first_offset:.3f}s, expected ~0.25s"
-    )
+    assert 0.20 <= first_offset <= 0.30, f"first write at {first_offset:.3f}s, expected ~0.25s"
 
 
 def test_target_not_reached_early(clock: _VirtualClock) -> None:
@@ -211,9 +201,9 @@ def test_target_not_reached_early(clock: _VirtualClock) -> None:
     """
     song = _song_with_clock(clock, value=0.85)
     gen = live_fade_steps(
-        song, None,
-        {"track_index": 0, "target_percent": 0.0,
-         "duration": 1.0, "steps": 4},
+        song,
+        None,
+        {"track_index": 0, "target_percent": 0.0, "duration": 1.0, "steps": 4},
         clock=clock,
     )
     _drive(gen, clock, tick=0.005)
@@ -223,14 +213,11 @@ def test_target_not_reached_early(clock: _VirtualClock) -> None:
     # First write is at ~t=0.25 (step 1 / steps=4 of a linear fade); should
     # still be well above 50% of start (0.85).
     assert first_value > 0.6, (
-        f"first write {first_value} too close to target — "
-        "target was reached early"
+        f"first write {first_value} too close to target — target was reached early"
     )
     # And the last write must actually be the target.
     last_value = writes[-1][1]
-    assert abs(last_value) < 0.05, (
-        f"last write {last_value} did not reach target 0.0"
-    )
+    assert abs(last_value) < 0.05, f"last write {last_value} did not reach target 0.0"
 
 
 def test_duration_sixty_completes_around_one_minute(
@@ -240,15 +227,13 @@ def test_duration_sixty_completes_around_one_minute(
     song = _song_with_clock(clock, value=0.85)
     start = clock()
     gen = live_fade_steps(
-        song, None,
-        {"track_index": 0, "target_percent": 0.0,
-         "duration": 60.0, "steps": 40},
+        song,
+        None,
+        {"track_index": 0, "target_percent": 0.0, "duration": 60.0, "steps": 40},
         clock=clock,
     )
     result = _drive(gen, clock, tick=0.5, max_seconds=120.0)
     elapsed = clock() - start
-    assert 55.0 <= elapsed <= 65.0, (
-        f"duration=60 took {elapsed:.3f}s of virtual time"
-    )
+    assert 55.0 <= elapsed <= 65.0, f"duration=60 took {elapsed:.3f}s of virtual time"
     assert result["duration"] == 60.0
     assert result["steps"] == 40
