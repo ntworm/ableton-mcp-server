@@ -5,7 +5,7 @@ These release candidates install on the owner machine only. Do not run them from
 ## Python wheel
 
 ```
-pip install C:/Users/Usuario/repos/ableton-mcp-server-core-complete/releases/v0.5.1-rc1/ableton_mcp_server-0.5.1-py3-none-any.whl
+pip install releases/v0.5.1-rc1/ableton_mcp_server-0.5.1-py3-none-any.whl
 ```
 
 ## MIDI Remote Script
