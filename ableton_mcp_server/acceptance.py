@@ -336,7 +336,8 @@ def _release_ready(
     3. ``fire_clip`` must have been exercised (the flag toggled on).
     4. ``host_unavailable`` blocks promotion.
     5. ``environment_unavailable`` blocks promotion, except ``build_extension``.
-    6. ``manual_required`` blocks promotion, except ``quit_ableton``.
+    6. ``manual_required`` blocks promotion, except ``quit_ableton`` and the
+       strictly validated manual fallback for ``save_set``.
     7. Otherwise the report is release-ready.
     """
     rows = list(report.recorded.values())
@@ -1126,6 +1127,7 @@ async def run_live_acceptance(
 
                     # Original warp state for restore.
                     original_warp = None
+                    track_creation_runner: Callable[[str], Awaitable[str]] | None = None
                     if (
                         baseline["track_types"].get(audio_track_index) == "audio"
                     ):
@@ -1167,10 +1169,9 @@ async def run_live_acceptance(
                                 )
                             saved = save_result.get("saved")
                             api_avail = save_result.get("api_available")
-                            song_save_avail = save_result.get("song_save_available")
                             gui_workflow = save_result.get("gui_workflow")
 
-                            if saved is True and (api_avail is True or song_save_avail is True):
+                            if saved is True and api_avail is True:
                                 meta = call("get_project_metadata")
                                 if meta.get("is_dirty") is not False:
                                     dirty_val = meta.get("is_dirty")
@@ -1182,15 +1183,24 @@ async def run_live_acceptance(
                                     Verification("save_set", "live_passed", "saved=true")
                                 )
                                 return
-                            if song_save_avail is False and gui_workflow is None:
-                                raise BridgeError(
-                                    "Song.save API not exposed", code="CAPABILITY_UNAVAILABLE"
+                            if saved is False and api_avail is False:
+                                save_steps = (
+                                    gui_workflow.get("save")
+                                    if isinstance(gui_workflow, dict)
+                                    else None
                                 )
-                            if (
-                                saved is False
-                                and (api_avail is False or song_save_avail is False)
-                                and isinstance(gui_workflow, dict)
-                            ):
+                                if not (
+                                    isinstance(save_steps, list)
+                                    and save_steps
+                                    and all(
+                                        isinstance(step, str) and bool(step.strip())
+                                        for step in save_steps
+                                    )
+                                ):
+                                    raise AssertionError(
+                                        "save_set manual fallback requires a non-empty "
+                                        "gui_workflow.save string list"
+                                    )
                                 report.record(
                                     Verification(
                                         "save_set",
@@ -2079,12 +2089,7 @@ async def run_live_acceptance(
                             )
                             return f"new {kind} track index={new_index}"
 
-                        await _record_call(
-                            report, "create_audio_track", lambda: _run_track_creation("audio")
-                        )
-                        await _record_call(
-                            report, "create_midi_track", lambda: _run_track_creation("midi")
-                        )
+                        track_creation_runner = _run_track_creation
 
                     except Exception as mutations_error:
                         for tool in BASELINE_PROBE_GROUPS.get("mutations", ()):
@@ -2100,16 +2105,6 @@ async def run_live_acceptance(
                     finally:
                         # ----- cleanup restore -----
                         cleanup_failures: list[tuple[str, str]] = []
-
-                        def _cur_idx(idx: int) -> int:
-                            name = baseline.get("track_names", {}).get(idx)
-                            if name:
-                                trs = call("get_track_list")
-                                if isinstance(trs, list):
-                                    match = next((t for t in trs if t.get("name") == name), None)
-                                    if match is not None and "index" in match:
-                                        return int(match["index"])
-                            return idx
 
                         def _restore_call(
                             action: str,
@@ -2244,7 +2239,7 @@ async def run_live_acceptance(
                                 lambda: call_ws(
                                     "set_warp_state",
                                     {
-                                        "track_index": _cur_idx(audio_track_index),
+                                        "track_index": audio_track_index,
                                         "clip_index": audio_clip_index,
                                         "warping": expected_warp,
                                     },
@@ -2259,11 +2254,10 @@ async def run_live_acceptance(
                                 _idx: int = idx,
                                 _original: bool = original,
                             ) -> Any:
-                                cur = _cur_idx(_idx)
                                 return call(
                                     "set_track_property",
                                     {
-                                        "track_index": cur,
+                                        "track_index": _idx,
                                         "property": "mute",
                                         "value": _original,
                                     },
@@ -2274,10 +2268,9 @@ async def run_live_acceptance(
                                 _idx: int = idx,
                                 _original: bool = original,
                             ) -> None:
-                                cur = _cur_idx(_idx)
                                 _eq(
                                     bool(
-                                        call("get_track_state", {"track_index": cur}).get(
+                                        call("get_track_state", {"track_index": _idx}).get(
                                             "mute", False
                                         )
                                     ),
@@ -2297,11 +2290,10 @@ async def run_live_acceptance(
                                 _idx: int = idx,
                                 _original: bool = original,
                             ) -> Any:
-                                cur = _cur_idx(_idx)
                                 return call(
                                     "set_track_property",
                                     {
-                                        "track_index": cur,
+                                        "track_index": _idx,
                                         "property": "solo",
                                         "value": _original,
                                     },
@@ -2312,10 +2304,9 @@ async def run_live_acceptance(
                                 _idx: int = idx,
                                 _original: bool = original,
                             ) -> None:
-                                cur = _cur_idx(_idx)
                                 _eq(
                                     bool(
-                                        call("get_track_state", {"track_index": cur}).get(
+                                        call("get_track_state", {"track_index": _idx}).get(
                                             "solo", False
                                         )
                                     ),
@@ -2335,11 +2326,10 @@ async def run_live_acceptance(
                                 _idx: int = idx,
                                 _original: bool = original,
                             ) -> Any:
-                                cur = _cur_idx(_idx)
                                 return call(
                                     "set_track_property",
                                     {
-                                        "track_index": cur,
+                                        "track_index": _idx,
                                         "property": "arm",
                                         "value": _original,
                                     },
@@ -2350,10 +2340,9 @@ async def run_live_acceptance(
                                 _idx: int = idx,
                                 _original: bool = original,
                             ) -> None:
-                                cur = _cur_idx(_idx)
                                 _eq(
                                     bool(
-                                        call("get_track_state", {"track_index": cur}).get(
+                                        call("get_track_state", {"track_index": _idx}).get(
                                             "arm", False
                                         )
                                     ),
@@ -2461,20 +2450,6 @@ async def run_live_acceptance(
                                 ),
                                 verify=_verify_param_restore,
                             )
-                        # Delete tracks the runner created. ``index=-1``
-                        # appends, so the new indexes are at the tail.
-                        for created in artifacts["tracks_created"]:
-                            kind, idx_str = created.split(":", 1)
-                            idx = int(idx_str)
-                            # Live does not expose a delete-track command
-                            # via this bridge; the runner leaves that to
-                            # manual cleanup and reports it explicitly.
-                            artifacts["manual_cleanup"].append(
-                                f"delete {kind} track at index {idx} "
-                                "(originally created by acceptance "
-                                "runner)"
-                            )
-
                         # Any cleanup failure downgrades the affected
                         # tool rows to ``failed`` so ``release_ready``
                         # cannot be green. We never introduce a
@@ -2498,10 +2473,40 @@ async def run_live_acceptance(
                                         )
                                     )
 
-                        if "_run_track_creation" in artifacts and not cleanup_failures:
-                            _tc = artifacts["_run_track_creation"]
-                            await _record_call(report, "create_audio_track", lambda: _tc("audio"))
-                            await _record_call(report, "create_midi_track", lambda: _tc("midi"))
+                    if "create_audio_track" not in report.recorded:
+                        if cleanup_failures:
+                            cleanup_details = "; ".join(
+                                f"{tool}: {reason}" for tool, reason in cleanup_failures
+                            )
+                            for tool in ("create_audio_track", "create_midi_track"):
+                                report.record(
+                                    Verification(
+                                        tool,
+                                        "failed",
+                                        "not executed because reversible cleanup failed "
+                                        f"({cleanup_details})",
+                                    )
+                                )
+                        elif track_creation_runner is None:
+                            for tool in ("create_audio_track", "create_midi_track"):
+                                report.record(
+                                    Verification(
+                                        tool,
+                                        "failed",
+                                        "track creation runner was not initialized",
+                                    )
+                                )
+                        else:
+                            await _record_call(
+                                report,
+                                "create_audio_track",
+                                lambda: track_creation_runner("audio"),
+                            )
+                            await _record_call(
+                                report,
+                                "create_midi_track",
+                                lambda: track_creation_runner("midi"),
+                            )
 
                 if "quit" in profiles and "mutations" not in expanded:
                     # ``quit`` profile without ``mutations``: record the

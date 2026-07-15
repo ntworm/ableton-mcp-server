@@ -658,7 +658,7 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str, params: dict[st
         if bridge.save_set_response is not None:
             return dict(bridge.save_set_response)
         s.update({"is_dirty": False})
-        return {"saved": True, "api_available": True, "song_save_available": True}
+        return {"saved": True, "api_available": True, "result": None}
     if command == "take_snapshot":
         return {
             "schema_version": 1,

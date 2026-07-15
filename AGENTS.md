@@ -7,9 +7,8 @@
 ## Read order
 
 1. This file for repository-wide rules.
-2. `.agent-context/generated/summary.md` for compact inventory evidence.
-3. Only the relevant `.agent-context/{architecture,conventions,dependencies,hot-files,risks}.md` file.
-4. Current source, tests, Git evidence, and canonical docs for task-specific claims.
+2. Only the relevant `.agent-context/{architecture,conventions,dependencies,hot-files,risks}.md` file.
+3. Current source, tests, Git evidence, and canonical docs for task-specific claims.
 
 Canonical project docs are `README.md`, `docs/ARCHITECTURE.md`, `docs/TOOL_REFERENCE.md`, and `docs/KNOWN_BUGS.md`. Files under `prompts/` are proposals/handoffs and can be partially superseded; verify them against current code before acting.
 
@@ -82,4 +81,3 @@ Real Live connectivity is proven by `\.venv-win\Scripts\ableton-mcp.exe doctor -
 ## Persistent context
 
 Context was produced with `repo-context-loader` format v2. Generated evidence is ignored; curated files are reviewed and finalized. If `check` reports stale, inspect only reported changes and affected consumers rather than remapping the repository.
-

@@ -834,6 +834,16 @@ def test_p1_6_set_tempo_readback_fails_only_during_restore() -> None:
         "cleanup readback: "
         f"{[r for r in cert['tools'] if r['status'] == 'failed']}"
     )
+    mutation_commands = [command for command, _params in bridge.tcp_calls]
+    assert "create_audio_track" not in mutation_commands
+    assert "create_midi_track" not in mutation_commands
+    create_rows = {
+        row["tool"]: row
+        for row in cert["tools"]
+        if row["tool"] in {"create_audio_track", "create_midi_track"}
+    }
+    assert {row["status"] for row in create_rows.values()} == {"failed"}
+    assert all("cleanup" in row["evidence"].lower() for row in create_rows.values())
     assert cert["release_ready"] is False
 
 

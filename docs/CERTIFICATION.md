@@ -50,8 +50,9 @@ the following hold simultaneously:
    same as ``offline_passed`` — the runner never invents success
    for a probe it did not actually run.
 5. No row reports ``manual_required`` for an operation the runner
-   could have exercised. The single documented exception is
-   ``quit_ableton`` (see below).
+   could have exercised. The documented exceptions are ``quit_ableton``
+   and the strict ``save_set`` fallback used when Live does not expose
+   ``Song.save()`` but the preflight already proved ``is_dirty: false``.
 
 Any other condition — including transient infra problems — must
 surface as ``failed`` (with evidence) rather than as a green-washed
@@ -124,15 +125,30 @@ blocker (effectively a ``failed`` row). The runner enforces this in
 
 ## Cleanup restore semantics
 
-Before any mutation occurs, ``save_set`` certifies the clean baseline state of the loaded project file.
+Before any mutation occurs, the metadata preflight requires
+``is_dirty: false`` and thereby certifies that the loaded project
+matches a clean saved baseline. The subsequent ``save_set`` probe
+either performs a real ``Song.save()`` with a clean readback or
+honestly records ``manual_required`` when that API is unavailable.
 
 Every in-place reversible mutation (tempo, song position, loop boundaries, cue points, mixer properties, parameter values, and warp state) is captured in baseline snapshots and explicitly restored during cleanup. Each restoration is followed by a readback check; a readback mismatch — even when the initial mutation succeeded — downgrades the affected tool's status to ``failed``.
 
-Structural additions (such as loading a device via ``load_device_to_track`` or creating new tracks via ``create_audio_track`` / ``create_midi_track``) persist as unsaved in-memory modifications in the open Live session. Because ``save_set`` runs prior to all mutations, closing Live without saving guarantees that the project on disk reverts cleanly to the saved baseline state. Manual cleanup instructions are also recorded in the audit artifact as an operational fallback reference. See ``tests/test_acceptance_audit_p0p1.py::test_p1_6_set_tempo_readback_fails_only_during_restore`` for the regression guard.
+Structural additions (such as loading a device via
+``load_device_to_track`` or creating new tracks via
+``create_audio_track`` / ``create_midi_track``) persist as unsaved
+in-memory modifications in the open Live session. Because the preflight
+refuses a dirty Set before any mutation, closing Live without saving
+returns to the already-saved baseline on disk even when ``Song.save()``
+is unavailable. Manual cleanup instructions are also recorded in the
+audit artifact as an operational fallback reference. See
+``tests/test_acceptance_audit_p0p1.py::test_p1_6_set_tempo_readback_fails_only_during_restore``
+for the regression guard.
 
 ## Release candidate provenance & integrity
 
-Every release candidate bundle published under ``releases/v<version>-rc<N>/`` is bound to a specific ``source_commit`` SHA-256 in its ``manifest.json``.
+Every release candidate bundle published under
+``releases/v<version>-rc<N>/`` is bound to a full Git commit object ID in
+its ``manifest.json`` ``source_commit`` field.
 
 To ensure strict provenance:
 1. The ``source_commit`` must contain 100% of the source code, unit/integration tests, and documentation required for gate verification. This commit must pass all quality gates (pytest, coverage, Ruff, mypy strict, build tests) independently.

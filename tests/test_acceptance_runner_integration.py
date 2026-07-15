@@ -247,10 +247,26 @@ def test_fake_runner_readback_failure_flips_tool_to_failed() -> None:
     assert statuses["set_tempo"] == "failed"
 
 
-def test_fake_runner_save_set_requires_explicit_saved_true() -> None:
-    """``save_set`` must not pass with ``saved=False`` or ambiguous results."""
+@pytest.mark.parametrize(
+    "response",
+    [
+        {"saved": True, "api_available": False, "song_save_available": True},
+        {"saved": False, "api_available": False, "gui_workflow": {}},
+        {"saved": False, "api_available": False, "gui_workflow": {"save": []}},
+        {
+            "saved": False,
+            "api_available": False,
+            "gui_workflow": {"save": ["File -> Save", ""]},
+        },
+        {"saved": False, "song_save_available": False},
+    ],
+)
+def test_fake_runner_save_set_rejects_non_contract_responses(
+    response: dict[str, Any],
+) -> None:
+    """Contradictory, legacy, or malformed save responses must fail closed."""
     bridge = StrictFakeBridge()
-    bridge.save_set_response = {"saved": False, "song_save_available": True}
+    bridge.save_set_response = response
     result = asyncio.run(
         run_live_acceptance(
             bridge,
@@ -265,28 +281,7 @@ def test_fake_runner_save_set_requires_explicit_saved_true() -> None:
     cert = result["certification"]
     save_row = next(r for r in cert["tools"] if r["tool"] == "save_set")
     assert save_row["status"] == "failed", save_row
-    # The runner must not promote the report when save_set is ambiguous.
     assert cert["release_ready"] is False
-
-
-def test_fake_runner_save_set_host_unavailable_when_api_missing() -> None:
-    """``save_set`` is ``host_unavailable`` when ``song_save_available=False``."""
-    bridge = StrictFakeBridge()
-    bridge.save_set_response = {"saved": False, "song_save_available": False}
-    result = asyncio.run(
-        run_live_acceptance(
-            bridge,
-            confirm_project_name="TESTE_CODEX",
-            track_index=0,
-            clip_index=3,
-            audio_track_index=2,
-            audio_clip_index=0,
-            fire_clip=True,
-        )
-    )
-    cert = result["certification"]
-    save_row = next(r for r in cert["tools"] if r["tool"] == "save_set")
-    assert save_row["status"] == "host_unavailable", save_row
 
 
 def test_fake_runner_reports_reserved_artifacts() -> None:
@@ -1194,3 +1189,89 @@ def test_track_creation_insertion_with_return_and_master_tracks() -> None:
     assert audio_row["status"] == "live_passed"
     assert midi_row["status"] == "live_passed"
     assert cert["release_ready"] is True
+
+
+def test_duplicate_track_names_do_not_redirect_cleanup() -> None:
+    """Cleanup must preserve original objects even when Live track names collide."""
+    bridge = StrictFakeBridge()
+    regular = bridge.state["tracks"][0]
+    regular.update({"name": "DUPLICATE", "mute": False, "solo": True, "arm": False})
+    return_track = {
+        "index": 3,
+        "type": "return",
+        "name": "DUPLICATE",
+        "id": "track:3",
+        "mute": True,
+        "solo": False,
+        "arm": True,
+        "devices": [],
+    }
+    bridge.state["tracks"].extend(
+        [
+            return_track,
+            {
+                "index": 4,
+                "type": "master",
+                "name": "Main",
+                "id": "track:4",
+                "mute": False,
+                "solo": False,
+                "arm": False,
+                "devices": [],
+            },
+        ]
+    )
+    expected_regular = {key: regular[key] for key in ("mute", "solo", "arm")}
+    expected_return = {key: return_track[key] for key in ("mute", "solo", "arm")}
+
+    result = asyncio.run(
+        run_live_acceptance(
+            bridge,
+            confirm_project_name="TESTE_CODEX",
+            track_index=0,
+            clip_index=3,
+            audio_track_index=1,
+            audio_clip_index=0,
+            fire_clip=True,
+        )
+    )
+
+    assert {key: regular[key] for key in expected_regular} == expected_regular
+    assert {key: return_track[key] for key in expected_return} == expected_return
+    assert result["certification"]["release_ready"] is True
+
+
+def test_structural_track_creation_runs_after_cleanup_mutations() -> None:
+    """No reversible cleanup write may run after the first new track is inserted."""
+    bridge = StrictFakeBridge()
+    asyncio.run(
+        run_live_acceptance(
+            bridge,
+            confirm_project_name="TESTE_CODEX",
+            track_index=0,
+            clip_index=3,
+            audio_track_index=1,
+            audio_clip_index=0,
+            fire_clip=True,
+        )
+    )
+
+    commands = [command for _route, command, _params in bridge.timeline_calls]
+    first_create = commands.index("create_audio_track")
+    reversible_writes = {
+        "stop_playback",
+        "set_loop",
+        "set_loop_start",
+        "set_loop_length",
+        "set_tempo",
+        "set_current_song_time",
+        "delete_cue_point",
+        "set_track_property",
+        "live_fade",
+        "set_parameter_value",
+        "set_warp_state",
+    }
+    writes_after_creation = [
+        command for command in commands[first_create + 1 :] if command in reversible_writes
+    ]
+    assert writes_after_creation == []

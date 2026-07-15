@@ -128,6 +128,8 @@ MIDI clip slot are required before any mutation is sent:
   --confirm-project-name TESTE_CODEX `
   --track-index 0 `
   --clip-index 3 `
+  --audio-track-index 2 `
+  --audio-clip-index 0 `
   --fire-clip `
   --json
 ```
