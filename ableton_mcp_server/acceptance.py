@@ -60,6 +60,18 @@ class AcceptanceSafetyError(RuntimeError):
     """Raised before mutation when the disposable Set cannot be proven safe."""
 
 
+# Source of truth: ``AbletonMCPServer_RemoteScript/__init__.py``
+# line ~1896. The Remote Script maps ``target_percent=100`` to
+# ``LIVE_FADE_UNITY_VALUE`` on the user-facing fader — Live's
+# mixer volume parameter sits below unity so that 100% maps to
+# 0dB. The runner is a client-side component that does NOT
+# import the Remote Script (different process boundary), so the
+# constant is duplicated here. The drift guard in
+# ``tests/test_acceptance_live_fade_percent.py`` asserts both
+# sides agree at test time.
+LIVE_FADE_UNITY_VALUE = 0.8500000238418579
+
+
 # ---------------------------------------------------------------------------
 # Helper utilities (pure functions; no bridge state)
 # ---------------------------------------------------------------------------
@@ -1848,8 +1860,16 @@ async def run_live_acceptance(
                                 or "volume" not in post_immediate
                             ):
                                 raise AssertionError("live_fade immediate readback failed")
-                            if abs(float(post_immediate["volume"]) - 0.5) > 0.05:
-                                raise AssertionError("live_fade immediate target mismatch")
+                            _expected_immediate = LIVE_FADE_UNITY_VALUE * (50.0 / 100.0)
+                            if (
+                                abs(float(post_immediate["volume"]) - _expected_immediate)
+                                > 0.05
+                            ):
+                                raise AssertionError(
+                                    "live_fade immediate target mismatch "
+                                    f"(expected {_expected_immediate}, "
+                                    f"got {post_immediate['volume']})"
+                                )
 
                             call(
                                 "live_fade",
@@ -1863,8 +1883,13 @@ async def run_live_acceptance(
                             post_fade = call("get_track_state", {"track_index": fade_track_index})
                             if not isinstance(post_fade, dict) or "volume" not in post_fade:
                                 raise AssertionError("live_fade timed readback failed")
-                            if abs(float(post_fade["volume"]) - 0.8) > 0.05:
-                                raise AssertionError("live_fade timed target mismatch")
+                            _expected_timed = LIVE_FADE_UNITY_VALUE * (80.0 / 100.0)
+                            if abs(float(post_fade["volume"]) - _expected_timed) > 0.05:
+                                raise AssertionError(
+                                    "live_fade timed target mismatch "
+                                    f"(expected {_expected_timed}, "
+                                    f"got {post_fade['volume']})"
+                                )
                             return "duration=0.2 monotonic fade readback OK"
 
                         await _record_call(report, "live_fade", run_live_fade)
@@ -2248,7 +2273,37 @@ async def run_live_acceptance(
                             )
                         # Restore per-track mute/solo/arm so the
                         # disposable Set comes back to its pre-run state.
-                        for idx, original in baseline.get("track_mutes", {}).items():
+                        # ``set_track_property(mute/solo/arm)`` is rejected
+                        # by Live for master (mute/solo) and for master +
+                        # returns (arm). Skip those indices; the baseline
+                        # already recorded their values for symmetry with
+                        # other track states but cleanup must not mutate
+                        # them.
+                        _cleanup_types = baseline.get("track_types", {}) or {}
+                        # The mute / solo cleanup loops iterate over
+                        # every track that has a mixer property: midi,
+                        # audio, and returns. Master is excluded
+                        # because Live rejects mute and solo on the
+                        # master track.
+                        _cleanup_indices_mute_solo = sorted(
+                            idx
+                            for idx, ttype in _cleanup_types.items()
+                            if ttype in ("midi", "audio", "return")
+                        )
+                        # The arm cleanup loop is narrower: only midi
+                        # and audio tracks may be armed. Master has no
+                        # arm state, and the disposable Set's return
+                        # tracks are explicitly out of scope for arm
+                        # restoration.
+                        _cleanup_indices_arm = sorted(
+                            idx
+                            for idx, ttype in _cleanup_types.items()
+                            if ttype in ("midi", "audio")
+                        )
+                        for idx in _cleanup_indices_mute_solo:
+                            original = bool(
+                                baseline.get("track_mutes", {}).get(idx, False)
+                            )
 
                             def _restore_mute(
                                 _idx: int = idx,
@@ -2284,7 +2339,10 @@ async def run_live_acceptance(
                                 _restore_mute,
                                 verify=_verify_mute,
                             )
-                        for idx, original in baseline.get("track_solos", {}).items():
+                        for idx in _cleanup_indices_mute_solo:
+                            original = bool(
+                                baseline.get("track_solos", {}).get(idx, False)
+                            )
 
                             def _restore_solo(
                                 _idx: int = idx,
@@ -2320,7 +2378,10 @@ async def run_live_acceptance(
                                 _restore_solo,
                                 verify=_verify_solo,
                             )
-                        for idx, original in baseline.get("track_arms", {}).items():
+                        for idx in _cleanup_indices_arm:
+                            original = bool(
+                                baseline.get("track_arms", {}).get(idx, False)
+                            )
 
                             def _restore_arm(
                                 _idx: int = idx,

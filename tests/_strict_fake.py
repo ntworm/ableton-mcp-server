@@ -646,7 +646,17 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str, params: dict[st
         target_percent = params.get("target_percent")
         target_value = params.get("target_value")
         if target_percent is not None:
-            target_value = float(target_percent) / 100.0
+            # Match the Remote Script's
+            # ``AbletonMCPServer_RemoteScript/__init__.py``
+            # ``LIVE_FADE_UNITY_VALUE`` factor: ``target_percent=100``
+            # maps to ``0.85``, not ``1.0``. Without this, the runner's
+            # post-fade readback in
+            # ``tests/test_acceptance_live_fade_percent.py`` cannot
+            # observe the actual Live behaviour, and any acceptance
+            # probe that asserts on ``volume`` drifts.
+            target_value = (
+                float(target_percent) / 100.0 * 0.8500000238418579
+            )
         if target_value is not None:
             target_value = float(target_value)
             s.setdefault("mixer_volumes", {})[track_id] = max(
