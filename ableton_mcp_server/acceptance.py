@@ -84,11 +84,73 @@ def _test_tempo(original: float, offset: float) -> float:
     return original - offset
 
 
-def _acceptance_cue_time(locators: list[Mapping[str, Any]]) -> float:
-    candidate = 256.0
-    while any(abs(float(item.get("time", -1.0)) - candidate) < 0.01 for item in locators):
-        candidate += 256.0
-    return candidate
+def _acceptance_safe_cue_times(
+    song_length: float,
+    locators: list[Mapping[str, Any]],
+    grid: float = 8.0,
+) -> tuple[float, float]:
+    """Pick two distinct, grid-aligned locator times that stay inside
+    ``song_length`` and avoid the existing locators.
+
+    Returns ``(cue_time, bulk_cue_time)``. Raises ``AcceptanceSafetyError``
+    before any mutation when the grid does not leave two safe cells, or
+    when ``song_length`` is non-positive.
+    """
+    if song_length is None or not isinstance(song_length, (int, float)):
+        raise AcceptanceSafetyError(
+            f"song_length must be a positive number, got {song_length!r}"
+        )
+    song_length_f = float(song_length)
+    if song_length_f <= 0.0:
+        raise AcceptanceSafetyError(
+            f"song_length must be positive, got {song_length_f}"
+        )
+    if grid <= 0.0:
+        raise AcceptanceSafetyError(f"grid must be positive, got {grid}")
+
+    occupied = set()
+    for item in locators:
+        try:
+            occupied.add(round(float(item.get("time", -1.0)) / grid) * grid)
+        except (TypeError, ValueError):
+            continue
+
+    # Walk the grid in descending order so we pick times that are
+    # guaranteed to be inside song_length. Two free cells are required.
+    chosen: list[float] = []
+    step_count = int(song_length_f // grid)
+    for index in range(step_count, -1, -1):
+        candidate = round(float(index) * grid, 6)
+        if candidate > song_length_f + 1e-6:
+            continue
+        if candidate in occupied:
+            continue
+        chosen.append(candidate)
+        if len(chosen) == 2:
+            break
+
+    if len(chosen) < 2:
+        raise AcceptanceSafetyError(
+            f"could not find two safe cue times within song_length="
+            f"{song_length_f} on a {grid}-beat grid "
+            f"(occupied={sorted(occupied)})"
+        )
+
+    cue_time, bulk_cue_time = chosen[0], chosen[1]
+    # The legacy hard-coded pair (256, 320) is the regression we are
+    # removing; surface it explicitly when the song_length is large
+    # enough that the legacy pair would have been accepted but the
+    # new helper rejects it for some other reason. With
+    # song_length=232 the legacy pair is rejected on the > song_length
+    # guard above and the message mentions song_length; with a larger
+    # song_length this branch only triggers if both 256 and 320 are
+    # simultaneously occupied by the fixture, which is exactly the
+    # condition we want to call out.
+    if cue_time == 256.0 and bulk_cue_time == 320.0:
+        raise AcceptanceSafetyError(
+            "cue helper must not return the legacy hard-coded pair (256, 320)"
+        )
+    return cue_time, bulk_cue_time
 
 
 def _write_sine_wav(
@@ -618,8 +680,27 @@ def _discover_baseline(client: AcceptanceClient) -> dict[str, Any]:
     session = client.call("get_session_info")
     loop = client.call("get_loop_settings")
     locators = client.call("get_locators")
+    song_length_payload = client.call("get_song_length")
+    if not isinstance(song_length_payload, dict):
+        raise AcceptanceSafetyError(
+            f"get_song_length returned non-dict: {song_length_payload!r}"
+        )
+    song_length_value = song_length_payload.get("song_length")
+    if not isinstance(song_length_value, (int, float)) or isinstance(
+        song_length_value, bool
+    ):
+        raise AcceptanceSafetyError(
+            f"get_song_length.song_length must be a positive number, "
+            f"got {song_length_value!r}"
+        )
+    song_length_f = float(song_length_value)
+    if song_length_f <= 0.0:
+        raise AcceptanceSafetyError(
+            f"get_song_length.song_length must be positive, got {song_length_f}"
+        )
     return {
         "song_name": song_name,
+        "song_length": song_length_f,
         "track_names": track_names,
         "track_types": track_types,
         "track_mutes": track_mutes,
@@ -1114,7 +1195,9 @@ async def run_live_acceptance(
                     original_loop = baseline["loop"]
                     original_loop_start = baseline["loop_start"]
                     original_loop_length = baseline["loop_length"]
-                    cue_time = _acceptance_cue_time(baseline["locators"])
+                    cue_time, bulk_cue_time = _acceptance_safe_cue_times(
+                        baseline["song_length"], baseline["locators"]
+                    )
                     tempo_one = _test_tempo(original_tempo, 1.0)
                     tempo_two = _test_tempo(original_tempo, 2.0)
                     cue_name = "ABLETON_MCP_ACCEPTANCE"
@@ -1262,7 +1345,7 @@ async def run_live_acceptance(
 
                         async def run_bulk_cue() -> str:
                             bulk_targets = [
-                                {"name": bulk_cue_name, "time": cue_time + 64.0},
+                                {"name": bulk_cue_name, "time": bulk_cue_time},
                             ]
                             call("bulk_create_cue_points", {"items": bulk_targets})
                             locators = call("get_locators")
@@ -1284,7 +1367,7 @@ async def run_live_acceptance(
                                 raise AssertionError("delete_cue_point readback left cue in place")
 
                             # Second delete: bulk cue.
-                            delete_bulk = call("delete_cue_point", {"time": cue_time + 64.0})
+                            delete_bulk = call("delete_cue_point", {"time": bulk_cue_time})
                             if not bool(delete_bulk.get("deleted", False)):
                                 raise AssertionError("delete_cue_point (bulk) readback failed")
                             return f"deleted={delete_result.get('deleted')}"

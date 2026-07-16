@@ -7,7 +7,7 @@ import pytest
 
 from ableton_mcp_server.acceptance import (
     AcceptanceSafetyError,
-    _acceptance_cue_time,
+    _acceptance_safe_cue_times,
     run_live_acceptance,
 )
 
@@ -28,11 +28,27 @@ class MetadataOnlyClient:
         return {"song_name": "Valuable Project", "file_path": "valuable.als"}
 
 
-def test_acceptance_uses_a_coarse_grid_aligned_free_cue_time() -> None:
-    assert _acceptance_cue_time([]) == 256.0
-    assert (
-        _acceptance_cue_time([{"name": "A", "time": 256.0}, {"name": "B", "time": 512.0}]) == 768.0
+def test_acceptance_picks_two_grid_aligned_free_cue_times() -> None:
+    """The helper returns two distinct, grid-aligned times inside song_length.
+
+    The previous implementation returned ``256`` (and ``cue_time + 64``),
+    which exceeded the 232-beat ``TESTE_CODEX`` canonical song_length and
+    broke the cue probes on the real Set.
+    """
+    t1, t2 = _acceptance_safe_cue_times(song_length=232.0, locators=[], grid=8.0)
+    assert t1 != t2
+    assert 0.0 <= t1 <= 232.0
+    assert 0.0 <= t2 <= 232.0
+    assert t1 % 8.0 == 0.0
+    assert t2 % 8.0 == 0.0
+    # Bypasses any prior locator at exactly ``256.0``.
+    t3, t4 = _acceptance_safe_cue_times(
+        song_length=512.0,
+        locators=[{"name": "A", "time": 256.0}, {"name": "B", "time": 512.0}],
+        grid=64.0,
     )
+    assert t3 not in (256.0, 512.0)
+    assert t4 not in (256.0, 512.0)
 
 
 def test_acceptance_refuses_to_mutate_when_project_confirmation_does_not_match() -> None:

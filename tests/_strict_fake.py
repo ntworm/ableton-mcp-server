@@ -219,6 +219,7 @@ class StrictFakeBridge:
             "warp": {"warping": False, "warp_mode": "beats"},
             "search_browser_queries": [],
             "is_dirty": False,
+            "song_length": 64.0,
         }
 
     # --- AcceptanceClient surface ---
@@ -442,7 +443,7 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str, params: dict[st
             return [{"name": "Operator", "uri": "query:Operator#0"}]
         return []
     if command == "get_song_length":
-        return {"song_length": 64.0}
+        return {"song_length": float(s.get("song_length", 64.0))}
     if command == "live_find_track":
         q = params["query"].lower()
         return [t for t in s["tracks"] if q in t["name"].lower()]
@@ -499,16 +500,36 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str, params: dict[st
         s["loop_length"] = params["length_beats"]
         return {"loop_length": s["loop_length"]}
     if command == "create_cue_point":
-        cue = {"name": params["name"], "time": params["time"]}
+        song_length = float(s.get("song_length", 64.0))
+        cue_time = float(params["time"])
+        if cue_time > song_length + 1e-6:
+            raise RuntimeError(
+                f"Cannot set the Songtime behind the Songlength: "
+                f"time={cue_time} song_length={song_length}"
+            )
+        cue = {"name": params["name"], "time": cue_time}
         s["locators"].append(cue)
         return {"name": cue["name"], "time": cue["time"]}
     if command == "delete_cue_point":
+        song_length = float(s.get("song_length", 64.0))
+        cue_time = float(params["time"])
+        if cue_time > song_length + 1e-6:
+            # Mirror Live: deleting an out-of-range cue returns deleted=false
+            # rather than raising, because the locator never existed.
+            return {"deleted": False}
         before = len(s["locators"])
-        s["locators"] = [c for c in s["locators"] if abs(c["time"] - params["time"]) > 0.01]
+        s["locators"] = [c for c in s["locators"] if abs(c["time"] - cue_time) > 0.01]
         return {"deleted": len(s["locators"]) < before}
     if command == "bulk_create_cue_points":
+        song_length = float(s.get("song_length", 64.0))
         for item in params["items"]:
-            s["locators"].append({"name": item["name"], "time": item["time"]})
+            t = float(item["time"])
+            if t > song_length + 1e-6:
+                raise RuntimeError(
+                    f"Cannot set the Songtime behind the Songlength: "
+                    f"time={t} song_length={song_length}"
+                )
+            s["locators"].append({"name": item["name"], "time": t})
         return {"created": len(params["items"])}
     if command == "create_clip":
         track, slot = params["track_index"], params["clip_index"]
