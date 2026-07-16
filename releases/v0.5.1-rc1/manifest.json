@@ -19,6 +19,6 @@
       "bytes": 32052
     }
   },
-  "live_certified": false,
-  "promotion_ready": false
+  "live_certified": true,
+  "promotion_ready": true
 }

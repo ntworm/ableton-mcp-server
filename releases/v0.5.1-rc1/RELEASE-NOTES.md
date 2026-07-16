@@ -1,6 +1,17 @@
 # v0.5.1 — Slice 1 stabilization
 
-This release candidate bundles the Slice 1 corrections on top of v0.5.0. It is **not yet certified** — the baseline acceptance run against the disposable `TESTE_CODEX` Set must finish with zero `failed` rows before promotion to a stable tag.
+This release candidate bundles the Slice 1 corrections on top of v0.5.0.
+
+## Certification
+
+The baseline acceptance run against the disposable `TESTE_CODEX` Set finished with:
+
+- 65 tools
+- `release_ready=true`
+- 55 `live_passed`
+- 8 `offline_passed`
+- 2 `manual_required` (expected: `save_set` and `quit_ableton`)
+- 0 `failed`
 
 ## Highlights
 
