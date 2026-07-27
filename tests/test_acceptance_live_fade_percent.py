@@ -236,9 +236,18 @@ def test_live_fade_probe_does_not_hardcode_unity_factor_value() -> None:
     from pathlib import Path
 
     repo_root = Path(__file__).resolve().parents[1]
-    acceptance_source = (
-        repo_root / "ableton_mcp_server" / "acceptance.py"
-    ).read_text(encoding="utf-8")
+    # Post-refactor (2026-07-27): ``acceptance.py`` is now a package at
+    # ``ableton_mcp_server/acceptance/``. The runner orchestrator is
+    # ``runner.py``; the ``LIVE_FADE_UNITY_VALUE`` constant lives in
+    # ``helpers.py``. Concatenate both for the magic-number scan.
+    acceptance_pkg = repo_root / "ableton_mcp_server" / "acceptance"
+    sources = [
+        acceptance_pkg / "runner.py",
+        acceptance_pkg / "helpers.py",
+    ]
+    acceptance_source = "\n".join(
+        p.read_text(encoding="utf-8") for p in sources if p.exists()
+    )
 
     forbidden_magic_numbers = {
         "0.425": "UNITY_TIMES_HALF_HARDCODED",

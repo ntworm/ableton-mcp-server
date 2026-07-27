@@ -22,418 +22,35 @@ actually did. The runner is intentionally paranoid:
 
 from __future__ import annotations
 
-import inspect
 import shutil
-import struct
 import tempfile
-import wave
 from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path
-from typing import Any, Protocol, cast
+from typing import Any, cast
 
-from .certification import CertificationReport, Verification
-from .errors import BridgeError
-
-
-class AcceptanceClient(Protocol):
-    host: str
-    port: int
-
-    def call(
-        self,
-        command_type: str,
-        params: Mapping[str, Any] | None = None,
-        *,
-        timeout: float | None = None,
-    ) -> Any: ...
-
-    async def call_ws(
-        self,
-        method: str,
-        params: dict[str, Any] | None = None,
-        *,
-        timeout: float = 2.0,
-    ) -> Any: ...
-
-
-class AcceptanceSafetyError(RuntimeError):
-    """Raised before mutation when the disposable Set cannot be proven safe."""
-
-
-# Source of truth: ``AbletonMCPServer_RemoteScript/__init__.py``
-# line ~1896. The Remote Script maps ``target_percent=100`` to
-# ``LIVE_FADE_UNITY_VALUE`` on the user-facing fader — Live's
-# mixer volume parameter sits below unity so that 100% maps to
-# 0dB. The runner is a client-side component that does NOT
-# import the Remote Script (different process boundary), so the
-# constant is duplicated here. The drift guard in
-# ``tests/test_acceptance_live_fade_percent.py`` asserts both
-# sides agree at test time.
-LIVE_FADE_UNITY_VALUE = 0.8500000238418579
-
-
-# ---------------------------------------------------------------------------
-# Helper utilities (pure functions; no bridge state)
-# ---------------------------------------------------------------------------
-
-
-def _test_tempo(original: float, offset: float) -> float:
-    candidate = original + offset
-    if candidate <= 999.0:
-        return candidate
-    return original - offset
-
-
-def _acceptance_safe_cue_times(
-    song_length: float,
-    locators: list[Mapping[str, Any]],
-    grid: float = 8.0,
-) -> tuple[float, float]:
-    """Pick two distinct, grid-aligned locator times that stay inside
-    ``song_length`` and avoid the existing locators.
-
-    Returns ``(cue_time, bulk_cue_time)``. Raises ``AcceptanceSafetyError``
-    before any mutation when the grid does not leave two safe cells, or
-    when ``song_length`` is non-positive.
-    """
-    if song_length is None or not isinstance(song_length, (int, float)):
-        raise AcceptanceSafetyError(
-            f"song_length must be a positive number, got {song_length!r}"
-        )
-    song_length_f = float(song_length)
-    if song_length_f <= 0.0:
-        raise AcceptanceSafetyError(
-            f"song_length must be positive, got {song_length_f}"
-        )
-    if grid <= 0.0:
-        raise AcceptanceSafetyError(f"grid must be positive, got {grid}")
-
-    occupied = set()
-    for item in locators:
-        try:
-            occupied.add(round(float(item.get("time", -1.0)) / grid) * grid)
-        except (TypeError, ValueError):
-            continue
-
-    # Walk the grid in descending order so we pick times that are
-    # guaranteed to be inside song_length. Two free cells are required.
-    chosen: list[float] = []
-    step_count = int(song_length_f // grid)
-    for index in range(step_count, -1, -1):
-        candidate = round(float(index) * grid, 6)
-        if candidate > song_length_f + 1e-6:
-            continue
-        if candidate in occupied:
-            continue
-        chosen.append(candidate)
-        if len(chosen) == 2:
-            break
-
-    if len(chosen) < 2:
-        raise AcceptanceSafetyError(
-            f"could not find two safe cue times within song_length="
-            f"{song_length_f} on a {grid}-beat grid "
-            f"(occupied={sorted(occupied)})"
-        )
-
-    cue_time, bulk_cue_time = chosen[0], chosen[1]
-    # The legacy hard-coded pair (256, 320) is the regression we are
-    # removing; surface it explicitly when the song_length is large
-    # enough that the legacy pair would have been accepted but the
-    # new helper rejects it for some other reason. With
-    # song_length=232 the legacy pair is rejected on the > song_length
-    # guard above and the message mentions song_length; with a larger
-    # song_length this branch only triggers if both 256 and 320 are
-    # simultaneously occupied by the fixture, which is exactly the
-    # condition we want to call out.
-    if cue_time == 256.0 and bulk_cue_time == 320.0:
-        raise AcceptanceSafetyError(
-            "cue helper must not return the legacy hard-coded pair (256, 320)"
-        )
-    return cue_time, bulk_cue_time
-
-
-def _write_sine_wav(
-    path: Path, *, hz: float, amplitude: float, seconds: float, sample_rate: int = 44100
-) -> Path:
-    import math
-
-    nframes = int(seconds * sample_rate)
-    with wave.open(str(path), "wb") as wav:
-        wav.setnchannels(1)
-        wav.setsampwidth(2)
-        wav.setframerate(sample_rate)
-        for index in range(nframes):
-            sample = amplitude * math.sin(2.0 * math.pi * hz * (index / sample_rate))
-            wav.writeframes(struct.pack("<h", int(sample * 32767)))
-    return path
-
-
-def _synthesize_offline_inputs(directory: Path) -> dict[str, Path]:
-    directory.mkdir(parents=True, exist_ok=True)
-    return {
-        "target": _write_sine_wav(directory / "target.wav", hz=1000.0, amplitude=0.8, seconds=1.0),
-        "reference": _write_sine_wav(
-            directory / "reference.wav", hz=1000.0, amplitude=0.2, seconds=1.0
-        ),
-        "short": _write_sine_wav(directory / "short.wav", hz=440.0, amplitude=0.5, seconds=0.5),
-        "long": _write_sine_wav(directory / "long.wav", hz=440.0, amplitude=0.25, seconds=1.0),
-    }
-
-
-# ---------------------------------------------------------------------------
-# Probe groups and tool catalog helpers
-# ---------------------------------------------------------------------------
-
-
-# Tools that may legitimately be classified ``environment_unavailable``
-# under specific, documented conditions. Everything else either runs,
-# raises ``BridgeError`` → ``failed``, or is missing-from-profile.
-#
-# ``quit_ableton`` is classified ``manual_required`` whenever it is not
-# actually invoked. The runner must never record ``live_passed`` for an
-# operation that was not executed: that is a documented false-positive
-# pattern. ``build_extension`` is unavailable only when Node is genuinely
-# absent. ``fire_clip`` is unavailable when ``--fire-clip`` is not set.
-_ALLOWED_UNAVAILABLE: dict[str, str] = {
-    "build_extension": "node executable not found on PATH",
-    "fire_clip": "fire_clip requires --fire-clip flag",
-}
-
-# ``quit_ableton`` is only valid as ``live_passed`` after the bridge was
-# actually invoked and a real shutdown handshake completed. The runner
-# does not invoke it during the automated probe (doing so would close
-# the host and block every later probe). Until an out-of-band owner
-# confirmation arrives, the row must read ``manual_required``.
-QUIT_ABLETON_MANUAL_REASON = (
-    "quit_ableton requires out-of-band owner confirmation; "
-    "automated probe never invokes a destructive shutdown"
+from ..certification import CertificationReport, Verification
+from ..errors import BridgeError
+from .baseline import BaselineSnapshot, _discover_baseline  # noqa: F401  (mypy-only)
+from .helpers import (
+    LIVE_FADE_UNITY_VALUE,
+    _acceptance_safe_cue_times,
+    _baseline_tool_names,
+    _parameter_tolerance,
+    _synthesize_offline_inputs,
+    _test_tempo,
 )
-
-
-# Slice 1 Task 9: baseline probe map. The flattened names must equal the
-# 65-name ``PUBLIC_TOOL_NAMES`` set, so each catalogued tool has a home in
-# exactly one probe group. The runner never fabricates
-# ``environment_unavailable`` for a tool that is actually selected.
-BASELINE_PROBE_GROUPS: dict[str, tuple[str, ...]] = {
-    "offline": (
-        "get_ableton_logs",
-        "diff_snapshots_tool",
-        "scaffold_extension",
-        "build_extension",
-        "analyze_audio",
-        "find_frequency_masking",
-        "analyze_mix",
-        "extract_single_cycle",
-    ),
-    "composed": ("get_bridge_status", "get_session_overview"),
-    "tcp_reads": (
-        "get_session_info",
-        "get_track_list",
-        "get_track_state",
-        "get_locators",
-        "take_snapshot",
-        "get_control_surfaces",
-        "get_scenes",
-        "get_scene_state",
-        "get_project_metadata",
-        "get_loop_settings",
-        "get_selected_context",
-        "get_clip_summary",
-        "get_clip_notes",
-        "get_clip_info",
-        "get_device_list",
-        "get_parameter_value",
-        "get_routing",
-        "get_browser_categories",
-        "search_browser",
-        "get_song_length",
-        "live_find_track",
-        "list_device_params",
-        "get_composition_structure",
-        "diagnose_midi_clip",
-        "lifecycle_status",
-    ),
-    "websocket_reads": ("get_warp_state",),
-    "mutations": (
-        "create_cue_point",
-        "bulk_create_cue_points",
-        "delete_cue_point",
-        "set_current_song_time",
-        "set_tempo",
-        "start_playback",
-        "stop_playback",
-        "set_loop",
-        "set_loop_start",
-        "set_loop_length",
-        "run_batch",
-        "add_notes_to_clip",
-        "fire_clip",
-        "create_clip",
-        "delete_clip",
-        "clear_clip_notes",
-        "fire_scene",
-        "set_track_property",
-        "set_clip_properties",
-        "create_clip_automation",
-        "create_midi_track",
-        "create_audio_track",
-        "rename_track",
-        "set_parameter_value",
-        "save_set",
-        "live_fade",
-        "set_warp_state",
-        "load_device_to_track",
-    ),
-    "quit": ("quit_ableton",),
-}
-
-
-def _baseline_tool_names() -> tuple[str, ...]:
-    from .server import PUBLIC_TOOL_NAMES
-
-    return tuple(PUBLIC_TOOL_NAMES)
-
-
-def _baseline_probe_names() -> tuple[str, ...]:
-    names: list[str] = []
-    for group in BASELINE_PROBE_GROUPS.values():
-        names.extend(group)
-    return tuple(names)
-
-
-def assert_baseline_probe_coverage() -> None:
-    flat = set(_baseline_probe_names())
-    catalog_names = set(_baseline_tool_names())
-    assert flat == catalog_names, (
-        f"baseline probe mismatch: missing={catalog_names - flat}, extra={flat - catalog_names}"
-    )
-
-
-def _expand_profiles(profiles: tuple[str, ...]) -> tuple[str, ...]:
-    """Resolve ``"baseline"`` to every group and validate names."""
-    if "baseline" in profiles:
-        return tuple(BASELINE_PROBE_GROUPS)
-    for profile in profiles:
-        if profile not in BASELINE_PROBE_GROUPS:
-            raise ValueError(f"unknown acceptance profile: {profile}")
-    return profiles
-
-
-def _parameter_tolerance(min_val: float, max_val: float) -> float:
-    """Compute range-proportional tolerance with a numeric precision floor (1e-12)."""
-    return max(1e-12, abs(max_val - min_val) * 0.01)
-
-
-# ---------------------------------------------------------------------------
-# Verification recording
-# ---------------------------------------------------------------------------
-
-
-async def _record_call(
-    report: CertificationReport,
-    tool: str,
-    action: Callable[[], Any | Awaitable[Any]],
-    *,
-    passed: str = "live_passed",
-) -> Any:
-    """Invoke ``action`` and record one verification row.
-
-    The caller is responsible for performing any readback inside ``action``
-    and raising if the mutation didn't take effect. This function only
-    records the result of the whole encapsulated action.
-
-    ``BridgeError`` with code ``CAPABILITY_UNAVAILABLE`` is mapped to
-    ``host_unavailable``; every other exception becomes ``failed``.
-    """
-    try:
-        value = action()
-        if inspect.isawaitable(value):
-            value = await value
-    except Exception as error:  # noqa: BLE001 — recording layer swallows all
-
-        if getattr(error, "code", None) == "CAPABILITY_UNAVAILABLE":
-            report.record(
-                Verification(
-                    tool,
-                    "host_unavailable",
-                    f"{getattr(error, 'code', 'CAPABILITY_UNAVAILABLE')}: {error}",
-                )
-            )
-        else:
-            report.record(Verification(tool, "failed", f"{type(error).__name__}: {error}"))
-        return None
-    report.record(Verification(tool, passed, "call and readback completed"))
-    return value
-
-
-def _record_unavailable(report: CertificationReport, tool: str, reason: str) -> None:
-    report.record(Verification(tool, "environment_unavailable", reason))
-
-
-# ---------------------------------------------------------------------------
-# Profile / release policy
-# ---------------------------------------------------------------------------
-
-
-def build_baseline_report(
-    profiles: tuple[str, ...] | None = None,
-) -> CertificationReport:
-    """Return a report covering exactly the catalogued tools.
-
-    The runner calls this and then manually records every selected tool;
-    the report itself does not pre-classify unselected tools. The
-    ``CertificationReport.finish()`` invariant guarantees the runner
-    cannot forget a tool.
-    """
-    selected = profiles or tuple(BASELINE_PROBE_GROUPS)
-    for _profile in _expand_profiles(selected):
-        pass
-    catalog_names = _baseline_tool_names()
-    return CertificationReport(tool_names=catalog_names)
-
-
-def _is_full_baseline(profiles: tuple[str, ...]) -> bool:
-    expanded = _expand_profiles(profiles)
-    return set(expanded) == set(BASELINE_PROBE_GROUPS)
-
-
-def _release_ready(
-    report: CertificationReport, profiles: tuple[str, ...], *, fire_clip: bool
-) -> bool:
-    """Compute the final ``release_ready`` decision.
-
-    Rules (in order):
-
-    1. Any ``failed`` row blocks promotion.
-    2. Partial profiles (not full baseline) are never release-ready.
-    3. ``fire_clip`` must have been exercised (the flag toggled on).
-    4. ``host_unavailable`` blocks promotion.
-    5. ``environment_unavailable`` blocks promotion, except ``build_extension``.
-    6. ``manual_required`` blocks promotion, except ``quit_ableton`` and the
-       strictly validated manual fallback for ``save_set``.
-    7. Otherwise the report is release-ready.
-    """
-    rows = list(report.recorded.values())
-    if any(row.status == "failed" for row in rows):
-        return False
-    if not _is_full_baseline(profiles):
-        return False
-    if not fire_clip:
-        return False
-    if any(row.status == "host_unavailable" for row in rows):
-        return False
-    if any(
-        row.status == "environment_unavailable"
-        and row.tool != "build_extension"
-        for row in rows
-    ):
-        return False
-    return not any(
-        row.status == "manual_required" and row.tool not in ("quit_ableton", "save_set")
-        for row in rows
-    )
-
+from .probes import (
+    BASELINE_PROBE_GROUPS,
+    QUIT_ABLETON_MANUAL_REASON,
+    _expand_profiles,
+)
+from .report import (
+    _record_call,
+    _record_unavailable,
+    _release_ready,
+    build_baseline_report,
+)
+from .safety import AcceptanceClient, AcceptanceSafetyError, _resolve_track_id
 
 # ---------------------------------------------------------------------------
 # Offline probes
@@ -452,7 +69,7 @@ async def run_offline_probes(report: CertificationReport, workdir: Path) -> None
     inputs = _synthesize_offline_inputs(workdir)
 
     def analyze() -> dict[str, Any]:
-        from .analysis import audio as analysis_audio
+        from ..analysis import audio as analysis_audio
 
         return analysis_audio.analyze_audio(str(inputs["target"]))
 
@@ -480,7 +97,7 @@ async def run_offline_probes(report: CertificationReport, workdir: Path) -> None
 
     def logs() -> str:
         """Real ``get_ableton_logs`` impl: read the tail of Log.txt."""
-        from .diagnostics import find_ableton_log_path
+        from ..diagnostics import find_ableton_log_path
 
         path = find_ableton_log_path()
         if path is None:
@@ -495,7 +112,7 @@ async def run_offline_probes(report: CertificationReport, workdir: Path) -> None
 
     def diff_tool() -> dict[str, Any]:
         """Compare two snapshots through the real ``diff_snapshots`` impl."""
-        from .diff import diff_snapshots
+        from ..diff import diff_snapshots
 
         # Build two snapshots via ``take_snapshot`` semantics — same shape
         # the runner would observe; equality is preserved so the diff is
@@ -523,7 +140,7 @@ async def run_offline_probes(report: CertificationReport, workdir: Path) -> None
         """Real ``scaffold_extension`` impl, validated by file presence."""
         import json
 
-        from .server import scaffold_extension
+        from ..server import scaffold_extension
 
         out_dir = workdir / "scaffold"
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -560,7 +177,7 @@ async def run_offline_probes(report: CertificationReport, workdir: Path) -> None
     def build_ext() -> dict[str, Any]:
         import json
 
-        from .server import build_extension
+        from ..server import build_extension
 
         scaffold_dir = workdir / "scaffold"
         scaffold_dirs = [p for p in scaffold_dir.iterdir() if p.is_dir()]
@@ -618,106 +235,6 @@ async def run_offline_probes(report: CertificationReport, workdir: Path) -> None
 
 
 # ---------------------------------------------------------------------------
-
-
-# Disposable set discovery (called inside the safety guard)
-# ---------------------------------------------------------------------------
-
-
-def _resolve_track_id(client: AcceptanceClient, index: int) -> str:
-    tracks = client.call("get_track_list")
-    match = next((t for t in tracks if int(t.get("index", -1)) == index), None)
-    if match is None:
-        raise AcceptanceSafetyError(f"track {index} not present")
-    return str(match.get("id", f"track:{index}"))
-
-
-def _discover_baseline(client: AcceptanceClient) -> dict[str, Any]:
-    """Capture the disposable Set baseline that the runner must restore.
-
-    The restore step relies on every value the mutations touch being
-    captured here. A live ``live_fade`` or ``set_track_property`` run
-    must round-trip through the original value, not a default.
-
-    The real ``get_track_list`` contract returns only ``id``/``index``/
-    ``name``/``type`` — no ``mute``/``solo``/``arm``/``volume``. We
-    therefore drive every per-track field from ``get_track_state``,
-    which exposes the mixer and arm state. We never read the absent
-    fields from ``get_track_list`` or invent defaults for them.
-    """
-    metadata = client.call("get_project_metadata")
-    song_name = str(metadata.get("song_name", ""))
-    tracks = client.call("get_track_list")
-    track_names: dict[int, str] = {}
-    track_types: dict[int, str] = {}
-    track_mutes: dict[int, bool] = {}
-    track_solos: dict[int, bool] = {}
-    track_arms: dict[int, bool] = {}
-    track_volumes: dict[int, float] = {}
-    for track in tracks:
-        idx = int(track.get("index", -1))
-        track_names[idx] = str(track.get("name", ""))
-        track_types[idx] = str(track.get("type", ""))
-        # ``get_track_list`` is not the source of truth for the mixer
-        # state — read it from ``get_track_state``.
-        state = client.call("get_track_state", {"track_index": idx})
-        if not isinstance(state, dict):
-            raise AcceptanceSafetyError(f"get_track_state({idx}) returned non-dict: {state!r}")
-        if "mute" not in state or "solo" not in state or "arm" not in state:
-            raise AcceptanceSafetyError(
-                f"get_track_state({idx}) missing mute/solo/arm; "
-                "the disposable Set must expose the full track state"
-            )
-        if "volume" not in state:
-            raise AcceptanceSafetyError(
-                f"get_track_state({idx}) missing volume; the disposable "
-                "Set must expose the mixer volume"
-            )
-        track_mutes[idx] = bool(state["mute"])
-        track_solos[idx] = bool(state["solo"])
-        track_arms[idx] = bool(state["arm"])
-        track_volumes[idx] = float(state["volume"])
-    session = client.call("get_session_info")
-    loop = client.call("get_loop_settings")
-    locators = client.call("get_locators")
-    song_length_payload = client.call("get_song_length")
-    if not isinstance(song_length_payload, dict):
-        raise AcceptanceSafetyError(
-            f"get_song_length returned non-dict: {song_length_payload!r}"
-        )
-    song_length_value = song_length_payload.get("song_length")
-    if not isinstance(song_length_value, (int, float)) or isinstance(
-        song_length_value, bool
-    ):
-        raise AcceptanceSafetyError(
-            f"get_song_length.song_length must be a positive number, "
-            f"got {song_length_value!r}"
-        )
-    song_length_f = float(song_length_value)
-    if song_length_f <= 0.0:
-        raise AcceptanceSafetyError(
-            f"get_song_length.song_length must be positive, got {song_length_f}"
-        )
-    return {
-        "song_name": song_name,
-        "song_length": song_length_f,
-        "track_names": track_names,
-        "track_types": track_types,
-        "track_mutes": track_mutes,
-        "track_solos": track_solos,
-        "track_arms": track_arms,
-        "track_volumes": track_volumes,
-        "tempo": float(session["tempo"]),
-        "current_song_time": float(session["current_song_time"]),
-        "loop": bool(loop.get("loop", False)),
-        "loop_start": float(loop.get("loop_start", 0.0)),
-        "loop_length": float(loop.get("loop_length", 4.0)),
-        "locators": list(locators),
-        "track_count": len(tracks),
-    }
-
-
-# ---------------------------------------------------------------------------
 # Live acceptance runner
 # ---------------------------------------------------------------------------
 
@@ -741,7 +258,7 @@ async def run_live_acceptance(
     readback that proves the mutation took effect. ``failed`` rows
     propagate to ``release_ready=False`` and to a non-zero CLI exit code.
     """
-    from .diagnostics import bridge_status as _bridge_status_fn
+    from ..diagnostics import bridge_status as _bridge_status_fn
 
     expanded = _expand_profiles(profiles)
 
@@ -780,7 +297,19 @@ async def run_live_acceptance(
             # end-to-end environmental test exercises the real
             # implementation; every other test that needs the offline
             # rows uses the injection point.
-            probe_callable = offline_probes or run_offline_probes
+            #
+            # The default is resolved via the package facade (not the
+            # local module namespace) so that the test fixture which
+            # monkey-patches ``ableton_mcp_server.acceptance.run_offline_probes``
+            # is honored by this submodule.
+            if offline_probes is None:
+                import sys as _sys
+
+                probe_callable = _sys.modules[
+                    "ableton_mcp_server.acceptance"
+                ].run_offline_probes
+            else:
+                probe_callable = offline_probes
             await probe_callable(report, offline_dir)
             # Mark scaffold/build artifacts that the offline probe produced.
             scaffold_dir = offline_dir / "scaffold"
@@ -832,7 +361,7 @@ async def run_live_acceptance(
             )
 
         if {"tcp_reads", "mutations", "websocket_reads"} & set(expanded):
-            baseline: dict[str, Any] | None = None
+            baseline: BaselineSnapshot | None = None
             try:
                 metadata = call("get_project_metadata")
                 actual_name = str(metadata.get("song_name", ""))
