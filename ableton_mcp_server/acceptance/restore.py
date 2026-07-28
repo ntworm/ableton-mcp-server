@@ -57,6 +57,28 @@ class RestoreEngine:
         """Read-only view of the registered operations in order."""
         return tuple(self._ops)
 
+    @property
+    def client(self) -> AcceptanceClient:
+        """The bridge client the engine restores against.
+
+        Probe modules need this to construct restore / verify lambdas
+        that call ``client.call`` (or ``call_ws``); the alternative —
+        threading ``client`` through every ``register_restores`` call —
+        leaks the engine's internal contract.
+        """
+        return self._client
+
+    @property
+    def artifacts(self) -> dict[str, Any]:
+        """Mutable artifacts dict shared with the runner.
+
+        Restores can stash pre-mutation values here so a later restore
+        step can read them back. The engine shares the same dict the
+        runner owns; mutations never replace the binding, only mutate
+        its contents.
+        """
+        return self._artifacts
+
     def register(
         self,
         *,
