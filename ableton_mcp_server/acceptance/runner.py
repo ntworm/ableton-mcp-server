@@ -44,6 +44,12 @@ from .probes import (
     QUIT_ABLETON_MANUAL_REASON,
     _expand_profiles,
 )
+from .probes import (
+    composed as _composed,
+)
+from .probes import (
+    quit as _quit,
+)
 from .report import (
     _record_call,
     _record_unavailable,
@@ -258,8 +264,6 @@ async def run_live_acceptance(
     readback that proves the mutation took effect. ``failed`` rows
     propagate to ``release_ready=False`` and to a non-zero CLI exit code.
     """
-    from ..diagnostics import bridge_status as _bridge_status_fn
-
     expanded = _expand_profiles(profiles)
 
     async def call_ws(method: str, params: dict[str, Any] | None = None) -> Any:
@@ -319,46 +323,10 @@ async def run_live_acceptance(
                         artifacts["files"].append(str(path))
 
         if "composed" in expanded:
-
-            def bridge_status_probe() -> dict[str, Any]:
-                # ``get_bridge_status`` is a composed tool that wraps
-                # ``diagnostics.bridge_status(client, tool_count=...)``.
-                # The runner must call the wrapper, not the underlying
-                # ``get_session_info`` TCP command.
-                return _bridge_status_fn(client, tool_count=65)
-
-            def session_overview_probe() -> dict[str, Any]:
-                # ``get_session_overview`` is composed from three TCP reads.
-                # The runner must do the same composition explicitly; the
-                # bridge does not expose a single ``get_session_overview``
-                # command.
-                return {
-                    "session": call("get_session_info", {}),
-                    "tracks": call("get_track_list", {}),
-                    "scenes": call("get_scenes", {}),
-                }
-
-            await _record_call(
-                report, "get_bridge_status", bridge_status_probe, passed="live_passed"
-            )
-            await _record_call(
-                report, "get_session_overview", session_overview_probe, passed="live_passed"
-            )
+            await _composed.run(report, client=client)
 
         if "quit" in profiles and not {"tcp_reads", "mutations", "websocket_reads"} & set(expanded):
-            # ``quit`` profile without tcp_reads/mutations: record the
-            # ``quit_ableton`` row as ``manual_required``. The runner does
-            # not invoke the bridge here — invoking it would close the host
-            # and prevent any subsequent probe from running, so the row
-            # never claims ``live_passed`` without an out-of-band owner
-            # confirmation.
-            report.record(
-                Verification(
-                    "quit_ableton",
-                    "manual_required",
-                    QUIT_ABLETON_MANUAL_REASON,
-                )
-            )
+            await _quit.run(report)
 
         if {"tcp_reads", "mutations", "websocket_reads"} & set(expanded):
             baseline: BaselineSnapshot | None = None
