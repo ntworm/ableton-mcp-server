@@ -10,3 +10,7 @@ build/
 dist/
 .coverage-data/
 .agent-context/generated/
+
+# Isolated worktrees per using-git-worktrees skill.
+.worktrees/
+worktrees/
