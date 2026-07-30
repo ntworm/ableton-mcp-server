@@ -7,7 +7,14 @@ bridge over WebSockets on `127.0.0.1:9889`.
 
 Version 0.5.1 exposes 65 tools. The Slice 1 stabilization introduces an
 immutable 65-tool catalog and a per-tool certification report driven by
-`ableton-mcp acceptance --profile baseline`. See the [v0.5.1] entry in
+`ableton-mcp acceptance --profile baseline`. 
+This is the author's personal working tool for developing Ableton Live
+projects with an MCP-compatible agent in the loop. The contracts and
+bridge shape borrow from several existing projects in the
+Ableton-MCP/Live-OSC ecosystem — see [Inspiration & prior art](docs/INSPIRATION.md)
+for the full attribution before reading the code.
+
+See the [v0.5.1] entry in
 `CHANGELOG.md` for the corrections applied on top of the v0.5.0 surface.
 
 The certification policy — what each row status means, how
