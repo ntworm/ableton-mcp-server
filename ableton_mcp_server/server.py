@@ -1332,7 +1332,10 @@ def build_extension(project_path: str) -> str:
     request = models.BuildExtensionRequest(project_path=project_path)
     project = Path(request.project_path)
     if not (project / "package.json").is_file():
-        return json.dumps({"status": "error", "message": "No package.json found"})
+        return json.dumps(
+            {"status": "error", "message": "no package.json found", "project_path": str(project)},
+            indent=2,
+        )
 
     entrypoint_rel = _resolve_extension_entrypoint(project)
     if entrypoint_rel is None:
@@ -1348,14 +1351,17 @@ def build_extension(project_path: str) -> str:
         )
 
     steps: list[dict[str, Any]] = []
-    for step_name, cmd in [
-        (_EXTENSION_INSTALL_STEP_NAME, "npm install"),
-        (_EXTENSION_BUILD_STEP_NAME, "npm run build"),
-    ]:
+    # Use an argument list rather than shell=True so the user-supplied
+    # project_path can never be interpreted by a shell. Each step is a
+    # separate subprocess so a failing install does not mask a build failure.
+    for step_name, cmd in (
+        (_EXTENSION_INSTALL_STEP_NAME, ["npm", "install"]),
+        (_EXTENSION_BUILD_STEP_NAME, ["npm", "run", "build"]),
+    ):
         result = subprocess.run(
             cmd,
             cwd=str(project),
-            shell=True,
+            shell=False,
             capture_output=True,
             text=True,
             timeout=180,
