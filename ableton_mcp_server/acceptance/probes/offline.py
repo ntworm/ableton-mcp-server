@@ -55,19 +55,19 @@ async def run(report: CertificationReport, workdir: Path) -> None:
         return analysis_audio.analyze_audio(str(inputs["target"]))
 
     def masking() -> dict[str, Any]:
-        from ..analysis import audio as analysis_audio
+        from ...analysis import audio as analysis_audio
 
         return analysis_audio.find_frequency_masking(
             str(inputs["target"]), str(inputs["reference"])
         )
 
     def mix() -> dict[str, Any]:
-        from ..analysis import audio as analysis_audio
+        from ...analysis import audio as analysis_audio
 
         return analysis_audio.analyze_mix([str(inputs["target"]), str(inputs["reference"])])
 
     def single_cycle() -> dict[str, Any]:
-        from ..analysis import audio as analysis_audio
+        from ...analysis import audio as analysis_audio
 
         return analysis_audio.extract_single_cycle(str(inputs["short"]))
 
