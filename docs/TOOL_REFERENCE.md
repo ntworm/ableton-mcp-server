@@ -2,6 +2,12 @@
 
 The FastMCP server exposes 65 snake_case tools. Remote examples below show the JSONL command envelope after MCP/Pydantic validation. All error responses use `{"status":"error","code","message","hint?"}`.
 
+The promotion gates that consume the per-tool status rows recorded by
+the acceptance runner are documented in
+[`docs/CERTIFICATION.md`](CERTIFICATION.md). That document is canonical
+for what each status means and which `environment_unavailable` rows
+are explicitly allowed.
+
 ## v0.5.0 set lifecycle
 
 ### `lifecycle_status()`
@@ -25,7 +31,9 @@ The FastMCP server exposes 65 snake_case tools. Remote examples below show the J
 ### `live_fade(target: str, from_value: float, to_value: float, duration_s: float, steps: int = 30, easing: str = "smoothstep")`
 
 - Params: `target` (mixer path-id), numeric `from_value`/`to_value`, `duration_s`, `steps`, `easing` (`smoothstep` or `linear`).
-- Side effects: interpolates the parameter on the Live main thread via `Song.update_display` ticks; no `time.sleep`.
+- Side effects: distributes writes across the requested `duration_s` via
+  `time.monotonic` and yields between steps; the Live main thread stays
+  responsive because there is no `time.sleep` and no busy-wait.
 - Edge cases / side effects: 60-second timeout override; `min(60, steps + 1)` work units; mutation gated by `ALLOWED_MUTATIONS`.
 
 ## v0.5.0 track creation
@@ -424,3 +432,11 @@ The FastMCP server exposes 65 snake_case tools. Remote examples below show the J
 - Replaces one Session clip envelope with 1..500 sorted `{time,value}` breakpoints.
 - Resolves exact device parameters plus mixer aliases `volume`, `pan`/`panning`, and `send_a` through `send_h`.
 - Edge cases / side effects: one undo step; only Session clips are supported. Values must fit parameter bounds, and hosts without the automation-envelope API return `LIVE_UNAVAILABLE`.
+
+### `get_warp_state(track_index, clip_index)` and `set_warp_state(...)`
+
+- `get_warp_state` exposes the current `warping` boolean, `warp_mode`, and
+  the read-only `warp_markers` array (sample-time / beat-time pairs).
+- `set_warp_state` accepts only `warping` and `warp_mode`. It rejects any
+  `warp_markers` payload at the model layer (`VALIDATION_ERROR`) — marker
+  writes were retired at v0.5.0 and must not reach the Extension bridge.

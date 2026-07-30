@@ -40,9 +40,7 @@ def executable_lines(path: Path) -> set[int]:
 
     def visit(item: CodeType) -> None:
         lines.update(
-            line
-            for _offset, line in dis.findlinestarts(item)
-            if line is not None and line > 0
+            line for _offset, line in dis.findlinestarts(item) if line is not None and line > 0
         )
         for constant in item.co_consts:
             if isinstance(constant, CodeType):

@@ -1,4 +1,5 @@
 """v0.5.0 offline mix-analysis module tests (LUFS, masking, single-cycle)."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -54,8 +55,7 @@ def test_find_frequency_masking_reports_excess_band(tmp_path) -> None:
     result = find_frequency_masking(str(target), str(reference), threshold_db=6.0)
 
     assert any(
-        band["excess_db"] is not None and band["excess_db"] >= 6.0
-        for band in result["bands"]
+        band["excess_db"] is not None and band["excess_db"] >= 6.0 for band in result["bands"]
     )
     assert result["score"] >= 6.0
 
@@ -70,6 +70,27 @@ def test_find_frequency_masking_returns_empty_when_no_excess(tmp_path) -> None:
 
     assert result["score"] == 0.0
     assert all(band["excess_db"] is None for band in result["bands"])
+
+
+def test_masking_detects_two_overlapping_1khz_tones(tmp_path) -> None:
+    target = tmp_path / "target.wav"
+    reference = tmp_path / "reference.wav"
+    write_sine(target, frequency_hz=1000.0, duration_s=1.0, amplitude=0.8)
+    write_sine(reference, frequency_hz=1000.0, duration_s=1.0, amplitude=0.2)
+
+    result = find_frequency_masking(str(target), str(reference), threshold_db=6.0)
+
+    assert result["score"] == pytest.approx(12.04, abs=1.5)
+    assert any(item["overlap_ratio"] > 0.8 for item in result["bands"])
+
+
+def test_masking_trims_to_shared_duration(tmp_path) -> None:
+    short = tmp_path / "short.wav"
+    long_ = tmp_path / "long.wav"
+    write_sine(short, frequency_hz=440.0, duration_s=0.5, amplitude=0.5)
+    write_sine(long_, frequency_hz=440.0, duration_s=1.0, amplitude=0.25)
+
+    assert find_frequency_masking(str(short), str(long_))["score"] > 0
 
 
 def test_find_frequency_masking_rejects_mismatched_sample_rates(tmp_path) -> None:

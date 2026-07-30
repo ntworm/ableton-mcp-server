@@ -1,6 +1,6 @@
 [project]
 name = "ableton-mcp-server"
-version = "0.5.0"
+version = "0.5.1"
 description = "Debug-grade MCP server and MIDI Remote Script for Ableton Live"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -9,7 +9,9 @@ dependencies = [
     "mcp>=1.28,<2",
     "fastmcp>=3.4,<4",
     "pydantic>=2.12,<3",
-    "websockets>=14.0,<15",
+    "websockets>=15.0.1,<17",
+    "numpy>=2.2,<3",
+    "soundfile>=0.13,<1",
 ]
 
 [project.optional-dependencies]
@@ -34,6 +36,8 @@ packages = ["ableton_mcp_server"]
 [tool.hatch.build.targets.wheel.force-include]
 "contracts.py" = "contracts.py"
 "AbletonMCPServer_RemoteScript" = "ableton_mcp_server/_remote_script"
+"AbletonMCPServer_Extension/vendor" = "ableton_mcp_server/_extension_vendor"
+
 
 [tool.ruff]
 line-length = 100
@@ -47,3 +51,9 @@ ignore = ["UP031"]
 python_version = "3.10"
 strict = true
 warn_unused_configs = true
+follow_imports_for_stubs = true
+
+[[tool.mypy.overrides]]
+module = ["numpy", "numpy.*", "soundfile"]
+follow_imports = "skip"
+ignore_missing_imports = true

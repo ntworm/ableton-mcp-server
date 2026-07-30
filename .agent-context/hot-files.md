@@ -1,6 +1,6 @@
 # Hot files
 
-Generated churn evidence is in `generated/hot-files.md`. The paths below are curated because their responsibilities and coupled-change requirements make regressions costly; churn alone was not used as proof.
+The paths below are curated because their responsibilities and coupled-change requirements make regressions costly; churn alone is not used as proof.
 
 ## Protocol and routing
 
@@ -11,7 +11,7 @@ Generated churn evidence is in `generated/hot-files.md`. The paths below are cur
 
 ## Public MCP surface
 
-- `ableton_mcp_server/server.py`: owns all 46 public tools and the registry asserted by `tests/test_server_tools.py`, `tests/test_tool_registry.py`, and `tests/test_models.py`.
+- `ableton_mcp_server/server.py`: owns all 65 public tools and the registry asserted by `tests/test_server_tools.py`, `tests/test_tool_registry.py`, and `tests/test_models.py`.
 - `docs/TOOL_REFERENCE.md`: user-facing tool contract; update with public surface changes.
 
 ## Live execution
@@ -34,4 +34,3 @@ Generated churn evidence is in `generated/hot-files.md`. The paths below are cur
 - `README.md`: supported installation, doctor, acceptance, safety, and verification commands.
 
 When behavior changes, update the canonical document rather than expanding persistent context into a duplicate manual.
-

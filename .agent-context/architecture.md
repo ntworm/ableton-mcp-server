@@ -24,8 +24,8 @@ Primary evidence: `README.md`, `docs/ARCHITECTURE.md`, `ableton_mcp_server/clien
 
 ### MCP package
 
-- `server.py`: owns the FastMCP instance and 46-function public registry.
-- `models.py`: owns request validation and the 46 request-model mapping.
+- `server.py`: owns the FastMCP instance and 65-function public registry.
+- `models.py`: owns request validation for the current public tool catalog.
 - `client.py`: owns one TCP client plus a WebSocket client and selects the route from `WEBSOCKET_TARGET_COMMANDS`.
 - `protocol.py`, `errors.py`, `write_guard.py`, `ids.py`: framing, typed failures, allowlist enforcement, and path-ID validation.
 - `diagnostics.py`, `snapshot.py`, `diff.py`: inspection helpers independent of Live imports.
@@ -47,9 +47,9 @@ The first two access `AudioClip`; device insertion calls `track.insertDevice()`.
 
 ## Routing and contracts
 
-`contracts.py` is canonical. At v0.3.0 it defines 23 read commands, 18 allowed mutations, five explicitly blocked commands, and three WebSocket targets. `scripts/vendor_contracts.py` renders the vendored Remote Script copy, and tests compare the result.
+`contracts.py` is canonical. At v0.5.1 it defines 26 read commands, 29 allowed mutations, five explicitly blocked commands, and three WebSocket targets. `scripts/vendor_contracts.py` renders the vendored Remote Script copy, and tests compare the result.
 
-Python MCP-only tools such as diagnostics, snapshot diffing, and extension scaffolding/building do not all correspond one-for-one with remote command sets; therefore 46 public tools and 41 remote commands are both valid counts.
+Python MCP-only tools such as diagnostics, snapshot diffing, and extension scaffolding/building do not all correspond one-for-one with remote command sets; therefore 65 public tools and 55 routed remote commands are both valid current counts.
 
 ## Protocols
 
@@ -57,7 +57,7 @@ Python MCP-only tools such as diagnostics, snapshot diffing, and extension scaff
 - WebSocket: JSON-RPC 2.0 request/result/error envelopes on port 9889.
 - MCP: FastMCP over stdio; expected remote failures are converted to explicit error results.
 
-The Node WebSocket server currently specifies a port but no `host`. Treat local-only binding as an intended constraint that still needs code-level enforcement; see `risks.md`.
+The Node WebSocket server explicitly binds `127.0.0.1:9889`; `tests/test_extension_loopback.py` enforces the local-only boundary.
 
 ## Mutation lifecycle
 
@@ -73,5 +73,4 @@ Path IDs encode index paths such as `track:2/device:1`. They are re-resolved per
 
 - Hatchling packages `ableton_mcp_server`, force-including root `contracts.py` and the Remote Script under `ableton_mcp_server/_remote_script`.
 - The Extension uses TypeScript type checking plus `tsx build.ts`; esbuild bundles `src/extension.ts` to the manifest entry.
-- Root and Extension manifests currently share version `0.3.0`.
-
+- Root and Extension manifests currently share version `0.5.1`.

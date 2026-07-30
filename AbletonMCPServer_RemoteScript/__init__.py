@@ -38,6 +38,7 @@ from ._contracts import (
     ERROR_TIMEOUT,
     ERROR_TRACK_LIMIT_REACHED,
     ERROR_UNKNOWN_COMMAND,
+    ERROR_VERIFICATION_FAILED,
     ERROR_WRONG_TYPE,
     PLAYHEAD_MOVE_RETRIES,
     READ_ONLY_COMMANDS,
@@ -675,26 +676,39 @@ def cmd_search_browser(
         raise RemoteError(ERROR_INVALID_PARAMS, "Unknown browser category %r." % category_filter)
     selected = (category_filter,) if category_filter is not None else category_names
     results: list[dict[str, Any]] = []
-    visited: set[int] = set()
+    visited: set[str] = set()
     budget = 5000
     for category in selected:
         root = _safe(lambda category=category: getattr(application.browser, category), None)
         if root is None:
             continue
         root_name = str(_safe(lambda root=root: root.name, category.replace("_", " ").title()))
-        stack = [(root, [root_name], 0)]
+        # Slice 1 Task 5: Live's LOM yields fresh proxy wrappers on every
+        # ``.children`` access, so tracking identity via ``id()`` collapses.
+        # Use URI keys (stable across proxies) and ordinal-path keys (URI-less
+        # trees) to bound traversal.
+        stack = [(root, [root_name], 0, ())]
         while stack and len(results) < limit and len(visited) < budget:
-            item, path, depth = stack.pop()
-            identity = id(item)
-            if identity in visited:
+            item, path, depth, ordinal_path = stack.pop()
+            uri = str(_safe(lambda item=item: item.uri, ""))
+            key = (
+                "uri:" + uri
+                if uri
+                else "%s:%s"
+                % (
+                    category,
+                    "/".join(str(part) for part in ordinal_path),
+                )
+            )
+            if key in visited:
                 continue
-            visited.add(identity)
+            visited.add(key)
             name = str(_safe(lambda item=item: item.name, ""))
             if depth > 0 and query in name.casefold():
                 results.append(
                     {
                         "name": name,
-                        "uri": str(_safe(lambda item=item: item.uri, "")),
+                        "uri": uri,
                         "category": category,
                         "path": path,
                         "is_loadable": bool(_safe(lambda item=item: item.is_loadable, False)),
@@ -703,9 +717,10 @@ def cmd_search_browser(
             if depth >= 5:
                 continue
             children = list(_safe(lambda item=item: item.children, []))[:500]
-            for child in reversed(children):
+            for child_index in range(len(children) - 1, -1, -1):
+                child = children[child_index]
                 child_name = str(_safe(lambda child=child: child.name, ""))
-                stack.append((child, [*path, child_name], depth + 1))
+                stack.append((child, [*path, child_name], depth + 1, (*ordinal_path, child_index)))
         if len(results) >= limit or len(visited) >= budget:
             break
     return results
@@ -908,8 +923,7 @@ def _verified_attribute_boolean_steps(
             return {result_key: actual}
     raise RemoteError(
         ERROR_LIVE_UNAVAILABLE,
-        "State setter for %s did not reach %s after %s UI ticks."
-        % (attribute, expected, retries),
+        "State setter for %s did not reach %s after %s UI ticks." % (attribute, expected, retries),
     )
 
 
@@ -932,8 +946,7 @@ def _verified_attribute_string_steps(
             return {result_key: actual}
     raise RemoteError(
         ERROR_LIVE_UNAVAILABLE,
-        "State setter for %s did not reach %r after %s UI ticks."
-        % (attribute, expected, retries),
+        "State setter for %s did not reach %r after %s UI ticks." % (attribute, expected, retries),
     )
 
 
@@ -1364,14 +1377,10 @@ def _set_clip_properties_steps(
     current_start = float(_safe(lambda: clip.loop_start, 0.0))
     current_end = float(_safe(lambda: clip.loop_end, _safe(lambda: clip.length, 0.0)))
     requested_start = (
-        _float_param(params, "loop_start", 0.0, 100000.0)
-        if "loop_start" in params
-        else None
+        _float_param(params, "loop_start", 0.0, 100000.0) if "loop_start" in params else None
     )
     requested_end = (
-        _float_param(params, "loop_end", 0.0, 100000.0)
-        if "loop_end" in params
-        else None
+        _float_param(params, "loop_end", 0.0, 100000.0) if "loop_end" in params else None
     )
     requested_name = _string_param(params, "name") if "name" in params else None
     final_start = requested_start if requested_start is not None else current_start
@@ -1464,15 +1473,27 @@ def _create_clip_automation_steps(
             )
         points.append((point_time, value))
     points.sort(key=lambda point: point[0])
-    envelope_getter = _safe(lambda: clip.automation_envelope_for_parameter, None)
+    envelope_getter = _safe(lambda: clip.automation_envelope, None)
+    envelope_creator = _safe(lambda: clip.create_automation_envelope, None)
     clear_envelope = _safe(lambda: clip.clear_envelope, None)
-    if not callable(envelope_getter) or not callable(clear_envelope):
+    if (not callable(envelope_getter) and not callable(envelope_creator)) or not callable(
+        clear_envelope
+    ):
         raise RemoteError(
             ERROR_LIVE_UNAVAILABLE,
             "Live runtime does not expose the clip automation envelope API.",
         )
     clear_envelope(parameter)
-    envelope = envelope_getter(parameter)
+    envelope = None
+    if callable(envelope_getter):
+        envelope = envelope_getter(parameter)
+    if envelope is None and callable(envelope_creator):
+        envelope = envelope_creator(parameter)
+    if envelope is None:
+        raise RemoteError(
+            ERROR_LIVE_UNAVAILABLE,
+            "Live runtime failed to retrieve or create the clip automation envelope.",
+        )
     insert_step = _safe(lambda: envelope.insert_step, None)
     if not callable(insert_step):
         raise RemoteError(
@@ -1793,6 +1814,11 @@ def cmd_create_audio_track(
     # the existing TRACK_LIMIT_REACHED guard above is not reused because audio may
     # legitimately exceed 96 tracks on hosts that already grew the midi set past
     # the cap. We rely on Live's per-host track-limit instead.
+    #
+    # Slice 1 Task 4: Live's LOM yields a new proxy wrapper per enumeration, so
+    # ``id()`` comparisons collapse to the proxy identity. We now identify the
+    # new track by counting the collection before and after the mutation and
+    # resolving the requested index against the verified post-mutation list.
     fn = getattr(song, "create_audio_track", None)
     if not callable(fn):
         raise RemoteError(
@@ -1802,21 +1828,27 @@ def cmd_create_audio_track(
     raw_index = params.get("index")
     index = int(raw_index) if raw_index is not None else -1
     name = params.get("name")
-    before_ids = set(id(track) for track in song.tracks)
+    before_count = len(list(song.tracks))
     fn(index)
-    created = None
-    created_index = None
-    for position, track in enumerate(song.tracks):
-        if id(track) not in before_ids:
-            created = track
-            created_index = position
-            break
-    result = {"created": True, "track_index": created_index, "requested_index": index}
-    if created is not None and name:
+    tracks = list(song.tracks)
+    if len(tracks) != before_count + 1:
+        raise RemoteError(
+            ERROR_VERIFICATION_FAILED,
+            "create_audio_track did not increase the regular track count by one",
+        )
+    created_index = len(tracks) - 1 if index == -1 else index
+    if created_index < 0 or created_index >= len(tracks):
+        raise RemoteError(ERROR_VERIFICATION_FAILED, "created track index is out of range")
+    created = tracks[created_index]
+    if name:
         created.name = str(name)
-    if created is not None:
-        result["track_name"] = getattr(created, "name", "")
-    return result
+    return {
+        "created": True,
+        "track_id": "track:%s" % created_index,
+        "track_index": created_index,
+        "requested_index": index,
+        "track_name": str(getattr(created, "name", "")),
+    }
 
 
 def cmd_rename_track(
@@ -1960,12 +1992,23 @@ def live_fade_steps(
     song: Any,
     _application: Any,
     params: dict[str, Any],
+    *,
+    clock: Callable[[], float] | None = None,
 ) -> Generator[None, None, dict[str, Any]]:
     """Interpolate one track's volume to a target value over ``duration`` seconds.
 
-    The first command in our bridge that deliberately blocks the Live main
-    thread. ``duration`` is bounded at :data:`LIVE_FADE_MAX_DURATION` and each
-    step yields to give Live's UI a chance to schedule other work.
+    The fade distributes its steps across the requested ``duration`` of
+    monotonic-clock time and yields between writes so the Live UI tick
+    (``update_display``) can keep scheduling other work. We deliberately do
+    *not* call :func:`time.sleep` — sleeping on the Live main thread would
+    freeze the GUI. Instead each step waits until its monotonic deadline
+    before requesting the next ``yield``. ``duration=0`` short-circuits the
+    wait entirely and finishes in a single Live tick.
+
+    ``clock`` is injectable for tests; it defaults to :func:`time.monotonic`
+    so production behaviour is unchanged. ``steps=1`` with ``duration>0``
+    still waits the requested duration before finishing — it writes the
+    target once and yields until the deadline.
     """
 
     track_index = _required(params, "track_index")
@@ -2020,18 +2063,34 @@ def live_fade_steps(
             "curve must be smoothstep or linear",
         )
     start = float(param.value)
-    for step in range(1, steps + 1):
-        t = step / float(steps)
+    effective_clock: Callable[[], float] = clock or time.monotonic
+    if duration == 0.0:
+        # ``duration=0`` short-circuits: still write the target value so the
+        # documented contract holds, but never wait.
+        t = 1.0
         shaped = t * t * (3.0 - 2.0 * t) if curve == "smoothstep" else t
         param.value = start + (target - start) * shaped
-        # Yield once per step so the Live UI tick loop can schedule other work
-        # (and so the socket reader can drain incoming MCP requests) between
-        # volume writes. We deliberately do NOT call ``time.sleep`` here —
-        # blocking the Live main thread is forbidden by an AST invariant in
-        # ``tests/test_transport_retry.py``. The RPC timeout override in
-        # ``COMMAND_TIMEOUT_OVERRIDES`` leaves room for long multi-step faders,
-        # but the work itself stays responsive.
         yield
+    else:
+        step_interval = duration / float(steps)
+        for step in range(1, steps + 1):
+            # Wait until the monotonic clock has advanced to this step's
+            # deadline before writing the new value. Writes therefore land at
+            # ``step * step_interval`` (i.e. ``0.25 / 0.50 / 0.75 / 1.00`` for
+            # ``steps=4, duration=1``) — never earlier. We never call
+            # ``time.sleep``; we yield so Live's ``update_display`` tick loop
+            # runs other work. Blocking the Live main thread is forbidden by
+            # an AST invariant in ``tests/test_transport_retry.py``. The RPC
+            # timeout override in ``COMMAND_TIMEOUT_OVERRIDES`` leaves room
+            # for long multi-step faders, but the work itself stays
+            # responsive.
+            deadline = effective_clock() + step_interval
+            while effective_clock() < deadline:
+                yield
+            t = step / float(steps)
+            shaped = t * t * (3.0 - 2.0 * t) if curve == "smoothstep" else t
+            param.value = start + (target - start) * shaped
+
     final_value = float(param.value)
     result: dict[str, Any] = {
         "track": str(_safe(lambda: track.name, "")),
@@ -2177,9 +2236,7 @@ def _dispatch_command_steps(
 ) -> Generator[None, None, Any]:
     if normalized == "run_batch":
         return (
-            yield from _run_batch_steps(
-                song, application, params, undo_target, control_surface
-            )
+            yield from _run_batch_steps(song, application, params, undo_target, control_surface)
         )
     if normalized == "quit_ableton":
         # Give Live's UI thread one cycle before scheduling application quit.
@@ -2272,9 +2329,10 @@ def _dispatch_command_steps(
     if normalized == "quit_ableton":
         return handler(song, application, control_surface, params)
     if normalized == "live_fade":
-        # ``live_fade_steps`` is a generator that yields between volume
+        # ``live_fade_steps`` is a generator that distributes its writes
+        # across ``duration`` of monotonic-clock time and yields between
         # writes; ``yield from`` keeps the Live main thread pumping while it
-        # sleeps through its ``duration`` seconds of interpolation work.
+        # waits for each step's deadline.
         return (yield from handler(song, application, params))
     return handler(song, application, params)
 

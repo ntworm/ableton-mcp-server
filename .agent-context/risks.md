@@ -1,10 +1,9 @@
 # Risks
 
-## Critical: WebSocket bind does not explicitly enforce loopback
+## Resolved / Verified: WebSocket bind code-enforces loopback
 
-`AbletonMCPServer_Extension/src/index.ts` constructs `new WebSocketServer({ port: 9889 })` without a `host` option and implements no authentication. Documentation describes the bridge as local-only, while only the Python TCP listener and Python client explicitly use/reject non-loopback hosts.
+`AbletonMCPServer_Extension/src/index.ts` explicitly binds `new WebSocketServer({ host: '127.0.0.1', port: 9889 })`. The listener is code-enforced loopback-only and covered by `tests/test_extension_loopback.py`.
 
-Until verified or fixed, do not claim the Extension listener is code-enforced loopback-only. Do not expose port 9889 through firewall, LAN forwarding, containers, or tunneling. A product fix should bind `127.0.0.1` explicitly and add a regression test appropriate to the Extension runtime.
 
 ## Critical: Python LOM thread affinity
 
@@ -42,7 +41,7 @@ Tool discovery and TCP `doctor` do not prove the Extension WebSocket bridge is l
 
 ## Medium: acceptance testing mutates a real Set
 
-The acceptance runner requires an exact project-name confirmation and empty MIDI clip slot. Use a disposable Set. It restores transport/loop state, but intentionally leaves the created clip.
+The acceptance runner requires an exact project-name confirmation and empty MIDI clip slot. Use a disposable Set. It restores transport/loop state and deletes the test clip. Structural additions (loaded Operator device, newly created audio and MIDI tracks) remain only in the unsaved session memory; closing Live without saving cleanly reverts the project file on disk.
 
 ## Medium: proposals can be stale
 

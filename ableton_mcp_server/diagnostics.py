@@ -52,13 +52,32 @@ def detect_runtime(env: Mapping[str, str] | None = None) -> RuntimeInfo:
 
 
 def bundled_remote_script_path(package_dir: Path | None = None) -> Path:
+    """Return the bundled Remote Script directory.
+
+    Kept as a compatibility wrapper that returns ``BundledSource.path``.
+    """
+    return bundled_remote_script_source(package_dir).path
+
+
+@dataclass(frozen=True)
+class BundledSource:
+    path: Path
+    kind: str  # "checkout" or "wheel"
+
+
+def bundled_remote_script_source(package_dir: Path | None = None) -> BundledSource:
+    """Resolve which copy of the Remote Script is bundled with the package.
+
+    Returns a typed descriptor so callers can tell whether they are running
+    against a checkout tree (development) or an installed wheel (production).
+    """
     package = Path(__file__).resolve().parent if package_dir is None else package_dir
     checkout_source = package.parent / REMOTE_SCRIPT_NAME
     if checkout_source.is_dir():
-        return checkout_source
+        return BundledSource(checkout_source, "checkout")
     wheel_source = package / "_remote_script"
     if wheel_source.is_dir():
-        return wheel_source
+        return BundledSource(wheel_source, "wheel")
     raise FileNotFoundError(
         "Bundled AbletonMCPServer_RemoteScript could not be found in the checkout or wheel."
     )
@@ -89,6 +108,7 @@ def bridge_status(
     tool_count: int = 0,
 ) -> dict[str, Any]:
     info = detect_runtime() if runtime is None else runtime
+    bundled = bundled_remote_script_source()
     base: dict[str, Any] = {
         "endpoint": {"host": client.host, "port": client.port},
         "runtime": asdict(info),
@@ -98,6 +118,11 @@ def bridge_status(
         "extension_host_available": None,
         "ws_methods_registered": sorted(WEBSOCKET_TARGET_COMMANDS),
         "python_runtime": {"platform": info.platform, "is_wsl": info.is_wsl},
+        # Slice 1 Task 8: tell callers whether they're running from a checkout
+        # or an installed wheel, plus the resolved interpreter path.
+        "source_kind": bundled.kind,
+        "source": str(bundled.path),
+        "python_executable": str(Path(sys.executable).resolve()),
         "features": [
             "device_parameter_write",
             "session_clip_automation",

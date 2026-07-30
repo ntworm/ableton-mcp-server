@@ -373,8 +373,23 @@ class DiagnoseMidiClipRequest(RequestModel):
             return None
         value = value.strip().upper()
         if value not in (
-            "C", "C#", "Db", "D", "D#", "Eb", "E", "F",
-            "F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B",
+            "C",
+            "C#",
+            "Db",
+            "D",
+            "D#",
+            "Eb",
+            "E",
+            "F",
+            "F#",
+            "Gb",
+            "G",
+            "G#",
+            "Ab",
+            "A",
+            "A#",
+            "Bb",
+            "B",
         ):
             raise ValueError(f"Invalid scale root: {value!r}")
         return value
@@ -386,10 +401,20 @@ class DiagnoseMidiClipRequest(RequestModel):
             return None
         value = value.strip().lower()
         if value not in (
-            "major", "minor", "dorian", "phrygian", "lydian",
-            "mixolydian", "aeolian", "locrian", "harmonic_minor",
-            "melodic_minor", "pentatonic_major", "pentatonic_minor",
-            "blues", "chromatic",
+            "major",
+            "minor",
+            "dorian",
+            "phrygian",
+            "lydian",
+            "mixolydian",
+            "aeolian",
+            "locrian",
+            "harmonic_minor",
+            "melodic_minor",
+            "pentatonic_major",
+            "pentatonic_minor",
+            "blues",
+            "chromatic",
         ):
             raise ValueError(f"Invalid scale type: {value!r}")
         return value
@@ -445,17 +470,11 @@ class GetWarpStateRequest(RequestModel):
     clip_index: NonNegativeInt
 
 
-class WarpMarkerSpec(RequestModel):
-    sample_time: Annotated[float, Field(ge=0)]
-    beat_time: Annotated[float, Field(ge=0)]
-
-
 class SetWarpStateRequest(RequestModel):
     track_index: NonNegativeInt
     clip_index: NonNegativeInt
     warping: bool | None = None
     warp_mode: Annotated[str, Field(max_length=32)] | None = None
-    warp_markers: list[WarpMarkerSpec] | None = None
 
     @field_validator("warp_mode")
     @classmethod
@@ -468,18 +487,33 @@ class SetWarpStateRequest(RequestModel):
             raise ValueError(f"Invalid warp mode: {value!r}. Valid: {valid}")
         return normalized
 
+    @model_validator(mode="after")
+    def require_change(self) -> SetWarpStateRequest:
+        if self.warping is None and self.warp_mode is None:
+            raise ValueError("provide warping or warp_mode")
+        return self
+
 
 class LoadDeviceToTrackRequest(RequestModel):
     track_index: NonNegativeInt
-    device_uri: Annotated[str, Field(min_length=1, max_length=512)]
+    device_name: Annotated[str, Field(min_length=1, max_length=128)] | None = None
+    device_uri: Annotated[str, Field(min_length=1, max_length=512)] | None = None
 
-    @field_validator("device_uri")
-    @classmethod
-    def strip_device_uri(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            raise ValueError("device_uri must be non-empty")
-        return value
+    @model_validator(mode="after")
+    def exactly_one_name(self) -> LoadDeviceToTrackRequest:
+        values = [value for value in (self.device_name, self.device_uri) if value is not None]
+        if len(values) != 1:
+            raise ValueError("provide exactly one of device_name or deprecated device_uri")
+        resolved = values[0].strip()
+        if not resolved:
+            raise ValueError("device name must be non-empty after trimming")
+        self.device_name = resolved
+        return self
+
+    @property
+    def resolved_name(self) -> str:
+        assert self.device_name is not None
+        return self.device_name
 
 
 # ---------------------------------------------------------------------------
@@ -547,9 +581,7 @@ class LiveFadeRequest(RequestModel):
     @model_validator(mode="after")
     def _exactly_one_target(self) -> LiveFadeRequest:
         if (self.target_percent is None) == (self.target_value is None):
-            raise ValueError(
-                "Provide exactly one of target_percent or target_value"
-            )
+            raise ValueError("Provide exactly one of target_percent or target_value")
         return self
 
 

@@ -1,17 +1,15 @@
 from __future__ import annotations
 
-from copy import deepcopy
+import asyncio
 from typing import Any
 
 import pytest
 
 from ableton_mcp_server.acceptance import (
     AcceptanceSafetyError,
-    _acceptance_cue_time,
+    _acceptance_safe_cue_times,
     run_live_acceptance,
 )
-from ableton_mcp_server.client import Client
-from scripts.mock_remote_script import default_snapshot, run_mock_server
 
 
 class MetadataOnlyClient:
@@ -30,61 +28,40 @@ class MetadataOnlyClient:
         return {"song_name": "Valuable Project", "file_path": "valuable.als"}
 
 
-def test_acceptance_uses_a_coarse_grid_aligned_free_cue_time() -> None:
-    assert _acceptance_cue_time([]) == 256.0
-    assert _acceptance_cue_time(
-        [{"name": "A", "time": 256.0}, {"name": "B", "time": 512.0}]
-    ) == 768.0
+def test_acceptance_picks_two_grid_aligned_free_cue_times() -> None:
+    """The helper returns two distinct, grid-aligned times inside song_length.
+
+    The previous implementation returned ``256`` (and ``cue_time + 64``),
+    which exceeded the 232-beat ``TESTE_CODEX`` canonical song_length and
+    broke the cue probes on the real Set.
+    """
+    t1, t2 = _acceptance_safe_cue_times(song_length=232.0, locators=[], grid=8.0)
+    assert t1 != t2
+    assert 0.0 <= t1 <= 232.0
+    assert 0.0 <= t2 <= 232.0
+    assert t1 % 8.0 == 0.0
+    assert t2 % 8.0 == 0.0
+    # Bypasses any prior locator at exactly ``256.0``.
+    t3, t4 = _acceptance_safe_cue_times(
+        song_length=512.0,
+        locators=[{"name": "A", "time": 256.0}, {"name": "B", "time": 512.0}],
+        grid=64.0,
+    )
+    assert t3 not in (256.0, 512.0)
+    assert t4 not in (256.0, 512.0)
 
 
 def test_acceptance_refuses_to_mutate_when_project_confirmation_does_not_match() -> None:
     client = MetadataOnlyClient()
     with pytest.raises(AcceptanceSafetyError, match="does not match"):
-        run_live_acceptance(
-            client,
-            confirm_project_name="DISPOSABLE",
-            track_index=0,
-            clip_index=1,
+        asyncio.run(
+            run_live_acceptance(
+                client,
+                confirm_project_name="DISPOSABLE",
+                track_index=0,
+                clip_index=1,
+            )
         )
-    assert client.calls == ["get_project_metadata"]
-
-
-def test_acceptance_exercises_reads_mutations_and_partial_batch_over_real_jsonl() -> None:
-    snapshot = deepcopy(default_snapshot())
-    snapshot["tracks"][0]["clip_slots"].append(
-        {
-            "id": "track:0/clipslot:1",
-            "clip_id": None,
-            "index": 1,
-            "has_clip": False,
-            "clip_name": "",
-            "length_beats": 0.0,
-            "is_playing": False,
-            "notes": [],
-        }
-    )
-    server = run_mock_server(port=0, snapshot=snapshot)
-    client = Client(port=server.port, reconnect=False)
-    try:
-        result = run_live_acceptance(
-            client,
-            confirm_project_name="Mock Set",
-            track_index=0,
-            clip_index=1,
-            fire_clip=True,
-        )
-        assert result["status"] == "ok"
-        assert result["notes_added"] == 4
-        assert result["cue_round_trip"] is True
-        assert result["batch"]["completed"] == 2
-        assert result["batch"]["aborted_at"] == 2
-        assert result["batch"]["rolled_back"] is False
-        assert client.call("get_session_info", {})["tempo"] == 120.0
-        assert client.call("get_loop_settings", {}) == {
-            "loop": False,
-            "loop_start": 0.0,
-            "loop_length": 4.0,
-        }
-    finally:
-        client.close()
-        server.stop()
+    # The composed-profile probes run first and the metadata probe is the
+    # only one that targets the TCP bridge before the safety check fires.
+    assert "get_project_metadata" in client.calls

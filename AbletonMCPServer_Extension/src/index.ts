@@ -4,6 +4,36 @@ import { getExtensionContext } from './context.js';
 
 let wss: WebSocketServer | null = null;
 
+class RpcDomainError extends Error {
+  constructor(
+    public readonly domainCode: string,
+    message: string,
+    public readonly hint?: string,
+  ) {
+    super(message);
+  }
+}
+
+function rpcError(error: unknown, id: any): { jsonrpc: string; error: unknown; id: any } {
+  if (error instanceof RpcDomainError) {
+    return {
+      jsonrpc: "2.0",
+      id,
+      error: {
+        code: -32000,
+        message: error.message,
+        data: { code: error.domainCode, hint: error.hint },
+      },
+    };
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  return {
+    jsonrpc: "2.0",
+    id,
+    error: { code: -32603, message },
+  };
+}
+
 const WARP_MODE_MAP: Record<string, number> = {
   "beats": WarpMode.Beats,
   "tones": WarpMode.Tones,
@@ -118,12 +148,27 @@ async function handleLoadDeviceToTrack(params: any) {
   const song = context.application.song;
   const track = getTrackAtIndex(song, params.track_index);
   const index = track.devices.length;
-  
-  // Insert device at the end of the device chain
-  const device = await track.insertDevice(params.device_uri, index);
+
+  // Slice 1 Task 6: ``device_name`` is the primary contract; ``device_uri``
+  // is the deprecated alias kept for backward compatibility with v0.5.0
+  // callers. Empty / non-string values are rejected with a domain error.
+  const deviceName =
+    typeof params.device_name === "string"
+      ? params.device_name.trim()
+      : typeof params.device_uri === "string"
+        ? params.device_uri.trim()
+        : "";
+  if (!deviceName) {
+    throw new RpcDomainError(
+      "INVALID_PARAMS",
+      "load_device_to_track requires a non-empty device_name",
+    );
+  }
+  const device = await track.insertDevice(deviceName, index);
 
   return {
     status: "loaded",
+    track_index: params.track_index,
     device_name: device.name,
     device_index: index,
   };
@@ -132,7 +177,10 @@ async function handleLoadDeviceToTrack(params: any) {
 export function startServer(): void {
   if (wss) return;
 
-  wss = new WebSocketServer({ port: 9889 });
+  // Slice 1 Task — loopback enforced: bind explicitly to 127.0.0.1 so the
+  // WebSocketServer does not accept LAN connections. Do not remove the host
+  // argument without replacing it with another loopback-only binding.
+  wss = new WebSocketServer({ host: '127.0.0.1', port: 9889 });
 
   wss.on('connection', (ws) => {
     console.log('[Extension WS] Client connected');
@@ -177,11 +225,7 @@ export function startServer(): void {
         }));
       } catch (err: any) {
         console.error(`[Extension WS] Error executing method ${method}:`, err);
-        ws.send(JSON.stringify({
-          jsonrpc: "2.0",
-          error: { code: -32603, message: err.message || String(err) },
-          id
-        }));
+        ws.send(JSON.stringify(rpcError(err, id)));
       }
     });
 

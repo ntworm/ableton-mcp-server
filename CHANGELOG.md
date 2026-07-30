@@ -2,12 +2,66 @@
 
 All notable changes to this project are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+The canonical certification policy that governs the promotion decision
+(see `ableton-mcp acceptance --profile baseline` below) lives in
+[`docs/CERTIFICATION.md`](docs/CERTIFICATION.md).
+
+## [0.5.1] - 2026-07-13
+
+### Added
+
+- `ableton_mcp_server.catalog` exposes the canonical 65-tool `TOOL_CATALOG`
+  (`ToolSpec` with `Route`, `Risk`, `AcceptanceMode`). `PUBLIC_TOOL_NAMES`
+  is now derived from the catalog — the catalog is the single source of
+  truth.
+- `ableton_mcp_server.certification` provides an immutable `Verification`
+  record and a per-run `CertificationReport` aggregator with the statuses
+  `offline_passed`, `live_passed`, `manual_passed`, `host_unavailable`,
+  `environment_unavailable`, and `failed`.
+- `scripts/verify_clean_install.ps1` — isolated wheel install probe that
+  succeeds without Node.js.
+
+### Changed
+
+- `load_device_to_track` takes a primary `device_name` argument; the
+  `device_uri` alias is retained for one release cycle. Only the resolved
+  name travels over the WebSocket bridge.
+- `set_warp_state` no longer accepts `warp_markers`. Marker writes are
+  rejected at the model layer; `get_warp_state` keeps returning the
+  read-only marker array.
+- Browser search in the Remote Script now tracks visited nodes by URI and
+  ordinal path rather than `id()`, so the traversal stays stable across
+  Live's LOM proxy wrappers.
+- `create_audio_track` now identifies the newly-created track by counting
+  the regular-track collection before and after the mutation; proxy
+  identity is no longer trusted.
+- `find_frequency_masking` switches from per-bin log means to STFT power
+  and trims both signals to a shared sample count before the band
+  comparison.
+- Both bridges (TCP Remote Script and WebSocket Extension) now share a
+  stable error taxonomy: `CAPABILITY_UNAVAILABLE`, `AMBIGUOUS_MATCH`,
+  `VERIFICATION_FAILED`, `ACCEPTANCE_GUARD_FAILED`.
+
+### Diagnostics
+
+- `bridge_status` reports `source_kind` (`checkout` vs `wheel`),
+  `source`, and resolved `python_executable` so an unfamiliar agent can
+  confirm which tree is running.
+
+### Safety
+
+- All TCP and WebSocket mutations stay on their originating runtime
+  thread; no automatic retry after connection loss.
+- The Release Blockers gate now runs every tool through
+  `CertificationReport.finish()`; a single `failed` row blocks the
+  release.
+
 ## [0.5.0] - 2026-07-13
 
 ### Added
 
 - Nine public tools, bringing the FastMCP surface to 65:
-  - Set lifecycle: `lifecycle_status` (read-only probe of save/quit API availability), `save_set` (conditional `Song.save()`), `quit_ableton` (save-then-quit with scheduled GUI fallback), `live_fade` (smoothstep/linear interpolation on the Live main thread).
+  - Set lifecycle: `lifecycle_status` (read-only probe of save/quit API availability), `save_set` (conditional `Song.save()`), `quit_ableton` (save-then-quit with scheduled GUI fallback), `live_fade` (smoothstep/linear interpolation distributed across `duration` via `time.monotonic`; yields between steps; never blocks the Live main thread).
   - Track creation: `create_audio_track` (mirrors `create_midi_track`, zero-touch).
   - Offline mix analysis: `analyze_audio` (LUFS-I, true-peak, RMS, per-band energy), `find_frequency_masking` (target/reference band-level delta), `analyze_mix` (up to 16 stems with pair-wise masking), `extract_single_cycle` (pitch detection plus single-cycle buffer).
 - New `ableton_mcp_server.analysis` package — dependency-free of Live and the bridge; reads local audio through `soundfile`.

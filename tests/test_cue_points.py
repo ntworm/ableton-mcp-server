@@ -100,16 +100,13 @@ class SnappingCueSong(FakeSong):
 
     def set_or_delete_cue(self) -> None:
         self.toggle_count += 1
-        snapped = math.floor(
-            (self.current_song_time + self.grid_size / 2.0) / self.grid_size
-        ) * self.grid_size
+        snapped = (
+            math.floor((self.current_song_time + self.grid_size / 2.0) / self.grid_size)
+            * self.grid_size
+        )
         self._current_song_time = snapped
         existing = next(
-            (
-                cue
-                for cue in self.cue_points
-                if abs(float(cue.time) - snapped) < 0.01
-            ),
+            (cue for cue in self.cue_points if abs(float(cue.time) - snapped) < 0.01),
             None,
         )
         if existing is None:
@@ -183,9 +180,7 @@ def test_create_moves_only_playback_position_and_preserves_start_time() -> None:
     song._start_time = 2.0
     app = FakeApplication()
 
-    response = call_across_ticks(
-        song, app, "create_cue_point", {"name": "Verse", "time": 8.0}
-    )
+    response = call_across_ticks(song, app, "create_cue_point", {"name": "Verse", "time": 8.0})
 
     assert response == {
         "status": "ok",
@@ -334,9 +329,7 @@ def test_create_restores_existing_cue_removed_by_grid_snap() -> None:
 
     assert response["status"] == "error"
     assert response["code"] == "CUE_SNAPPED_TO_GRID"
-    assert [(cue.name, float(cue.time)) for cue in song.cue_points] == [
-        ("Existing", 32.0)
-    ]
+    assert [(cue.name, float(cue.time)) for cue in song.cue_points] == [("Existing", 32.0)]
     assert song.current_song_time == 2.0
 
 
@@ -355,9 +348,7 @@ def test_delete_detects_grid_snap_and_removes_unintended_cue() -> None:
 
     assert response["status"] == "error"
     assert response["code"] == "CUE_SNAPPED_TO_GRID"
-    assert [(cue.name, float(cue.time)) for cue in song.cue_points] == [
-        ("Target", 24.0)
-    ]
+    assert [(cue.name, float(cue.time)) for cue in song.cue_points] == [("Target", 24.0)]
     assert song.current_song_time == 2.0
 
 
@@ -402,9 +393,7 @@ def test_delete_reports_when_toggle_never_changes_locator_state() -> None:
 
     assert response["status"] == "error"
     assert response["code"] == "LIVE_UNAVAILABLE"
-    assert [(cue.name, float(cue.time)) for cue in song.cue_points] == [
-        ("Target", 8.0)
-    ]
+    assert [(cue.name, float(cue.time)) for cue in song.cue_points] == [("Target", 8.0)]
 
 
 def test_bulk_contains_each_grid_snap_without_corrupting_successes() -> None:
@@ -430,6 +419,4 @@ def test_bulk_contains_each_grid_snap_without_corrupting_successes() -> None:
         "CUE_SNAPPED_TO_GRID",
         "CUE_SNAPPED_TO_GRID",
     ]
-    assert [(cue.name, float(cue.time)) for cue in song.cue_points] == [
-        ("Aligned", 32.0)
-    ]
+    assert [(cue.name, float(cue.time)) for cue in song.cue_points] == [("Aligned", 32.0)]

@@ -49,6 +49,30 @@ class FakeAutomationEnvelope:
             self._on_insert()
 
 
+class _BrowserItemProxy:
+    """Wraps a FakeBrowserItem so every enumeration yields a fresh proxy.
+
+    Mirrors Live's LOM: the C++ engine keeps one object per item, but each
+    access through Python returns a new wrapper. ``id()`` therefore never
+    compares equal across calls.
+    """
+
+    __slots__ = ("_target",)
+
+    def __init__(self, target: FakeBrowserItem) -> None:
+        object.__setattr__(self, "_target", target)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._target, name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        setattr(self._target, name, value)
+
+    @property
+    def children(self) -> list[_BrowserItemProxy]:
+        return [_BrowserItemProxy(child) for child in self._target.children]
+
+
 class FakeBrowserItem:
     def __init__(
         self,
@@ -57,11 +81,27 @@ class FakeBrowserItem:
         uri: str = "",
         is_loadable: bool = False,
         children: list[FakeBrowserItem] | None = None,
+        reproxy_children: bool = False,
     ) -> None:
         self.name = name
         self.uri = uri
         self.is_loadable = is_loadable
-        self.children = children if children is not None else []
+        self._static_children = children if children is not None else []
+        self._reproxy_children = reproxy_children
+
+    @property
+    def children(self) -> list[Any]:
+        if self._reproxy_children:
+            return [_BrowserItemProxy(child) for child in self._static_children]
+        return list(self._static_children)
+
+    @children.setter
+    def children(self, value: list[FakeBrowserItem]) -> None:
+        self._static_children = value
+        self._reproxy_children = False
+
+    def append_child(self, child: FakeBrowserItem) -> None:
+        self._static_children.append(child)
 
 
 class FakeDevice:
@@ -122,17 +162,21 @@ class FakeClip:
     ) -> None:
         self.notes.clear()
 
-    def automation_envelope_for_parameter(
-        self, parameter: FakeParameter
-    ) -> FakeAutomationEnvelope:
+    def automation_envelope(self, parameter: FakeParameter) -> FakeAutomationEnvelope | None:
+        return self._automation_envelopes.get(parameter)
+
+    def create_automation_envelope(self, parameter: FakeParameter) -> FakeAutomationEnvelope:
         if parameter not in self._automation_envelopes:
             self._automation_envelopes[parameter] = FakeAutomationEnvelope(
                 lambda: setattr(self, "has_envelopes", True)
             )
+        self.has_envelopes = True
         return self._automation_envelopes[parameter]
 
     def clear_envelope(self, parameter: FakeParameter) -> None:
-        self.automation_envelope_for_parameter(parameter).steps.clear()
+        if parameter in self._automation_envelopes:
+            self._automation_envelopes[parameter].steps.clear()
+            del self._automation_envelopes[parameter]
         self.has_envelopes = False
 
 
@@ -424,7 +468,7 @@ class FakeBrowser:
     @classmethod
     def with_operator(cls) -> FakeBrowser:
         browser = cls()
-        browser.instruments.children.append(
+        browser.instruments.append_child(
             FakeBrowserItem(
                 "Operator",
                 uri="query:Instruments#Operator",

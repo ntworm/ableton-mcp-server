@@ -1,4 +1,5 @@
 """Deterministic synthesized signals for offline mix-analysis tests."""
+
 from __future__ import annotations
 
 import numpy as np
