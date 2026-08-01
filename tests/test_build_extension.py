@@ -86,7 +86,33 @@ def test_build_extension_uses_resolved_npm_path(
     assert commands[1] == ["cmd.exe", "/c", npm_path, "run", "build"]
 
 
-def test_build_extension_propagates_subprocess_failure(
+def test_build_extension_surfaces_nonzero_returncode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = _extension_project(tmp_path)
+    monkeypatch.setattr(server.shutil, "which", lambda _name: "/usr/bin/npm")
+    _patch_os_name(monkeypatch, "posix")
+
+    def failing_run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            command, 1, stdout="", stderr="npm ERR! missing script"
+        )
+
+    monkeypatch.setattr(server.subprocess, "run", failing_run)
+
+    import json
+
+    payload = json.loads(server.build_extension(str(project)))
+    install_step = payload["steps"][0]
+    assert install_step["step"] == "install"
+    assert install_step["returncode"] == 1
+    assert "missing script" in install_step["stderr"]
+    assert payload["status"] == "error"
+    assert len(payload["steps"]) == 1
+    assert payload["artifacts"] == []
+
+
+def test_build_extension_propagates_subprocess_exception(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     project = _extension_project(tmp_path)
@@ -94,9 +120,9 @@ def test_build_extension_propagates_subprocess_failure(
     _patch_os_name(monkeypatch, "posix")
 
     def fail_run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-        raise subprocess.SubprocessError("npm failed")
+        raise subprocess.SubprocessError("npm crashed")
 
     monkeypatch.setattr(server.subprocess, "run", fail_run)
 
-    with pytest.raises(subprocess.SubprocessError, match="npm failed"):
+    with pytest.raises(subprocess.SubprocessError, match="npm crashed"):
         server.build_extension(str(project))
