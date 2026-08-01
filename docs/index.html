@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232EC4B6'><path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/></svg>">
-  <title>Ableton MCP Server — Model Context Protocol for Ableton Live</title>
+  <title>Ableton MCP Server — Model Context Protocol for Ableton Live 12</title>
   <meta name="description" content="An MCP (Model Context Protocol) server exposing 65 tools over TCP and WebSockets to enable AI agents (Claude, Antigravity, Gemini, Codex) and audio developers to query, analyze, drive, and automate Ableton Live sets.">
   <meta property="og:title" content="Ableton MCP Server — Model Context Protocol for Ableton Live">
   <meta property="og:description" content="65 MCP tools to drive running Ableton Live sets from AI agents and Python scripts. Dual-bridge architecture for transport, devices, clips, offline mix analysis, and live automation.">
@@ -13,16 +13,16 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <style>
     :root {
-      --bg-dark: #0b0f19;
-      --bg-card: #131a2a;
-      --bg-card-hover: #1a243a;
-      --bg-code: #070a11;
-      --border-color: #202d46;
-      --border-glow: #2ec4b640;
+      --bg-dark: #080c14;
+      --bg-card: #101726;
+      --bg-card-hover: #172238;
+      --bg-code: #05080e;
+      --border-color: #1e293b;
+      --border-glow: rgba(46, 196, 182, 0.25);
       
       --text-main: #e2e8f0;
       --text-muted: #94a3b8;
@@ -32,6 +32,7 @@
       --accent-gold: #f2b94b;
       --accent-blue: #3b82f6;
       --accent-purple: #a855f7;
+      --accent-red: #f43f5e;
       --accent-green: #10b981;
       
       --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -46,22 +47,35 @@
       font-family: var(--font-sans);
       line-height: 1.6;
       -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
     }
 
     a { color: var(--accent-teal); text-decoration: none; transition: color 0.2s; }
     a:hover { color: var(--accent-gold); }
 
     .container {
-      max-width: 1200px;
+      max-width: 1240px;
       margin: 0 auto;
       padding: 0 24px;
     }
 
+    /* Top Banner Link back to Repo */
+    .top-banner {
+      background: linear-gradient(90deg, rgba(46, 196, 182, 0.15), rgba(242, 185, 75, 0.15));
+      border-bottom: 1px solid rgba(46, 196, 182, 0.3);
+      padding: 8px 0;
+      font-size: 13px;
+      font-family: var(--font-mono);
+      text-align: center;
+      color: var(--text-main);
+    }
+    .top-banner a { font-weight: 700; text-decoration: underline; margin-left: 6px; }
+
     /* Nav Bar */
     header {
       border-bottom: 1px solid var(--border-color);
-      background: rgba(11, 15, 25, 0.85);
-      backdrop-filter: blur(12px);
+      background: rgba(8, 12, 20, 0.9);
+      backdrop-filter: blur(16px);
       position: sticky;
       top: 0;
       z-index: 100;
@@ -76,9 +90,10 @@
       display: flex;
       align-items: center;
       gap: 12px;
-      font-weight: 700;
-      font-size: 16px;
+      font-weight: 800;
+      font-size: 17px;
       color: #fff;
+      letter-spacing: -0.01em;
     }
     .brand-tag {
       font-family: var(--font-mono);
@@ -91,59 +106,66 @@
     }
     .nav-links {
       display: flex;
-      gap: 20px;
+      gap: 24px;
       font-size: 14px;
+      font-weight: 500;
     }
 
     /* Hero */
     .hero {
-      padding: 72px 0 48px;
+      padding: 64px 0 48px;
       border-bottom: 1px solid var(--border-color);
+      background: radial-gradient(circle at 50% 0%, rgba(46, 196, 182, 0.08), transparent 70%);
     }
     .hero-badge {
       display: inline-flex;
       align-items: center;
       gap: 8px;
       background: rgba(242, 185, 75, 0.1);
-      border: 1px solid rgba(242, 185, 75, 0.3);
+      border: 1px solid rgba(242, 185, 75, 0.35);
       color: var(--accent-gold);
       font-family: var(--font-mono);
       font-size: 12px;
-      padding: 4px 12px;
+      font-weight: 600;
+      padding: 5px 14px;
       border-radius: 99px;
       margin-bottom: 20px;
     }
     .hero h1 {
-      font-size: 42px;
+      font-size: 46px;
       font-weight: 800;
-      line-height: 1.15;
-      letter-spacing: -0.02em;
-      margin-bottom: 16px;
+      line-height: 1.12;
+      letter-spacing: -0.025em;
+      margin-bottom: 18px;
       color: #ffffff;
     }
     .hero p.subtitle {
       font-size: 18px;
       color: var(--text-muted);
-      max-width: 820px;
+      max-width: 860px;
       margin-bottom: 32px;
+      line-height: 1.65;
     }
 
     .badge-row {
       display: flex;
       flex-wrap: wrap;
       gap: 10px;
-      margin-bottom: 32px;
+      margin-bottom: 36px;
     }
     .chip {
       font-family: var(--font-mono);
       font-size: 12px;
       background: var(--bg-card);
       border: 1px solid var(--border-color);
-      padding: 6px 12px;
+      padding: 6px 14px;
       border-radius: 6px;
       color: var(--text-muted);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
-    .chip.highlight { border-color: var(--accent-teal); color: var(--accent-teal); }
+    .chip.highlight { border-color: var(--accent-teal); color: var(--accent-teal); background: rgba(46, 196, 182, 0.08); }
 
     .btn-group {
       display: flex;
@@ -156,19 +178,20 @@
       gap: 8px;
       font-weight: 600;
       font-size: 14px;
-      padding: 10px 20px;
+      padding: 11px 22px;
       border-radius: 6px;
       cursor: pointer;
       transition: all 0.2s;
     }
     .btn-primary {
       background: var(--accent-teal);
-      color: #0b0f19;
+      color: #080c14;
       border: none;
     }
     .btn-primary:hover {
       background: #26ab9f;
-      color: #0b0f19;
+      color: #080c14;
+      box-shadow: 0 0 20px rgba(46, 196, 182, 0.4);
     }
     .btn-secondary {
       background: var(--bg-card);
@@ -177,39 +200,67 @@
     }
     .btn-secondary:hover {
       border-color: var(--accent-teal);
+      color: #fff;
     }
 
-    /* System Architecture Diagram SVG */
+    /* Section Styling */
     .arch-section {
-      padding: 56px 0;
+      padding: 64px 0;
       border-bottom: 1px solid var(--border-color);
     }
     .section-title {
-      font-size: 24px;
-      font-weight: 700;
-      margin-bottom: 8px;
+      font-size: 28px;
+      font-weight: 800;
+      margin-bottom: 10px;
       color: #fff;
+      letter-spacing: -0.015em;
     }
     .section-desc {
       color: var(--text-muted);
-      margin-bottom: 32px;
-      font-size: 15px;
+      margin-bottom: 36px;
+      font-size: 16px;
+      max-width: 800px;
     }
 
     .arch-card {
       background: var(--bg-card);
       border: 1px solid var(--border-color);
       border-radius: 12px;
-      padding: 24px;
+      padding: 28px;
       margin-bottom: 24px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
     }
 
-    /* Code Block Styling */
+    /* Animated Flow Lines for Architecture SVG */
+    @keyframes flowLine {
+      to { stroke-dashoffset: -20; }
+    }
+    .flow-path {
+      stroke-dasharray: 6, 4;
+      animation: flowLine 1s linear infinite;
+    }
+
+    /* Grid Layouts */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+    @media (max-width: 900px) {
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    }
+
+    /* Code Box Styling */
     .code-box {
       background: var(--bg-code);
       border: 1px solid var(--border-color);
       border-radius: 8px;
-      padding: 16px;
+      padding: 20px;
       font-family: var(--font-mono);
       font-size: 13px;
       color: #e2e8f0;
@@ -223,18 +274,8 @@
       font-size: 12px;
       color: var(--text-dim);
       border-bottom: 1px solid var(--border-color);
-      padding-bottom: 8px;
-      margin-bottom: 12px;
-    }
-
-    /* Grid Layouts */
-    .grid-2 {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 24px;
-    }
-    @media (max-width: 768px) {
-      .grid-2 { grid-template-columns: 1fr; }
+      padding-bottom: 10px;
+      margin-bottom: 14px;
     }
 
     /* Config Tab Area */
@@ -251,37 +292,55 @@
       color: var(--text-muted);
       font-family: var(--font-mono);
       font-size: 13px;
-      padding: 6px 14px;
+      padding: 8px 16px;
       cursor: pointer;
-      border-radius: 4px;
+      border-radius: 6px;
+      transition: all 0.2s;
     }
     .tab-btn.active {
-      background: var(--bg-card-hover);
+      background: rgba(46, 196, 182, 0.15);
       color: var(--accent-teal);
+      border: 1px solid rgba(46, 196, 182, 0.4);
       font-weight: 600;
+    }
+
+    /* Error Taxonomy Card */
+    .error-tag {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent-red);
+      background: rgba(244, 63, 94, 0.12);
+      border: 1px solid rgba(244, 63, 94, 0.3);
+      padding: 3px 8px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-bottom: 8px;
     }
 
     /* Tool Matrix Table */
     .tool-controls {
       display: flex;
       gap: 16px;
-      margin-bottom: 20px;
+      margin-bottom: 24px;
       flex-wrap: wrap;
     }
     .search-input {
       flex: 1;
-      min-width: 260px;
+      min-width: 280px;
       background: var(--bg-code);
       border: 1px solid var(--border-color);
       color: #fff;
       font-family: var(--font-mono);
       font-size: 13px;
-      padding: 10px 14px;
-      border-radius: 6px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      transition: border-color 0.2s;
     }
     .search-input:focus {
       outline: none;
       border-color: var(--accent-teal);
+      box-shadow: 0 0 12px rgba(46, 196, 182, 0.2);
     }
     .filter-btn {
       background: var(--bg-card);
@@ -289,34 +348,38 @@
       color: var(--text-muted);
       font-family: var(--font-mono);
       font-size: 12px;
-      padding: 8px 14px;
-      border-radius: 6px;
+      padding: 10px 16px;
+      border-radius: 8px;
       cursor: pointer;
+      transition: all 0.2s;
     }
     .filter-btn.active {
       border-color: var(--accent-teal);
       color: var(--accent-teal);
-      background: rgba(46, 196, 182, 0.1);
+      background: rgba(46, 196, 182, 0.15);
+      font-weight: 600;
     }
 
     .tool-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-      gap: 16px;
+      grid-template-columns: repeat(auto-fill, minmax(370px, 1fr));
+      gap: 18px;
     }
     .tool-card {
       background: var(--bg-card);
       border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 16px;
-      transition: border-color 0.2s;
+      border-radius: 10px;
+      padding: 20px;
+      transition: all 0.2s;
     }
     .tool-card:hover {
       border-color: var(--accent-teal);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
     }
     .tool-name {
       font-family: var(--font-mono);
-      font-size: 14px;
+      font-size: 15px;
       font-weight: 700;
       color: var(--accent-gold);
       margin-bottom: 6px;
@@ -325,22 +388,32 @@
       display: inline-block;
       font-family: var(--font-mono);
       font-size: 10px;
+      font-weight: 700;
       text-transform: uppercase;
       background: rgba(59, 130, 246, 0.15);
       color: var(--accent-blue);
       border: 1px solid rgba(59, 130, 246, 0.3);
-      padding: 2px 6px;
+      padding: 3px 8px;
       border-radius: 4px;
-      margin-bottom: 8px;
+      margin-bottom: 10px;
     }
     .tool-desc {
       font-size: 13px;
       color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .tool-sig {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255,255,255,0.05);
     }
 
     footer {
       border-top: 1px solid var(--border-color);
-      padding: 40px 0;
+      padding: 48px 0;
       color: var(--text-dim);
       font-size: 13px;
     }
@@ -355,19 +428,26 @@
 </head>
 <body>
 
+  <!-- Top Banner -->
+  <div class="top-banner">
+    🔗 Source code & repository available on GitHub:
+    <a href="https://github.com/ntworm/ableton-mcp-server" target="_blank">github.com/ntworm/ableton-mcp-server</a>
+  </div>
+
   <!-- Header -->
   <header>
     <div class="container nav-inner">
       <div class="brand">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2EC4B6" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2EC4B6" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
         ableton-mcp-server
         <span class="brand-tag">v0.5.1</span>
       </div>
       <div class="nav-links">
         <a href="#architecture">Architecture</a>
         <a href="#config">Agent Setup</a>
+        <a href="#taxonomy">Error Taxonomy</a>
         <a href="#tools">MCP Tools (65)</a>
-        <a href="https://github.com/ntworm/ableton-mcp-server" target="_blank">GitHub Repo →</a>
+        <a href="https://github.com/ntworm/ableton-mcp-server" target="_blank">GitHub →</a>
       </div>
     </div>
   </header>
@@ -380,22 +460,22 @@
         <span>·</span>
         <span>65 Production Tools</span>
       </div>
-      <h1>Model Context Protocol for Ableton Live</h1>
+      <h1>Model Context Protocol for Ableton Live 12</h1>
       <p class="subtitle">
         A developer and AI-agent interface that turns running Ableton Live Sets into an introspectable, programmable, and controllable environment. Enables Claude, Antigravity, Gemini, Codex, and custom scripts to query parameters, drive transport, automate clips, and analyze mix audio in non-realtime.
       </p>
 
       <div class="badge-row">
         <span class="chip highlight">Python FastMCP</span>
-        <span class="chip">TCP Loopback (9888)</span>
-        <span class="chip">WebSocket Extension (9889)</span>
-        <span class="chip">WSL2 Native Bridge</span>
-        <span class="chip">Offline LUFS / Mix Analysis</span>
+        <span class="chip">TCP Loopback (127.0.0.1:9888)</span>
+        <span class="chip">WebSocket Extension (127.0.0.1:9889)</span>
+        <span class="chip">WSL2 Native Executable</span>
+        <span class="chip">Offline Mix Analysis</span>
         <span class="chip">MIT License</span>
       </div>
 
       <div class="btn-group">
-        <a href="https://github.com/ntworm/ableton-mcp-server" class="btn btn-primary">
+        <a href="https://github.com/ntworm/ableton-mcp-server" class="btn btn-primary" target="_blank">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
           Repository on GitHub
         </a>
@@ -414,54 +494,77 @@
       </p>
 
       <div class="arch-card">
-        <!-- SVG Architecture Diagram -->
-        <svg viewBox="0 0 900 280" style="width: 100%; height: auto; font-family: var(--font-mono); font-size: 11px;">
-          <!-- Background grids -->
-          <rect x="10" y="10" width="250" height="260" rx="8" fill="#070a11" stroke="#202d46" stroke-width="1.5" />
-          <text x="30" y="36" fill="#64748b" font-weight="bold">AI AGENT / MCP CLIENT</text>
+        <!-- Responsive SVG Diagram with generous dimensions -->
+        <svg viewBox="0 0 1000 320" style="width: 100%; height: auto; font-family: var(--font-mono); font-size: 11px; overflow: visible;">
+          <defs>
+            <marker id="arrow-cyan" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#2ec4b6" />
+            </marker>
+            <marker id="arrow-gold" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#f2b94b" />
+            </marker>
+            <marker id="arrow-blue" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b82f6" />
+            </marker>
+          </defs>
+
+          <!-- Column 1: MCP Clients -->
+          <rect x="20" y="20" width="240" height="280" rx="10" fill="#05080e" stroke="#1e293b" stroke-width="1.5" />
+          <text x="40" y="48" fill="#64748b" font-weight="bold" font-size="12">AI AGENTS / MCP CLIENTS</text>
           
-          <rect x="320" y="10" width="260" height="260" rx="8" fill="#070a11" stroke="#202d46" stroke-width="1.5" />
-          <text x="340" y="36" fill="#64748b" font-weight="bold">PYTHON FASTMCP SERVER</text>
+          <rect x="40" y="70" width="200" height="46" rx="6" fill="#101726" stroke="#3b82f6" stroke-width="1.5" />
+          <text x="55" y="98" fill="#3b82f6" font-weight="bold">Claude Desktop / Antigravity</text>
+
+          <rect x="40" y="136" width="200" height="46" rx="6" fill="#101726" stroke="#a855f7" stroke-width="1.5" />
+          <text x="55" y="164" fill="#a855f7" font-weight="bold">Gemini CLI / Codex Agent</text>
+
+          <rect x="40" y="202" width="200" height="46" rx="6" fill="#101726" stroke="#10b981" stroke-width="1.5" />
+          <text x="55" y="230" fill="#10b981" font-weight="bold">Custom Python / Audio Scripts</text>
+
+          <!-- Connection Client -> FastMCP -->
+          <path d="M 260 160 L 340 160" stroke="#2ec4b6" stroke-width="2" class="flow-path" marker-end="url(#arrow-cyan)" />
+          <rect x="268" y="140" width="64" height="18" rx="3" fill="#080c14" />
+          <text x="272" y="153" fill="#2ec4b6" font-size="10" font-weight="bold">stdio JSON</text>
+
+          <!-- Column 2: FastMCP Server -->
+          <rect x="340" y="20" width="280" height="280" rx="10" fill="#05080e" stroke="#2ec4b6" stroke-width="1.5" />
+          <text x="360" y="48" fill="#2ec4b6" font-weight="bold" font-size="12">PYTHON FASTMCP SERVER</text>
           
-          <rect x="630" y="10" width="260" height="260" rx="8" fill="#070a11" stroke="#202d46" stroke-width="1.5" />
-          <text x="650" y="36" fill="#64748b" font-weight="bold">ABLETON LIVE 12 HOST</text>
+          <rect x="360" y="70" width="240" height="210" rx="8" fill="#101726" stroke="#1e293b" />
+          <text x="380" y="100" fill="#2ec4b6" font-size="14" font-weight="bold">ableton_mcp_server</text>
+          <text x="380" y="125" fill="#94a3b8">• 65 Tool Dispatch Surface</text>
+          <text x="380" y="148" fill="#94a3b8">• Cross-bridge Error Taxonomy</text>
+          <text x="380" y="171" fill="#94a3b8">• Offline Mix Analysis Engine</text>
+          <text x="380" y="194" fill="#f2b94b">• WSL2 Loopback Executable</text>
+          <text x="380" y="217" fill="#64748b">• Non-blocking Async I/O</text>
+          <text x="380" y="240" fill="#64748b">• FastMCP Protocol Specs</text>
 
-          <!-- Nodes: Clients -->
-          <rect x="30" y="60" width="210" height="40" rx="6" fill="#131a2a" stroke="#3b82f6" />
-          <text x="45" y="84" fill="#3b82f6" font-weight="bold">Claude Desktop / Antigravity</text>
+          <!-- Connections FastMCP -> Ableton Hosts -->
+          <!-- TCP Path -->
+          <path d="M 620 115 L 700 115" stroke="#f2b94b" stroke-width="2" class="flow-path" marker-end="url(#arrow-gold)" />
+          <rect x="622" y="94" width="76" height="18" rx="3" fill="#080c14" />
+          <text x="626" y="107" fill="#f2b94b" font-size="10" font-weight="bold">TCP :9888</text>
 
-          <rect x="30" y="120" width="210" height="40" rx="6" fill="#131a2a" stroke="#a855f7" />
-          <text x="45" y="144" fill="#a855f7" font-weight="bold">Gemini CLI / Codex Agent</text>
+          <!-- WS Path -->
+          <path d="M 620 225 L 700 225" stroke="#3b82f6" stroke-width="2" class="flow-path" marker-end="url(#arrow-blue)" />
+          <rect x="622" y="204" width="76" height="18" rx="3" fill="#080c14" />
+          <text x="626" y="217" fill="#3b82f6" font-size="10" font-weight="bold">WS :9889</text>
 
-          <rect x="30" y="180" width="210" height="40" rx="6" fill="#131a2a" stroke="#10b981" />
-          <text x="45" y="204" fill="#10b981" font-weight="bold">Custom Python / Audio Scripts</text>
+          <!-- Column 3: Ableton Live Host -->
+          <rect x="700" y="20" width="280" height="280" rx="10" fill="#05080e" stroke="#1e293b" stroke-width="1.5" />
+          <text x="720" y="48" fill="#64748b" font-weight="bold" font-size="12">ABLETON LIVE 12 HOST</text>
 
-          <!-- Arrows Client -> MCP -->
-          <path d="M 240 140 L 320 140" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)" />
-          <text x="250" y="132" fill="#2ec4b6" font-size="10">stdio / MCP JSON-RPC</text>
+          <!-- Node: Remote Script -->
+          <rect x="720" y="70" width="240" height="90" rx="8" fill="#101726" stroke="#f2b94b" stroke-width="1.5" />
+          <text x="735" y="95" fill="#f2b94b" font-weight="bold" font-size="13">MIDI Remote Script</text>
+          <text x="735" y="118" fill="#94a3b8">Transport, Tracks, Clips, Devices</text>
+          <text x="735" y="138" fill="#64748b">Main thread looper execution</text>
 
-          <!-- Node: FastMCP Server -->
-          <rect x="340" y="80" width="220" height="120" rx="6" fill="#131a2a" stroke="#2ec4b6" />
-          <text x="360" y="110" fill="#2ec4b6" font-size="13" font-weight="bold">ableton_mcp_server</text>
-          <text x="360" y="130" fill="#94a3b8">65 Tool Registry</text>
-          <text x="360" y="150" fill="#94a3b8">Cross-bridge Error Taxonomy</text>
-          <text x="360" y="170" fill="#f2b94b">WSL2 Loopback Executable</text>
-
-          <!-- Arrows MCP -> Ableton -->
-          <path d="M 560 100 L 630 100" stroke="#f2b94b" stroke-width="2" />
-          <text x="568" y="92" fill="#f2b94b" font-size="10">TCP 127.0.0.1:9888</text>
-
-          <path d="M 560 180 L 630 180" stroke="#3b82f6" stroke-width="2" />
-          <text x="568" y="172" fill="#3b82f6" font-size="10">WS 127.0.0.1:9889</text>
-
-          <!-- Nodes: Ableton Remote Script & Extension -->
-          <rect x="650" y="60" width="220" height="70" rx="6" fill="#131a2a" stroke="#f2b94b" />
-          <text x="665" y="85" fill="#f2b94b" font-weight="bold">MIDI Remote Script</text>
-          <text x="665" y="105" fill="#94a3b8">Transport, Tracks, Clips, Devices</text>
-
-          <rect x="650" y="150" width="220" height="70" rx="6" fill="#131a2a" stroke="#3b82f6" />
-          <text x="665" y="175" fill="#3b82f6" font-weight="bold">Extension Host Bridge</text>
-          <text x="665" y="195" fill="#94a3b8">Warping, Browser, Live Fade</text>
+          <!-- Node: Extension Host -->
+          <rect x="720" y="180" width="240" height="90" rx="8" fill="#101726" stroke="#3b82f6" stroke-width="1.5" />
+          <text x="735" y="205" fill="#3b82f6" font-weight="bold" font-size="13">Extension Host Bridge</text>
+          <text x="735" y="228" fill="#94a3b8">Warping, Browser, Live Fade</text>
+          <text x="735" y="248" fill="#64748b">Async WebSocket loopback</text>
         </svg>
       </div>
 
@@ -500,7 +603,7 @@
       <div id="cfg-claude" class="code-box">
         <div class="code-header">
           <span>claude_desktop_config.json</span>
-          <span>Windows / WSL2</span>
+          <span>Windows / WSL2 Deployment</span>
         </div>
 <pre><code>{
   "mcpServers": {
@@ -547,6 +650,50 @@
     </div>
   </section>
 
+  <!-- Error Taxonomy & Acceptance Rules -->
+  <section id="taxonomy" class="arch-section">
+    <div class="container">
+      <h2 class="section-title">Cross-Bridge Error Taxonomy</h2>
+      <p class="section-desc">
+        Agents receive deterministic error codes when a command cannot be executed, allowing LLMs to reason and adapt automatically.
+      </p>
+
+      <div class="grid-2">
+        <div class="arch-card">
+          <span class="error-tag">CAPABILITY_UNAVAILABLE</span>
+          <h4 style="color: #fff; margin-bottom: 6px;">Capability Unavailable</h4>
+          <p style="font-size: 13px; color: var(--text-muted);">
+            Returned when attempting an operation not supported by the connected Live version or missing extension bridge (e.g., calling warping on an unwarped audio clip).
+          </p>
+        </div>
+
+        <div class="arch-card">
+          <span class="error-tag">AMBIGUOUS_MATCH</span>
+          <h4 style="color: #fff; margin-bottom: 6px;">Ambiguous Match</h4>
+          <p style="font-size: 13px; color: var(--text-muted);">
+            Returned when a fuzzy track or device lookup matches multiple targets without sufficient specificity. Prompt the agent to supply exact index or full name.
+          </p>
+        </div>
+
+        <div class="arch-card">
+          <span class="error-tag">VERIFICATION_FAILED</span>
+          <h4 style="color: #fff; margin-bottom: 6px;">Verification Failed</h4>
+          <p style="font-size: 13px; color: var(--text-muted);">
+            Returned by the per-tick write-then-verify loop when a parameter write does not match the readback value from Live's object model after execution.
+          </p>
+        </div>
+
+        <div class="arch-card">
+          <span class="error-tag">ACCEPTANCE_GUARD_FAILED</span>
+          <h4 style="color: #fff; margin-bottom: 6px;">Acceptance Guard Failed</h4>
+          <p style="font-size: 13px; color: var(--text-muted);">
+            Returned when running destructive or test suite operations against an active project instead of a disposable test Set (e.g. <code>TESTE_CODEX</code>).
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Tools Catalog Matrix -->
   <section id="tools" class="arch-section">
     <div class="container">
@@ -556,7 +703,7 @@
       </p>
 
       <div class="tool-controls">
-        <input type="text" id="tool-search" class="search-input" placeholder="Search tool by name, command or description..." oninput="filterTools()">
+        <input type="text" id="tool-search" class="search-input" placeholder="Search tool by name, parameters, or description..." oninput="filterTools()">
         <button class="filter-btn active" onclick="setCategory('all', this)">All (65)</button>
         <button class="filter-btn" onclick="setCategory('transport', this)">Transport & Session</button>
         <button class="filter-btn" onclick="setCategory('track', this)">Tracks & Devices</button>
@@ -576,6 +723,8 @@
     <div class="container footer-inner">
       <div>
         <strong>ableton-mcp-server v0.5.1</strong> — Source available under MIT License.
+        <br>
+        <a href="https://github.com/ntworm/ableton-mcp-server" target="_blank">github.com/ntworm/ableton-mcp-server</a>
       </div>
       <div>
         Built by <a href="https://github.com/ntworm" target="_blank">Gabriel Worm</a>
@@ -586,71 +735,71 @@
   <script>
     const TOOLS = [
       // Transport & Session
-      { name: 'get_session_info', cat: 'transport', desc: 'Returns current song tempo, time signature, playing status, and song position.' },
-      { name: 'set_tempo', cat: 'transport', desc: 'Sets song tempo in BPM (supports floating point values e.g. 124.5).' },
-      { name: 'start_playback', cat: 'transport', desc: 'Starts arrangement playback from the current song time.' },
-      { name: 'stop_playback', cat: 'transport', desc: 'Stops arrangement playback.' },
-      { name: 'get_loop_settings', cat: 'transport', desc: 'Queries loop enabled state, loop start beat, and loop length.' },
-      { name: 'set_loop', cat: 'transport', desc: 'Enables or disables arrangement loop mode.' },
-      { name: 'set_loop_start', cat: 'transport', desc: 'Sets loop start position in beats.' },
-      { name: 'set_loop_length', cat: 'transport', desc: 'Sets loop length in beats.' },
-      { name: 'set_current_song_time', cat: 'transport', desc: 'Jumps transport playhead to specific song position in beats.' },
-      { name: 'get_song_length', cat: 'transport', desc: 'Returns total arrangement song length in beats.' },
-      { name: 'get_session_overview', cat: 'transport', desc: 'Fetches high-level matrix summary of all tracks, scenes, and clip slots.' },
-      { name: 'get_scenes', cat: 'transport', desc: 'Returns list of all session view scenes with names and indices.' },
-      { name: 'get_scene_state', cat: 'transport', desc: 'Returns detailed clip slot states for a specific scene index.' },
-      { name: 'fire_scene', cat: 'transport', desc: 'Triggers scene launch by scene index.' },
-      { name: 'fire_clip', cat: 'transport', desc: 'Triggers clip launch for a specific track and clip slot.' },
+      { name: 'get_session_info', cat: 'transport', desc: 'Returns current song tempo, time signature, playing status, and song position.', sig: 'get_session_info()' },
+      { name: 'set_tempo', cat: 'transport', desc: 'Sets song tempo in BPM (supports floating point values e.g. 124.5).', sig: 'set_tempo(tempo: float)' },
+      { name: 'start_playback', cat: 'transport', desc: 'Starts arrangement playback from the current song time.', sig: 'start_playback()' },
+      { name: 'stop_playback', cat: 'transport', desc: 'Stops arrangement playback.', sig: 'stop_playback()' },
+      { name: 'get_loop_settings', cat: 'transport', desc: 'Queries loop enabled state, loop start beat, and loop length.', sig: 'get_loop_settings()' },
+      { name: 'set_loop', cat: 'transport', desc: 'Enables or disables arrangement loop mode.', sig: 'set_loop(enabled: bool)' },
+      { name: 'set_loop_start', cat: 'transport', desc: 'Sets loop start position in beats.', sig: 'set_loop_start(start_beat: float)' },
+      { name: 'set_loop_length', cat: 'transport', desc: 'Sets loop length in beats.', sig: 'set_loop_length(length_beats: float)' },
+      { name: 'set_current_song_time', cat: 'transport', desc: 'Jumps transport playhead to specific song position in beats.', sig: 'set_current_song_time(time_beats: float)' },
+      { name: 'get_song_length', cat: 'transport', desc: 'Returns total arrangement song length in beats.', sig: 'get_song_length()' },
+      { name: 'get_session_overview', cat: 'transport', desc: 'Fetches high-level matrix summary of all tracks, scenes, and clip slots.', sig: 'get_session_overview()' },
+      { name: 'get_scenes', cat: 'transport', desc: 'Returns list of all session view scenes with names and indices.', sig: 'get_scenes()' },
+      { name: 'get_scene_state', cat: 'transport', desc: 'Returns detailed clip slot states for a specific scene index.', sig: 'get_scene_state(scene_index: int)' },
+      { name: 'fire_scene', cat: 'transport', desc: 'Triggers scene launch by scene index.', sig: 'fire_scene(scene_index: int)' },
+      { name: 'fire_clip', cat: 'transport', desc: 'Triggers clip launch for a specific track and clip slot.', sig: 'fire_clip(track_index: int, clip_index: int)' },
 
       // Tracks & Devices
-      { name: 'get_track_list', cat: 'track', desc: 'Returns complete list of audio, MIDI, return, and master tracks.' },
-      { name: 'live_find_track', cat: 'track', desc: 'Fuzzy-searches track by name and returns track index and type.' },
-      { name: 'get_track_state', cat: 'track', desc: 'Queries track volume, panning, mute, solo, arm, and device count.' },
-      { name: 'get_device_list', cat: 'track', desc: 'Returns list of devices on a track with device IDs and names.' },
-      { name: 'get_parameter_value', cat: 'track', desc: 'Reads parameter value, min/max range, and formatted string.' },
-      { name: 'set_parameter_value', cat: 'track', desc: 'Sets normalized or raw parameter value on a specific device parameter.' },
-      { name: 'get_clip_summary', cat: 'track', desc: 'Fetches clip metadata (name, length, color, warp mode, note count).' },
-      { name: 'create_clip', cat: 'track', desc: 'Creates new MIDI or audio clip in specified clip slot.' },
-      { name: 'get_clip_notes', cat: 'track', desc: 'Reads MIDI notes from clip with pitch, start_time, duration, velocity, mute.' },
-      { name: 'add_notes_to_clip', cat: 'track', desc: 'Appends array of MIDI notes to an existing MIDI clip.' },
-      { name: 'delete_clip', cat: 'track', desc: 'Deletes clip from specified track and slot index.' },
-      { name: 'clear_clip_notes', cat: 'track', desc: 'Clears all MIDI notes from clip while preserving clip container.' },
-      { name: 'set_clip_properties', cat: 'track', desc: 'Updates clip name, color, signature, or loop bounds.' },
-      { name: 'get_clip_info', cat: 'track', desc: 'Returns detailed clip properties and playback state.' },
-      { name: 'set_track_property', cat: 'track', desc: 'Sets volume, pan, mute, solo, or arm state on a track.' },
-      { name: 'create_audio_track', cat: 'track', desc: 'Creates new audio track in the active Live Set.' },
-      { name: 'get_routing', cat: 'track', desc: 'Queries input/output audio and MIDI routing options for a track.' },
-      { name: 'diff_snapshots_tool', cat: 'track', desc: 'Diffs two parameter snapshots to highlight changed values.' },
-      { name: 'take_snapshot', cat: 'track', desc: 'Captures full parameter state snapshot of current Live Set.' },
-      { name: 'get_selected_context', cat: 'track', desc: 'Returns user-selected track, device, and clip in Ableton UI.' },
-      { name: 'search_browser', cat: 'track', desc: 'Searches Live browser database for instruments, effects, or samples.' },
-      { name: 'load_device_to_track', cat: 'track', desc: 'Loads instrument or audio effect to track by device name or URI.' },
-      { name: 'get_warp_state', cat: 'track', desc: 'Reads clip warp mode, warp markers, and tempo mapping.' },
+      { name: 'get_track_list', cat: 'track', desc: 'Returns complete list of audio, MIDI, return, and master tracks.', sig: 'get_track_list()' },
+      { name: 'live_find_track', cat: 'track', desc: 'Fuzzy-searches track by name and returns track index and type.', sig: 'live_find_track(name_pattern: str)' },
+      { name: 'get_track_state', cat: 'track', desc: 'Queries track volume, panning, mute, solo, arm, and device count.', sig: 'get_track_state(track_index: int)' },
+      { name: 'get_device_list', cat: 'track', desc: 'Returns list of devices on a track with device IDs and names.', sig: 'get_device_list(track_index: int)' },
+      { name: 'get_parameter_value', cat: 'track', desc: 'Reads parameter value, min/max range, and formatted string.', sig: 'get_parameter_value(track_index: int, device_index: int, parameter_index: int)' },
+      { name: 'set_parameter_value', cat: 'track', desc: 'Sets normalized or raw parameter value on a specific device parameter.', sig: 'set_parameter_value(track_index: int, device_index: int, parameter_index: int, value: float)' },
+      { name: 'get_clip_summary', cat: 'track', desc: 'Fetches clip metadata (name, length, color, warp mode, note count).', sig: 'get_clip_summary(track_index: int, clip_index: int)' },
+      { name: 'create_clip', cat: 'track', desc: 'Creates new MIDI or audio clip in specified clip slot.', sig: 'create_clip(track_index: int, clip_index: int, length_beats: float)' },
+      { name: 'get_clip_notes', cat: 'track', desc: 'Reads MIDI notes from clip with pitch, start_time, duration, velocity, mute.', sig: 'get_clip_notes(track_index: int, clip_index: int)' },
+      { name: 'add_notes_to_clip', cat: 'track', desc: 'Appends array of MIDI notes to an existing MIDI clip.', sig: 'add_notes_to_clip(track_index: int, clip_index: int, notes: list)' },
+      { name: 'delete_clip', cat: 'track', desc: 'Deletes clip from specified track and slot index.', sig: 'delete_clip(track_index: int, clip_index: int)' },
+      { name: 'clear_clip_notes', cat: 'track', desc: 'Clears all MIDI notes from clip while preserving clip container.', sig: 'clear_clip_notes(track_index: int, clip_index: int)' },
+      { name: 'set_clip_properties', cat: 'track', desc: 'Updates clip name, color, signature, or loop bounds.', sig: 'set_clip_properties(track_index: int, clip_index: int, properties: dict)' },
+      { name: 'get_clip_info', cat: 'track', desc: 'Returns detailed clip properties and playback state.', sig: 'get_clip_info(track_index: int, clip_index: int)' },
+      { name: 'set_track_property', cat: 'track', desc: 'Sets volume, pan, mute, solo, or arm state on a track.', sig: 'set_track_property(track_index: int, property_name: str, value: float)' },
+      { name: 'create_audio_track', cat: 'track', desc: 'Creates new audio track in the active Live Set.', sig: 'create_audio_track(name: str = "")' },
+      { name: 'get_routing', cat: 'track', desc: 'Queries input/output audio and MIDI routing options for a track.', sig: 'get_routing(track_index: int)' },
+      { name: 'diff_snapshots_tool', cat: 'track', desc: 'Diffs two parameter snapshots to highlight changed values.', sig: 'diff_snapshots_tool(snapshot_a: dict, snapshot_b: dict)' },
+      { name: 'take_snapshot', cat: 'track', desc: 'Captures full parameter state snapshot of current Live Set.', sig: 'take_snapshot()' },
+      { name: 'get_selected_context', cat: 'track', desc: 'Returns user-selected track, device, and clip in Ableton UI.', sig: 'get_selected_context()' },
+      { name: 'search_browser', cat: 'track', desc: 'Searches Live browser database for instruments, effects, or samples.', sig: 'search_browser(query: str)' },
+      { name: 'load_device_to_track', cat: 'track', desc: 'Loads instrument or audio effect to track by device name or URI.', sig: 'load_device_to_track(track_index: int, device_name: str)' },
+      { name: 'get_warp_state', cat: 'track', desc: 'Reads clip warp mode, warp markers, and tempo mapping.', sig: 'get_warp_state(track_index: int, clip_index: int)' },
 
       // Lifecycle & Fade
-      { name: 'lifecycle_status', cat: 'lifecycle', desc: 'Queries server bridge connection health, uptime, and latency.' },
-      { name: 'save_set', cat: 'lifecycle', desc: 'Saves current Live Set to disk.' },
-      { name: 'quit_ableton', cat: 'lifecycle', desc: 'Safely closes Ableton Live application.' },
-      { name: 'live_fade', cat: 'lifecycle', desc: 'Executes automated volume fade curves between tracks over duration.' },
-      { name: 'create_clip_automation', cat: 'lifecycle', desc: 'Creates automated parameter envelopes directly on clip timeline.' },
+      { name: 'lifecycle_status', cat: 'lifecycle', desc: 'Queries server bridge connection health, uptime, and latency.', sig: 'lifecycle_status()' },
+      { name: 'save_set', cat: 'lifecycle', desc: 'Saves current Live Set to disk.', sig: 'save_set()' },
+      { name: 'quit_ableton', cat: 'lifecycle', desc: 'Safely closes Ableton Live application.', sig: 'quit_ableton()' },
+      { name: 'live_fade', cat: 'lifecycle', desc: 'Executes automated volume fade curves between tracks over duration.', sig: 'live_fade(track_a: int, track_b: int, duration_sec: float)' },
+      { name: 'create_clip_automation', cat: 'lifecycle', desc: 'Creates automated parameter envelopes directly on clip timeline.', sig: 'create_clip_automation(track_index: int, clip_index: int, param: str, points: list)' },
 
       // Mix Analysis
-      { name: 'analyze_audio', cat: 'analysis', desc: 'Non-realtime LUFS-I, True Peak, dynamic range analysis of audio file.' },
-      { name: 'find_frequency_masking', cat: 'analysis', desc: 'Analyzes two audio files to detect spectral collision and masking.' },
-      { name: 'analyze_mix', cat: 'analysis', desc: 'Full mix bus health report: balance, crest factor, and low-end phase.' },
-      { name: 'extract_single_cycle', cat: 'analysis', desc: 'Extracts pitch-matched single-cycle waveform from sample file.' },
+      { name: 'analyze_audio', cat: 'analysis', desc: 'Non-realtime LUFS-I, True Peak, dynamic range analysis of audio file.', sig: 'analyze_audio(file_path: str)' },
+      { name: 'find_frequency_masking', cat: 'analysis', desc: 'Analyzes two audio files to detect spectral collision and masking.', sig: 'find_frequency_masking(file_a: str, file_b: str)' },
+      { name: 'analyze_mix', cat: 'analysis', desc: 'Full mix bus health report: balance, crest factor, and low-end phase.', sig: 'analyze_mix(file_path: str)' },
+      { name: 'extract_single_cycle', cat: 'analysis', desc: 'Extracts pitch-matched single-cycle waveform from sample file.', sig: 'extract_single_cycle(file_path: str, pitch_hz: float)' },
 
       // Inspection & Batch
-      { name: 'run_batch', cat: 'inspection', desc: 'Executes multiple MCP commands in atomic transaction with rollback.' },
-      { name: 'get_locators', cat: 'inspection', desc: 'Returns list of all arrangement cue points / locators.' },
-      { name: 'create_cue_point', cat: 'inspection', desc: 'Creates arrangement locator at specified beat time.' },
-      { name: 'delete_cue_point', cat: 'inspection', desc: 'Deletes locator by index or name.' },
-      { name: 'bulk_create_cue_points', cat: 'inspection', desc: 'Creates array of locators in single atomic operation.' },
-      { name: 'get_control_surfaces', cat: 'inspection', desc: 'Lists active MIDI control surfaces configured in Live.' },
-      { name: 'get_browser_categories', cat: 'inspection', desc: 'Returns top-level categories from Ableton browser database.' },
-      { name: 'get_project_metadata', cat: 'inspection', desc: 'Reads project directory name, set file path, and creation time.' },
-      { name: 'get_ableton_logs', cat: 'inspection', desc: 'Reads latest log entries from Ableton Live Log.txt.' },
-      { name: 'get_bridge_status', cat: 'inspection', desc: 'Queries socket buffer status and message counter metrics.' }
+      { name: 'run_batch', cat: 'inspection', desc: 'Executes multiple MCP commands in atomic transaction with rollback.', sig: 'run_batch(operations: list)' },
+      { name: 'get_locators', cat: 'inspection', desc: 'Returns list of all arrangement cue points / locators.', sig: 'get_locators()' },
+      { name: 'create_cue_point', cat: 'inspection', desc: 'Creates arrangement locator at specified beat time.', sig: 'create_cue_point(name: str, beat: float)' },
+      { name: 'delete_cue_point', cat: 'inspection', desc: 'Deletes locator by index or name.', sig: 'delete_cue_point(index: int)' },
+      { name: 'bulk_create_cue_points', cat: 'inspection', desc: 'Creates array of locators in single atomic operation.', sig: 'bulk_create_cue_points(cue_points: list)' },
+      { name: 'get_control_surfaces', cat: 'inspection', desc: 'Lists active MIDI control surfaces configured in Live.', sig: 'get_control_surfaces()' },
+      { name: 'get_browser_categories', cat: 'inspection', desc: 'Returns top-level categories from Ableton browser database.', sig: 'get_browser_categories()' },
+      { name: 'get_project_metadata', cat: 'inspection', desc: 'Reads project directory name, set file path, and creation time.', sig: 'get_project_metadata()' },
+      { name: 'get_ableton_logs', cat: 'inspection', desc: 'Reads latest log entries from Ableton Live Log.txt.', sig: 'get_ableton_logs(lines: int = 50)' },
+      { name: 'get_bridge_status', cat: 'inspection', desc: 'Queries socket buffer status and message counter metrics.', sig: 'get_bridge_status()' }
     ];
 
     let currentCat = 'all';
@@ -661,7 +810,7 @@
       
       const filtered = TOOLS.filter(t => {
         const matchesCat = currentCat === 'all' || t.cat === currentCat;
-        const matchesSearch = t.name.toLowerCase().includes(search) || t.desc.toLowerCase().includes(search);
+        const matchesSearch = t.name.toLowerCase().includes(search) || t.desc.toLowerCase().includes(search) || (t.sig && t.sig.toLowerCase().includes(search));
         return matchesCat && matchesSearch;
       });
 
@@ -670,6 +819,7 @@
           <div class="tool-name">${t.name}</div>
           <span class="tool-cat">${t.cat}</span>
           <div class="tool-desc">${t.desc}</div>
+          <div class="tool-sig">${t.sig}</div>
         </div>
       `).join('');
     }

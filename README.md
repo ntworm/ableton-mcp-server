@@ -1,15 +1,14 @@
 # ableton-mcp-server
 
-An MCP server that lets an agent drive a running Ableton Live Set.
+[**:globe_with_meridians: Live Landing Page & Interactive 65-Tool Catalog**](https://ntworm.github.io/ableton-mcp-server/) · [**Architecture Diagram**](docs/ARCHITECTURE.md) · [**Tool Index**](docs/TOOL_REFERENCE.md)
+
+An MCP server that lets an AI agent drive a running Ableton Live Set.
 
 Version 0.5.1 exposes 65 tools. A FastMCP server in Python talks to a MIDI
 Remote Script on TCP `127.0.0.1:9888` and to an Extension Host bridge over
 WebSockets on `127.0.0.1:9889`. Live runs on Windows; the WSL client runs
 the Windows binary so the loopback stays in the right network namespace.
 Verify a clean install with `scripts/verify_clean_install.ps1`.
-
-See the [architecture diagram](docs/ARCHITECTURE.md) and the
-[tool index](docs/TOOL_REFERENCE.md) for the full surface.
 
 ## Why this exists
 
