@@ -12,7 +12,10 @@ def test_real_jsonl_socket_round_trip_is_stateful() -> None:
     client = Client(port=server.port, reconnect=False)
     try:
         assert client.call("get_session_info")["tempo"] == 120.0
-        assert client.call("set_tempo", {"tempo": 128.0}) == {"tempo": 128.0}
+        assert client.call("set_tempo", {"tempo": 128.0}) == {
+            "tempo": 128.0,
+            "resolved": {"kind": "tempo", "tempo": 128.0},
+        }
         assert client.call("take_snapshot")["tempo"] == 128.0
         assert client.call("live_find_track", {"query": "bass"}) == [
             {"id": "track:0", "index": 0, "name": "Bass", "type": "midi"}
