@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from collections.abc import Awaitable, Callable, Generator, Sequence
 from pathlib import Path
@@ -1354,10 +1355,12 @@ def build_extension(project_path: str) -> str:
     # Use an argument list rather than shell=True so the user-supplied
     # project_path can never be interpreted by a shell. Each step is a
     # separate subprocess so a failing install does not mask a build failure.
-    for step_name, cmd in (
-        (_EXTENSION_INSTALL_STEP_NAME, ["npm", "install"]),
-        (_EXTENSION_BUILD_STEP_NAME, ["npm", "run", "build"]),
+    npm_bin = shutil.which("npm") or "npm"
+    for step_name, raw_cmd in (
+        (_EXTENSION_INSTALL_STEP_NAME, [npm_bin, "install"]),
+        (_EXTENSION_BUILD_STEP_NAME, [npm_bin, "run", "build"]),
     ):
+        cmd = ["cmd.exe", "/c"] + raw_cmd if os.name == "nt" else raw_cmd
         result = subprocess.run(
             cmd,
             cwd=str(project),
