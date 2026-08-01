@@ -21,6 +21,13 @@ def test_create_clip_requires_empty_midi_slot_and_returns_clip_path() -> None:
         "created": True,
         "clip_id": "track:0/clipslot:0/clip",
         "length_beats": 8.0,
+        "resolved": {
+            "kind": "clip",
+            "track_index": 0,
+            "clip_index": 0,
+            "clip_id": "track:0/clipslot:0/clip",
+            "track_name": "Bass",
+        },
     }
 
 

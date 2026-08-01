@@ -20,7 +20,20 @@ def test_set_parameter_value_writes_and_returns_observed_value() -> None:
     song = FakeSong()
     result = execute_command(song, FakeApplication(), "set_parameter_value", _params())
 
-    assert result == {"target": 0.75, "value": 0.75, "is_quantized": False}
+    expected_resolved = {
+        "kind": "device",
+        "track_index": 0,
+        "device_index": 0,
+        "parameter_name": "Filter Freq",
+        "track_name": "Bass",
+        "device_name": "Operator",
+    }
+    assert result == {
+        "target": 0.75,
+        "value": 0.75,
+        "is_quantized": False,
+        "resolved": expected_resolved,
+    }
     assert song.tracks[0].devices[0].parameters[1].value == 0.75
 
 
