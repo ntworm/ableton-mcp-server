@@ -235,7 +235,44 @@ class MockRemoteScript:
     def _handle_mutation(self, command: str, params: dict[str, Any]) -> dict[str, Any] | None:
         if command == "set_tempo":
             self.snapshot["tempo"] = float(params["tempo"])
-            return self.ok({"tempo": self.snapshot["tempo"]})
+            return self.ok(
+                {
+                    "tempo": self.snapshot["tempo"],
+                    "resolved": {"kind": "tempo", "tempo": self.snapshot["tempo"]},
+                }
+            )
+        if command == "set_parameter_value":
+            track = self._track(params.get("track_index"))
+            if not track:
+                return self._missing("track")
+            device_index = params.get("device_index")
+            if not isinstance(device_index, int) or device_index >= len(track["devices"]):
+                return self._missing("device")
+            device = track["devices"][device_index]
+            parameter_name = params.get("parameter_name")
+            parameter = next(
+                (item for item in device["parameters"] if item["name"] == parameter_name),
+                None,
+            )
+            if parameter is None:
+                return self._missing("parameter")
+            requested = float(params["value"])
+            parameter["value"] = requested
+            return self.ok(
+                {
+                    "target": requested,
+                    "value": parameter["value"],
+                    "is_quantized": parameter["is_quantized"],
+                    "resolved": {
+                        "kind": "device",
+                        "track_index": track["index"],
+                        "device_index": device_index,
+                        "parameter_name": parameter_name,
+                        "track_name": track["name"],
+                        "device_name": device["name"],
+                    },
+                }
+            )
         if command == "set_current_song_time":
             self.snapshot["current_song_time"] = float(params["time"])
             return self.ok({"current_song_time": self.snapshot["current_song_time"]})
@@ -314,7 +351,18 @@ class MockRemoteScript:
                 }
             )
             return self.ok(
-                {"created": True, "clip_id": slot["clip_id"], "length_beats": slot["length_beats"]}
+                {
+                    "created": True,
+                    "clip_id": slot["clip_id"],
+                    "length_beats": slot["length_beats"],
+                    "resolved": {
+                        "kind": "clip",
+                        "track_index": track["index"],
+                        "clip_index": clip_index,
+                        "track_name": track["name"],
+                        "clip_id": slot["clip_id"],
+                    },
+                }
             )
         if command == "run_batch":
             results = []
