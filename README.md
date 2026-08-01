@@ -107,6 +107,12 @@ Full notes in [docs/INSPIRATION.md](docs/INSPIRATION.md).
 
 ---
 
+## ⚠️ Known Bugs
+
+Live's Object Model exposes a number of traps (path-id drift, undo semantics, WSL loopback, protocol drift, allowlist surprises) that an AI agent can hit without warning. Each one has a known workaround in the codebase; every trap is documented in [docs/KNOWN_BUGS.md](docs/KNOWN_BUGS.md). Read the executive summary at the top of that file before relying on track indexes, `run_batch`, or a TCP loopback to Live.
+
+---
+
 ## 📜 License
 
 **MIT** — Copyright (c) 2026 Gabriel Worm (ntworm). See [LICENSE](LICENSE).
