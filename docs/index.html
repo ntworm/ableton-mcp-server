@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232EC4B6'><path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/></svg>">
-  <title>Ableton MCP Server — Model Context Protocol for Ableton Live 12</title>
-  <meta name="description" content="An open Model Context Protocol (MCP) server exposing 65 tools over TCP and WebSockets for AI agents (Claude, Antigravity, Gemini, Codex) and audio developers to control Ableton Live 12.">
-  <meta property="og:title" content="Ableton MCP Server — Model Context Protocol for Ableton Live">
-  <meta property="og:description" content="65 MCP tools for AI agents and Python scripts to query, control, analyze, and automate Ableton Live sets. Dual-bridge architecture for transport, devices, clips, and offline mix analysis.">
+  <title>Ableton MCP Server — Production Tool Surface for Ableton Live 12</title>
+  <meta name="description" content="Production MCP server exposing 65 tools over TCP and WebSockets for AI agents (Claude, Antigravity, Gemini, Codex) and audio developers to control Ableton Live 12.">
+  <meta property="og:title" content="Ableton MCP Server — Technical Specification & 65-Tool Catalog">
+  <meta property="og:description" content="Dual-bridge FastMCP server for querying parameters, driving transport, automating clips, and non-realtime mix analysis in Ableton Live 12.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://ntworm.github.io/ableton-mcp-server/">
 
@@ -22,7 +22,6 @@
       --bg-card-hover: #172238;
       --bg-code: #05080e;
       --border-color: #1e293b;
-      --border-glow: rgba(46, 196, 182, 0.25);
       
       --text-main: #e2e8f0;
       --text-muted: #94a3b8;
@@ -143,7 +142,7 @@
 
     /* Hero */
     .hero {
-      padding: 64px 0 48px;
+      padding: 56px 0 40px;
       border-bottom: 1px solid var(--border-color);
       background: radial-gradient(circle at 50% 0%, rgba(46, 196, 182, 0.08), transparent 70%);
     }
@@ -162,26 +161,26 @@
       margin-bottom: 20px;
     }
     .hero h1 {
-      font-size: 44px;
+      font-size: 42px;
       font-weight: 800;
       line-height: 1.12;
       letter-spacing: -0.025em;
-      margin-bottom: 18px;
+      margin-bottom: 16px;
       color: #ffffff;
     }
     .hero p.subtitle {
-      font-size: 18px;
+      font-size: 17px;
       color: var(--text-muted);
-      max-width: 880px;
-      margin-bottom: 32px;
-      line-height: 1.65;
+      max-width: 900px;
+      margin-bottom: 28px;
+      line-height: 1.6;
     }
 
     .badge-row {
       display: flex;
       flex-wrap: wrap;
       gap: 10px;
-      margin-bottom: 36px;
+      margin-bottom: 32px;
     }
     .chip {
       font-family: var(--font-mono);
@@ -235,28 +234,28 @@
 
     /* Section Styling */
     .arch-section {
-      padding: 64px 0;
+      padding: 56px 0;
       border-bottom: 1px solid var(--border-color);
     }
     .section-title {
-      font-size: 28px;
+      font-size: 26px;
       font-weight: 800;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
       color: #fff;
       letter-spacing: -0.015em;
     }
     .section-desc {
       color: var(--text-muted);
-      margin-bottom: 36px;
-      font-size: 16px;
-      max-width: 840px;
+      margin-bottom: 32px;
+      font-size: 15px;
+      max-width: 860px;
     }
 
     .arch-card {
       background: var(--bg-card);
       border: 1px solid var(--border-color);
       border-radius: 12px;
-      padding: 28px;
+      padding: 26px;
       margin-bottom: 24px;
       box-shadow: 0 10px 30px rgba(0,0,0,0.3);
     }
@@ -443,7 +442,7 @@
 
     footer {
       border-top: 1px solid var(--border-color);
-      padding: 48px 0;
+      padding: 40px 0;
       color: var(--text-dim);
       font-size: 13px;
     }
@@ -475,10 +474,11 @@
 
       <div class="nav-right">
         <div class="nav-links">
-          <a href="#how-mcp-works" data-en="How MCP Works" data-pt="Como Funciona o MCP">How MCP Works</a>
+          <a href="#execution" data-en="Execution Model" data-pt="Modelo de Execução">Execution Model</a>
           <a href="#architecture" data-en="Architecture" data-pt="Arquitetura">Architecture</a>
-          <a href="#config" data-en="Agent Setup" data-pt="Configuração">Agent Setup</a>
-          <a href="#inspiration" data-en="References" data-pt="Referências">References</a>
+          <a href="#config" data-en="Agent Config" data-pt="Configuração">Agent Config</a>
+          <a href="#taxonomy" data-en="Error Taxonomy" data-pt="Taxonomia de Erros">Error Taxonomy</a>
+          <a href="#inspiration" data-en="Prior Art" data-pt="Trabalhos Anteriores">Prior Art</a>
           <a href="#tools" data-en="MCP Tools (65)" data-pt="Ferramentas MCP (65)">MCP Tools (65)</a>
         </div>
 
@@ -494,21 +494,21 @@
   <section class="hero">
     <div class="container">
       <div class="hero-badge">
-        <span>⚡ Model Context Protocol (MCP)</span>
+        <span>⚡ FastMCP Production Bridge</span>
         <span>·</span>
-        <span data-en="65 Production Tools" data-pt="65 Ferramentas de Produção">65 Production Tools</span>
+        <span data-en="65 Tools Over IPC" data-pt="65 Ferramentas via IPC">65 Tools Over IPC</span>
       </div>
-      <h1 data-en="Model Context Protocol for Ableton Live 12" data-pt="Model Context Protocol para Ableton Live 12">Model Context Protocol for Ableton Live 12</h1>
-      <p class="subtitle" data-en="A developer and AI-agent interface that turns running Ableton Live Sets into an introspectable, programmable, and controllable environment. Enables Claude, Antigravity, Gemini, Codex, and custom scripts to query parameters, drive transport, automate clips, and analyze mix audio in non-realtime." data-pt="Uma interface aberta para desenvolvedores e agentes de IA que transforma projetos do Ableton Live em um ambiente inspecionável e programável. Permite que Claude, Antigravity, Gemini, Codex e scripts Python consultem parâmetros, comandem o transport, criem automações e analisem áudio fora de tempo real.">
-        A developer and AI-agent interface that turns running Ableton Live Sets into an introspectable, programmable, and controllable environment. Enables Claude, Antigravity, Gemini, Codex, and custom scripts to query parameters, drive transport, automate clips, and analyze mix audio in non-realtime.
+      <h1 data-en="Ableton Live 12 Integration Surface for AI Agents" data-pt="Superfície de Integração do Ableton Live 12 para Agentes de IA">Ableton Live 12 Integration Surface for AI Agents</h1>
+      <p class="subtitle" data-en="A high-density, low-latency MCP server that exposes active Ableton Live 12 Sets to AI agents and Python scripts. Query live LOM parameters, drive transport, automate clips, analyze audio in non-realtime, and execute atomic transactions." data-pt="Servidor MCP de baixa latência que expõe projetos ativos do Ableton Live 12 para agentes de IA e scripts Python. Consulta de parâmetros LOM em tempo real, controle de transport, automação de clips, análise de áudio offline e transações atômicas.">
+        A high-density, low-latency MCP server that exposes active Ableton Live 12 Sets to AI agents and Python scripts. Query live LOM parameters, drive transport, automate clips, analyze audio in non-realtime, and execute atomic transactions.
       </p>
 
       <div class="badge-row">
         <span class="chip highlight">Python FastMCP</span>
-        <span class="chip">TCP Loopback (127.0.0.1:9888)</span>
+        <span class="chip">TCP Remote Script (127.0.0.1:9888)</span>
         <span class="chip">WebSocket Extension (127.0.0.1:9889)</span>
-        <span class="chip" data-en="WSL2 Native Executable" data-pt="Executável Nativo WSL2">WSL2 Native Executable</span>
-        <span class="chip" data-en="Offline Mix Analysis" data-pt="Análise de Mix Offline">Offline Mix Analysis</span>
+        <span class="chip" data-en="WSL2 Loopback Executable" data-pt="Executável Loopback WSL2">WSL2 Loopback Executable</span>
+        <span class="chip" data-en="LUFS/TruePeak Analysis" data-pt="Análise LUFS/TruePeak">LUFS/TruePeak Analysis</span>
         <span class="chip">MIT License</span>
       </div>
 
@@ -517,62 +517,62 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
           <span data-en="Repository on GitHub" data-pt="Repositório no GitHub">Repository on GitHub</span>
         </a>
-        <a href="#config" class="btn btn-secondary" data-en="AI Agent Config JSON" data-pt="JSON de Configuração para Agentes">AI Agent Config JSON</a>
-        <a href="#tools" class="btn btn-secondary" data-en="Browse 65 Tools" data-pt="Ver as 65 Ferramentas">Browse 65 Tools</a>
+        <a href="#config" class="btn btn-secondary" data-en="Agent Config JSON" data-pt="JSON de Configuração do Agente">Agent Config JSON</a>
+        <a href="#tools" class="btn btn-secondary" data-en="Browse 65 Tools" data-pt="Catálogo das 65 Ferramentas">Browse 65 Tools</a>
       </div>
     </div>
   </section>
 
-  <!-- How MCP Works Section -->
-  <section id="how-mcp-works" class="arch-section">
+  <!-- Server Execution Model Section -->
+  <section id="execution" class="arch-section">
     <div class="container">
-      <h2 class="section-title" data-en="How Model Context Protocol (MCP) Works" data-pt="Como o Model Context Protocol (MCP) Funciona">How Model Context Protocol (MCP) Works</h2>
-      <p class="section-desc" data-en="MCP is an open standard created by Anthropic for secure, local communication between Large Language Models and desktop development environments. It does NOT run in the cloud — it operates locally over stdio/IPC for maximum privacy and zero latency." data-pt="O MCP é um padrão aberto desenvolvido pela Anthropic para comunicação local e segura entre Modelos de Linguagem (LLMs) e ferramentas de desenvolvimento desktop. Ele NÃO roda na nuvem — funciona localmente via stdio/IPC para latência zero e total privacidade.">
-        MCP is an open standard created by Anthropic for secure, local communication between Large Language Models and desktop development environments. It does NOT run in the cloud — it operates locally over stdio/IPC for maximum privacy and zero latency.
+      <h2 class="section-title" data-en="Server Execution & Agent Runtime Model" data-pt="Modelo de Execução e Runtime do Agente">Server Execution & Agent Runtime Model</h2>
+      <p class="section-desc" data-en="`ableton-mcp-server` runs locally over stdio IPC. It exposes 65 typed tool contracts directly to LLM agent runtimes with write verification, transaction rollbacks, and explicit error taxonomies." data-pt="O `ableton-mcp-server` executa localmente via IPC stdio. Ele expõe 65 ferramentas tipadas para runtimes de agentes LLM com confirmação de escrita, rollback de transações e taxonomia explícita de erros.">
+        `ableton-mcp-server` runs locally over stdio IPC. It exposes 65 typed tool contracts directly to LLM agent runtimes with write verification, transaction rollbacks, and explicit error taxonomies.
       </p>
 
       <div class="grid-3">
         <div class="arch-card">
-          <div style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-teal); margin-bottom: 8px;">1. Tool Discovery (`tools/list`)</div>
-          <p style="font-size: 14px; color: var(--text-muted);" data-en="When an MCP client (Claude, Antigravity, Cursor) launches `ableton-mcp-server.exe`, it queries `tools/list`. The server returns 65 typed JSON schemas describing all available tools." data-pt="Quando o cliente MCP inicia o executável `ableton-mcp-server.exe`, ele executa `tools/list`. O servidor responde com 65 esquemas JSON detalhando as ferramentas disponíveis.">
-            When an MCP client launches `ableton-mcp-server.exe`, it queries `tools/list`. The server returns 65 typed JSON schemas describing all available tools.
+          <div style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-teal); margin-bottom: 8px;">1. Per-Tick Write Verification</div>
+          <p style="font-size: 13.5px; color: var(--text-muted);" data-en="Every parameter mutation (`set_parameter_value`, `set_track_property`) executes a write-then-verify loop inside Live's main thread tick before confirming completion to the agent." data-pt="Cada mutação de parâmetro (`set_parameter_value`, `set_track_property`) executa uma verificação a cada tick no loop principal do Live antes de confirmar a escrita para o agente.">
+            Every parameter mutation (`set_parameter_value`, `set_track_property`) executes a write-then-verify loop inside Live's main thread tick before confirming completion to the agent.
           </p>
         </div>
 
         <div class="arch-card">
-          <div style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-gold); margin-bottom: 8px;">2. Local Execution (`tools/call`)</div>
-          <p style="font-size: 14px; color: var(--text-muted);" data-en="When the LLM decides to manipulate Ableton Live, it issues a `tools/call` JSON-RPC message. The server executes the write loop on Live's local socket and verifies the change." data-pt="Quando a IA decide manipular o Ableton Live, ela envia uma mensagem JSON-RPC `tools/call`. O servidor executa a alteração no socket local e confirma a escrita.">
-            When the LLM decides to manipulate Ableton Live, it issues a `tools/call` JSON-RPC message. The server executes the write loop on Live's local socket and verifies the change.
+          <div style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-gold); margin-bottom: 8px;">2. Grouped `run_batch` Transactions</div>
+          <p style="font-size: 13.5px; color: var(--text-muted);" data-en="Agents bundle multi-step operations (e.g. creating tracks, loading devices, setting levels) into atomic `run_batch` payloads. Partial failures trigger explicit rollback reporting." data-pt="Os agentes agrupam operações encadeadas (ex: criar tracks, carregar plugins, ajustar volumes) em payloads atômicos de `run_batch`. Falhas parciais disparam relatório explícito de rollback.">
+            Agents bundle multi-step operations into atomic `run_batch` payloads. Partial failures trigger explicit rollback reporting.
           </p>
         </div>
 
         <div class="arch-card">
-          <div style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-blue); margin-bottom: 8px;">3. Deterministic Error Feedback</div>
-          <p style="font-size: 14px; color: var(--text-muted);" data-en="If a parameter write fails or target track is not found, the server returns structured error taxonomies. The LLM parses the error and self-corrects its plan automatically." data-pt="Se um parâmetro falhar ou uma track não for encontrada, o servidor retorna um erro estruturado. O modelo lê o erro e ajusta seu plano de forma autônoma.">
-            If a parameter write fails or target track is not found, the server returns structured error taxonomies. The LLM parses the error and self-corrects its plan automatically.
+          <div style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-blue); margin-bottom: 8px;">3. Non-Realtime Audio Engine</div>
+          <p style="font-size: 14px; color: var(--text-muted);" data-en="Four standalone mix analysis tools (`analyze_audio`, `find_frequency_masking`, `analyze_mix`, `extract_single_cycle`) process audio files offline (LUFS-I, True Peak, spectral collisions)." data-pt="Quatro ferramentas de análise de mix (`analyze_audio`, `find_frequency_masking`, `analyze_mix`, `extract_single_cycle`) processam arquivos fora de tempo real (LUFS-I, True Peak, colisão espectral).">
+            Four standalone mix analysis tools process audio files offline (LUFS-I, True Peak, spectral collisions) without requiring active playback.
           </p>
         </div>
       </div>
 
       <!-- Agent System Prompt Guidance -->
       <div class="arch-card" style="margin-top: 24px;">
-        <h3 style="color: #fff; margin-bottom: 12px;" data-en="Recommended System Prompt for AI Agents" data-pt="Prompt de Sistema Recomendado para Agentes de IA">Recommended System Prompt for AI Agents</h3>
-        <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 16px;" data-en="Include the following context snippet in your agent's system prompt so the LLM understands how to navigate the Live Set:" data-pt="Inclua este trecho no prompt de sistema do seu agente para que o modelo saiba como navegar e operar o projeto do Ableton Live:">
-          Include the following context snippet in your agent's system prompt so the LLM understands how to navigate the Live Set:
+        <h3 style="color: #fff; margin-bottom: 12px;" data-en="System Prompt Specification for Agent Runtimes" data-pt="Especificação de Prompt de Sistema para Agentes">System Prompt Specification for Agent Runtimes</h3>
+        <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 16px;" data-en="Inject this system prompt fragment into your agent runtime to enforce deterministic interaction patterns against `ableton-mcp-server`:" data-pt="Injete este fragmento no prompt de sistema do seu agente para garantir um padrão determinístico ao interagir com o `ableton-mcp-server`:">
+          Inject this system prompt fragment into your agent runtime to enforce deterministic interaction patterns against `ableton-mcp-server`:
         </p>
 
         <div class="code-box">
           <div class="code-header">
-            <span>system_prompt_snippet.txt</span>
-            <span>AI Agent Prompt Context</span>
+            <span>agent_system_prompt_context.txt</span>
+            <span>Production Prompt Injection</span>
           </div>
-<pre><code>You have direct access to an active Ableton Live Set via ableton-mcp-server (65 tools).
-Guidelines for driving Ableton Live:
-1. Always start by inspecting the project state using `get_session_overview()` or `get_track_list()`.
-2. To modify track properties, resolve the target track index using `live_find_track(name_pattern)` first.
-3. For parameter adjustments, query parameters via `get_device_list()` and `get_parameter_value()`, then apply changes using `set_parameter_value()`.
-4. When executing multiple operations, bundle them using `run_batch(operations)` to ensure atomic execution.
-5. Respect the error taxonomy: if you receive `AMBIGUOUS_MATCH` or `VERIFICATION_FAILED`, inspect the track context and retry.</code></pre>
+<pre><code>You are connected to an active Ableton Live 12 Set via ableton-mcp-server (65 tools).
+Operational rules:
+1. Always inspect live set topology first via `get_session_overview()` or `get_track_list()`.
+2. Resolve target tracks by index or via fuzzy name matching (`live_find_track`).
+3. Query device parameters via `get_device_list()` and `get_parameter_value()` before mutating values with `set_parameter_value()`.
+4. Bundle multi-step modifications into `run_batch(operations)` for atomic execution with rollback protection.
+5. If an error envelope returns `AMBIGUOUS_MATCH` or `VERIFICATION_FAILED`, inspect the track/device index and retry with precise targets.</code></pre>
         </div>
       </div>
     </div>
@@ -582,8 +582,8 @@ Guidelines for driving Ableton Live:
   <section id="architecture" class="arch-section">
     <div class="container">
       <h2 class="section-title" data-en="Dual-Bridge System Architecture" data-pt="Arquitetura do Sistema Dual-Bridge">Dual-Bridge System Architecture</h2>
-      <p class="section-desc" data-en="Designed specifically to solve cross-platform constraints between Windows host process boundaries, WSL2 network namespaces, and Python concurrency models." data-pt="Projetado especificamente para resolver restrições de processos no Windows, namespaces de rede no WSL2 e modelos de concorrência em Python.">
-        Designed specifically to solve cross-platform constraints between Windows host process boundaries, WSL2 network namespaces, and Python concurrency models.
+      <p class="section-desc" data-en="High-efficiency separation between high-frequency LOM transport/device control and async WebSocket extension routines." data-pt="Separação de alta eficiência entre controle LOM/transport de alta frequência e rotinas assíncronas via WebSocket.">
+        High-efficiency separation between high-frequency LOM transport/device control and async WebSocket extension routines.
       </p>
 
       <div class="arch-card">
@@ -682,9 +682,9 @@ Guidelines for driving Ableton Live:
   <!-- Agent Configuration -->
   <section id="config" class="arch-section">
     <div class="container">
-      <h2 class="section-title" data-en="AI Agent Setup & Configuration" data-pt="Configuração para Agentes de IA">AI Agent Setup & Configuration</h2>
-      <p class="section-desc" data-en="Copy-paste configurations to equip your AI coding assistant or autonomous agent with direct Ableton Live control." data-pt="Copie e cole as configurações abaixo no seu assistente ou agente autônomo para conceder controle direto ao Ableton Live.">
-        Copy-paste configurations to equip your AI coding assistant or autonomous agent with direct Ableton Live control.
+      <h2 class="section-title" data-en="Agent Configuration" data-pt="Configuração do Agente">Agent Configuration</h2>
+      <p class="section-desc" data-en="Copy-paste server launch configurations for MCP client environments (Claude Desktop, Antigravity IDE, Cursor, Windsurf)." data-pt="Configurações de inicialização do servidor para ambientes de clientes MCP (Claude Desktop, Antigravity IDE, Cursor, Windsurf).">
+        Copy-paste server launch configurations for MCP client environments (Claude Desktop, Antigravity IDE, Cursor, Windsurf).
       </p>
 
       <div class="tab-bar">
@@ -702,7 +702,7 @@ Guidelines for driving Ableton Live:
 <pre><code>{
   "mcpServers": {
     "ableton": {
-      "command": "C:\\Users\\Usuario\\repos\\ableton-mcp-server\\.venv-win\\Scripts\\ableton-mcp-server.exe",
+      "command": "C:\\path\\to\\ableton-mcp-server\\.venv-win\\Scripts\\ableton-mcp-server.exe",
       "args": []
     }
   }
@@ -718,7 +718,7 @@ Guidelines for driving Ableton Live:
 <pre><code>{
   "mcpServers": {
     "ableton-live": {
-      "command": "C:/Users/Usuario/repos/ableton-mcp-server/.venv-win/Scripts/ableton-mcp-server.exe",
+      "command": "C:/path/to/ableton-mcp-server/.venv-win/Scripts/ableton-mcp-server.exe",
       "env": {
         "PYTHONUNBUFFERED": "1"
       }
@@ -736,7 +736,7 @@ Guidelines for driving Ableton Live:
 <pre><code>{
   "mcpServers": {
     "ableton": {
-      "command": "C:/Users/Usuario/repos/ableton-mcp-server/.venv-win/Scripts/ableton-mcp-server.exe"
+      "command": "C:/path/to/ableton-mcp-server/.venv-win/Scripts/ableton-mcp-server.exe"
     }
   }
 }</code></pre>
@@ -744,28 +744,28 @@ Guidelines for driving Ableton Live:
     </div>
   </section>
 
-  <!-- Error Taxonomy & Acceptance Rules -->
+  <!-- Error Taxonomy Section -->
   <section id="taxonomy" class="arch-section">
     <div class="container">
       <h2 class="section-title" data-en="Cross-Bridge Error Taxonomy" data-pt="Taxonomia de Erros do Sistema">Cross-Bridge Error Taxonomy</h2>
-      <p class="section-desc" data-en="Agents receive deterministic error codes when a command cannot be executed, allowing LLMs to reason and adapt automatically." data-pt="Os agentes recebem códigos de erro determinísticos quando um comando falha, permitindo que o LLM raciocine e se corrija de forma autônoma.">
-        Agents receive deterministic error codes when a command cannot be executed, allowing LLMs to reason and adapt automatically.
+      <p class="section-desc" data-en="Deterministic error codes returned when a command cannot be executed, enabling LLM agent runtimes to inspect and self-correct plans." data-pt="Códigos de erro determinísticos retornados quando um comando falha, permitindo que agentes LLM inspecionem e corrijam seus planos de forma autônoma.">
+        Deterministic error codes returned when a command cannot be executed, enabling LLM agent runtimes to inspect and self-correct plans.
       </p>
 
       <div class="grid-2">
         <div class="arch-card">
           <span class="error-tag">CAPABILITY_UNAVAILABLE</span>
           <h4 style="color: #fff; margin-bottom: 6px;" data-en="Capability Unavailable" data-pt="Recurso Indisponível">Capability Unavailable</h4>
-          <p style="font-size: 13px; color: var(--text-muted);" data-en="Returned when attempting an operation not supported by the connected Live version or missing extension bridge (e.g., calling warping on an unwarped audio clip)." data-pt="Retornado ao tentar uma operação não suportada pela versão do Live ou por ponte ausente (ex: ajustar warping em clip não warped).">
-            Returned when attempting an operation not supported by the connected Live version or missing extension bridge (e.g., calling warping on an unwarped audio clip).
+          <p style="font-size: 13px; color: var(--text-muted);" data-en="Returned when attempting an operation not supported by the connected Live version or missing extension bridge (e.g. calling warping on an unwarped audio clip)." data-pt="Retornado ao tentar uma operação não suportada pela versão do Live ou por ponte ausente (ex: ajustar warping em clip não warped).">
+            Returned when attempting an operation not supported by the connected Live version or missing extension bridge (e.g. calling warping on an unwarped audio clip).
           </p>
         </div>
 
         <div class="arch-card">
           <span class="error-tag">AMBIGUOUS_MATCH</span>
           <h4 style="color: #fff; margin-bottom: 6px;" data-en="Ambiguous Match" data-pt="Busca Ambiguação">Ambiguous Match</h4>
-          <p style="font-size: 13px; color: var(--text-muted);" data-en="Returned when a fuzzy track or device lookup matches multiple targets without sufficient specificity. Prompt the agent to supply exact index or full name." data-pt="Retornado quando a busca por nome de track ou dispositivo encontra múltiplos resultados. O agente deve fornecer o índice ou nome exato.">
-            Returned when a fuzzy track or device lookup matches multiple targets without sufficient specificity. Prompt the agent to supply exact index or full name.
+          <p style="font-size: 13px; color: var(--text-muted);" data-en="Returned when a fuzzy track or device lookup matches multiple targets without sufficient specificity. Agent must supply exact index or full name." data-pt="Retornado quando a busca por nome de track ou dispositivo encontra múltiplos resultados. O agente deve fornecer o índice ou nome exato.">
+            Returned when a fuzzy track or device lookup matches multiple targets without sufficient specificity. Agent must supply exact index or full name.
           </p>
         </div>
 
@@ -780,8 +780,8 @@ Guidelines for driving Ableton Live:
         <div class="arch-card">
           <span class="error-tag">ACCEPTANCE_GUARD_FAILED</span>
           <h4 style="color: #fff; margin-bottom: 6px;" data-en="Acceptance Guard Failed" data-pt="Guarda de Aceitação Rejeitada">Acceptance Guard Failed</h4>
-          <p style="font-size: 13px; color: var(--text-muted);" data-en="Returned when running destructive or test suite operations against an active project instead of a disposable test Set (e.g. TESTE_CODEX)." data-pt="Retornado ao executar operações de teste destrutivas em um projeto ativo em vez de um Set descartável de teste (ex: `TESTE_CODEX`).">
-            Returned when running destructive or test suite operations against an active project instead of a disposable test Set (e.g. TESTE_CODEX).
+          <p style="font-size: 13px; color: var(--text-muted);" data-en="Returned when running destructive operations against an active production project instead of a disposable test Set (e.g. TESTE_CODEX)." data-pt="Retornado ao executar operações de teste destrutivas em um projeto ativo em vez de um Set descartável de teste (ex: `TESTE_CODEX`).">
+            Returned when running destructive operations against an active production project instead of a disposable test Set (e.g. TESTE_CODEX).
           </p>
         </div>
       </div>
@@ -791,16 +791,16 @@ Guidelines for driving Ableton Live:
   <!-- Inspiration & References Section -->
   <section id="inspiration" class="arch-section">
     <div class="container">
-      <h2 class="section-title" data-en="Inspiration & Prior Art" data-pt="Inspirações e Trabalhos Anteriores">Inspiration & Prior Art</h2>
-      <p class="section-desc" data-en="`ableton-mcp-server` is built on design insights from seminal open-source Ableton integration projects. Full technical attribution:" data-pt="O `ableton-mcp-server` foi construído com base nas lições aprendidas em grandes projetos open-source da comunidade. Atribuição e referências técnicas:">
-        `ableton-mcp-server` is built on design insights from seminal open-source Ableton integration projects. Full technical attribution:
+      <h2 class="section-title" data-en="Prior Art & Technical References" data-pt="Trabalhos Anteriores e Referências Técnicas">Prior Art & Technical References</h2>
+      <p class="section-desc" data-en="`ableton-mcp-server` builds on design insights from open-source Ableton control surfaces and OSC bridges. Direct attribution:" data-pt="O `ableton-mcp-server` foi construído com base nas lições aprendidas em pontes de controle e superfícies OSC open-source. Atribuição direta:">
+        `ableton-mcp-server` builds on design insights from open-source Ableton control surfaces and OSC bridges. Direct attribution:
       </p>
 
       <div class="grid-2">
         <div class="arch-card">
           <h4 style="color: var(--accent-gold); margin-bottom: 8px;">pnomolos/live-wire</h4>
-          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px;" data-en="Pioneered the TCP JSONL Remote Script protocol layout, the typed error envelope structure, and the per-tick write-then-verify loop discipline." data-pt="Pioneiro no layout do protocolo TCP JSONL via Remote Script, estrutura de envelopes de erro tipados e verificação de parâmetros a cada tick.">
-            Pioneered the TCP JSONL Remote Script protocol layout, the typed error envelope structure, and the per-tick write-then-verify loop discipline.
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px;" data-en="Pioneered the TCP JSONL Remote Script protocol layout, typed error envelope structure, and per-tick write-then-verify loop discipline." data-pt="Pioneiro no layout do protocolo TCP JSONL via Remote Script, estrutura de envelopes de erro tipados e verificação de parâmetros a cada tick.">
+            Pioneered the TCP JSONL Remote Script protocol layout, typed error envelope structure, and per-tick write-then-verify loop discipline.
           </p>
           <a href="https://github.com/pnomolos/live-wire" target="_blank" style="font-size: 12px; font-family: var(--font-mono);">github.com/pnomolos/live-wire →</a>
         </div>
@@ -815,8 +815,8 @@ Guidelines for driving Ableton Live:
 
         <div class="arch-card">
           <h4 style="color: var(--accent-gold); margin-bottom: 8px;">ideoforms/AbletonOSC</h4>
-          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px;" data-en="The de-facto reference for exposing the Live Object Model over OSC conventions used by the Extension Host bridge." data-pt="A referência padrão para exposição do Live Object Model via mensagens e convenções OSC no Extension Host.">
-            The de-facto reference for exposing the Live Object Model over OSC conventions used by the Extension Host bridge.
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px;" data-en="De-facto reference for exposing the Live Object Model over OSC conventions used by the Extension Host bridge." data-pt="A referência padrão para exposição do Live Object Model via mensagens e convenções OSC no Extension Host.">
+            De-facto reference for exposing the Live Object Model over OSC conventions used by the Extension Host bridge.
           </p>
           <a href="https://github.com/ideoforms/AbletonOSC" target="_blank" style="font-size: 12px; font-family: var(--font-mono);">github.com/ideoforms/AbletonOSC →</a>
         </div>
@@ -836,12 +836,12 @@ Guidelines for driving Ableton Live:
   <section id="tools" class="arch-section">
     <div class="container">
       <h2 class="section-title" data-en="Complete 65 MCP Tool Surface" data-pt="Catálogo Completo das 65 Ferramentas MCP">Complete 65 MCP Tool Surface</h2>
-      <p class="section-desc" data-en="Explore every tool available to AI agents for controlling Ableton Live 12. Filter by domain or search by keyword." data-pt="Explore todas as 65 ferramentas disponíveis para agentes de IA no Ableton Live 12. Filtre por categoria ou pesquise por palavra-chave.">
-        Explore every tool available to AI agents for controlling Ableton Live 12. Filter by domain or search by keyword.
+      <p class="section-desc" data-en="Typed parameter signatures and descriptions for all 65 tools exposed to AI agents. Search by name, category, or parameter signature." data-pt="Assinaturas de parâmetros e descrições tipadas para todas as 65 ferramentas expostas aos agentes de IA. Pesquise por nome, categoria ou assinatura.">
+        Typed parameter signatures and descriptions for all 65 tools exposed to AI agents. Search by name, category, or parameter signature.
       </p>
 
       <div class="tool-controls">
-        <input type="text" id="tool-search" class="search-input" placeholder="Search tool by name, parameters, or description..." oninput="filterTools()">
+        <input type="text" id="tool-search" class="search-input" placeholder="Search tool by name, parameters, or signature..." oninput="filterTools()">
         <button class="filter-btn active" onclick="setCategory('all', this)" data-en="All (65)" data-pt="Todas (65)">All (65)</button>
         <button class="filter-btn" onclick="setCategory('transport', this)" data-en="Transport & Session" data-pt="Transport e Sessão">Transport & Session</button>
         <button class="filter-btn" onclick="setCategory('track', this)" data-en="Tracks & Devices" data-pt="Tracks e Dispositivos">Tracks & Devices</button>
@@ -925,7 +925,7 @@ Guidelines for driving Ableton Live:
       { name: 'analyze_audio', cat: 'analysis', desc_en: 'Non-realtime LUFS-I, True Peak, dynamic range analysis of audio file.', desc_pt: 'Análise offline de áudio: LUFS-I, True Peak e faixa dinâmica de arquivo.', sig: 'analyze_audio(file_path: str)' },
       { name: 'find_frequency_masking', cat: 'analysis', desc_en: 'Analyzes two audio files to detect spectral collision and masking.', desc_pt: 'Analisa dois arquivos de áudio para detectar colisão espectral e mascaramento.', sig: 'find_frequency_masking(file_a: str, file_b: str)' },
       { name: 'analyze_mix', cat: 'analysis', desc_en: 'Full mix bus health report: balance, crest factor, and low-end phase.', desc_pt: 'Relatório de saúde da mix: equilíbrio espectral, fator de crista e fase de graves.', sig: 'analyze_mix(file_path: str)' },
-      { name: 'extract_single_cycle', cat: 'analysis', desc: 'Extracts pitch-matched single-cycle waveform from sample file.', desc_pt: 'Extrai forma de onda de ciclo único alinhada com o tom da amostra.', sig: 'extract_single_cycle(file_path: str, pitch_hz: float)' },
+      { name: 'extract_single_cycle', cat: 'analysis', desc_en: 'Extracts pitch-matched single-cycle waveform from sample file.', desc_pt: 'Extrai forma de onda de ciclo único alinhada com o tom da amostra.', sig: 'extract_single_cycle(file_path: str, pitch_hz: float)' },
 
       // Inspection & Batch
       { name: 'run_batch', cat: 'inspection', desc_en: 'Executes multiple MCP commands in atomic transaction with rollback.', desc_pt: 'Executa múltiplos comandos MCP em uma transação atômica com rollback.', sig: 'run_batch(operations: list)' },

@@ -95,7 +95,7 @@ The implementation track for these lives on `feature/v0.4.0-borrow-competitor-fe
 4. **Plug the printed `.exe` path into any MCP client**:
 
    ```
-   command: C:\Users\Usuario\repos\ableton-mcp-server\.venv-win\Scripts\ableton-mcp-server.exe
+   command: C:\path\to\ableton-mcp-server\.venv-win\Scripts\ableton-mcp-server.exe
    env:
      ABLETON_MCP_SERVER_HOST: 127.0.0.1
      ABLETON_MCP_SERVER_PORT: "9888"
@@ -104,7 +104,7 @@ The implementation track for these lives on `feature/v0.4.0-borrow-competitor-fe
 5. **Pre-flight**:
 
    ```powershell
-   & 'C:\Users\Usuario\repos\ableton-mcp-server\.venv-win\Scripts\ableton-mcp.exe' doctor --json
+   & 'C:\path\to\ableton-mcp-server\.venv-win\Scripts\ableton-mcp.exe' doctor --json
    ```
 
    Confirm `bridge_available: true` for both TCP and (if you need warp/devices) WS.

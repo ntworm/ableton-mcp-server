@@ -55,7 +55,7 @@ Then restart Live, select `AbletonMCPServer` under `Preferences -> Link, Tempo &
 {
   "mcpServers": {
     "ableton": {
-      "command": "C:\\Users\\Usuario\\repos\\ableton-mcp-server\\.venv-win\\Scripts\\ableton-mcp-server.exe",
+      "command": "C:\\path\\to\\ableton-mcp-server\\.venv-win\\Scripts\\ableton-mcp-server.exe",
       "args": []
     }
   }
@@ -65,7 +65,7 @@ Then restart Live, select `AbletonMCPServer` under `Preferences -> Link, Tempo &
 If you operate from **WSL2**, point the MCP client at the Windows binary so loopback stays in the host network namespace:
 
 ```text
-/mnt/c/Users/Usuario/repos/ableton-mcp-server/.venv-win/Scripts/ableton-mcp-server.exe
+/path/to/ableton-mcp-server/.venv-win/Scripts/ableton-mcp-server.exe
 ```
 
 ---
