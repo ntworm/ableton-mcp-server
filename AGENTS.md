@@ -67,6 +67,7 @@ Real Live connectivity is proven by `\.venv-win\Scripts\ableton-mcp.exe doctor -
 - A routed command change must keep contracts, Python client, Remote Script or Extension handler, models, and tests aligned.
 - Keep `pyproject.toml`, root `manifest.json`, and `AbletonMCPServer_Extension/package.json` versions aligned for a release.
 - Expected bridge errors must remain structured MCP errors; do not turn them into framework crashes.
+- `resolved` is the canonical identity sub-object on success results for `set_parameter_value`, `create_clip`, `set_tempo`, and `load_device_to_track`; future tools adopting resolved identity must use the same sub-object convention and omit unavailable name keys.
 - Never call Live Python LOM from the socket thread; defer through the request queue and `update_display()`.
 
 ## Safety
