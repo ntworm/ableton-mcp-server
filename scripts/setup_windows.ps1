@@ -21,11 +21,22 @@ if ($LASTEXITCODE -ne 0) {
     throw "Unable to install AbletonMCPServer_RemoteScript"
 }
 
-$InstallStatus = & $AbletonMcp install-status --json | ConvertFrom-Json
+$InstallStatusRaw = & $AbletonMcp install-status --json
 if ($LASTEXITCODE -ne 0) {
-    throw "Unable to verify AbletonMCPServer_RemoteScript"
+    throw "Unable to verify AbletonMCPServer_RemoteScript (install-status exited $LASTEXITCODE)"
+}
+try {
+    $InstallStatus = $InstallStatusRaw | ConvertFrom-Json
+} catch {
+    throw "Unable to verify AbletonMCPServer_RemoteScript (install-status returned invalid JSON)"
+}
+if ($null -eq $InstallStatus -or [string]::IsNullOrWhiteSpace($InstallStatus.target)) {
+    throw "Unable to verify AbletonMCPServer_RemoteScript (install-status reported no target)"
 }
 $InstalledScript = Join-Path $InstallStatus.target "__init__.py"
+if (-not (Test-Path -LiteralPath $InstalledScript)) {
+    throw "Unable to verify AbletonMCPServer_RemoteScript (expected file not found at $InstalledScript)"
+}
 $InstalledHash = Get-FileHash -LiteralPath $InstalledScript -Algorithm SHA256
 Write-Output "Remote Script verification:"
 Write-Output "  algorithm: $($InstalledHash.Algorithm)"

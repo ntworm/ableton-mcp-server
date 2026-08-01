@@ -175,34 +175,47 @@ def test_resolved_absent_on_error(mock_get_client: MagicMock) -> None:
 # ---------------------------------------------------------------------------
 
 
-@patch("ableton_mcp_server.server.get_client")
-def test_resolved_omitted_keys_when_name_unavailable(mock_get_client: MagicMock) -> None:
+def test_resolved_omitted_keys_when_name_unavailable() -> None:
     """When ``track.name`` cannot be read, ``track_name`` is omitted from
     ``resolved`` rather than serialized as an empty string. The spec §2.2
-    states the canonical signal is *key absent*."""
+    states the canonical signal is *key absent*.
 
-    client = MagicMock()
-    client.call.return_value = {
-        "created": True,
-        "clip_id": "track:0/clipslot:1/clip",
-        "length_beats": 4.0,
-        "resolved": {
-            "kind": "clip",
-            "track_index": 0,
-            "clip_index": 1,
-            "clip_id": "track:0/clipslot:1/clip",
-            # no ``track_name`` key on purpose
-        },
-    }
-    mock_get_client.return_value = client
+    Exercises the real Remote Script path: ``cmd_create_clip`` runs against
+    a real ``FakeSong`` whose track has an empty ``name``, and the wire
+    payload is asserted to omit the key.
+    """
 
-    result = server.create_clip(0, 1, 4.0)
+    from AbletonMCPServer_RemoteScript import execute_command
+    from tests.remote_fakes import FakeApplication, FakeClipSlot, FakeSong
 
-    assert "track_name" not in result["resolved"]
-    # Kind and required identity keys are still present.
-    assert result["resolved"]["kind"] == "clip"
-    assert result["resolved"]["track_index"] == 0
-    assert result["resolved"]["clip_index"] == 1
+    # Track with empty name simulates the case where ``track.name`` is
+    # unavailable or returns an empty string.
+    song = FakeSong()
+    song.tracks[0].clip_slots = [FakeClipSlot()]
+    # Force the cached attribute lookup the LOM style uses.
+    song.tracks[0].name = ""
+
+    payload = execute_command(
+        song, FakeApplication(), "create_clip",
+        {"track_index": 0, "clip_index": 0, "length_beats": 4.0},
+    )
+
+    # Canonical signal: key absent (not empty string).
+    assert "track_name" not in payload["resolved"]
+    # Required identity keys survive the omission.
+    assert payload["resolved"]["kind"] == "clip"
+    assert payload["resolved"]["track_index"] == 0
+    assert payload["resolved"]["clip_index"] == 0
+    assert payload["resolved"]["clip_id"] == "track:0/clipslot:0/clip"
+
+    # Sanity: with a non-empty name, the key IS present.
+    song2 = FakeSong()
+    song2.tracks[0].clip_slots = [FakeClipSlot()]
+    payload_with_name = execute_command(
+        song2, FakeApplication(), "create_clip",
+        {"track_index": 0, "clip_index": 0, "length_beats": 4.0},
+    )
+    assert payload_with_name["resolved"]["track_name"] == "Bass"
 
 
 # ---------------------------------------------------------------------------
