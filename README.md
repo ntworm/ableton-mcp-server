@@ -49,6 +49,17 @@ Then restart Live, select `AbletonMCPServer` under `Preferences -> Link, Tempo &
 .\.venv-win\Scripts\ableton-mcp.exe doctor --json
 ```
 
+### Verify Install
+
+Run the Remote Script status check after installation:
+
+```powershell
+.\.venv-win\Scripts\ableton-mcp.exe install-status --json
+```
+
+A current installation reports `"status": "current"`. The setup script also prints the
+installed Remote Script's SHA-256 `algorithm`, `hash`, and `path` for auditing.
+
 ### Agent Configuration (`claude_desktop_config.json` / `mcp.json`):
 
 ```json

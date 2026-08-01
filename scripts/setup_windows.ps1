@@ -21,6 +21,17 @@ if ($LASTEXITCODE -ne 0) {
     throw "Unable to install AbletonMCPServer_RemoteScript"
 }
 
+$InstallStatus = & $AbletonMcp install-status --json | ConvertFrom-Json
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to verify AbletonMCPServer_RemoteScript"
+}
+$InstalledScript = Join-Path $InstallStatus.target "__init__.py"
+$InstalledHash = Get-FileHash -LiteralPath $InstalledScript -Algorithm SHA256
+Write-Output "Remote Script verification:"
+Write-Output "  algorithm: $($InstalledHash.Algorithm)"
+Write-Output "  hash: $($InstalledHash.Hash)"
+Write-Output "  path: $($InstalledHash.Path)"
+
 Write-Output "Windows runtime: $Python"
 Write-Output "MCP executable: $(Join-Path $VenvRoot 'Scripts\ableton-mcp-server.exe')"
 Write-Output "From WSL use: /mnt/c/.../.venv-win/Scripts/ableton-mcp-server.exe"
