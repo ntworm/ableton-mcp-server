@@ -4,7 +4,7 @@
 
 An open **Model Context Protocol (MCP)** server that enables AI agents (Claude, Antigravity, Gemini, Codex) and audio developers to query, analyze, drive, and automate a running Ableton Live 12 Set.
 
-Version 0.5.1 exposes 65 tools over TCP and WebSockets (with primary device resolution via device_name, track_index, and clip_index). A FastMCP server in Python communicates with a MIDI Remote Script on TCP `127.0.0.1:9888` and an Extension Host bridge over WebSockets on `127.0.0.1:9889`.
+Version 0.5.2 exposes 65 tools over TCP and WebSockets (with primary device resolution via device_name, track_index, and clip_index). A FastMCP server in Python communicates with a MIDI Remote Script on TCP `127.0.0.1:9888` and an Extension Host bridge over WebSockets on `127.0.0.1:9889`.
 
 ---
 
@@ -48,6 +48,17 @@ Then restart Live, select `AbletonMCPServer` under `Preferences -> Link, Tempo &
 ```powershell
 .\.venv-win\Scripts\ableton-mcp.exe doctor --json
 ```
+
+### Verify Install
+
+Run the Remote Script status check after installation:
+
+```powershell
+.\.venv-win\Scripts\ableton-mcp.exe install-status --json
+```
+
+A current installation reports `"status": "current"`. The setup script also prints the
+installed Remote Script's SHA-256 `algorithm`, `hash`, and `path` for auditing.
 
 ### Agent Configuration (`claude_desktop_config.json` / `mcp.json`):
 
@@ -93,6 +104,12 @@ This project builds on design insights from seminal open-source projects:
 - [`Simon-Kansara/ableton-live-mcp-server`](https://github.com/Simon-Kansara/ableton-live-mcp-server) — Tool boundary design (Remote Script for transport/devices vs WebSocket Extension for warping/browser loading).
 
 Full notes in [docs/INSPIRATION.md](docs/INSPIRATION.md).
+
+---
+
+## ⚠️ Known Bugs
+
+Live's Object Model exposes a number of traps (path-id drift, undo semantics, WSL loopback, protocol drift, allowlist surprises) that an AI agent can hit without warning. Each one has a known workaround in the codebase; every trap is documented in [docs/KNOWN_BUGS.md](docs/KNOWN_BUGS.md). Read the executive summary at the top of that file before relying on track indexes, `run_batch`, or a TCP loopback to Live.
 
 ---
 

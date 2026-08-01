@@ -2,6 +2,8 @@
 
 The FastMCP server exposes 65 snake_case tools. Remote examples below show the JSONL command envelope after MCP/Pydantic validation. All error responses use `{"status":"error","code","message","hint?"}`.
 
+A machine-readable view of these tools (route, risk, acceptance mode, reversibility) is exposed at runtime via the `get_bridge_status` tool's `tools` list and `capability_counts` keys, derived from the canonical `TOOL_CATALOG`.
+
 The promotion gates that consume the per-tool status rows recorded by
 the acceptance runner are documented in
 [`docs/CERTIFICATION.md`](CERTIFICATION.md). That document is canonical
@@ -297,9 +299,9 @@ are explicitly allowed.
 ### `set_tempo(tempo: float)`
 
 - Params: finite BPM 20..999.
-- Returns: observed tempo.
+- Returns: observed tempo plus canonical `resolved` identity (`kind: "tempo"` and observed `tempo`).
 - Request: `{"type":"set_tempo","params":{"tempo":128.0}}`
-- Response: `{"status":"ok","result":{"tempo":128.0}}`
+- Response: `{"status":"ok","result":{"tempo":128.0,"resolved":{"kind":"tempo","tempo":128.0}}}`
 - Edge cases / side effects: one undo step; tempo automation can subsequently change the value.
 
 ### `start_playback()`
@@ -369,9 +371,9 @@ are explicitly allowed.
 ### `create_clip(track_index: int, clip_index: int, length_beats: float)`
 
 - Params: non-negative track/slot indexes and finite positive length up to 100000 beats.
-- Returns: creation flag, clip path-id, and length.
+- Returns: creation flag, clip path-id, length, and canonical `resolved` clip identity (resolved indexes, track name when available, and post-mutation clip path-id).
 - Request: `{"type":"create_clip","params":{"track_index":0,"clip_index":1,"length_beats":4.0}}`
-- Response: `{"status":"ok","result":{"created":true,"clip_id":"track:0/clipslot:1/clip","length_beats":4.0}}`
+- Response: `{"status":"ok","result":{"created":true,"clip_id":"track:0/clipslot:1/clip","length_beats":4.0,"resolved":{"kind":"clip","track_index":0,"clip_index":1,"track_name":"Bass","clip_id":"track:0/clipslot:1/clip"}}}`
 - Edge cases / side effects: one undo step; only empty Session slots on MIDI tracks are supported.
 
 ## v0.4.0 capability expansion
@@ -379,7 +381,7 @@ are explicitly allowed.
 ### `set_parameter_value(track_index, device_index, parameter_name, value)`
 
 - Params: exact parameter name and finite value within the parameter's reported bounds.
-- Returns: requested target, observed value, and `is_quantized`.
+- Returns: requested target, observed value, `is_quantized`, and canonical `resolved` device identity (resolved indexes, parameter name, and track/device names when available).
 - Request: `{"type":"set_parameter_value","params":{"track_index":0,"device_index":0,"parameter_name":"Filter Freq","value":0.75}}`
 - Edge cases / side effects: one undo step; disabled, unknown, or out-of-range parameters are rejected. Unknown names include close suggestions. The write is read back and retried once; it is valid inside `run_batch`.
 
