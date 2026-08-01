@@ -1083,7 +1083,7 @@ def _build_extension_package_json(
     """
     pkg: dict[str, Any] = {
         "name": name.lower().replace(" ", "-"),
-        "version": "0.5.1",
+        "version": "0.5.2",
         "private": True,
         "type": "module",
         "main": _EXTENSION_ENTRYPOINT_REL,
@@ -1122,7 +1122,7 @@ def _build_extension_manifest(*, name: str, author: str) -> dict[str, Any]:
         "name": name,
         "author": author,
         "entry": _EXTENSION_ENTRYPOINT_REL,
-        "version": "0.5.1",
+        "version": "0.5.2",
         "minimumApiVersion": "1.0.0",
     }
 
