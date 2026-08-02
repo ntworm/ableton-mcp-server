@@ -2,6 +2,6 @@
   "name": "AbletonMCPServer Extension",
   "author": "ntworm",
   "entry": "dist/extension.js",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "minimumApiVersion": "1.0.0"
 }

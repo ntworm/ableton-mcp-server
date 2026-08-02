@@ -9,7 +9,10 @@ from tests.remote_fakes import FakeApplication, FakeClipSlot, FakeSong
 def test_standalone_mutation_is_one_undo_step() -> None:
     app = FakeApplication()
     song = FakeSong()
-    assert execute_command(song, app, "set_tempo", {"tempo": 128.0}) == {"tempo": 128.0}
+    assert execute_command(song, app, "set_tempo", {"tempo": 128.0}) == {
+        "tempo": 128.0,
+        "resolved": {"kind": "tempo", "tempo": 128.0},
+    }
     assert (app.begin_count, app.end_count) == (1, 1)
 
 
@@ -94,7 +97,10 @@ def test_batch_advances_deferred_children_with_one_outer_undo() -> None:
     assert result["completed"] == 3  # type: ignore[index]
     assert result["aborted_at"] == 3  # type: ignore[index]
     assert result["rolled_back"] is False  # type: ignore[index]
-    assert result["results"][0]["result"] == {"tempo": 128.0}  # type: ignore[index]
+    assert result["results"][0]["result"] == {  # type: ignore[index]
+        "tempo": 128.0,
+        "resolved": {"kind": "tempo", "tempo": 128.0},
+    }
     assert result["results"][1]["result"] == {"loop": True}  # type: ignore[index]
     assert song.tempo == 128.0
     assert song.loop is True

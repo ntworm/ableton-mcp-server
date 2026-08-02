@@ -79,7 +79,11 @@ def test_all_numeric_transport_writes_wait_for_observed_state() -> None:
     processor = RequestProcessor(song, FakeApplication())
 
     for command, params, expected in (
-        ("set_tempo", {"tempo": 128.0}, {"tempo": 128.0}),
+        (
+            "set_tempo",
+            {"tempo": 128.0},
+            {"tempo": 128.0, "resolved": {"kind": "tempo", "tempo": 128.0}},
+        ),
         ("set_loop_start", {"start_beat": 4.0}, {"loop_start": 4.0}),
         ("set_loop_length", {"length_beats": 8.0}, {"loop_length": 8.0}),
     ):

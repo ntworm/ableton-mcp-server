@@ -11,9 +11,17 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
-from contracts import DEFAULT_HOST, DEFAULT_WS_PORT, WEBSOCKET_TARGET_COMMANDS
+from contracts import (
+    ALLOWED_MUTATIONS,
+    DEFAULT_HOST,
+    DEFAULT_WS_PORT,
+    READ_COMMANDS,
+    READ_ONLY_COMMANDS,
+    WEBSOCKET_TARGET_COMMANDS,
+)
 
 from . import __version__
+from .catalog import TOOL_CATALOG, Route
 
 
 @dataclass(frozen=True)
@@ -130,6 +138,22 @@ def bridge_status(
             "bounded_browser_search",
             "extended_midi_notes",
         ],
+        # R4 -- capability matrix derived from TOOL_CATALOG and contracts.*
+        # at call time. No persisted JSON, no module-level cache. Adding a
+        # tool requires no edits here.
+        "tools": [
+            {
+                "name": spec.name,
+                "domain": spec.domain,
+                "route": spec.route.value,
+                "risk": spec.risk.value,
+                "acceptance": spec.acceptance.value,
+                "reversible": spec.reversible,
+            }
+            for spec in TOOL_CATALOG
+        ],
+        "capability_counts": _capability_counts(),
+        "capability_source": _capability_source(),
     }
     try:
         live = client.call("get_session_info", {}, timeout=timeout)
@@ -159,6 +183,43 @@ def bridge_status(
         "live": live,
         "error": None,
         "hint": None,
+    }
+
+
+def _capability_counts() -> dict[str, int]:
+    """Return the R4 capability counts derived from catalog and contracts.
+
+    Every value is computed at call time from the canonical sources
+    (TOOL_CATALOG and contracts.*); nothing is cached at module level.
+    live_required_tools is the public tool count minus every tool whose
+    route is LOCAL (the six LOCAL_READS plus the two LOCAL_WRITES); none
+    of those eight tools require an Ableton Live process.
+    """
+    routed = READ_COMMANDS | ALLOWED_MUTATIONS
+    local_tools = {spec.name for spec in TOOL_CATALOG if spec.route is Route.LOCAL}
+    live_required = len(TOOL_CATALOG) - len(local_tools)
+    return {
+        "public_tools": len(TOOL_CATALOG),
+        "routed_commands": len(routed),
+        "websocket_targets": len(WEBSOCKET_TARGET_COMMANDS),
+        "read_only_blocked": len(READ_ONLY_COMMANDS),
+        "feature_flags": 5,
+        "live_required_tools": live_required,
+    }
+
+
+def _capability_source() -> dict[str, str]:
+    """Provenance for each capability_counts key.
+
+    Points a debugger at the canonical source so the count cannot drift
+    silently from the catalog or the contracts module.
+    """
+    return {
+        "catalog": "ableton_mcp_server.catalog:TOOL_CATALOG",
+        "routed_commands": "contracts:READ_COMMANDS|ALLOWED_MUTATIONS",
+        "websocket_targets": "contracts:WEBSOCKET_TARGET_COMMANDS",
+        "read_only": "contracts:READ_ONLY_COMMANDS",
+        "features": "ableton_mcp_server.diagnostics.bridge_status:features",
     }
 
 

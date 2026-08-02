@@ -81,7 +81,10 @@ def test_playback_loop_and_tempo_mutations_return_observed_state() -> None:
     assert execute_command(song, app, "start_playback", {}) == {"is_playing": True}
     assert execute_command(song, app, "stop_playback", {}) == {"is_playing": False}
     assert execute_command(song, app, "set_loop", {"enabled": True}) == {"loop": True}
-    assert execute_command(song, app, "set_tempo", {"tempo": 140}) == {"tempo": 140.0}
+    assert execute_command(song, app, "set_tempo", {"tempo": 140}) == {
+        "tempo": 140.0,
+        "resolved": {"kind": "tempo", "tempo": 140.0},
+    }
     assert (app.begin_count, app.end_count) == (4, 4)
 
 

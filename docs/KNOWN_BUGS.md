@@ -2,6 +2,16 @@
 
 The categories below describe recurring Live API failure shapes rather than one project-specific incident. The cited Live Object Model documentation currently describes Live 12.3.5; this project targets a Live 12.4 beta and therefore retains manual verification gates.
 
+## Don't try these yet
+
+The five categories below are the most likely to surprise or burn an AI agent that has not read this document end-to-end. Read the linked section before attempting anything in the same neighbourhood.
+
+- [Path-ids are session locators, not persistent handles.](#category-g--session-local-integer-paths) A `track:N` index from one call can refer to a different track on the next call; always re-resolve after structural edits. ([Category G](#category-g--session-local-integer-paths))
+- [`run_batch` is not a transaction.](#category-h--multi-command-undo-is-not-rollback) If command N fails after commands 1..N-1 already mutated the Set, a single Ctrl+Z reverts the whole prefix, not just the failing step; there is no automatic rollback. ([Category H](#category-h--multi-command-undo-is-not-rollback))
+- [WSL loopback is not Windows loopback.](#category-k--wsl-loopback-is-not-windows-loopback-under-nat) `127.0.0.1:9888` in WSL is the WSL-side NAT interface, not the Windows process hosting Live. Tool discovery works; live calls will be refused. ([Category K](#category-k--wsl-loopback-is-not-windows-loopback-under-nat))
+- [Protocol constants must be vendored, not hand-edited.](#category-f--duplicated-protocol-constants-drift) The MCP server and the Live Remote Script will silently diverge if `contracts.py` is changed without re-running `scripts/vendor_contracts.py`. ([Category F](#category-f--duplicated-protocol-constants-drift))
+- [Prefix-based mutation blocking is gone; explicit allowlist applies.](#category-i--over-defensive-prefix-blocking) A tool such as `set_tempo` is permitted because it is explicitly allowlisted, not because it passes a prefix heuristic. Do not infer permissions from tool names. ([Category I](#category-i--over-defensive-prefix-blocking))
+
 ## Category A — Deferred transport setters
 
 **Symptom:** a transport property accepts a write but reads back a different value.

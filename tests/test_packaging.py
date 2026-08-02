@@ -21,12 +21,12 @@ def test_release_version_is_aligned_across_package_metadata() -> None:
     extension_lock = json.loads(
         (ROOT / "AbletonMCPServer_Extension" / "package-lock.json").read_text(encoding="utf-8")
     )
-    assert __version__ == "0.5.1"
-    assert manifest["version"] == "0.5.1"
-    assert extension_manifest["version"] == "0.5.1"
-    assert extension_manifest_json["version"] == "0.5.1"
-    assert extension_lock["version"] == "0.5.1"
-    assert 'version = "0.5.1"' in pyproject
+    assert __version__ == "0.5.2"
+    assert manifest["version"] == "0.5.2"
+    assert extension_manifest["version"] == "0.5.2"
+    assert extension_manifest_json["version"] == "0.5.2"
+    assert extension_lock["version"] == "0.5.2"
+    assert 'version = "0.5.2"' in pyproject
 
 
 def test_runtime_dependencies_cover_imported_analysis_and_fastmcp_websockets() -> None:
@@ -88,7 +88,7 @@ def test_v040_public_docs_cover_tools_and_attribution() -> None:
         "set_clip_properties",
         "create_clip_automation",
     }
-    assert "Version 0.5.1 exposes 65 tools" in readme
+    assert "Version 0.5.2 exposes 65 tools" in readme
     for tool in new_tools:
         assert f"`{tool}`" in readme
         assert f"`{tool}" in reference

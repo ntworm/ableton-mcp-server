@@ -19,7 +19,7 @@ Install, deploy, and registration all worked. **Server cannot connect to the Liv
 | 1 | `cd /mnt/c/.../ableton-mcp-server && python3 -m venv .venv` | venv created (Linux, not Windows — see Finding F2) |
 | 2 | `.venv/bin/python3.11 -m pip install -e ".[dev]"` | timeout on first run; completed on retry; all deps including `fastmcp 3.4.4` installed |
 | 3 | `python scripts/vendor_contracts.py` | OK; `_contracts.py` regenerated with vendor diff = header only |
-| 4 | `cp -r AbletonMCPServer_RemoteScript/ /mnt/c/Users/Usuario/Documents/Ableton/User Library/Remote Scripts/AbletonMCPServer_RemoteScript/` | OK; md5 verified; `__pycache__` purged |
+| 4 | `cp -r AbletonMCPServer_RemoteScript/ /mnt/c/Users/<username>/Documents/Ableton/User Library/Remote Scripts/AbletonMCPServer_RemoteScript/` | OK; md5 verified; `__pycache__` purged |
 | 5 | Old `AbletonDebuggerMCP_RemoteScript/` deleted from User Library | OK |
 | 6 | `[Environment]::SetEnvironmentVariable('ABLETON_MCP_SERVER_VERBOSE', '1', 'User')` in PowerShell | set; persists across reboots |
 | 7 | Live closed via PowerShell | OK |
@@ -102,13 +102,12 @@ I'd recommend **Option C** — it's the smallest behaviour change for the WSL ca
 
 ```python
 def find_ableton_log_path() -> Path | None:
-    appdata = os.environ.get("APPDATA")
     if not appdata:
         return None
     ...
 ```
 
-`APPDATA` is a Windows env var. On WSL Linux it doesn't exist (unless explicitly exported from Windows). So `get_ableton_logs` will return `None`/empty when the server is launched from WSL. If the fix to F3 keeps the server on WSL, this tool needs an alternate path resolution (e.g. translate `~/.hermes/profiles/broc` → `/mnt/c/Users/Usuario/AppData/Roaming`, or read the env from the parent hermes process and re-export).
+`APPDATA` is a Windows env var. On WSL Linux it doesn't exist (unless explicitly exported from Windows). So `get_ableton_logs` will return `None`/empty when the server is launched from WSL. If the fix to F3 keeps the server on WSL, this tool needs an alternate path resolution (e.g. translate `~/.hermes/profiles/broc` → `/mnt/c/Users/<username>/AppData/Roaming`, or read the env from the parent hermes process and re-export).
 
 ### F5 — verbose env var does not appear in `Log.txt`
 
@@ -132,7 +131,7 @@ $ hermes mcp list
   ableton-mcp-server    /mnt/c/.../.venv/bin/python…   all    ✓ enabled
 
 $ hermes mcp test ableton-mcp-server
-  Transport: stdio → /mnt/c/Users/Usuario/repos/ableton-mcp-server/.venv/bin/python3.11
+  Transport: stdio → /path/to/ableton-mcp-server/.venv/bin/python3.11
   Auth: none
   ✓ Connected (12750ms)
   ✓ Tools discovered: 36

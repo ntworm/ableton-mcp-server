@@ -6,6 +6,63 @@ The canonical certification policy that governs the promotion decision
 (see `ableton-mcp acceptance --profile baseline` below) lives in
 [`docs/CERTIFICATION.md`](docs/CERTIFICATION.md).
 
+## [0.5.2] - 2026-08-01
+
+### Added
+
+- `ableton-mcp-server` `R3` — `setup_windows.ps1` now invokes
+  `ableton-mcp install-status --json`, prints the SHA-256 of the installed
+  `AbletonMCPServer_RemoteScript/__init__.py`, and surfaces the algorithm,
+  hash, and path. JSON parse, exit code, and target presence are validated
+  before the hash is computed, so partial installs and bad JSON no longer
+  fail with cryptic PowerShell errors.
+- `ableton-mcp-server` `R5` — `docs/KNOWN_BUGS.md` opens with a 5-bullet
+  "Don't try these yet" executive summary pointing at categories G, H, K,
+  F, and I. A new "## ⚠️ Known Bugs" section in `README.md` links to the
+  full document so AI agents surface the constraints before relying on
+  track indexes, `run_batch`, or a TCP loopback to Live.
+- `ableton-mcp-server` `R1` — every successful mutation from
+  `set_parameter_value`, `create_clip`, `set_tempo`, and
+  `load_device_to_track` now returns a `resolved` sub-object. The shape
+  is canonical across all four tools: `kind`, the location keys, and the
+  name keys that were actually observed (`track_name` and
+  `device_name` are omitted when the LOM returned an empty value, not
+  emitted as empty strings). The transport shape is documented in
+  `docs/superpowers/specs/2026-08-01-r1-resolved-field.md`.
+- `ableton-mcp-server` `R4` — `get_bridge_status` now returns a
+  capability matrix alongside the existing transport diagnostics:
+  `tools` (65 entries with `name`, `route`, `risk`, and `acceptance`),
+  `capability_counts` (6 named invariants), and `capability_source`
+  (5 pointers to the canonical modules that hold each invariant). The
+  full design lives in
+  `docs/superpowers/specs/2026-08-01-r4-capability-matrix.md`. The
+  narrative `docs/TOOL_REFERENCE.md` remains the hand-curated source of
+  truth for human readers; the matrix is the machine-checkable mirror.
+
+### Changed
+
+- `test_build_extension.py::test_build_extension_propagates_subprocess_failure`
+  was replaced by `test_build_extension_surfaces_nonzero_returncode`,
+  which exercises the real `build_extension` failure path: a non-zero
+  returncode is now asserted against the JSON payload that the function
+  actually returns (`{"status": "error", "steps": [...]}`). The
+  exception-propagation path is now covered separately by
+  `test_build_extension_propagates_subprocess_exception`.
+- `test_resolved_envelope.py::test_resolved_omitted_keys_when_name_unavailable`
+  now drives the real `cmd_create_clip` against a `FakeSong` whose
+  track name is empty, instead of mocking the client. The canonical
+  signal — `track_name` key absent from `resolved` — is asserted
+  end-to-end through the Remote Script and a sanity case confirms
+  the key is present when the name is non-empty.
+
+### Fixed
+
+- `setup_windows.ps1` no longer crashes with an unhandled JSON parse
+  error when `install-status` exits non-zero with a non-JSON payload.
+- `setup_windows.ps1` no longer crashes with an unhandled
+  `Get-FileHash` error when the Remote Script install target directory
+  is missing the expected `__init__.py`.
+
 ## [0.5.1] - 2026-07-13
 
 ### Added

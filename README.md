@@ -1,114 +1,118 @@
 # ableton-mcp-server
 
-An MCP server that lets an agent drive a running Ableton Live Set.
+[**:globe_with_meridians: Live Landing Page & Interactive 65-Tool Catalog**](https://ntworm.github.io/ableton-mcp-server/) · [**Architecture Diagram**](docs/ARCHITECTURE.md) · [**Tool Index**](docs/TOOL_REFERENCE.md)
 
-Version 0.5.1 exposes 65 tools. A FastMCP server in Python talks to a MIDI
-Remote Script on TCP `127.0.0.1:9888` and to an Extension Host bridge over
-WebSockets on `127.0.0.1:9889`. Live runs on Windows; the WSL client runs
-the Windows binary so the loopback stays in the right network namespace.
-Verify a clean install with `scripts/verify_clean_install.ps1`.
+An open **Model Context Protocol (MCP)** server that enables AI agents (Claude, Antigravity, Gemini, Codex) and audio developers to query, analyze, drive, and automate a running Ableton Live 12 Set.
 
-See the [architecture diagram](docs/ARCHITECTURE.md) and the
-[tool index](docs/TOOL_REFERENCE.md) for the full surface.
+Version 0.5.2 exposes 65 tools over TCP and WebSockets (with primary device resolution via device_name, track_index, and clip_index). A FastMCP server in Python communicates with a MIDI Remote Script on TCP `127.0.0.1:9888` and an Extension Host bridge over WebSockets on `127.0.0.1:9889`.
 
-## Why this exists
+---
 
-This is a working tool, not a clean-room reference implementation. It exists
-because one person writes, performs and debugs Live Sets with an agent in the
-loop, and the off-the-shelf pieces didn't cover the workflow — the live
-session lifecycle (save, quit, fade between tracks), offline mix analysis,
-and a WSL topology that actually works against a Windows Live install.
+## ⚡ What is Model Context Protocol (MCP) & How Agents Use It
 
-The contract layout borrows from a few predecessors. The code is written
-from scratch. See [Inspiration & prior art](docs/INSPIRATION.md) for the
-full attribution and the projects that shaped this codebase.
+**Model Context Protocol (MCP)** is an open standard developed by Anthropic for secure, local communication between Large Language Models (LLMs) and desktop applications.
 
-## Projects I read while building this
+> **Local IPC / stdio (Not a Cloud Service):**  
+> `ableton-mcp-server` runs locally on your host OS over standard input/output (`stdio`) or IPC loopback. The AI agent spawns the `ableton-mcp-server.exe` process directly. There are no external cloud endpoints or API keys required, guaranteeing zero network latency and maximum privacy.
 
-- `pnomolos/live-wire` — the TCP JSONL bridge shape and the per-tick
-  write-then-verify loop.
-- `hidingwill/AbletonBridge` — group `run_batch` semantics with
-  `rolled_back: false` on partial failure.
-- `ideoforms/AbletonOSC` — the Open Sound Control command conventions used
-  by the Extension Host bridge.
-- `ideoforms/pylive` — Python LOM reference for the introspection surface.
-- `Simon-Kansara/ableton-live-mcp-server` — anchors the decision to keep
-  transport, clips, tracks and devices on the Python Remote Script path
-  and route warping and device loading through the WebSocket Extension.
+### How AI Agents Interact with Ableton Live:
+1. **Tool Discovery (`tools/list`)**: When an MCP client (Claude Desktop, Antigravity, Cursor) launches the server, it automatically discovers all 65 tool schemas.
+2. **Tool Execution (`tools/call`)**: When the LLM decides to manipulate Ableton Live, it issues JSON-RPC messages (e.g. `set_tempo(tempo=128.0)` or `create_clip(...)`).
+3. **Write-Then-Verify Loop**: The server writes to Live's local socket and verifies object model state before returning a result.
+4. **Self-Correcting Error Taxonomy**: If an error occurs, the server returns structured codes (`CAPABILITY_UNAVAILABLE`, `AMBIGUOUS_MATCH`, `VERIFICATION_FAILED`), enabling the agent to reason and adapt.
 
-Full notes in [docs/INSPIRATION.md](docs/INSPIRATION.md).
+### Recommended System Prompt for AI Agents:
+```text
+You have direct access to an active Ableton Live Set via ableton-mcp-server (65 tools).
+1. Always start by inspecting the project state using `get_session_overview()` or `get_track_list()`.
+2. To modify track properties, resolve the target track index using `live_find_track(name_pattern)` first.
+3. For parameter adjustments, query parameters via `get_device_list()` and `get_parameter_value()`, then apply changes using `set_parameter_value()`.
+4. When executing multiple operations, bundle them using `run_batch(operations)` to ensure atomic execution.
+5. Respect the error taxonomy: if you receive `AMBIGUOUS_MATCH` or `VERIFICATION_FAILED`, inspect track context and retry.
+```
 
-## Use it
+---
 
-License is MIT. Copy, fork, ship — see [LICENSE](LICENSE).
+## 🛠️ Use It
 
-Windows install (one-shot):
+License is **MIT**. Copy, fork, ship — see [LICENSE](LICENSE).
+
+### Windows Install (one-shot):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1
 ```
 
-Then restart Live, select `AbletonMCPServer` under `Preferences -> Link,
-Tempo & MIDI -> Control Surfaces`, and use the CLI:
+Then restart Live, select `AbletonMCPServer` under `Preferences -> Link, Tempo & MIDI -> Control Surfaces`, and verify the installation:
 
 ```powershell
 .\.venv-win\Scripts\ableton-mcp.exe doctor --json
 ```
 
-If you're on WSL, point the MCP client at the Windows binary:
+### Verify Install
 
-```text
-/mnt/c/Users/Usuario/repos/ableton-mcp-server/.venv-win/Scripts/ableton-mcp-server.exe
+Run the Remote Script status check after installation:
+
+```powershell
+.\.venv-win\Scripts\ableton-mcp.exe install-status --json
 ```
 
-Native Linux Python inside WSL NAT won't reach the Live loopback. Don't
-expose or forward port `9889` to a LAN — the JSONL protocol has no auth.
-The cross-bridge error taxonomy is documented in `ableton_mcp_server.errors`
-and includes `CAPABILITY_UNAVAILABLE`, `AMBIGUOUS_MATCH`,
-`VERIFICATION_FAILED`, and `ACCEPTANCE_GUARD_FAILED`.
+A current installation reports `"status": "current"`. The setup script also prints the
+installed Remote Script's SHA-256 `algorithm`, `hash`, and `path` for auditing.
 
-## What it does
+### Agent Configuration (`claude_desktop_config.json` / `mcp.json`):
 
-65 MCP tools grouped by area:
+```json
+{
+  "mcpServers": {
+    "ableton": {
+      "command": "C:\\path\\to\\ableton-mcp-server\\.venv-win\\Scripts\\ableton-mcp-server.exe",
+      "args": []
+    }
+  }
+}
+```
 
-- Transport and session: `get_session_info`, `set_tempo`, `start_playback`,
-  `stop_playback`, `get_loop_settings`, `set_loop`, `set_loop_start`,
-  `set_loop_length`, `set_current_song_time`, `get_song_length`,
-  `get_session_overview`, `get_scenes`, `get_scene_state`, `fire_scene`,
-  `fire_clip`.
-- Tracks and devices: `get_track_list`, `live_find_track`, `get_track_state`,
-  `get_device_list`, `get_parameter_value`, `get_clip_summary`,
-  `set_parameter_value`, `create_clip`, `get_clip_notes`, `add_notes_to_clip`,
-  `delete_clip`, `clear_clip_notes`, `set_clip_properties`, `get_clip_info`,
-  `set_track_property`, `create_audio_track`, `get_routing`, `diff_snapshots_tool`,
-  `take_snapshot`, `get_selected_context`, `search_browser`,
-  `load_device_to_track` accepts `device_name` (primary) or `device_uri`
-  (deprecated alias). `get_warp_state` is read-only; `set_warp_state` rejects
-  marker writes at the model layer.
-- Lifecycle: `lifecycle_status`, `save_set`, `quit_ableton`, `live_fade`,
-  `create_clip_automation`.
-- Offline mix analysis: `analyze_audio`, `find_frequency_masking`,
-  `analyze_mix`, `extract_single_cycle`. Input is a file path; no Live
-  required; LUFS-I, true peak, single-cycle extraction.
-- Test/inspection: `run_batch`, `get_locators`, `create_cue_point`,
-  `delete_cue_point`, `bulk_create_cue_points`, `get_control_surfaces`,
-  `get_browser_categories`, `get_project_metadata`, `get_ableton_logs`,
-  `get_bridge_status`.
+If you operate from **WSL2**, point the MCP client at the Windows binary so loopback stays in the host network namespace:
 
-WSL-safe executable path is the canonical deployment, not an afterthought.
-A guarded acceptance runner lives at `ableton-mcp acceptance --profile
-baseline` and is gated to a disposable Set called `TESTE_CODEX`.
+```text
+/path/to/ableton-mcp-server/.venv-win/Scripts/ableton-mcp-server.exe
+```
 
-## Stability
+---
 
-The 65-tool catalog is the immutable surface for the v0.5.x line. Per-tool
-status reports drive release decisions; see
-[docs/CERTIFICATION.md](docs/CERTIFICATION.md) for the policy.
+## 📦 What It Does (65 MCP Tools)
 
-## Changelog
+The 65 MCP tools are grouped into 5 operational domains:
 
-[CHANGELOG.md](CHANGELOG.md) tracks the public surface.
+- **Transport & Session**: `get_session_info`, `set_tempo`, `start_playback`, `stop_playback`, `get_loop_settings`, `set_loop`, `set_loop_start`, `set_loop_length`, `set_current_song_time`, `get_song_length`, `get_session_overview`, `get_scenes`, `get_scene_state`, `fire_scene`, `fire_clip`.
+- **Tracks & Devices**: `get_track_list`, `live_find_track`, `get_track_state`, `get_device_list`, `get_parameter_value`, `get_clip_summary`, `set_parameter_value`, `create_clip`, `get_clip_notes`, `add_notes_to_clip`, `delete_clip`, `clear_clip_notes`, `set_clip_properties`, `get_clip_info`, `set_track_property`, `create_audio_track`, `get_routing`, `diff_snapshots_tool`, `take_snapshot`, `get_selected_context`, `search_browser`, `load_device_to_track`, `get_warp_state`.
+- **Lifecycle & Automation**: `lifecycle_status`, `save_set`, `quit_ableton`, `live_fade`, `create_clip_automation`.
+- **Offline Mix Analysis**: `analyze_audio`, `find_frequency_masking`, `analyze_mix`, `extract_single_cycle` (LUFS-I, True Peak, dynamic range, spectral collision).
+- **Inspection & Batch Execution**: `run_batch`, `get_locators`, `create_cue_point`, `delete_cue_point`, `bulk_create_cue_points`, `get_control_surfaces`, `get_browser_categories`, `get_project_metadata`, `get_ableton_logs`, `get_bridge_status`.
 
-## License
+---
 
-MIT — Copyright (c) 2026 ntworm. See [LICENSE](LICENSE).
+## 💡 Inspiration & Prior Art
+
+This project builds on design insights from seminal open-source projects:
+
+- [`pnomolos/live-wire`](https://github.com/pnomolos/live-wire) — TCP JSONL Remote Script layout, typed error envelopes, per-tick verification loop.
+- [`hidingwill/AbletonBridge`](https://github.com/hidingwill/AbletonBridge) — `run_batch` transaction semantics and attribute verification.
+- [`ideoforms/AbletonOSC`](https://github.com/ideoforms/AbletonOSC) — OSC command naming and Extension Host bridge conventions.
+- [`ideoforms/pylive`](https://github.com/ideoforms/pylive) — Python LOM introspection reference.
+- [`Simon-Kansara/ableton-live-mcp-server`](https://github.com/Simon-Kansara/ableton-live-mcp-server) — Tool boundary design (Remote Script for transport/devices vs WebSocket Extension for warping/browser loading).
+
+Full notes in [docs/INSPIRATION.md](docs/INSPIRATION.md).
+
+---
+
+## ⚠️ Known Bugs
+
+Live's Object Model exposes a number of traps (path-id drift, undo semantics, WSL loopback, protocol drift, allowlist surprises) that an AI agent can hit without warning. Each one has a known workaround in the codebase; every trap is documented in [docs/KNOWN_BUGS.md](docs/KNOWN_BUGS.md). Read the executive summary at the top of that file before relying on track indexes, `run_batch`, or a TCP loopback to Live.
+
+---
+
+## 📜 License
+
+**MIT** — Copyright (c) 2026 Gabriel Worm (ntworm). See [LICENSE](LICENSE).

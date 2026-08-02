@@ -16,7 +16,7 @@
 Run from PowerShell after opening a disposable Live Set named e.g. `TESTE_CODEX`:
 
 ```powershell
-& 'C:\Users\Usuario\repos\ableton-mcp-server\.venv-win\Scripts\ableton-mcp.exe' acceptance --project-name TESTE_CODEX --track-index 0 --clip-index 3
+& 'C:\path\to\ableton-mcp-server\.venv-win\Scripts\ableton-mcp.exe' acceptance --project-name TESTE_CODEX --track-index 0 --clip-index 3
 ```
 
 The CLI refuses to run without an explicit `--project-name` and exits non-zero if the loaded Set does not match.
@@ -25,7 +25,7 @@ The CLI refuses to run without an explicit `--project-name` and exits non-zero i
 The repository now ships `scripts/setup_windows.ps1`, which provisions a Windows-native virtualenv at `.venv-win\`, installs the package in editable mode, deploys the Remote Script to Live's User Library, and prints the exact stdio command line to plug into any MCP client.
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File 'C:\Users\Usuario\repos\ableton-mcp-server\scripts\setup_windows.ps1'
+powershell -ExecutionPolicy Bypass -File 'C:\path\to\ableton-mcp-server\scripts\setup_windows.ps1'
 ```
 
 ### Bridge doctor (new)
@@ -46,13 +46,13 @@ The Live Remote Script binds `127.0.0.1:9888` only; on WSL, hermes launches the 
 3. Plug the printed `.exe` path into your MCP client's stdio config. For hermes:
 
 ```
-command: C:\Users\Usuario\repos\ableton-mcp-server\.venv-win\Scripts\ableton-mcp-server.exe
+command: C:\path\to\ableton-mcp-server\.venv-win\Scripts\ableton-mcp-server.exe
 env:
   ABLETON_MCP_SERVER_HOST: 127.0.0.1
   ABLETON_MCP_SERVER_PORT: "9888"
 ```
 
-For a WSL hermes client, the same path is reachable via `/mnt/c/Users/Usuario/repos/ableton-mcp-server/.venv-win/Scripts/ableton-mcp-server.exe`.
+For a WSL hermes client, the same path is reachable via `/path/to/ableton-mcp-server/.venv-win/Scripts/ableton-mcp-server.exe`.
 
 ---
 

@@ -575,6 +575,7 @@ def _set_parameter_value_steps(
     if device_index >= len(devices):
         raise RemoteError(ERROR_INVALID_PARAMS, "Device index %s does not exist." % device_index)
     parameters = list(_safe(lambda: devices[device_index].parameters, []))
+    device = devices[device_index]
     parameter = next(
         (
             item
@@ -608,10 +609,23 @@ def _set_parameter_value_steps(
         yield
         observed = float(parameter.value)
         if is_quantized or abs(observed - requested) < 1e-6:
+            resolved = {
+                "kind": "device",
+                "track_index": track_index,
+                "device_index": device_index,
+                "parameter_name": parameter_name,
+            }
+            track_name = str(_safe(lambda: track.name, ""))
+            device_name = str(_safe(lambda: device.name, ""))
+            if track_name:
+                resolved["track_name"] = track_name
+            if device_name:
+                resolved["device_name"] = device_name
             return {
                 "target": requested,
                 "value": observed,
                 "is_quantized": is_quantized,
+                "resolved": resolved,
             }
     raise RemoteError(
         ERROR_INTERNAL_ERROR,
@@ -1267,10 +1281,21 @@ def cmd_create_clip(song: Any, _application: Any, params: dict[str, Any]) -> dic
     if bool(_safe(lambda: slot.has_clip, False)):
         raise RemoteError(ERROR_BAD_INPUT, "Clip slot is not empty.")
     slot.create_clip(length)
+    clip_id = "track:%s/clipslot:%s/clip" % (track_index, clip_index)
+    resolved = {
+        "kind": "clip",
+        "track_index": track_index,
+        "clip_index": clip_index,
+        "clip_id": clip_id,
+    }
+    track_name = str(_safe(lambda: track.name, ""))
+    if track_name:
+        resolved["track_name"] = track_name
     return {
         "created": True,
-        "clip_id": "track:%s/clipslot:%s/clip" % (track_index, clip_index),
+        "clip_id": clip_id,
         "length_beats": length,
+        "resolved": resolved,
     }
 
 
@@ -2252,14 +2277,14 @@ def _dispatch_command_steps(
         return (yield from _verified_playhead_steps(song, target))
     if normalized == "set_tempo":
         tempo = _float_param(params, "tempo", 20.0, 999.0)
-        return (
-            yield from _verified_numeric_steps(
-                song,
-                attribute="tempo",
-                expected=tempo,
-                result_key="tempo",
-            )
+        result: dict[str, Any] = yield from _verified_numeric_steps(
+            song,
+            attribute="tempo",
+            expected=tempo,
+            result_key="tempo",
         )
+        result["resolved"] = {"kind": "tempo", "tempo": result["tempo"]}
+        return result
     if normalized == "set_parameter_value":
         return (yield from _set_parameter_value_steps(song, params))
     if normalized == "clear_clip_notes":

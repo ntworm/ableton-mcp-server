@@ -165,12 +165,20 @@ async function handleLoadDeviceToTrack(params: any) {
     );
   }
   const device = await track.insertDevice(deviceName, index);
+  const trackName = track.name;
 
   return {
     status: "loaded",
     track_index: params.track_index,
     device_name: device.name,
     device_index: index,
+    resolved: {
+      kind: "device",
+      track_index: params.track_index,
+      device_index: index,
+      track_name: trackName,
+      device_name: device.name,
+    },
   };
 }
 
