@@ -113,9 +113,7 @@ def test_acceptance_and_remote_script_share_unity_value() -> None:
     side without the other.
     """
     remote_value = _read_remote_script_unity_value()
-    assert remote_value is not None, (
-        "could not locate LIVE_FADE_UNITY_VALUE in the Remote Script"
-    )
+    assert remote_value is not None, "could not locate LIVE_FADE_UNITY_VALUE in the Remote Script"
     assert remote_value == acceptance_module.LIVE_FADE_UNITY_VALUE, (
         f"runner LIVE_FADE_UNITY_VALUE="
         f"{acceptance_module.LIVE_FADE_UNITY_VALUE!r} "
@@ -245,9 +243,7 @@ def test_live_fade_probe_does_not_hardcode_unity_factor_value() -> None:
         acceptance_pkg / "runner.py",
         acceptance_pkg / "helpers.py",
     ]
-    acceptance_source = "\n".join(
-        p.read_text(encoding="utf-8") for p in sources if p.exists()
-    )
+    acceptance_source = "\n".join(p.read_text(encoding="utf-8") for p in sources if p.exists())
 
     forbidden_magic_numbers = {
         "0.425": "UNITY_TIMES_HALF_HARDCODED",
@@ -263,9 +259,7 @@ def test_live_fade_probe_does_not_hardcode_unity_factor_value() -> None:
     code_only = "\n".join(code_lines)
 
     hits = {
-        label: literal
-        for literal, label in forbidden_magic_numbers.items()
-        if literal in code_only
+        label: literal for literal, label in forbidden_magic_numbers.items() if literal in code_only
     }
     assert not hits, (
         "runner hardcoded live_fade unity-derived literals instead "

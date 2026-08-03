@@ -309,9 +309,7 @@ async def run_live_acceptance(
             if offline_probes is None:
                 import sys as _sys
 
-                probe_callable = _sys.modules[
-                    "ableton_mcp_server.acceptance"
-                ].run_offline_probes
+                probe_callable = _sys.modules["ableton_mcp_server.acceptance"].run_offline_probes
             else:
                 probe_callable = offline_probes
             await probe_callable(report, offline_dir)
@@ -720,9 +718,7 @@ async def run_live_acceptance(
                     # Original warp state for restore.
                     original_warp = None
                     track_creation_runner: Callable[[str], Awaitable[str]] | None = None
-                    if (
-                        baseline["track_types"].get(audio_track_index) == "audio"
-                    ):
+                    if baseline["track_types"].get(audio_track_index) == "audio":
                         try:
                             audio_slots = call(
                                 "get_clip_summary", {"track_index": audio_track_index}
@@ -771,9 +767,7 @@ async def run_live_acceptance(
                                         "save_set returned saved=true but "
                                         f"get_project_metadata still shows is_dirty={dirty_val}"
                                     )
-                                report.record(
-                                    Verification("save_set", "live_passed", "saved=true")
-                                )
+                                report.record(Verification("save_set", "live_passed", "saved=true"))
                                 return
                             if saved is False and api_avail is False:
                                 save_steps = (
@@ -822,6 +816,7 @@ async def run_live_acceptance(
                                         "save_set", "failed", f"{type(error).__name__}: {error}"
                                     )
                                 )
+
                         # ----- cue points -----
                         async def run_create_cue() -> str:
                             call("create_cue_point", {"name": cue_name, "time": cue_time})
@@ -1393,8 +1388,7 @@ async def run_live_acceptance(
                                 )
                                 if not isinstance(rb_value, dict):
                                     raise AssertionError(
-                                        "set_parameter_value readback failed "
-                                        "(no dict response)"
+                                        "set_parameter_value readback failed (no dict response)"
                                     )
                                 rb_val = float(rb_value.get("value", 0.0))
                                 if abs(rb_val - target) > prop_tol:
@@ -1441,10 +1435,7 @@ async def run_live_acceptance(
                             ):
                                 raise AssertionError("live_fade immediate readback failed")
                             _expected_immediate = LIVE_FADE_UNITY_VALUE * (50.0 / 100.0)
-                            if (
-                                abs(float(post_immediate["volume"]) - _expected_immediate)
-                                > 0.05
-                            ):
+                            if abs(float(post_immediate["volume"]) - _expected_immediate) > 0.05:
                                 raise AssertionError(
                                     "live_fade immediate target mismatch "
                                     f"(expected {_expected_immediate}, "
@@ -1547,9 +1538,7 @@ async def run_live_acceptance(
                                 or len(devs_after) != count_before + 1
                             ):
                                 post_str = (
-                                    len(devs_after)
-                                    if isinstance(devs_after, list)
-                                    else "non-list"
+                                    len(devs_after) if isinstance(devs_after, list) else "non-list"
                                 )
                                 raise AssertionError(
                                     "load_device_to_track did not increase device count by 1: "
@@ -1634,11 +1623,7 @@ async def run_live_acceptance(
                                 )
 
                             created_track = next(
-                                (
-                                    t
-                                    for t in post_tracks
-                                    if int(t.get("index", -1)) == new_index
-                                ),
+                                (t for t in post_tracks if int(t.get("index", -1)) == new_index),
                                 None,
                             )
                             if created_track is None or created_track.get("type") != kind:
@@ -1881,9 +1866,7 @@ async def run_live_acceptance(
                             if ttype in ("midi", "audio")
                         )
                         for idx in _cleanup_indices_mute_solo:
-                            original = bool(
-                                baseline.get("track_mutes", {}).get(idx, False)
-                            )
+                            original = bool(baseline.get("track_mutes", {}).get(idx, False))
 
                             def _restore_mute(
                                 _idx: int = idx,
@@ -1920,9 +1903,7 @@ async def run_live_acceptance(
                                 verify=_verify_mute,
                             )
                         for idx in _cleanup_indices_mute_solo:
-                            original = bool(
-                                baseline.get("track_solos", {}).get(idx, False)
-                            )
+                            original = bool(baseline.get("track_solos", {}).get(idx, False))
 
                             def _restore_solo(
                                 _idx: int = idx,
@@ -1959,9 +1940,7 @@ async def run_live_acceptance(
                                 verify=_verify_solo,
                             )
                         for idx in _cleanup_indices_arm:
-                            original = bool(
-                                baseline.get("track_arms", {}).get(idx, False)
-                            )
+                            original = bool(baseline.get("track_arms", {}).get(idx, False))
 
                             def _restore_arm(
                                 _idx: int = idx,
@@ -2009,9 +1988,7 @@ async def run_live_acceptance(
                         if "live_fade_volume_original" in artifacts:
                             restore_target = artifacts["live_fade_volume_original"]
                             target_track = int(
-                                artifacts.get(
-                                    "live_fade_track_index", fade_track_index
-                                )
+                                artifacts.get("live_fade_track_index", fade_track_index)
                             )
 
                             def _verify_volume(_o: Any) -> None:

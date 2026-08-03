@@ -675,9 +675,7 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str, params: dict[st
             # ``tests/test_acceptance_live_fade_percent.py`` cannot
             # observe the actual Live behaviour, and any acceptance
             # probe that asserts on ``volume`` drifts.
-            target_value = (
-                float(target_percent) / 100.0 * 0.8500000238418579
-            )
+            target_value = float(target_percent) / 100.0 * 0.8500000238418579
         if target_value is not None:
             target_value = float(target_value)
             s.setdefault("mixer_volumes", {})[track_id] = max(

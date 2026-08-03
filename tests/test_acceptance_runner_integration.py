@@ -482,6 +482,7 @@ def test_save_set_order_and_is_dirty_checking() -> None:
 
 def test_preflight_is_dirty_missing_or_ambiguous() -> None:
     """Verify that metadata missing is_dirty or non-False value raises error."""
+
     class MissingDirtyBridge(StrictFakeBridge):
         def call(self, command_type: str, params: Any = None, *, timeout: Any = None) -> Any:
             if command_type == "get_project_metadata":
@@ -856,6 +857,7 @@ def test_parameter_discovery_stale_list_device_params_and_small_range() -> None:
 
 def test_parameter_write_ignored_by_fake_causes_probe_failure() -> None:
     """Verify that if set_parameter_value fails to apply on host, the probe records failed."""
+
     class RefusingParamBridge(StrictFakeBridge):
         def call(self, command_type: str, params: Any = None, *, timeout: Any = None) -> Any:
             if command_type == "set_parameter_value":
@@ -881,6 +883,7 @@ def test_parameter_write_ignored_by_fake_causes_probe_failure() -> None:
 
 def test_load_device_to_track_preexisting_operator_causes_failure() -> None:
     """Verify that returning success without increasing device count fails load_device_to_track."""
+
     class NoOpLoadBridge(StrictFakeBridge):
         async def call_ws(self, method: str, params: Any = None, *, timeout: float = 2.0) -> Any:
             if method == "load_device_to_track":
@@ -912,6 +915,7 @@ def test_load_device_to_track_preexisting_operator_causes_failure() -> None:
 
 def test_create_track_existing_index_or_inconsistent_type_causes_failure() -> None:
     """Verify that returning existing track index for create_audio_track fails the probe."""
+
     class ExistingIndexTrackBridge(StrictFakeBridge):
         def call(self, command_type: str, params: Any = None, *, timeout: Any = None) -> Any:
             if command_type == "create_audio_track":
@@ -958,6 +962,7 @@ def test_live_fade_restore_uses_fallback_track_index() -> None:
 
 def test_small_parameter_range_write_failure() -> None:
     """Verify write failure on micro range (0.0 to 0.000001) is detected."""
+
     class RefusingMicroBridge(StrictFakeBridge):
         def call(self, command_type: str, params: Any = None, *, timeout: Any = None) -> Any:
             if command_type == "set_parameter_value":
@@ -1007,6 +1012,7 @@ def test_small_parameter_range_write_failure() -> None:
 )
 def test_load_device_to_track_contract_robustness(t_case: str, expected_err: str) -> None:
     """Verify load_device_to_track fails when pre-query is non-list or index is negative."""
+
     class RobustnessBridge(StrictFakeBridge):
         def call(self, command_type: str, params: Any = None, *, timeout: Any = None) -> Any:
             if command_type == "get_device_list" and t_case == "non_list_devs":
@@ -1061,7 +1067,8 @@ def test_save_set_precedes_all_mutations_global_timeline() -> None:
         )
     )
     mutations = [
-        t for t in bridge.timeline_calls
+        t
+        for t in bridge.timeline_calls
         if t[1] not in _READ_ONLY_TCP_COMMANDS and t[1] != "get_warp_state"
     ]
     assert mutations[0][1] == "save_set"
@@ -1088,6 +1095,7 @@ def test_save_set_precedes_all_mutations_global_timeline() -> None:
 )
 def test_track_creation_negative_matrix(tool_name: str, subclass_behavior: str) -> None:
     """Verify track creation negative cases result in probe failure."""
+
     class TrackCreationBadBridge(StrictFakeBridge):
         def call(self, command_type: str, params: Any = None, *, timeout: Any = None) -> Any:
             if command_type == tool_name:
@@ -1133,6 +1141,7 @@ def test_track_creation_negative_matrix(tool_name: str, subclass_behavior: str) 
 
 def test_save_set_api_unavailable_recorded_as_manual_required_and_release_ready() -> None:
     """Verify save_set api_available=false is manual_required and permits release_ready."""
+
     class ApiUnavailSaveBridge(StrictFakeBridge):
         def call(self, command_type: str, params: Any = None, *, timeout: Any = None) -> Any:
             if command_type == "save_set":

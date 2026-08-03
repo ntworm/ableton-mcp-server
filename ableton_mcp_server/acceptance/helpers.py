@@ -49,14 +49,10 @@ def _acceptance_safe_cue_times(
     when ``song_length`` is non-positive.
     """
     if song_length is None or not isinstance(song_length, (int, float)):
-        raise AcceptanceSafetyError(
-            f"song_length must be a positive number, got {song_length!r}"
-        )
+        raise AcceptanceSafetyError(f"song_length must be a positive number, got {song_length!r}")
     song_length_f = float(song_length)
     if song_length_f <= 0.0:
-        raise AcceptanceSafetyError(
-            f"song_length must be positive, got {song_length_f}"
-        )
+        raise AcceptanceSafetyError(f"song_length must be positive, got {song_length_f}")
     if grid <= 0.0:
         raise AcceptanceSafetyError(f"grid must be positive, got {grid}")
 
@@ -122,18 +118,12 @@ def _write_sine_wav(
 def _synthesize_offline_inputs(directory: Path) -> dict[str, Path]:
     directory.mkdir(parents=True, exist_ok=True)
     return {
-        "target": _write_sine_wav(
-            directory / "target.wav", hz=1000.0, amplitude=0.8, seconds=1.0
-        ),
+        "target": _write_sine_wav(directory / "target.wav", hz=1000.0, amplitude=0.8, seconds=1.0),
         "reference": _write_sine_wav(
             directory / "reference.wav", hz=1000.0, amplitude=0.2, seconds=1.0
         ),
-        "short": _write_sine_wav(
-            directory / "short.wav", hz=440.0, amplitude=0.5, seconds=0.5
-        ),
-        "long": _write_sine_wav(
-            directory / "long.wav", hz=440.0, amplitude=0.25, seconds=1.0
-        ),
+        "short": _write_sine_wav(directory / "short.wav", hz=440.0, amplitude=0.5, seconds=0.5),
+        "long": _write_sine_wav(directory / "long.wav", hz=440.0, amplitude=0.25, seconds=1.0),
     }
 
 

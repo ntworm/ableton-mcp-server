@@ -122,16 +122,11 @@ def discover_baseline(client: AcceptanceClient) -> BaselineSnapshot:
     locators = client.call("get_locators")
     song_length_payload = client.call("get_song_length")
     if not isinstance(song_length_payload, dict):
-        raise AcceptanceSafetyError(
-            f"get_song_length returned non-dict: {song_length_payload!r}"
-        )
+        raise AcceptanceSafetyError(f"get_song_length returned non-dict: {song_length_payload!r}")
     song_length_value = song_length_payload.get("song_length")
-    if not isinstance(song_length_value, (int, float)) or isinstance(
-        song_length_value, bool
-    ):
+    if not isinstance(song_length_value, (int, float)) or isinstance(song_length_value, bool):
         raise AcceptanceSafetyError(
-            f"get_song_length.song_length must be a positive number, "
-            f"got {song_length_value!r}"
+            f"get_song_length.song_length must be a positive number, got {song_length_value!r}"
         )
     song_length_f = float(song_length_value)
     if song_length_f <= 0.0:

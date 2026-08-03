@@ -97,10 +97,7 @@ def _discover_first_enabled_device_parameter(
                                 for p in params_list:
                                     if not isinstance(p, dict):
                                         continue
-                                    if (
-                                        p.get("is_enabled") is False
-                                        or p.get("enabled") is False
-                                    ):
+                                    if p.get("is_enabled") is False or p.get("enabled") is False:
                                         continue
                                     p_name = p.get("name")
                                     if not isinstance(p_name, str) or not p_name:
@@ -168,9 +165,7 @@ async def run(
             _min_val,
             _max_val,
             _is_quant,
-        ) = _discover_first_enabled_device_parameter(
-            client, snapshot, track_index, call
-        )
+        ) = _discover_first_enabled_device_parameter(client, snapshot, track_index, call)
     else:
         discovered_track_index = None
         discovered_device_index = None

@@ -118,9 +118,7 @@ def _release_ready(
     if any(row.status == "host_unavailable" for row in rows):
         return False
     if any(
-        row.status == "environment_unavailable"
-        and row.tool != "build_extension"
-        for row in rows
+        row.status == "environment_unavailable" and row.tool != "build_extension" for row in rows
     ):
         return False
     return not any(

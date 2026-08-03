@@ -134,23 +134,15 @@ def bridge_with_master_and_returns() -> _BridgeWithMasterAndReturns:
         *,
         timeout: float | None = None,
     ) -> Any:
-        if (
-            command_type == "set_track_property"
-            and params is not None
-        ):
+        if command_type == "set_track_property" and params is not None:
             target_idx = int(params.get("track_index", -1))
             target = next(
-                (
-                    t
-                    for t in bridge.state["tracks"]
-                    if int(t.get("index", -1)) == target_idx
-                ),
+                (t for t in bridge.state["tracks"] if int(t.get("index", -1)) == target_idx),
                 None,
             )
             if target is not None and str(target.get("type")) == "master":
                 raise RuntimeError(
-                    "set_track_property rejected by Live: master track has "
-                    "no mixer property"
+                    "set_track_property rejected by Live: master track has no mixer property"
                 )
         return raw_call(command_type, params, timeout=timeout)
 
@@ -227,9 +219,6 @@ def _run_with_recording(
     return recorded
 
 
-
-
-
 def test_baseline_exposes_master_and_return_track_types(
     bridge_with_master_and_returns: _BridgeWithMasterAndReturns,
 ) -> None:
@@ -242,12 +231,8 @@ def test_baseline_exposes_master_and_return_track_types(
     bridge = bridge_with_master_and_returns
 
     fake_types = {int(t["index"]): str(t["type"]) for t in bridge.state["tracks"]}
-    assert "master" in fake_types.values(), (
-        f"master track missing from fake state: {fake_types}"
-    )
-    assert "return" in fake_types.values(), (
-        f"return track missing from fake state: {fake_types}"
-    )
+    assert "master" in fake_types.values(), f"master track missing from fake state: {fake_types}"
+    assert "return" in fake_types.values(), f"return track missing from fake state: {fake_types}"
 
 
 def test_cleanup_loop_does_not_call_set_track_property_mute_3(
@@ -275,15 +260,10 @@ def test_cleanup_loop_does_not_call_set_track_property_mute_3(
     """
     bridge = bridge_with_master_and_returns
     baseline_types = {
-        int(idx): ttype
-        for idx, ttype in _discover_baseline(bridge)["track_types"].items()
+        int(idx): ttype for idx, ttype in _discover_baseline(bridge)["track_types"].items()
     }
-    master_indices = {
-        idx for idx, ttype in baseline_types.items() if ttype == "master"
-    }
-    assert master_indices, (
-        f"fixture must expose a master track; baseline_types={baseline_types}"
-    )
+    master_indices = {idx for idx, ttype in baseline_types.items() if ttype == "master"}
+    assert master_indices, f"fixture must expose a master track; baseline_types={baseline_types}"
 
     recorded = _run_with_recording(bridge)
 
@@ -313,12 +293,9 @@ def test_cleanup_loop_does_not_call_set_track_property_solo_master(
     Either way, the runner must skip master."""
     bridge = bridge_with_master_and_returns
     baseline_types = {
-        int(idx): ttype
-        for idx, ttype in _discover_baseline(bridge)["track_types"].items()
+        int(idx): ttype for idx, ttype in _discover_baseline(bridge)["track_types"].items()
     }
-    master_indices = {
-        idx for idx, ttype in baseline_types.items() if ttype == "master"
-    }
+    master_indices = {idx for idx, ttype in baseline_types.items() if ttype == "master"}
 
     recorded = _run_with_recording(bridge)
 

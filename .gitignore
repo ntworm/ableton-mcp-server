@@ -11,6 +11,9 @@ dist/
 .coverage-data/
 .agent-context/generated/
 
+# Local backups of extension bundles from in-place upgrade experiments.
+*.ablx.bak-*
+
 # Isolated worktrees per using-git-worktrees skill.
 .worktrees/
 worktrees/

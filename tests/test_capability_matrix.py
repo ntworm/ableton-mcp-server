@@ -56,8 +56,7 @@ def test_bridge_status_tool_dict_schema() -> None:
     names: list[str] = []
     for entry in result["tools"]:
         assert set(entry.keys()) == expected_fields, (
-            "Each tool dict must contain exactly the six §2(a) fields; "
-            f"got {sorted(entry.keys())}"
+            f"Each tool dict must contain exactly the six §2(a) fields; got {sorted(entry.keys())}"
         )
         assert isinstance(entry["name"], str)
         assert isinstance(entry["domain"], str)
@@ -89,9 +88,7 @@ def test_capability_counts_match_invariants() -> None:
 def test_websocket_targets_match_catalog_route() -> None:
     """§5 case 4: names whose route is websocket equal the contracts set."""
     result = _status()
-    websocket_names = {
-        entry["name"] for entry in result["tools"] if entry["route"] == "websocket"
-    }
+    websocket_names = {entry["name"] for entry in result["tools"] if entry["route"] == "websocket"}
     assert websocket_names == set(WEBSOCKET_TARGET_COMMANDS)
 
 
