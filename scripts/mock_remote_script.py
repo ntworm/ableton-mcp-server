@@ -9,7 +9,29 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Any
 
-from contracts import DEFAULT_HOST, READ_ONLY_COMMANDS
+from contracts import (
+    CAPABILITY_EVIDENCE,
+    DEFAULT_HOST,
+    READ_ONLY_COMMANDS,
+    UNSUPPORTED_CAPABILITIES,
+)
+
+# Identity plus hierarchy/colour. Mixer state stays out of ``get_track_list``
+# and is only reachable through ``get_track_state``.
+TRACK_LIST_KEYS: tuple[str, ...] = (
+    "id",
+    "index",
+    "name",
+    "type",
+    "color",
+    "color_index",
+    "is_group_track",
+    "is_grouped",
+    "group_track_index",
+    "group_track_id",
+    "is_visible",
+    "fold_state",
+)
 
 
 def default_snapshot() -> dict[str, Any]:
@@ -32,6 +54,14 @@ def default_snapshot() -> dict[str, Any]:
                 "index": 0,
                 "name": "Bass",
                 "type": "midi",
+                "color": 0x336699,
+                "color_index": 3,
+                "is_group_track": False,
+                "is_grouped": False,
+                "group_track_index": None,
+                "group_track_id": None,
+                "is_visible": True,
+                "fold_state": 0,
                 "devices": [
                     {
                         "id": "track:0/device:0",
@@ -98,6 +128,19 @@ class MockRemoteScript:
                 "READ_ONLY_VIOLATION",
                 f"Command {command!r} is blocked: creative mutation is not available.",
             )
+        if command in UNSUPPORTED_CAPABILITIES:
+            envelope = self.error(
+                "CAPABILITY_UNAVAILABLE",
+                UNSUPPORTED_CAPABILITIES[command],
+                "The request is well-formed; Live's public API has no operation that "
+                "performs it. Nothing was changed in the Set.",
+            )
+            envelope["details"] = {
+                **CAPABILITY_EVIDENCE[command],
+                "request": dict(params),
+                "applied": False,
+            }
+            return envelope
         reads = self._handle_read(command, params)
         if reads is not None:
             return reads
@@ -125,13 +168,65 @@ class MockRemoteScript:
         if command == "get_track_list":
             return self.ok(
                 [
-                    {key: track[key] for key in ("id", "index", "name", "type")}
+                    {key: track[key] for key in TRACK_LIST_KEYS if key in track}
                     for track in self.snapshot["tracks"]
                 ]
             )
         if command == "get_track_state":
             track = self._track(params.get("track_index"))
             return self.ok(copy.deepcopy(track)) if track else self._missing("track")
+        if command == "diagnose_clip_targets":
+            requested = params.get("track_index")
+            targets = (
+                [t for t in self.snapshot["tracks"] if t["index"] == requested]
+                if isinstance(requested, int)
+                else self.snapshot["tracks"]
+            )
+            tracks = []
+            session_total = 0
+            for track in targets:
+                session = [
+                    {
+                        "id": slot["clip_id"],
+                        "scope": "session",
+                        "track_index": track["index"],
+                        "clip_index": slot["index"],
+                        "name": slot.get("clip_name", ""),
+                        "is_midi_clip": True,
+                        "color": slot.get("color", 0),
+                        "color_index": slot.get("color_index", 0),
+                        "colorable": True,
+                    }
+                    for slot in track["clip_slots"]
+                    if slot.get("has_clip")
+                ]
+                session_total += len(session)
+                tracks.append(
+                    {
+                        "track_index": track["index"],
+                        "track_id": track["id"],
+                        "name": track["name"],
+                        "type": track["type"],
+                        "session_clips": session,
+                        "arrangement_clips": [],
+                        "arrangement_supported": False,
+                    }
+                )
+            return self.ok(
+                {
+                    "tracks": tracks,
+                    "session_clip_count": session_total,
+                    "arrangement_clip_count": 0,
+                    "inaccessible": [
+                        {
+                            "track_index": track["track_index"],
+                            "scope": "arrangement",
+                            "reason": "The mock Remote Script exposes no Arrangement lane.",
+                        }
+                        for track in tracks
+                    ],
+                }
+            )
         if command == "get_device_list":
             track = self._track(params.get("track_index"))
             return self.ok(copy.deepcopy(track["devices"])) if track else self._missing("track")
@@ -270,6 +365,68 @@ class MockRemoteScript:
                         "parameter_name": parameter_name,
                         "track_name": track["name"],
                         "device_name": device["name"],
+                    },
+                }
+            )
+        if command == "set_clip_color":
+            track = self._track(params.get("track_index"))
+            if not track:
+                return self._missing("track")
+            if params.get("scope", "session") != "session":
+                return self.error(
+                    "CAPABILITY_UNAVAILABLE",
+                    "The mock Set has no Arrangement clips.",
+                )
+            slot = self._slot(params)
+            if slot is None:
+                return self._missing("clip")
+            provided = [name for name in ("color_index", "color") if name in params]
+            if len(provided) != 1:
+                return self.error(
+                    "INVALID_PARAMS",
+                    "Provide exactly one of color_index or color.",
+                )
+            slot[provided[0]] = int(params[provided[0]])
+            return self.ok(
+                {
+                    "clip_id": slot.get("clip_id"),
+                    "scope": "session",
+                    "track_index": track["index"],
+                    "clip_index": params["clip_index"],
+                    "property": provided[0],
+                    "color": slot.get("color", 0),
+                    "color_index": slot.get("color_index", 0),
+                    "resolved": {
+                        "kind": "clip",
+                        "track_index": track["index"],
+                        "clip_index": params["clip_index"],
+                        "scope": "session",
+                        "clip_id": slot.get("clip_id"),
+                    },
+                }
+            )
+        if command == "set_track_color":
+            track = self._track(params.get("track_index"))
+            if not track:
+                return self._missing("track")
+            provided = [name for name in ("color_index", "color") if name in params]
+            if len(provided) != 1:
+                return self.error(
+                    "INVALID_PARAMS",
+                    "Provide exactly one of color_index or color.",
+                )
+            track[provided[0]] = int(params[provided[0]])
+            return self.ok(
+                {
+                    "track_id": track["id"],
+                    "track_index": track["index"],
+                    "property": provided[0],
+                    "color": track.get("color", 0),
+                    "color_index": track.get("color_index", 0),
+                    "resolved": {
+                        "kind": "track",
+                        "track_index": track["index"],
+                        "track_name": track["name"],
                     },
                 }
             )

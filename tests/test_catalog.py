@@ -5,7 +5,7 @@ from contracts import ALLOWED_MUTATIONS, READ_COMMANDS, WEBSOCKET_TARGET_COMMAND
 
 def test_baseline_catalog_is_complete_and_unique() -> None:
     names = tuple(item.name for item in TOOL_CATALOG)
-    assert len(names) == len(set(names)) == 65
+    assert len(names) == len(set(names)) == 73
     assert names == server.PUBLIC_TOOL_NAMES
     assert set(names) == set(models.TOOL_REQUEST_MODELS)
 

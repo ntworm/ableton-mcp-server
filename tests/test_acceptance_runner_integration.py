@@ -21,6 +21,7 @@ from ableton_mcp_server.acceptance import (
     run_live_acceptance,
 )
 from ableton_mcp_server.catalog import TOOL_CATALOG
+from contracts import UNSUPPORTED_CAPABILITIES
 
 from ._offline_probe_fixture import fast_offline_probes
 from ._strict_fake import _READ_ONLY_TCP_COMMANDS, StrictFakeBridge
@@ -47,7 +48,7 @@ def _inject_fast_offline_probes(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_fake_runner_returns_65_certification_rows() -> None:
     """Every catalogued tool must produce exactly one verification row."""
     expected = len(TOOL_CATALOG)
-    assert expected == 65
+    assert expected == 73
 
     bridge = StrictFakeBridge()
     result = asyncio.run(
@@ -62,8 +63,8 @@ def test_fake_runner_returns_65_certification_rows() -> None:
         )
     )
     cert = result["certification"]
-    assert cert["tool_count"] == 65
-    assert len(cert["tools"]) == 65
+    assert cert["tool_count"] == 73
+    assert len(cert["tools"]) == 73
     catalog_names = {item.name for item in TOOL_CATALOG}
     assert {row["tool"] for row in cert["tools"]} == catalog_names
     # ``quit_ableton`` is explicitly ``manual_required`` in baseline.
@@ -164,7 +165,7 @@ def test_fake_runner_partial_profile_is_not_release_ready() -> None:
     for tool in BASELINE_PROBE_GROUPS["mutations"]:
         assert tool in statuses
     # The runner must NOT have skipped the missing tools entirely.
-    assert len(statuses) == 65
+    assert len(statuses) == 73
 
 
 def test_fake_runner_release_ready_false_when_one_tool_fails() -> None:
@@ -222,6 +223,13 @@ def test_fake_runner_baseline_records_only_known_unavailable() -> None:
             # ``manual_required``; other rows must not be silently
             # downgraded without an out-of-band signal.
             assert tool == "quit_ableton", f"unexpected manual_required row: {tool}"
+            continue
+        if status == "capability_unavailable":
+            # Only the hierarchy tools may carry this status, and membership
+            # comes from contracts — a probe cannot elect itself into it.
+            assert tool in UNSUPPORTED_CAPABILITIES, (
+                f"{tool} is not a documented capability gap but claimed one"
+            )
             continue
         assert status in {"live_passed", "offline_passed"}, f"{tool} unexpectedly {status!r}"
 
@@ -342,7 +350,7 @@ def test_baseline_probe_coverage_matches_catalog() -> None:
     flat = {name for group in BASELINE_PROBE_GROUPS.values() for name in group}
     catalog_names = {item.name for item in TOOL_CATALOG}
     assert flat == catalog_names
-    assert len(flat) == 65
+    assert len(flat) == 73
 
 
 def test_spy_proves_fast_offline_probes_is_called(

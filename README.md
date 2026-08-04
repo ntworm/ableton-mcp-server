@@ -4,7 +4,7 @@
 
 An open **Model Context Protocol (MCP)** server that enables AI agents (Claude, Antigravity, Gemini, Codex) and audio developers to query, analyze, drive, and automate a running Ableton Live 12 Set.
 
-Version 0.5.2 exposes 65 tools over TCP and WebSockets (with primary device resolution via device_name, track_index, and clip_index). A FastMCP server in Python communicates with a MIDI Remote Script on TCP `127.0.0.1:9888` and an Extension Host bridge over WebSockets on `127.0.0.1:9889`.
+Version 0.5.3 exposes 73 tools over TCP and WebSockets (with primary device resolution via device_name, track_index, and clip_index), up from the 65 certified in v0.5.2. A FastMCP server in Python communicates with a MIDI Remote Script on TCP `127.0.0.1:9888` and an Extension Host bridge over WebSockets on `127.0.0.1:9889`.
 
 ---
 
@@ -83,10 +83,12 @@ If you operate from **WSL2**, point the MCP client at the Windows binary so loop
 
 ## 📦 What It Does (65 MCP Tools)
 
+> v0.5.3 adds 8 tools to the 65-tool v0.5.2 baseline: `set_track_color`, `set_clip_color`, `diagnose_clip_targets`, and five track-hierarchy tools (`move_track`, `reorder_tracks`, `move_track_to_group`, `ungroup_track`, `merge_groups`) that validate a request and then return a typed `CAPABILITY_UNAVAILABLE` — Live's public API cannot move, reorder, re-parent or ungroup a track, and this server will not fake it. See [docs/KNOWN_BUGS.md](docs/KNOWN_BUGS.md) §Category O. The 65-tool grouping below is unchanged.
+
 The 65 MCP tools are grouped into 5 operational domains:
 
 - **Transport & Session**: `get_session_info`, `set_tempo`, `start_playback`, `stop_playback`, `get_loop_settings`, `set_loop`, `set_loop_start`, `set_loop_length`, `set_current_song_time`, `get_song_length`, `get_session_overview`, `get_scenes`, `get_scene_state`, `fire_scene`, `fire_clip`.
-- **Tracks & Devices**: `get_track_list`, `live_find_track`, `get_track_state`, `get_device_list`, `get_parameter_value`, `get_clip_summary`, `set_parameter_value`, `create_clip`, `get_clip_notes`, `add_notes_to_clip`, `delete_clip`, `clear_clip_notes`, `set_clip_properties`, `get_clip_info`, `set_track_property`, `create_audio_track`, `get_routing`, `diff_snapshots_tool`, `take_snapshot`, `get_selected_context`, `search_browser`, `load_device_to_track`, `get_warp_state`.
+- **Tracks & Devices**: `get_track_list`, `live_find_track`, `get_track_state`, `get_device_list`, `get_parameter_value`, `get_clip_summary`, `set_parameter_value`, `create_clip`, `get_clip_notes`, `add_notes_to_clip`, `delete_clip`, `clear_clip_notes`, `set_clip_properties`, `get_clip_info`, `set_track_property`, `set_track_color`, `set_clip_color`, `diagnose_clip_targets`, `create_audio_track`, `get_routing`, `diff_snapshots_tool`, `take_snapshot`, `get_selected_context`, `search_browser`, `load_device_to_track`, `get_warp_state`.
 - **Lifecycle & Automation**: `lifecycle_status`, `save_set`, `quit_ableton`, `live_fade`, `create_clip_automation`.
 - **Offline Mix Analysis**: `analyze_audio`, `find_frequency_masking`, `analyze_mix`, `extract_single_cycle` (LUFS-I, True Peak, dynamic range, spectral collision).
 - **Inspection & Batch Execution**: `run_batch`, `get_locators`, `create_cue_point`, `delete_cue_point`, `bulk_create_cue_points`, `get_control_surfaces`, `get_browser_categories`, `get_project_metadata`, `get_ableton_logs`, `get_bridge_status`.

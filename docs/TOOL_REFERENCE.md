@@ -97,17 +97,19 @@ are explicitly allowed.
 ### `get_track_list()`
 
 - Params: none.
-- Returns: all regular, return, and master tracks as `{id,index,name,type}`.
+- Returns: all regular, return, and master tracks as `{id,index,name,type}` plus the hierarchy block `{color,color_index,is_group_track,is_grouped,group_track_index,group_track_id,is_visible,fold_state}`.
 - Request: `{"type":"get_track_list","params":{}}`
-- Response: `{"status":"ok","result":[{"id":"track:0","index":0,"name":"Bass","type":"midi"}]}`
-- Edge cases / side effects: pure read; re-list after structural changes.
+- Response: `{"status":"ok","result":[{"id":"track:0","index":0,"name":"Bass","type":"midi","color":3368601,"color_index":3,"is_group_track":false,"is_grouped":false,"group_track_index":null,"group_track_id":null,"is_visible":true,"fold_state":0}]}`
+- Edge cases / side effects: pure read; re-list after structural changes. Mixer state (`mute`/`solo`/`arm`/`volume`) is deliberately **not** here — read it from `get_track_state`.
+- Group Tracks: `type` stays `audio` for a Group Track because Live gives it no MIDI input. Detect groups with `is_group_track` (LOM `Track.is_foldable`), membership with `is_grouped`, and the parent with `group_track_index`. Never infer "group" from `type == "audio"`.
+- Properties a host does not expose are reported as `null` (`color_index`, `fold_state`, `group_track_index`) or `false`, never invented. `is_visible` is `false` for a track hidden inside a folded group.
 
 ### `get_track_state(track_index: int)`
 
 - Params: non-negative `track_index` in the combined regular/return/master list.
-- Returns: path-id, mixer state, sends, devices, parameters, and Session clip slots.
+- Returns: path-id, the same hierarchy block as `get_track_list`, mixer state, sends, devices, parameters, and Session clip slots.
 - Request: `{"type":"get_track_state","params":{"track_index":0}}`
-- Response: `{"status":"ok","result":{"id":"track:0","name":"Bass","devices":[],"clip_slots":[]}}`
+- Response: `{"status":"ok","result":{"id":"track:0","name":"Bass","color_index":3,"is_group_track":false,"devices":[],"clip_slots":[]}}`
 - Edge cases / side effects: pure read; invalid indexes return `INVALID_PARAMS`.
 
 ### `get_locators()`
@@ -422,6 +424,47 @@ are explicitly allowed.
 - `property` is exactly `mute`, `solo`, or `arm`; `value` is boolean.
 - Returns the verified observed property value.
 - Edge cases / side effects: one undo step; return/master tracks cannot be armed.
+
+### `set_track_color(track_index, color_index=None, color=None)`
+
+- Exactly one of `color_index` (Live's 70-swatch palette, `0..69`) and `color` (packed `0x00rrggbb`, `0..0xFFFFFF`) is required; supplying both or neither returns `INVALID_PARAMS`.
+- Writes LOM `Track.color_index` or `Track.color`, then reads the value back on a later Live UI tick and returns `{track_id, track_index, property, color, color_index, resolved}`.
+- `resolved` follows the canonical convention: `{"kind":"track","track_index":N,"track_name":"…"}` with `track_name` omitted when the name is unavailable.
+- Edge cases / side effects: one undo step; clips are never recoloured — clip colour is a separate LOM property and there is no tool for it. A track that does not expose the property returns `WRONG_TYPE`; a write that does not land returns `VERIFICATION_FAILED`. The write is issued **once** — mutations are never retried. Return and master tracks accept colour.
+- The `color_index` upper bound is enforced by this server, not by the LOM reference (which documents `color` but leaves the `color_index` range unspecified). A host that disagrees fails the readback rather than silently accepting a bad slot.
+
+### `set_clip_color(track_index, clip_index, scope="session", color_index=None, color=None)`
+
+- Exactly one of `color_index` (`0..69`) and `color` (packed `0x00rrggbb`) is required; both or neither returns `INVALID_PARAMS`.
+- `scope="session"` addresses `track.clip_slots[clip_index].clip`; `scope="arrangement"` addresses `track.arrangement_clips[clip_index]`. `Clip.color` and `Clip.color_index` are `getsetobserve` in the LOM, so **both lanes are genuinely writable** — unlike track reordering.
+- Writes once, reads back on a later UI tick, returns `{clip_id, scope, track_index, clip_index, property, color, color_index, resolved}` with `resolved.kind == "clip"`.
+- Edge cases / side effects: one undo step. An empty Session slot returns `BAD_INPUT`. `Track.arrangement_clips` needs Live 11+; a host without it returns `CAPABILITY_UNAVAILABLE` for `scope="arrangement"`. An out-of-range Arrangement index returns `INVALID_PARAMS`. No retry on failure.
+
+### `diagnose_clip_targets(track_index=None)`
+
+- Read-only sweep answering "which clips can `set_clip_color` actually reach?".
+- Returns `{tracks, session_clip_count, arrangement_clip_count, inaccessible}`. Each track entry carries `session_clips`, `arrangement_clips`, and `arrangement_supported`; each clip entry carries `id`, `scope`, `name`, `is_midi_clip`, `color`, `color_index`, and `colorable`.
+- `inaccessible` names every target that cannot be coloured **and why** — a host without `Track.arrangement_clips` produces an entry per track rather than a silent zero count.
+- Edge cases / side effects: pure read; omit `track_index` to sweep the whole Set.
+
+### Track hierarchy: `move_track`, `reorder_tracks`, `move_track_to_group`, `ungroup_track`, `merge_groups`
+
+These five tools are registered, documented, and fully validated — and they **always refuse**. No public API can perform them.
+
+| Tool | Signature |
+|---|---|
+| `move_track` | `(track_index, destination_index)` |
+| `reorder_tracks` | `(order: list[int])` |
+| `move_track_to_group` | `(track_index, group_track_index)` |
+| `ungroup_track` | `(track_index)` |
+| `merge_groups` | `(source_group_index, destination_group_index, delete_empty_source=False)` |
+
+- **Validation runs first**, against the live Set, so a malformed request stays distinguishable from the capability gap: unknown indexes return `INVALID_PARAMS`; return/main tracks return `WRONG_TYPE`; a non-foldable group target returns `WRONG_TYPE`; a non-permutation `order`, a self-nesting request, a cycle, or `delete_empty_source=True` return `BAD_INPUT`.
+- A well-formed request returns `CAPABILITY_UNAVAILABLE`. The error carries a `details` object with the exact evidence: `lom_song_functions_checked`, `lom_verdict`, `sdk_bindings_checked`, `sdk_verdict`, `rejected_workarounds`, `supported_alternative`, the echoed `request`, and `applied: false`.
+- **Nothing is written.** No undo step is opened, no track is added or removed, and no clip, device, note, automation, mixer value, routing or colour changes. This is covered by tests, not just by intent.
+- Evidence: Live's LOM `Song` exposes `create_audio_track(index)`, `create_midi_track(index)`, `duplicate_track(index)`, `delete_track(index)`, `move_device(...)` — and no reposition call. `song.tracks` / `song.visible_tracks` are get/observe lists and `Track.group_track` is get-only, so re-parenting is impossible too. The Ableton Extension SDK 1.0.0-beta.0 matches: `songCreateMidiTrack`, `songCreateAudioTrack`, `songDuplicateTrack`, `songDeleteTrack`, `trackGetGroupTrack` — no move, no grouping, and its create calls take no index.
+- Duplicate + delete is not an escape hatch: `duplicate_track` always inserts the copy immediately after the original, so relative order cannot change at all — and it would destroy the original track. Devices, unlike tracks, *can* be moved between tracks (`Song.move_device`), but no tool exposes that yet.
+- Discover the gap without triggering it: `get_bridge_status().capability_gaps` carries the same evidence.
 
 ### `set_clip_properties(track_index, clip_index, loop_start=None, loop_end=None, name=None)`
 

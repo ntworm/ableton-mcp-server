@@ -80,6 +80,8 @@ The listener binds the literal `127.0.0.1`. It has no LAN mode.
 | `BAD_INPUT` | A well-shaped argument is outside a safe domain. | Correct its value. |
 | `EXTENSION_UNAVAILABLE` | Extension Host WebSocket bridge is not reachable. | Ensure the AbletonMCPServer extension is compiled and loaded. |
 | `TRACK_LIMIT_REACHED` | The 96 track safety limit has been hit. | Remove unused tracks. |
+| `CAPABILITY_UNAVAILABLE` | The operation is real in Live's UI but has no supported entry point in the public LOM or the Extension SDK. | Do it by hand in Live; no bridge version will add it. |
+| `VERIFICATION_FAILED` | The write was issued but the readback disagreed. | Inspect the Set; the mutation is never retried automatically. |
 
 `Client` maps remote errors and socket failures to typed Python exceptions. At the FastMCP boundary, expected bridge exceptions become typed MCP error results rather than internal framework failures. Empty arrays receive both structured `[]` data and a textual `[]` fallback for clients that ignore structured content.
 
@@ -103,6 +105,28 @@ Device parameter writes resolve exact LOM parameters, enforce enabled state and 
 
 Optional MIDI note expression fields are passed to `Live.Clip.MidiNoteSpecification` only when requested. A host that cannot construct the requested extended specification returns `LIVE_UNAVAILABLE`; fields are never silently discarded.
 
+## Track hierarchy and colour (post-v0.5.2)
+
+`get_track_list` and `get_track_state` return the same hierarchy block: `color`, `color_index`, `is_group_track`, `is_grouped`, `group_track_index`, `group_track_id`, `is_visible`, `fold_state`. It is sourced from the documented LOM properties `Track.color`, `Track.color_index`, `Track.is_foldable`, `Track.is_grouped`, `Track.group_track`, `Track.is_visible` and `Track.fold_state`.
+
+`type` keeps its four values (`midi`, `audio`, `return`, `master`) because `_clip_slot` and the acceptance cleanup branch on it. A Group Track has no MIDI input and therefore still reports `audio`; `is_group_track` is the only correct group test. `group_track_index` resolves the parent through the same `_all_tracks` ordering used by every path-id, so it can be passed straight back as a `track_index`. Properties the host does not expose are `null`, never invented.
+
+`set_track_color` writes exactly one of `color_index` / `color`, once, inside the existing single-undo mutation path, and confirms it by reading the property back on a later UI tick. There is no retry: a rejected or clamped write returns `VERIFICATION_FAILED`. Clip colour is a distinct LOM property and is never written as a side effect.
+
+`set_clip_color` mirrors it for clips. `Clip.color` / `Clip.color_index` are `getsetobserve` and `Track.arrangement_clips` exists since Live 11, so both the Session and Arrangement lanes are genuinely writable; `diagnose_clip_targets` reports which targets a given host actually exposes instead of letting a caller guess.
+
+## Unavailable capabilities (post-v0.5.2)
+
+Moving, reordering, re-parenting, ungrouping and merging tracks are **not implementable**: neither the public LOM nor the Extension SDK exposes any of those operations (see `docs/KNOWN_BUGS.md` §Category O for the enumerated evidence).
+
+They are still routed and registered, because a discoverable, evidence-carrying refusal is more useful than an unknown-tool error:
+
+- `contracts.UNSUPPORTED_CAPABILITIES` holds the message per operation, `contracts.CAPABILITY_EVIDENCE` the structured evidence, and `contracts.UNAVAILABLE_COMMANDS` the routed set. They stay **disjoint from `ALLOWED_MUTATIONS`**, so `_command_steps` never opens an undo step for them and `run_batch` cannot contain one.
+- The Remote Script validates each request against the live Set *before* refusing, so `INVALID_PARAMS` / `WRONG_TYPE` / `BAD_INPUT` still distinguish a malformed call from the permanent gap.
+- The refusal travels as a normal error envelope plus an optional `details` object (`protocol.Response.details`, `errors.BridgeError.details`). `details` is only populated for this case today.
+- `catalog.Risk.UNAVAILABLE` and `catalog.AcceptanceMode.CAPABILITY` mark them in the tool matrix; the acceptance runner's `capability` probe group proves the refusal and records `capability_unavailable`, a status that does **not** block a release. A tool that ever *succeeds* is recorded as `failed`.
+- `get_bridge_status().capability_gaps` publishes the evidence without triggering a refusal.
+
 ## Mutation Allowlist
 
 `contracts.py` defines three disjoint sets:
@@ -111,7 +135,7 @@ Optional MIDI note expression fields are passed to `Live.Clip.MidiNoteSpecificat
 - `ALLOWED_MUTATIONS`: transport, loop, cue, Session clip, MIDI-note, and batch debug operations.
 - `READ_ONLY_COMMANDS`: creative/destructive operations that remain blocked.
 
-There is no name-prefix rule. An unknown command reaches the dispatcher and returns `UNKNOWN_COMMAND`.
+There is no name-prefix rule. An unknown command reaches the dispatcher and returns `UNKNOWN_COMMAND`, except for the names in `UNSUPPORTED_CAPABILITIES`, which return `CAPABILITY_UNAVAILABLE`.
 
 `contracts.py` is copied into `_contracts.py` by `python scripts/vendor_contracts.py`. The generated file has a stable header and identical remaining bytes. Live never imports the server package.
 
@@ -176,7 +200,7 @@ tools = await mcp.list_tools()
 count = len(mcp.list_tools())
 ```
 
-Tests assert both counts match the 65 cataloged public tools.
+Tests assert both counts match the cataloged public tools: 65 in the shipped v0.5.2 release, 73 on the current line (`set_track_color`, `set_clip_color`, `diagnose_clip_targets`, and the five hierarchy tools).
 
 `tools/list` remains deterministic metadata discovery. `get_bridge_status` and the `ableton-mcp doctor` CLI perform an actual `get_session_info` round trip and report WSL-specific topology hints when unavailable.
 

@@ -323,10 +323,15 @@ async def run_live_acceptance(
         if "composed" in expanded:
             await _composed.run(report, client=client)
 
-        if "quit" in profiles and not {"tcp_reads", "mutations", "websocket_reads"} & set(expanded):
+        if "quit" in profiles and not {
+            "tcp_reads",
+            "mutations",
+            "websocket_reads",
+            "capability",
+        } & set(expanded):
             await _quit.run(report)
 
-        if {"tcp_reads", "mutations", "websocket_reads"} & set(expanded):
+        if {"tcp_reads", "mutations", "websocket_reads", "capability"} & set(expanded):
             baseline: BaselineSnapshot | None = None
             try:
                 metadata = call("get_project_metadata")
@@ -398,6 +403,94 @@ async def run_live_acceptance(
                     except Exception:
                         pass
 
+                if "capability" in expanded:
+                    # Prove the refusal, not the operation. Each of these
+                    # tools must reject a *well-formed* request with
+                    # CAPABILITY_UNAVAILABLE and leave the Set untouched. A
+                    # success is a hard failure: it would mean the tool found
+                    # some unverified path into the Set.
+                    _hierarchy = call("get_track_list")
+                    _regular = [
+                        int(track["index"])
+                        for track in _hierarchy
+                        if track.get("type") in ("midi", "audio")
+                    ]
+                    _groups = [
+                        int(track["index"])
+                        for track in _hierarchy
+                        if bool(track.get("is_group_track", False))
+                    ]
+                    _grouped = [
+                        int(track["index"])
+                        for track in _hierarchy
+                        if bool(track.get("is_grouped", False))
+                    ]
+                    _capability_requests: dict[str, dict[str, Any] | None] = {
+                        "move_track": (
+                            {"track_index": _regular[0], "destination_index": _regular[-1]}
+                            if _regular
+                            else None
+                        ),
+                        "reorder_tracks": ({"order": sorted(_regular)} if _regular else None),
+                        # These three need a Set that actually has groups. On a
+                        # disposable Set without any, the row is recorded as
+                        # not exercised rather than as a passed refusal.
+                        "move_track_to_group": (
+                            {"track_index": _regular[0], "group_track_index": _groups[0]}
+                            if _groups and _regular and _regular[0] != _groups[0]
+                            else None
+                        ),
+                        "ungroup_track": ({"track_index": _grouped[0]} if _grouped else None),
+                        "merge_groups": (
+                            {
+                                "source_group_index": _groups[0],
+                                "destination_group_index": _groups[1],
+                            }
+                            if len(_groups) >= 2
+                            else None
+                        ),
+                    }
+                    for _tool, _request in _capability_requests.items():
+                        if _request is None:
+                            # No Group Track in this Set, so a well-formed
+                            # request cannot be built. The row still reads
+                            # capability_unavailable — the operation has no
+                            # public API either way — but the evidence says
+                            # plainly that the refusal was not exercised here.
+                            report.record(
+                                Verification(
+                                    _tool,
+                                    "capability_unavailable",
+                                    "not exercised: this Set has no Group Track to build a "
+                                    "well-formed request from; the refusal is proven by the "
+                                    "unit tests. Use a Set containing groups for full "
+                                    "hierarchy coverage.",
+                                )
+                            )
+                            continue
+
+                        async def run_capability(
+                            _tool: str = _tool,
+                            _request: dict[str, Any] = _request,
+                        ) -> str:
+                            try:
+                                call(_tool, _request)
+                            except BridgeError as error:
+                                if error.code != "CAPABILITY_UNAVAILABLE":
+                                    raise
+                                return f"{_tool} refused with CAPABILITY_UNAVAILABLE"
+                            raise AssertionError(
+                                f"{_tool} returned success; Live's public API cannot "
+                                "perform it, so the refusal contract is broken"
+                            )
+
+                        await _record_call(
+                            report,
+                            _tool,
+                            run_capability,
+                            passed="capability_unavailable",
+                        )
+
                 if "tcp_reads" in expanded:
                     await _record_call(
                         report, "get_project_metadata", lambda: metadata, passed="live_passed"
@@ -414,6 +507,22 @@ async def run_live_acceptance(
                         lambda: call("get_track_list"),
                         passed="live_passed",
                     )
+
+                    async def run_diagnose_clip_targets() -> str:
+                        report_payload = call("diagnose_clip_targets", {})
+                        if not isinstance(report_payload, dict):
+                            raise AssertionError("diagnose_clip_targets must return a dict")
+                        for key in ("tracks", "session_clip_count", "arrangement_clip_count"):
+                            if key not in report_payload:
+                                raise AssertionError(
+                                    f"diagnose_clip_targets response missing {key!r}"
+                                )
+                        return (
+                            f"session={report_payload['session_clip_count']} "
+                            f"arrangement={report_payload['arrangement_clip_count']}"
+                        )
+
+                    await _record_call(report, "diagnose_clip_targets", run_diagnose_clip_targets)
                     await _record_call(
                         report,
                         "get_track_state",
@@ -1232,6 +1341,87 @@ async def run_live_acceptance(
                         except Exception:
                             pass
 
+                        # ----- set_track_color + readback -----
+                        # Live's palette has 70 swatches. We pick a slot the
+                        # track is not already using so the readback proves a
+                        # real write instead of matching the prior value.
+                        _baseline_color_index = baseline.get("track_color_indexes", {}).get(
+                            midi_track_index
+                        )
+                        _probe_color_index = 1 if _baseline_color_index == 0 else 0
+
+                        async def run_set_track_color() -> str:
+                            call(
+                                "set_track_color",
+                                {
+                                    "track_index": midi_track_index,
+                                    "color_index": _probe_color_index,
+                                },
+                            )
+                            state = call("get_track_state", {"track_index": midi_track_index})
+                            observed = state.get("color_index")
+                            if observed != _probe_color_index:
+                                raise AssertionError(
+                                    "set_track_color readback mismatch: "
+                                    f"observed={observed!r} expected={_probe_color_index!r}"
+                                )
+                            return f"color_index={_probe_color_index} readback OK"
+
+                        await _record_call(report, "set_track_color", run_set_track_color)
+                        try:
+                            if _baseline_color_index is not None:
+                                call(
+                                    "set_track_color",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "color_index": _baseline_color_index,
+                                    },
+                                )
+                        except Exception:
+                            pass
+
+                        # ----- set_clip_color + readback -----
+                        # Only runs when create_clip produced a clip we own;
+                        # recolouring a pre-existing clip would change the
+                        # operator's Set beyond what cleanup restores.
+                        if not create_clip_ok:
+                            report.record(
+                                Verification(
+                                    "set_clip_color",
+                                    "failed",
+                                    "Skipped: create_clip dependency failed",
+                                )
+                            )
+                        else:
+
+                            async def run_set_clip_color() -> str:
+                                call(
+                                    "set_clip_color",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "clip_index": clip_index,
+                                        "color_index": 1,
+                                    },
+                                )
+                                info = call(
+                                    "get_clip_info",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "clip_index": clip_index,
+                                    },
+                                )
+                                observed = (
+                                    info.get("color_index") if isinstance(info, dict) else None
+                                )
+                                if observed != 1:
+                                    raise AssertionError(
+                                        "set_clip_color readback mismatch: "
+                                        f"observed={observed!r} expected=1"
+                                    )
+                                return "clip color_index=1 readback OK"
+
+                            await _record_call(report, "set_clip_color", run_set_clip_color)
+
                         # ----- rename_track + readback -----
                         async def run_rename_track() -> str:
                             tag_name = "ABLETON_MCP_ACCEPTANCE"
@@ -1975,6 +2165,44 @@ async def run_live_acceptance(
                                 "set_track_property",
                                 _restore_arm,
                                 verify=_verify_arm,
+                            )
+                        # Restore each track's palette slot. Tracks whose
+                        # baseline colour the bridge never reported are
+                        # skipped: writing a default would recolour a Set the
+                        # runner was never able to read.
+                        for idx, original_index in sorted(
+                            (baseline.get("track_color_indexes", {}) or {}).items()
+                        ):
+                            if original_index is None:
+                                continue
+
+                            def _restore_color(
+                                _idx: int = idx,
+                                _original: int = original_index,
+                            ) -> Any:
+                                return call(
+                                    "set_track_color",
+                                    {"track_index": _idx, "color_index": _original},
+                                )
+
+                            def _verify_color(
+                                _observed: Any,
+                                _idx: int = idx,
+                                _original: int = original_index,
+                            ) -> None:
+                                _eq(
+                                    call("get_track_state", {"track_index": _idx}).get(
+                                        "color_index"
+                                    ),
+                                    _original,
+                                    f"track:{_idx}.color_index",
+                                )
+
+                            _restore_call(
+                                f"set_track_color({idx})",
+                                "set_track_color",
+                                _restore_color,
+                                verify=_verify_color,
                             )
                         # Restore the live_fade target volume to its
                         # Restore the live_fade mixer volume to its pre-fade value.

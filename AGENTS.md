@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`ableton-mcp-server` v0.5.2 exposes 65 MCP tools for inspecting and safely mutating an Ableton Live Set. A Python FastMCP process coordinates a Live MIDI Remote Script over TCP and an Ableton Extension over WebSocket. The repository is MIT-licensed and targets Windows-hosted Ableton Live; WSL clients must launch the Windows-native executable.
+`ableton-mcp-server` v0.5.2 exposes 65 MCP tools for inspecting and safely mutating an Ableton Live Set; the current line adds colour writes, clip-target diagnostics and the five refusing hierarchy tools, so the asserted count on `main` is 73. A Python FastMCP process coordinates a Live MIDI Remote Script over TCP and an Ableton Extension over WebSocket. The repository is MIT-licensed and targets Windows-hosted Ableton Live; WSL clients must launch the Windows-native executable.
 
 ## Read order
 
@@ -47,7 +47,7 @@ Detailed boundaries and state ownership: `.agent-context/architecture.md`.
 
 | Path | Responsibility |
 |---|---|
-| `ableton_mcp_server/server.py` | Registers the 65 public MCP tools. |
+| `ableton_mcp_server/server.py` | Registers the 73 public MCP tools. |
 | `ableton_mcp_server/models.py` | Pydantic request models and batch validation. |
 | `ableton_mcp_server/client.py` | Routes commands to TCP or WebSocket clients. |
 | `AbletonMCPServer_RemoteScript/__init__.py` | Queues socket requests and touches Python LOM only on Live's UI thread. |
@@ -85,6 +85,7 @@ Real Live connectivity is proven by `\.venv-win\Scripts\ableton-mcp.exe doctor -
 - Expected bridge errors must remain structured MCP errors; do not turn them into framework crashes.
 - `resolved` is the canonical identity sub-object on success results for `set_parameter_value`, `create_clip`, `set_tempo`, and `load_device_to_track`; future tools adopting resolved identity must use the same sub-object convention and omit unavailable name keys.
 - Never call Live Python LOM from the socket thread; defer through the request queue and `update_display()`.
+- Operations with no public API (track move/reorder/re-parent/ungroup/merge) belong in `contracts.UNSUPPORTED_CAPABILITIES` + `CAPABILITY_EVIDENCE`, stay out of `ALLOWED_MUTATIONS`, validate before refusing, and answer `CAPABILITY_UNAVAILABLE` with `details`. Never let one open an undo step, and never emulate a missing operation with duplicate + delete.
 
 ## Safety
 

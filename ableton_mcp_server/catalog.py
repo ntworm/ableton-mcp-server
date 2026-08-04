@@ -17,6 +17,9 @@ class Risk(str, Enum):
     DESTRUCTIVE = "destructive"
     LIFECYCLE = "lifecycle"
     LOCAL_WRITE = "local_write"
+    # Validated, never applied: Live's public API cannot perform the
+    # operation, so the tool refuses with CAPABILITY_UNAVAILABLE.
+    UNAVAILABLE = "unavailable"
 
 
 class AcceptanceMode(str, Enum):
@@ -24,6 +27,8 @@ class AcceptanceMode(str, Enum):
     GUARDED = "guarded"
     MANUAL = "manual"
     ENVIRONMENT = "environment"
+    # Certified by proving the refusal, not by proving a mutation.
+    CAPABILITY = "capability"
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +91,16 @@ _TCP_READS = (
     "get_composition_structure",
     "diagnose_midi_clip",
     "lifecycle_status",
+    "diagnose_clip_targets",
+)
+# Routed like commands so the Remote Script can validate them against the real
+# Set, but they never mutate: Live's public API cannot perform any of them.
+_TCP_UNAVAILABLE = (
+    "move_track",
+    "reorder_tracks",
+    "move_track_to_group",
+    "ungroup_track",
+    "merge_groups",
 )
 _TCP_MUTATIONS = (
     "create_cue_point",
@@ -106,6 +121,8 @@ _TCP_MUTATIONS = (
     "clear_clip_notes",
     "fire_scene",
     "set_track_property",
+    "set_track_color",
+    "set_clip_color",
     "set_clip_properties",
     "create_clip_automation",
     "create_midi_track",
@@ -133,6 +150,14 @@ TOOL_CATALOG = (
         route=Route.TCP,
         risk=Risk.REVERSIBLE,
         acceptance=AcceptanceMode.GUARDED,
+        reversible=True,
+    ),
+    *_group(
+        _TCP_UNAVAILABLE,
+        domain="hierarchy",
+        route=Route.TCP,
+        risk=Risk.UNAVAILABLE,
+        acceptance=AcceptanceMode.CAPABILITY,
         reversible=True,
     ),
     ToolSpec("save_set", "lifecycle", Route.TCP, Risk.LIFECYCLE, AcceptanceMode.GUARDED, False),

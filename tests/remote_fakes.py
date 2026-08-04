@@ -115,6 +115,8 @@ class FakeDevice:
 class FakeClip:
     def __init__(self, name: str = "Clip", length: float = 4.0, midi: bool = True) -> None:
         self.name = name
+        self.color = 0x1A2B3C
+        self.color_index = 0
         self.length = length
         self.loop_start = 0.0
         self.loop_end = length
@@ -226,17 +228,37 @@ class FakeTrackView:
 
 
 class FakeTrack:
+    """Regular (midi/audio) track fake.
+
+    ``is_foldable`` mirrors Live: it is ``True`` only for Group Tracks, which
+    also report ``has_midi_input == False`` — that combination is exactly why
+    a Group Track cannot be recognised from ``type`` alone. ``group_track``
+    holds the parent Group Track object (Live returns a falsy ``id 0`` object
+    for ungrouped tracks; ``None`` is the fake's equivalent).
+    """
+
     def __init__(
         self,
         name: str,
         *,
         midi: bool = True,
         clip_slots: list[FakeClipSlot] | None = None,
+        is_foldable: bool = False,
+        group_track: FakeTrack | None = None,
+        fold_state: int = 0,
+        is_visible: bool = True,
+        color_index: int = 0,
     ) -> None:
         self.name = name
         self.has_midi_input = midi
         self.has_audio_input = not midi
         self.color = 0x336699
+        self.color_index = color_index
+        self.is_foldable = is_foldable
+        self.group_track = group_track
+        self.is_grouped = group_track is not None
+        self.fold_state = fold_state
+        self.is_visible = is_visible
         self.mute = False
         self.solo = False
         self.arm = False
@@ -251,9 +273,17 @@ class FakeTrack:
 
 
 class FakeSpecialTrack:
-    def __init__(self, name: str) -> None:
+    """Return/master track fake.
+
+    Deliberately narrower than :class:`FakeTrack`: it exposes ``color`` and
+    ``color_index`` but none of the grouping properties, so the reads exercise
+    the ``_safe`` fallback path a Live host takes when a property is missing.
+    """
+
+    def __init__(self, name: str, *, color_index: int = 0) -> None:
         self.name = name
         self.color = 0
+        self.color_index = color_index
         self.mixer_device = FakeMixerDevice()
         self.devices: list[FakeDevice] = []
 
@@ -450,6 +480,26 @@ class FakeSong:
             self.tracks.append(track)
         else:
             self.tracks.insert(index, track)
+
+
+def grouped_song() -> FakeSong:
+    """A Set shaped like the reported failure case.
+
+    Track 0 is a folded Group Track named ``"1 DRUMS"`` — the name Live
+    renders for a track literally named ``"# DRUMS"``. Track 1 is its hidden
+    child, track 2 is ungrouped. The Group Track has no MIDI input, so
+    ``_track_type`` reports ``audio`` for it; only ``is_group_track``
+    separates it from a plain audio track.
+    """
+
+    song = FakeSong()
+    group = FakeTrack("1 DRUMS", midi=False, is_foldable=True, fold_state=1, color_index=5)
+    child = FakeTrack("Kick", midi=True, group_track=group, is_visible=False, color_index=6)
+    loose = FakeTrack("Bass", midi=True, color_index=7)
+    song.tracks = [group, child, loose]
+    song.scenes = [FakeScene("Verse", [group.clip_slots[0]])]
+    song.view = FakeSongView(loose, song.scenes[0])
+    return song
 
 
 class FakeBrowser:

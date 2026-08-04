@@ -6,6 +6,74 @@ The canonical certification policy that governs the promotion decision
 (see `ableton-mcp acceptance --profile baseline` below) lives in
 [`docs/CERTIFICATION.md`](docs/CERTIFICATION.md).
 
+## [0.5.3] - 2026-08-04
+
+Adds 8 tools to the 65-tool v0.5.2 baseline (73 total). Track hierarchy and
+colour are now readable; colours are writable; moving/grouping tracks is
+proven impossible through any public API and refuses accordingly.
+
+### Added — track hierarchy reads and track colour
+
+- `set_track_color(track_index, color_index=None, color=None)` writes Live's
+  `Track.color_index` (70-swatch palette) or `Track.color` (packed
+  `0x00rrggbb`) in one undo step, confirmed by readback, never retried.
+- `get_track_list` / `get_track_state` now report `color`, `color_index`,
+  `is_group_track` (`Track.is_foldable`), `is_grouped`, `group_track_index`,
+  `group_track_id`, `is_visible` and `fold_state`. A Group Track has no MIDI
+  input, so `type` still reads `audio` for it — `is_group_track` is the only
+  correct group test. Properties a host does not expose are `null`, never
+  invented. Mixer state stays on `get_track_state` only.
+
+### Added — clip colour
+
+- `set_clip_color(track_index, clip_index, scope="session", color_index=None,
+  color=None)`. `Clip.color` and `Clip.color_index` are `getsetobserve` in the
+  LOM and `Track.arrangement_clips` exists since Live 11, so **both** the
+  Session and the Arrangement lane are genuinely writable. Single undo step,
+  written once, confirmed by readback, no retry.
+- `diagnose_clip_targets(track_index=None)` — read-only sweep reporting which
+  clips `set_clip_color` can reach, with an explicit `inaccessible` list and a
+  reason per entry. A host without `Track.arrangement_clips` is reported as
+  `arrangement_supported: false` rather than as "zero Arrangement clips".
+
+### Added — track hierarchy tools that refuse honestly
+
+- `move_track`, `reorder_tracks`, `move_track_to_group`, `ungroup_track` and
+  `merge_groups` are registered, documented and fully validated — and they
+  always refuse, because no public API can perform them. Validation runs
+  first (bad index → `INVALID_PARAMS`, return/main track → `WRONG_TYPE`,
+  non-permutation order / cycle / self-nesting / `delete_empty_source=True` →
+  `BAD_INPUT`), then a well-formed request returns `CAPABILITY_UNAVAILABLE`
+  carrying the API evidence. No undo step is opened and nothing in the Set
+  changes; tests assert clips, devices, notes, automation, mixer values,
+  routing, colours, fold state and track order are byte-identical afterwards.
+- Error envelopes gained an optional `details` object
+  (`protocol.Response.details`, `errors.BridgeError.details`) so the refusal
+  can carry machine-readable evidence instead of prose only.
+- `get_bridge_status()` gained `capability_gaps` and a
+  `capability_counts.capability_unavailable` entry, so the gap is discoverable
+  without triggering a refusal.
+- New certification status `capability_unavailable`: the expected steady state
+  for those tools, and — unlike `host_unavailable` — it does not block a
+  release. A hierarchy tool that ever *succeeds* is recorded as `failed`.
+- Evidence, for the record. LOM `Song` exposes `create_audio_track(index)`,
+  `create_midi_track(index)`, `duplicate_track(index)`, `delete_track(index)`
+  and `move_device(...)`, with no reposition call; `song.tracks` and
+  `song.visible_tracks` are get/observe and `Track.group_track` is get-only.
+  Extension SDK 1.0.0-beta.0 has `songCreateMidiTrack`, `songCreateAudioTrack`,
+  `songDuplicateTrack`, `songDeleteTrack` and `trackGetGroupTrack` — no move,
+  no grouping, and its create calls take no index. Duplicate + delete cannot
+  reorder at all (the copy always lands immediately after the original) and
+  would destroy the original track.
+
+### Documented
+
+- `#` at the start of a track name is Live's native auto-numbering token, so
+  `# DRUMS` is displayed and read back as `1 DRUMS`. This is Live behaviour,
+  not a bridge bug; the LOM exposes no escape syntax and no separate display
+  name, so the bridge sends names through unchanged instead of hiding the
+  substitution. See `docs/KNOWN_BUGS.md` §Category P.
+
 ## [0.5.2] - 2026-08-01
 
 ### Added

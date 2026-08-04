@@ -712,6 +712,191 @@ def set_track_property(
 
 
 @mcp.tool()
+def set_track_color(
+    track_index: int,
+    color_index: int | None = None,
+    color: int | None = None,
+) -> Any:
+    """Set and verify one track colour, by palette index or packed RGB.
+
+    Side effects: writes ``Track.color_index`` or ``Track.color`` in one Live
+    undo step and reads the value back; clips are never recoloured.
+    Example: ``set_track_color(0, color_index=12)`` or
+    ``set_track_color(0, color=0x336699)``.
+    Edge cases: exactly one of ``color_index`` (0..69) and ``color``
+    (0x000000..0xFFFFFF) is required; a track that does not expose the
+    property returns ``WRONG_TYPE`` and a rejected write returns
+    ``VERIFICATION_FAILED`` — the write is never retried.
+    """
+    return _remote(
+        "set_track_color",
+        models.SetTrackColorRequest(
+            track_index=track_index,
+            color_index=color_index,
+            color=color,
+        ),
+        exclude_none=True,
+    )
+
+
+@mcp.tool()
+def set_clip_color(
+    track_index: int,
+    clip_index: int,
+    scope: Literal["session", "arrangement"] = "session",
+    color_index: int | None = None,
+    color: int | None = None,
+) -> Any:
+    """Set and verify one clip colour, by palette index or packed RGB.
+
+    Side effects: writes ``Clip.color_index`` or ``Clip.color`` in one Live
+    undo step and reads the value back. Only the addressed clip changes.
+    Example: ``set_clip_color(0, 1, color_index=12)`` colours a Session clip;
+    ``set_clip_color(0, 0, scope="arrangement", color=0x336699)`` colours the
+    first Arrangement clip on that track.
+    Edge cases: exactly one of ``color_index`` (0..69) and ``color``
+    (0x000000..0xFFFFFF) is required. An empty Session slot returns
+    ``BAD_INPUT``. Arrangement scope needs ``Track.arrangement_clips`` (Live
+    11+); a host without it returns ``CAPABILITY_UNAVAILABLE`` — run
+    ``diagnose_clip_targets`` to see what is reachable. The write is issued
+    once and never retried.
+    """
+    return _remote(
+        "set_clip_color",
+        models.SetClipColorRequest(
+            track_index=track_index,
+            clip_index=clip_index,
+            scope=scope,
+            color_index=color_index,
+            color=color,
+        ),
+        exclude_none=True,
+    )
+
+
+@mcp.tool()
+def diagnose_clip_targets(track_index: int | None = None) -> Any:
+    """Report which clips ``set_clip_color`` can and cannot reach.
+
+    Side effects: none; a read-only sweep of Session slots and Arrangement
+    clips.
+    Example: ``diagnose_clip_targets(0)`` inspects one track;
+    ``diagnose_clip_targets()`` sweeps the whole Set.
+    Edge cases: returns ``arrangement_supported: false`` and an ``inaccessible``
+    entry for a host that does not expose ``Track.arrangement_clips``, instead
+    of reporting zero Arrangement clips.
+    """
+    return _remote(
+        "diagnose_clip_targets",
+        models.DiagnoseClipTargetsRequest(track_index=track_index),
+        exclude_none=True,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Track hierarchy — validated, never applied
+#
+# Live's public LOM and the Ableton Extension SDK expose no operation that
+# moves, reorders, re-parents, or ungroups an existing track. These tools
+# validate the request against the live Set (so a bad index still returns
+# INVALID_PARAMS / BAD_INPUT / WRONG_TYPE) and then return a typed
+# CAPABILITY_UNAVAILABLE whose ``details`` carry the API evidence. They never
+# mutate the Set and never emulate the operation destructively.
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def move_track(track_index: int, destination_index: int) -> Any:
+    """Attempt to move one track to another index; Live's API cannot do this.
+
+    Side effects: none — the request is validated and refused.
+    Example: ``move_track(3, 0)`` returns ``CAPABILITY_UNAVAILABLE`` with the
+    LOM and Extension SDK evidence in ``details``.
+    Edge cases: invalid indexes return ``INVALID_PARAMS`` and return/main
+    tracks return ``WRONG_TYPE``, so a malformed request stays
+    distinguishable from the capability gap. Create tracks at the index you
+    want, or reorder by hand in Live.
+    """
+    return _remote(
+        "move_track",
+        models.MoveTrackRequest(track_index=track_index, destination_index=destination_index),
+    )
+
+
+@mcp.tool()
+def reorder_tracks(order: list[int]) -> Any:
+    """Attempt to reorder every track at once; Live's API cannot do this.
+
+    Side effects: none — the request is validated and refused.
+    Example: ``reorder_tracks([2, 0, 1])`` returns ``CAPABILITY_UNAVAILABLE``
+    with the API evidence in ``details``.
+    Edge cases: ``order`` must be a permutation of the regular track indexes;
+    anything else returns ``BAD_INPUT`` before the capability refusal.
+    """
+    return _remote("reorder_tracks", models.ReorderTracksRequest(order=order))
+
+
+@mcp.tool()
+def move_track_to_group(track_index: int, group_track_index: int) -> Any:
+    """Attempt to move a track into a Group Track; Live's API cannot do this.
+
+    Side effects: none — the request is validated and refused.
+    Example: ``move_track_to_group(4, 1)`` returns ``CAPABILITY_UNAVAILABLE``
+    with the API evidence in ``details``.
+    Edge cases: ``Track.group_track`` is read-only in the LOM and the
+    Extension SDK exposes only a getter. A non-foldable target returns
+    ``WRONG_TYPE``; a self-nesting or cyclic request returns ``BAD_INPUT``.
+    """
+    return _remote(
+        "move_track_to_group",
+        models.MoveTrackToGroupRequest(
+            track_index=track_index,
+            group_track_index=group_track_index,
+        ),
+    )
+
+
+@mcp.tool()
+def ungroup_track(track_index: int) -> Any:
+    """Attempt to take a track out of its group; Live's API cannot do this.
+
+    Side effects: none — the request is validated and refused. Nothing is
+    deleted under any circumstance.
+    Example: ``ungroup_track(2)`` returns ``CAPABILITY_UNAVAILABLE`` with the
+    API evidence in ``details``.
+    Edge cases: a track that is not grouped returns ``WRONG_TYPE`` before the
+    capability refusal.
+    """
+    return _remote("ungroup_track", models.UngroupTrackRequest(track_index=track_index))
+
+
+@mcp.tool()
+def merge_groups(
+    source_group_index: int,
+    destination_group_index: int,
+    delete_empty_source: bool = False,
+) -> Any:
+    """Attempt to move one group's members into another; Live's API cannot.
+
+    Side effects: none — the request is validated and refused. This bridge
+    never deletes a track, so an emptied group would always be left in place.
+    Example: ``merge_groups(5, 1)`` returns ``CAPABILITY_UNAVAILABLE`` with
+    the API evidence in ``details``.
+    Edge cases: both indexes must be Group Tracks (``WRONG_TYPE`` otherwise),
+    must differ, and must not nest into each other (``BAD_INPUT``).
+    ``delete_empty_source=True`` is rejected with ``BAD_INPUT``.
+    """
+    return _remote(
+        "merge_groups",
+        models.MergeGroupsRequest(
+            source_group_index=source_group_index,
+            destination_group_index=destination_group_index,
+            delete_empty_source=delete_empty_source,
+        ),
+    )
+
+
+@mcp.tool()
 def set_clip_properties(
     track_index: int,
     clip_index: int,
@@ -1487,6 +1672,14 @@ PUBLIC_TOOL_FUNCTIONS_HEAD = (
     clear_clip_notes,
     fire_scene,
     set_track_property,
+    set_track_color,
+    set_clip_color,
+    diagnose_clip_targets,
+    move_track,
+    reorder_tracks,
+    move_track_to_group,
+    ungroup_track,
+    merge_groups,
     set_clip_properties,
     create_clip_automation,
     # v0.3.0

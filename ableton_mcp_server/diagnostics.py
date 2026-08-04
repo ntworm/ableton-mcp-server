@@ -13,10 +13,12 @@ from typing import Any, Protocol
 
 from contracts import (
     ALLOWED_MUTATIONS,
+    CAPABILITY_EVIDENCE,
     DEFAULT_HOST,
     DEFAULT_WS_PORT,
     READ_COMMANDS,
     READ_ONLY_COMMANDS,
+    UNSUPPORTED_CAPABILITIES,
     WEBSOCKET_TARGET_COMMANDS,
 )
 
@@ -154,6 +156,7 @@ def bridge_status(
         ],
         "capability_counts": _capability_counts(),
         "capability_source": _capability_source(),
+        "capability_gaps": capability_gaps(),
     }
     try:
         live = client.call("get_session_info", {}, timeout=timeout)
@@ -205,6 +208,25 @@ def _capability_counts() -> dict[str, int]:
         "read_only_blocked": len(READ_ONLY_COMMANDS),
         "feature_flags": 5,
         "live_required_tools": live_required,
+        # Tools that validate a request and then refuse it because no public
+        # Live API can perform it. They are neither reads nor mutations.
+        "capability_unavailable": len(UNSUPPORTED_CAPABILITIES),
+    }
+
+
+def capability_gaps() -> dict[str, dict[str, Any]]:
+    """Return the evidence behind every permanently unavailable operation.
+
+    Surfaced by ``get_bridge_status`` so an agent can discover *why* an
+    operation is refused without having to trigger the refusal first.
+    """
+
+    return {
+        name: {
+            "message": message,
+            "evidence": CAPABILITY_EVIDENCE[name],
+        }
+        for name, message in UNSUPPORTED_CAPABILITIES.items()
     }
 
 
@@ -220,6 +242,7 @@ def _capability_source() -> dict[str, str]:
         "websocket_targets": "contracts:WEBSOCKET_TARGET_COMMANDS",
         "read_only": "contracts:READ_ONLY_COMMANDS",
         "features": "ableton_mcp_server.diagnostics.bridge_status:features",
+        "capability_unavailable": "contracts:UNSUPPORTED_CAPABILITIES",
     }
 
 

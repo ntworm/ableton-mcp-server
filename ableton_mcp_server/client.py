@@ -127,7 +127,12 @@ class Client:
                         return response.result
                     assert response.code is not None
                     assert response.message is not None
-                    raise error_from_envelope(response.code, response.message, response.hint)
+                    raise error_from_envelope(
+                        response.code,
+                        response.message,
+                        response.hint,
+                        response.details,
+                    )
                 except TimeoutError as exc:
                     self.close()
                     raise BridgeTimeoutError(

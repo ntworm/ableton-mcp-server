@@ -13,6 +13,10 @@ Statuses
   confirmation is required before this row can flip to ``manual_passed``.
 - ``host_unavailable`` — host does not expose the seam; verified by probe.
 - ``environment_unavailable`` — environment (Node, audio clip, etc.) missing.
+- ``capability_unavailable`` — the operation has no public API in any Live
+  version this project targets, and the tool proved it refuses cleanly. This
+  is the expected steady state for those tools, so it does **not** block a
+  release the way ``host_unavailable`` does.
 - ``failed`` — probe reached but readback failed; release blocker.
 """
 
@@ -27,6 +31,7 @@ _ALLOWED_STATUSES = {
     "manual_required",
     "host_unavailable",
     "environment_unavailable",
+    "capability_unavailable",
     "failed",
 }
 

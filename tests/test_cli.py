@@ -45,7 +45,7 @@ def test_doctor_passes_catalog_tool_count_to_bridge_status(
     assert main(["doctor", "--json"]) == 0
     mock_status.assert_called_once()
     assert mock_status.call_args.kwargs.get("tool_count") == len(TOOL_CATALOG)
-    assert mock_status.call_args.kwargs.get("tool_count") == 65
+    assert mock_status.call_args.kwargs.get("tool_count") == 73
 
 
 def test_cli_installs_and_checks_remote_script(tmp_path: Path, capsys: MagicMock) -> None:

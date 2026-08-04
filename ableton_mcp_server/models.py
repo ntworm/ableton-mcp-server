@@ -5,9 +5,17 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from contracts import ALLOWED_MUTATIONS
+from contracts import (
+    ALLOWED_MUTATIONS,
+    TRACK_COLOR_INDEX_MAX,
+    TRACK_COLOR_INDEX_MIN,
+    TRACK_COLOR_RGB_MAX,
+    TRACK_COLOR_RGB_MIN,
+)
 
 NonNegativeInt = Annotated[int, Field(ge=0)]
+PaletteIndex = Annotated[int, Field(ge=TRACK_COLOR_INDEX_MIN, le=TRACK_COLOR_INDEX_MAX)]
+PackedRgb = Annotated[int, Field(ge=TRACK_COLOR_RGB_MIN, le=TRACK_COLOR_RGB_MAX)]
 NonNegativeBeat = Annotated[float, Field(ge=0, le=100000)]
 PositiveBeat = Annotated[float, Field(gt=0, le=100000)]
 
@@ -105,6 +113,110 @@ class SetTrackPropertyRequest(RequestModel):
     track_index: NonNegativeInt
     property: Literal["mute", "solo", "arm"]
     value: bool
+
+
+class SetTrackColorRequest(RequestModel):
+    """Exactly one of ``color_index`` (palette slot) or ``color`` (packed RGB).
+
+    ``color_index`` addresses Live's 70-swatch colour palette; ``color`` is the
+    ``0x00rrggbb`` value documented for ``Track.color``. Requiring exactly one
+    keeps the write single-valued, so the readback has one unambiguous target.
+    """
+
+    track_index: NonNegativeInt
+    color_index: PaletteIndex | None = None
+    color: PackedRgb | None = None
+
+    @model_validator(mode="after")
+    def exactly_one_colour_source(self) -> SetTrackColorRequest:
+        provided = [value for value in (self.color_index, self.color) if value is not None]
+        if len(provided) != 1:
+            raise ValueError("provide exactly one of color_index or color")
+        return self
+
+
+class SetClipColorRequest(RequestModel):
+    """Colour one Session or Arrangement clip.
+
+    ``scope`` selects the lane. Session clips are addressed by clip-slot
+    index; Arrangement clips by their position in ``Track.arrangement_clips``.
+    Run ``diagnose_clip_targets`` first if you are unsure which clips the
+    connected Live host exposes.
+    """
+
+    track_index: NonNegativeInt
+    clip_index: NonNegativeInt
+    scope: Literal["session", "arrangement"] = "session"
+    color_index: PaletteIndex | None = None
+    color: PackedRgb | None = None
+
+    @model_validator(mode="after")
+    def exactly_one_colour_source(self) -> SetClipColorRequest:
+        provided = [value for value in (self.color_index, self.color) if value is not None]
+        if len(provided) != 1:
+            raise ValueError("provide exactly one of color_index or color")
+        return self
+
+
+class DiagnoseClipTargetsRequest(RequestModel):
+    """``track_index`` omitted means every track in the Set."""
+
+    track_index: NonNegativeInt | None = None
+
+
+# ---------------------------------------------------------------------------
+# Track hierarchy requests
+#
+# These are fully validated even though Live's public API cannot perform any
+# of them: a caller must be able to tell "my request was malformed" from "no
+# API can do this". The bridge answers a well-formed request with a typed
+# CAPABILITY_UNAVAILABLE carrying the evidence, and never mutates the Set.
+# ---------------------------------------------------------------------------
+
+
+class MoveTrackRequest(RequestModel):
+    track_index: NonNegativeInt
+    destination_index: NonNegativeInt
+
+
+class ReorderTracksRequest(RequestModel):
+    order: list[NonNegativeInt] = Field(min_length=1, max_length=512)
+
+    @model_validator(mode="after")
+    def order_has_no_duplicates(self) -> ReorderTracksRequest:
+        if len(set(self.order)) != len(self.order):
+            raise ValueError("order must not repeat a track index")
+        return self
+
+
+class MoveTrackToGroupRequest(RequestModel):
+    track_index: NonNegativeInt
+    group_track_index: NonNegativeInt
+
+    @model_validator(mode="after")
+    def group_is_not_itself(self) -> MoveTrackToGroupRequest:
+        if self.track_index == self.group_track_index:
+            raise ValueError("a track cannot be moved into itself")
+        return self
+
+
+class UngroupTrackRequest(RequestModel):
+    track_index: NonNegativeInt
+
+
+class MergeGroupsRequest(RequestModel):
+    source_group_index: NonNegativeInt
+    destination_group_index: NonNegativeInt
+    # Deleting the emptied source is never performed by this bridge; the flag
+    # exists so an explicit request for it is rejected loudly instead of being
+    # silently ignored.
+    delete_empty_source: bool = False
+
+    @model_validator(mode="after")
+    def groups_differ(self) -> MergeGroupsRequest:
+        if self.source_group_index == self.destination_group_index:
+            raise ValueError("source and destination groups must differ")
+        return self
 
 
 class SetClipPropertiesRequest(GetClipNotesRequest):
@@ -667,6 +779,14 @@ TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "clear_clip_notes": ClearClipNotesRequest,
     "fire_scene": FireSceneRequest,
     "set_track_property": SetTrackPropertyRequest,
+    "set_track_color": SetTrackColorRequest,
+    "set_clip_color": SetClipColorRequest,
+    "diagnose_clip_targets": DiagnoseClipTargetsRequest,
+    "move_track": MoveTrackRequest,
+    "reorder_tracks": ReorderTracksRequest,
+    "move_track_to_group": MoveTrackToGroupRequest,
+    "ungroup_track": UngroupTrackRequest,
+    "merge_groups": MergeGroupsRequest,
     "set_clip_properties": SetClipPropertiesRequest,
     "create_clip_automation": CreateClipAutomationRequest,
     "get_device_list": GetDeviceListRequest,

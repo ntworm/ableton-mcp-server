@@ -14,10 +14,12 @@ class BridgeError(Exception):
         hint: str | None = None,
         *,
         code: str | None = None,
+        details: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(message)
         self.hint = hint
         self.code = code or self.default_code
+        self.details = details
 
     def to_envelope(self) -> dict[str, Any]:
         envelope: dict[str, Any] = {
@@ -27,6 +29,8 @@ class BridgeError(Exception):
         }
         if self.hint:
             envelope["hint"] = self.hint
+        if self.details:
+            envelope["details"] = self.details
         return envelope
 
 
@@ -154,10 +158,15 @@ _ERROR_TYPES: dict[str, type[BridgeError]] = {
 }
 
 
-def error_from_envelope(code: str, message: str, hint: str | None) -> BridgeError:
+def error_from_envelope(
+    code: str,
+    message: str,
+    hint: str | None,
+    details: dict[str, Any] | None = None,
+) -> BridgeError:
     """Create the matching typed error without rewriting the remote message."""
 
     error_type = _ERROR_TYPES.get(code, BridgeError)
     error = error_type.__new__(error_type)
-    BridgeError.__init__(error, message, hint, code=code)
+    BridgeError.__init__(error, message, hint, code=code, details=details)
     return error

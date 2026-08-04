@@ -17,6 +17,10 @@ class Response:
     code: str | None = None
     message: str | None = None
     hint: str | None = None
+    # Optional machine-readable payload on an error. Used by
+    # ``CAPABILITY_UNAVAILABLE`` to carry the API evidence behind the refusal
+    # so a caller does not have to parse prose. Absent on every other error.
+    details: dict[str, Any] | None = None
 
 
 def _decode_object(data: bytes) -> dict[str, Any]:
@@ -69,11 +73,20 @@ def decode_response(data: bytes) -> Response:
         code = value.get("code")
         message = value.get("message")
         hint = value.get("hint")
+        details = value.get("details")
         if not isinstance(code, str) or not code:
             raise ProtocolError("Error response is missing 'code'")
         if not isinstance(message, str) or not message:
             raise ProtocolError("Error response is missing 'message'")
         if hint is not None and not isinstance(hint, str):
             raise ProtocolError("Error response 'hint' must be a string")
-        return Response(status="error", code=code, message=message, hint=hint)
+        if details is not None and not isinstance(details, dict):
+            raise ProtocolError("Error response 'details' must be an object")
+        return Response(
+            status="error",
+            code=code,
+            message=message,
+            hint=hint,
+            details=details,
+        )
     raise ProtocolError("Response 'status' must be 'ok' or 'error'")

@@ -31,6 +31,11 @@ class BaselineSnapshot:
     track_solos: dict[int, bool] = field(default_factory=dict)
     track_arms: dict[int, bool] = field(default_factory=dict)
     track_volumes: dict[int, float] = field(default_factory=dict)
+    # ``None`` means the connected Remote Script did not report the field.
+    # The colour probe and its restore are skipped for those tracks rather
+    # than restoring an invented default.
+    track_colors: dict[int, int | None] = field(default_factory=dict)
+    track_color_indexes: dict[int, int | None] = field(default_factory=dict)
     tempo: float = 120.0
     current_song_time: float = 0.0
     loop: bool = False
@@ -64,6 +69,8 @@ class BaselineSnapshot:
             "track_solos": dict(self.track_solos),
             "track_arms": dict(self.track_arms),
             "track_volumes": dict(self.track_volumes),
+            "track_colors": dict(self.track_colors),
+            "track_color_indexes": dict(self.track_color_indexes),
             "tempo": self.tempo,
             "current_song_time": self.current_song_time,
             "loop": self.loop,
@@ -72,6 +79,14 @@ class BaselineSnapshot:
             "locators": list(self.locators),
             "track_count": self.track_count,
         }
+
+
+def _optional_int(value: Any) -> int | None:
+    """Return ``value`` as ``int`` when the bridge reported a real integer."""
+
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return int(value)
 
 
 def discover_baseline(client: AcceptanceClient) -> BaselineSnapshot:
@@ -96,6 +111,8 @@ def discover_baseline(client: AcceptanceClient) -> BaselineSnapshot:
     track_solos: dict[int, bool] = {}
     track_arms: dict[int, bool] = {}
     track_volumes: dict[int, float] = {}
+    track_colors: dict[int, int | None] = {}
+    track_color_indexes: dict[int, int | None] = {}
     for track in tracks:
         idx = int(track.get("index", -1))
         track_names[idx] = str(track.get("name", ""))
@@ -117,6 +134,12 @@ def discover_baseline(client: AcceptanceClient) -> BaselineSnapshot:
         track_solos[idx] = bool(state["solo"])
         track_arms[idx] = bool(state["arm"])
         track_volumes[idx] = float(state["volume"])
+        # Colour is captured leniently: a Remote Script older than the
+        # set_track_color change does not report it, and that must degrade to
+        # "no colour restore for this track" rather than aborting the run or
+        # writing a fabricated default back into the Set.
+        track_colors[idx] = _optional_int(state.get("color"))
+        track_color_indexes[idx] = _optional_int(state.get("color_index"))
     session = client.call("get_session_info")
     loop = client.call("get_loop_settings")
     locators = client.call("get_locators")
@@ -142,6 +165,8 @@ def discover_baseline(client: AcceptanceClient) -> BaselineSnapshot:
         track_solos=track_solos,
         track_arms=track_arms,
         track_volumes=track_volumes,
+        track_colors=track_colors,
+        track_color_indexes=track_color_indexes,
         tempo=float(session["tempo"]),
         current_song_time=float(session["current_song_time"]),
         loop=bool(loop.get("loop", False)),

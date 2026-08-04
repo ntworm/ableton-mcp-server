@@ -30,6 +30,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from ableton_mcp_server.errors import CapabilityUnavailableError
+from contracts import CAPABILITY_EVIDENCE, UNSUPPORTED_CAPABILITIES
+
 # ---------------------------------------------------------------------------
 # Contract specs
 # ---------------------------------------------------------------------------
@@ -94,6 +97,17 @@ _TCP_COMMAND_FIELDS: dict[str, dict[str, Any]] = {
         "property": str,
         "value": bool,
     },
+    "set_track_color": {"track_index": int},
+    "set_clip_color": {"track_index": int, "clip_index": int},
+    "diagnose_clip_targets": {},
+    # Validated like any other command, then refused: no public Live API can
+    # perform these. The fake mirrors the Remote Script's ordering so a probe
+    # cannot pass here and fail against the real bridge.
+    "move_track": {"track_index": int, "destination_index": int},
+    "reorder_tracks": {"order": list},
+    "move_track_to_group": {"track_index": int, "group_track_index": int},
+    "ungroup_track": {"track_index": int},
+    "merge_groups": {"source_group_index": int, "destination_group_index": int},
     "set_clip_properties": {
         "track_index": int,
         "clip_index": int,
@@ -130,6 +144,31 @@ _WS_METHOD_FIELDS: dict[str, dict[str, Any]] = {
 }
 
 
+# Hierarchy fields every ``get_track_list`` row carries. The disposable Set
+# has no Group Track, so all three tracks are ungrouped and visible.
+_HIERARCHY_DEFAULTS: dict[str, Any] = {
+    "color": 0x000000,
+    "color_index": 0,
+    "is_group_track": False,
+    "is_grouped": False,
+    "group_track_index": None,
+    "group_track_id": None,
+    "is_visible": True,
+    "fold_state": 0,
+}
+
+# Keys ``get_track_list`` is allowed to expose: identity plus hierarchy.
+# Mixer state (mute/solo/arm/volume) is deliberately absent — it lives on
+# ``get_track_state`` only.
+_TRACK_LIST_KEYS: tuple[str, ...] = (
+    "id",
+    "index",
+    "name",
+    "type",
+    *_HIERARCHY_DEFAULTS,
+)
+
+
 # ---------------------------------------------------------------------------
 # The fake itself
 # ---------------------------------------------------------------------------
@@ -162,6 +201,7 @@ class StrictFakeBridge:
             "locators": [],
             "tracks": [
                 {
+                    **_HIERARCHY_DEFAULTS,
                     "index": 0,
                     "type": "midi",
                     "name": "Bass",
@@ -169,9 +209,12 @@ class StrictFakeBridge:
                     "mute": False,
                     "solo": False,
                     "arm": False,
+                    "color": 0x336699,
+                    "color_index": 3,
                     "devices": [{"name": "MIDI Device", "parameters": ["Device On"]}],
                 },
                 {
+                    **_HIERARCHY_DEFAULTS,
                     "index": 1,
                     "type": "audio",
                     "name": "Drums",
@@ -179,9 +222,12 @@ class StrictFakeBridge:
                     "mute": False,
                     "solo": False,
                     "arm": False,
+                    "color": 0x996633,
+                    "color_index": 7,
                     "devices": [{"name": "Audio Device", "parameters": ["Volume"]}],
                 },
                 {
+                    **_HIERARCHY_DEFAULTS,
                     "index": 2,
                     "type": "audio",
                     "name": "Samp",
@@ -189,6 +235,8 @@ class StrictFakeBridge:
                     "mute": False,
                     "solo": False,
                     "arm": False,
+                    "color": 0x669933,
+                    "color_index": 11,
                     "devices": [{"name": "Sampler", "parameters": ["Volume"]}],
                 },
             ],
@@ -292,6 +340,15 @@ def _validate_tcp(command: str, params: dict[str, Any]) -> None:
         raise RuntimeError(
             "BAD_FIELD: list_device_params uses track_id, not track_index/device_index"
         )
+    if command == "set_track_color":
+        # The real contract requires exactly one colour source; accepting both
+        # (or neither) here would let a probe pass against a request the
+        # Remote Script rejects with INVALID_PARAMS.
+        provided = [name for name in ("color_index", "color") if name in params]
+        if len(provided) != 1:
+            raise RuntimeError("BAD_FIELD: set_track_color needs exactly one of color_index/color")
+        if not isinstance(params[provided[0]], int) or isinstance(params[provided[0]], bool):
+            raise RuntimeError(f"BAD_FIELD_TYPE: set_track_color.{provided[0]} expected int")
 
 
 _READ_ONLY_TCP_COMMANDS = {
@@ -320,7 +377,62 @@ _READ_ONLY_TCP_COMMANDS = {
     "take_snapshot",
     "get_control_surfaces",
     "get_selected_context",
+    "diagnose_clip_targets",
+    # Refusals never touch the Set, so they must not mark it dirty either.
+    "move_track",
+    "reorder_tracks",
+    "move_track_to_group",
+    "ungroup_track",
+    "merge_groups",
 }
+
+
+def _validate_hierarchy(state: dict[str, Any], command: str, params: dict[str, Any]) -> None:
+    """Reject malformed hierarchy requests before the capability refusal.
+
+    Mirrors ``_validate_hierarchy_request`` in the Remote Script closely
+    enough that a probe cannot pass here and fail against the real bridge.
+    """
+
+    tracks = {int(track["index"]): track for track in state["tracks"]}
+    regular = sorted(idx for idx, track in tracks.items() if track["type"] in ("midi", "audio"))
+
+    def require_regular(index: int, label: str) -> dict[str, Any]:
+        if index not in tracks:
+            raise RuntimeError(f"INVALID_PARAMS: {label}={index} does not exist")
+        if tracks[index]["type"] in ("return", "master"):
+            raise RuntimeError(f"WRONG_TYPE: {label}={index} is a return/main track")
+        return tracks[index]
+
+    def require_group(index: int, label: str) -> dict[str, Any]:
+        track = require_regular(index, label)
+        if not track.get("is_group_track", False):
+            raise RuntimeError(f"WRONG_TYPE: {label}={index} is not a Group Track")
+        return track
+
+    if command == "move_track":
+        require_regular(params["track_index"], "track_index")
+        if params["destination_index"] not in regular:
+            raise RuntimeError("INVALID_PARAMS: destination_index outside the regular tracks")
+    elif command == "reorder_tracks":
+        if sorted(params["order"]) != regular:
+            raise RuntimeError("BAD_INPUT: order must be a permutation of the regular tracks")
+    elif command == "move_track_to_group":
+        require_regular(params["track_index"], "track_index")
+        require_group(params["group_track_index"], "group_track_index")
+        if params["track_index"] == params["group_track_index"]:
+            raise RuntimeError("BAD_INPUT: a group cannot contain itself")
+    elif command == "ungroup_track":
+        track = require_regular(params["track_index"], "track_index")
+        if not track.get("is_grouped", False):
+            raise RuntimeError("WRONG_TYPE: track is not inside a Group Track")
+    elif command == "merge_groups":
+        if params.get("delete_empty_source", False):
+            raise RuntimeError("BAD_INPUT: delete_empty_source is never supported")
+        require_group(params["source_group_index"], "source_group_index")
+        require_group(params["destination_group_index"], "destination_group_index")
+        if params["source_group_index"] == params["destination_group_index"]:
+            raise RuntimeError("BAD_INPUT: source and destination groups must differ")
 
 
 def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str, params: dict[str, Any]) -> Any:
@@ -331,12 +443,11 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str, params: dict[st
     if command == "get_project_metadata":
         return {"song_name": "TESTE_CODEX", "is_dirty": bool(s.get("is_dirty", False))}
     if command == "get_track_list":
-        # The real ``get_track_list`` contract returns only
-        # ``id``/``index``/``name``/``type``. Mixer state (mute, solo,
-        # arm, volume) lives on ``get_track_state``; including those
-        # fields here would let the runner invent defaults that bypass
-        # the mixer readback.
-        return [{k: t[k] for k in ("id", "index", "name", "type") if k in t} for t in s["tracks"]]
+        # The real ``get_track_list`` contract returns identity plus the
+        # hierarchy/colour fields. Mixer state (mute, solo, arm, volume)
+        # lives on ``get_track_state``; including those fields here would
+        # let the runner invent defaults that bypass the mixer readback.
+        return [{k: t[k] for k in _TRACK_LIST_KEYS if k in t} for t in s["tracks"]]
     if command == "get_track_state":
         idx = params["track_index"]
         track = next((t for t in s["tracks"] if t["index"] == idx), None)
@@ -356,6 +467,14 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str, params: dict[st
             "arm": track.get("arm", False),
             "device_count": len(track.get("devices", [])),
             "volume": mixer_volume,
+            "color": track.get("color", 0),
+            "color_index": track.get("color_index", 0),
+            "is_group_track": track.get("is_group_track", False),
+            "is_grouped": track.get("is_grouped", False),
+            "group_track_index": track.get("group_track_index"),
+            "group_track_id": track.get("group_track_id"),
+            "is_visible": track.get("is_visible", True),
+            "fold_state": track.get("fold_state", 0),
         }
     if command == "get_clip_summary":
         track = params["track_index"]
@@ -408,6 +527,8 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str, params: dict[st
             "length": clip.get("length", 4.0),
             "is_audio_clip": clip.get("is_audio_clip", False),
             "is_midi_clip": clip.get("is_midi_clip", False),
+            "color": clip.get("color", 0),
+            "color_index": clip.get("color_index", 0),
         }
     if command == "get_device_list":
         track = params["track_index"]
@@ -606,6 +727,103 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str, params: dict[st
             if track["index"] == idx:
                 track[params["property"]] = params["value"]
         return {"property": params["property"], "value": params["value"]}
+    if command in UNSUPPORTED_CAPABILITIES:
+        # Mirror the Remote Script: validate first so a malformed request is
+        # still distinguishable, then refuse with the typed error.
+        _validate_hierarchy(s, command, params)
+        raise CapabilityUnavailableError(
+            UNSUPPORTED_CAPABILITIES[command],
+            "The request is well-formed; Live's public API has no operation that "
+            "performs it. Nothing was changed in the Set.",
+            details={**CAPABILITY_EVIDENCE[command], "request": dict(params), "applied": False},
+        )
+    if command == "diagnose_clip_targets":
+        tracks = []
+        session_total = 0
+        for track in s["tracks"]:
+            session = [
+                {
+                    "id": f"track:{track['index']}/clipslot:{slot}/clip",
+                    "scope": "session",
+                    "track_index": track["index"],
+                    "clip_index": slot,
+                    "name": clip.get("name", ""),
+                    "is_midi_clip": clip.get("is_midi_clip", False),
+                    "color": clip.get("color", 0),
+                    "color_index": clip.get("color_index", 0),
+                    "colorable": True,
+                }
+                for (t_idx, slot), clip in sorted(s["clips"].items())
+                if t_idx == track["index"]
+            ]
+            session_total += len(session)
+            tracks.append(
+                {
+                    "track_index": track["index"],
+                    "track_id": track["id"],
+                    "name": track["name"],
+                    "type": track["type"],
+                    "session_clips": session,
+                    "arrangement_clips": [],
+                    # The disposable Set has no Arrangement clips; the lane is
+                    # still reported as supported so the runner exercises the
+                    # "supported and empty" branch.
+                    "arrangement_supported": True,
+                }
+            )
+        return {
+            "tracks": tracks,
+            "session_clip_count": session_total,
+            "arrangement_clip_count": 0,
+            "inaccessible": [],
+        }
+    if command == "set_clip_color":
+        if params.get("scope", "session") != "session":
+            raise RuntimeError("BAD_FIELD: fake Set has no Arrangement clips")
+        key = (params["track_index"], params["clip_index"])
+        clip = s["clips"].get(key)
+        if clip is None:
+            raise RuntimeError(f"set_clip_color: empty slot {key}")
+        provided = [name for name in ("color_index", "color") if name in params]
+        if len(provided) != 1:
+            raise RuntimeError("BAD_FIELD: set_clip_color needs exactly one colour source")
+        clip[provided[0]] = int(params[provided[0]])
+        clip_id = f"track:{key[0]}/clipslot:{key[1]}/clip"
+        return {
+            "clip_id": clip_id,
+            "scope": "session",
+            "track_index": key[0],
+            "clip_index": key[1],
+            "property": provided[0],
+            "color": clip.get("color", 0),
+            "color_index": clip.get("color_index", 0),
+            "resolved": {
+                "kind": "clip",
+                "track_index": key[0],
+                "clip_index": key[1],
+                "scope": "session",
+                "clip_id": clip_id,
+            },
+        }
+    if command == "set_track_color":
+        idx = params["track_index"]
+        target = next((t for t in s["tracks"] if t["index"] == idx), None)
+        if target is None:
+            raise RuntimeError(f"BAD_TRACK_INDEX: {idx}")
+        if "color_index" in params:
+            target["color_index"] = int(params["color_index"])
+            attribute = "color_index"
+        else:
+            target["color"] = int(params["color"])
+            attribute = "color"
+        return {
+            "track_id": f"track:{idx}",
+            "track_index": idx,
+            "property": attribute,
+            "color": target.get("color", 0),
+            "color_index": target.get("color_index", 0),
+            "resolved": {"kind": "track", "track_index": idx, "track_name": target["name"]},
+        }
     if command == "rename_track":
         idx = params["track_index"]
         for track in s["tracks"]:
@@ -626,6 +844,7 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str, params: dict[st
                 t["id"] = f"track:{t['index']}"
         s["tracks"].append(
             {
+                **_HIERARCHY_DEFAULTS,
                 "index": insert_idx,
                 "type": kind,
                 "name": "",

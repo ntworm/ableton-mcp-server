@@ -648,13 +648,27 @@ def test_p1_5_jsonl_socket_dispatch_round_trip(
                 f"get_track_list returned non-list or empty: {track_list}"
             )
             for track in track_list:
-                # Production contract: only id/index/name/type.
+                # Production contract: identity plus hierarchy/colour. Mixer
+                # state must stay on get_track_state — the baseline restores
+                # mute/solo/arm/volume from there, and a leaked field here
+                # would let it round-trip a value it never verified.
                 assert set(track.keys()) <= {
                     "id",
                     "index",
                     "name",
                     "type",
+                    "color",
+                    "color_index",
+                    "is_group_track",
+                    "is_grouped",
+                    "group_track_index",
+                    "group_track_id",
+                    "is_visible",
+                    "fold_state",
                 }, f"get_track_list leaked mixer fields: {track}"
+                assert not (set(track.keys()) & {"mute", "solo", "arm", "volume"}), (
+                    f"get_track_list leaked mixer fields: {track}"
+                )
         finally:
             c.close()
     finally:
