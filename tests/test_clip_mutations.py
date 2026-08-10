@@ -42,6 +42,35 @@ def test_create_clip_rejects_occupied_slot() -> None:
     assert exc_info.value.code == "BAD_INPUT"
 
 
+def test_create_clip_dry_run_validates_without_mutating_or_opening_undo() -> None:
+    song = FakeSong()
+    song.tracks[0].clip_slots = [FakeClipSlot()]
+    app = FakeApplication()
+
+    result = execute_command(
+        song,
+        app,
+        "create_clip",
+        {"track_index": 0, "clip_index": 0, "length_beats": 8.0, "dry_run": True},
+    )
+
+    assert result == {
+        "created": False,
+        "committed": False,
+        "clip_id": "track:0/clipslot:0/clip",
+        "length_beats": 8.0,
+        "resolved": {
+            "kind": "clip",
+            "track_index": 0,
+            "clip_index": 0,
+            "clip_id": "track:0/clipslot:0/clip",
+            "track_name": "Bass",
+        },
+    }
+    assert song.tracks[0].clip_slots[0].clip is None
+    assert (app.begin_count, app.end_count) == (0, 0)
+
+
 def test_fire_clip_and_add_notes_use_python_remote_script_lom_types() -> None:
     song = FakeSong()
     app = FakeApplication()

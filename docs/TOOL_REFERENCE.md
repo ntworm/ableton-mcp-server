@@ -1,8 +1,8 @@
 # Tool Reference
 
-The FastMCP server exposes 65 snake_case tools. Remote examples below show the JSONL command envelope after MCP/Pydantic validation. All error responses use `{"status":"error","code","message","hint?"}`.
+The FastMCP server exposes 75 snake_case tools, up from the certified 65-tool v0.5.2 baseline. Remote examples below show the JSONL command envelope after MCP/Pydantic validation. All error responses use `{"status":"error","code","message","hint?"}`.
 
-A machine-readable view of these tools (route, risk, acceptance mode, reversibility) is exposed at runtime via the `get_bridge_status` tool's `tools` list and `capability_counts` keys, derived from the canonical `TOOL_CATALOG`.
+A machine-readable view of these tools (route, risk, acceptance mode, reversibility) is exposed at runtime via the `get_bridge_status` tool's `tools` list and `capability_counts` keys, derived from the canonical `TOOL_CATALOG`. A generated [API Capability Matrix](api_capability_matrix.md) is also available for quick reference.
 
 The promotion gates that consume the per-tool status rows recorded by
 the acceptance runner are documented in
@@ -256,6 +256,20 @@ are explicitly allowed.
 - Response: `{"status":"ok","result":[{"id":"track:0","index":0,"name":"Bass","type":"midi"}]}`
 - Edge cases / side effects: pure read; no match returns `[]`.
 
+### `live_find_device(track_index: int, query: str)`
+
+- Params: non-negative track index and non-empty case-insensitive name substring.
+- Returns: matching device snapshots for that track.
+- Request: `{"type":"live_find_device","params":{"track_index":0,"query":"operator"}}`
+- Edge cases / side effects: pure read; no match returns `[]`.
+
+### `live_find_clip(track_index: int, query: str)`
+
+- Params: non-negative track index and non-empty case-insensitive name substring.
+- Returns: matching clip slot snapshots for that track.
+- Request: `{"type":"live_find_clip","params":{"track_index":0,"query":"verse"}}`
+- Edge cases / side effects: pure read; no match returns `[]`.
+
 ### `list_device_params(track_id: str)`
 
 - Params: current path-id in exact form `track:N`.
@@ -298,13 +312,13 @@ are explicitly allowed.
 - Response: `{"status":"ok","result":{"current_song_time":32.0}}`
 - Edge cases / side effects: one undo step; set/yield/read/retry across up to ten Live UI ticks; exhaustion returns `PLAYHEAD_NOT_MOVED`.
 
-### `set_tempo(tempo: float)`
+### `set_tempo(tempo: float, dry_run: bool = False)`
 
-- Params: finite BPM 20..999.
+- Params: finite BPM 20..999, optional boolean `dry_run`.
 - Returns: observed tempo plus canonical `resolved` identity (`kind: "tempo"` and observed `tempo`).
 - Request: `{"type":"set_tempo","params":{"tempo":128.0}}`
 - Response: `{"status":"ok","result":{"tempo":128.0,"resolved":{"kind":"tempo","tempo":128.0}}}`
-- Edge cases / side effects: one undo step; tempo automation can subsequently change the value.
+- Edge cases / side effects: one undo step; tempo automation can subsequently change the value. When `dry_run` is `True`, the new tempo is not committed to Live and `committed: False` is returned.
 
 ### `start_playback()`
 
@@ -370,13 +384,13 @@ are explicitly allowed.
 - Response: `{"status":"ok","result":{"fired":true,"clip_id":"track:0/clipslot:0/clip"}}`
 - Edge cases / side effects: launches the clip; empty slots are rejected rather than starting recording.
 
-### `create_clip(track_index: int, clip_index: int, length_beats: float)`
+### `create_clip(track_index: int, clip_index: int, length_beats: float, dry_run: bool = False)`
 
-- Params: non-negative track/slot indexes and finite positive length up to 100000 beats.
+- Params: non-negative track/slot indexes, finite positive length up to 100000 beats, and optional boolean `dry_run`.
 - Returns: creation flag, clip path-id, length, and canonical `resolved` clip identity (resolved indexes, track name when available, and post-mutation clip path-id).
 - Request: `{"type":"create_clip","params":{"track_index":0,"clip_index":1,"length_beats":4.0}}`
 - Response: `{"status":"ok","result":{"created":true,"clip_id":"track:0/clipslot:1/clip","length_beats":4.0,"resolved":{"kind":"clip","track_index":0,"clip_index":1,"track_name":"Bass","clip_id":"track:0/clipslot:1/clip"}}}`
-- Edge cases / side effects: one undo step; only empty Session slots on MIDI tracks are supported.
+- Edge cases / side effects: one undo step; only empty Session slots on MIDI tracks are supported. When `dry_run` is `True`, the clip is not created and `committed: False` is returned.
 
 ## v0.4.0 capability expansion
 

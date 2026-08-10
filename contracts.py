@@ -121,6 +121,8 @@ READ_COMMANDS = frozenset(
         "get_browser_categories",
         "get_song_length",
         "live_find_track",
+        "live_find_device",
+        "live_find_clip",
         "list_device_params",
         # v0.3.0 — composition diagnostics
         "get_composition_structure",

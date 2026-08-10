@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232EC4B6'><path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/></svg>">
   <title>Ableton MCP Server — Production Tool Surface for Ableton Live 12</title>
-  <meta name="description" content="Production MCP server exposing 65 tools over TCP and WebSockets for AI agents (Claude, Antigravity, Gemini, Codex) and audio developers to control Ableton Live 12.">
-  <meta property="og:title" content="Ableton MCP Server — Technical Specification & 65-Tool Catalog">
+  <meta name="description" content="Production MCP server exposing 75 tools over TCP and WebSockets for AI agents (Claude, Antigravity, Gemini, Codex) and audio developers to control Ableton Live 12.">
+  <meta property="og:title" content="Ableton MCP Server — Technical Specification & 75-Tool Catalog">
   <meta property="og:description" content="Dual-bridge FastMCP server for querying parameters, driving transport, automating clips, and non-realtime mix analysis in Ableton Live 12.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://ntworm.github.io/ableton-mcp-server/">
@@ -479,7 +479,7 @@
           <a href="#config" data-en="Agent Config" data-pt="Configuração">Agent Config</a>
           <a href="#taxonomy" data-en="Error Taxonomy" data-pt="Taxonomia de Erros">Error Taxonomy</a>
           <a href="#inspiration" data-en="Prior Art" data-pt="Trabalhos Anteriores">Prior Art</a>
-          <a href="#tools" data-en="MCP Tools (65)" data-pt="Ferramentas MCP (65)">MCP Tools (65)</a>
+          <a href="#tools" data-en="MCP Tools (75)" data-pt="Ferramentas MCP (75)">MCP Tools (75)</a>
         </div>
 
         <div class="lang-switcher">
@@ -496,7 +496,7 @@
       <div class="hero-badge">
         <span>⚡ FastMCP Production Bridge</span>
         <span>·</span>
-        <span data-en="65 Tools Over IPC" data-pt="65 Ferramentas via IPC">65 Tools Over IPC</span>
+        <span data-en="75 Tools Over IPC" data-pt="75 Ferramentas via IPC">75 Tools Over IPC</span>
       </div>
       <h1 data-en="Ableton Live 12 Integration Surface for AI Agents" data-pt="Superfície de Integração do Ableton Live 12 para Agentes de IA">Ableton Live 12 Integration Surface for AI Agents</h1>
       <p class="subtitle" data-en="A high-density, low-latency MCP server that exposes active Ableton Live 12 Sets to AI agents and Python scripts. Query live LOM parameters, drive transport, automate clips, analyze audio in non-realtime, and execute atomic transactions." data-pt="Servidor MCP de baixa latência que expõe projetos ativos do Ableton Live 12 para agentes de IA e scripts Python. Consulta de parâmetros LOM em tempo real, controle de transport, automação de clips, análise de áudio offline e transações atômicas.">
@@ -518,7 +518,7 @@
           <span data-en="Repository on GitHub" data-pt="Repositório no GitHub">Repository on GitHub</span>
         </a>
         <a href="#config" class="btn btn-secondary" data-en="Agent Config JSON" data-pt="JSON de Configuração do Agente">Agent Config JSON</a>
-        <a href="#tools" class="btn btn-secondary" data-en="Browse 65 Tools" data-pt="Catálogo das 65 Ferramentas">Browse 65 Tools</a>
+        <a href="#tools" class="btn btn-secondary" data-en="Browse 75 Tools" data-pt="Catálogo das 75 Ferramentas">Browse 75 Tools</a>
       </div>
     </div>
   </section>
@@ -527,8 +527,8 @@
   <section id="execution" class="arch-section">
     <div class="container">
       <h2 class="section-title" data-en="Server Execution & Agent Runtime Model" data-pt="Modelo de Execução e Runtime do Agente">Server Execution & Agent Runtime Model</h2>
-      <p class="section-desc" data-en="`ableton-mcp-server` runs locally over stdio IPC. It exposes 65 typed tool contracts directly to LLM agent runtimes with write verification, transaction rollbacks, and explicit error taxonomies." data-pt="O `ableton-mcp-server` executa localmente via IPC stdio. Ele expõe 65 ferramentas tipadas para runtimes de agentes LLM com confirmação de escrita, rollback de transações e taxonomia explícita de erros.">
-        `ableton-mcp-server` runs locally over stdio IPC. It exposes 65 typed tool contracts directly to LLM agent runtimes with write verification, transaction rollbacks, and explicit error taxonomies.
+      <p class="section-desc" data-en="`ableton-mcp-server` runs locally over stdio IPC. It exposes 75 typed tool contracts directly to LLM agent runtimes with write verification, grouped undo semantics, and explicit error taxonomies." data-pt="O `ableton-mcp-server` executa localmente via IPC stdio. Ele expõe 75 ferramentas tipadas para runtimes de agentes LLM com confirmação de escrita, undo agrupado e taxonomia explícita de erros.">
+        `ableton-mcp-server` runs locally over stdio IPC. It exposes 75 typed tool contracts directly to LLM agent runtimes with write verification, grouped undo semantics, and explicit error taxonomies.
       </p>
 
       <div class="grid-3">
@@ -566,7 +566,7 @@
             <span>agent_system_prompt_context.txt</span>
             <span>Production Prompt Injection</span>
           </div>
-<pre><code>You are connected to an active Ableton Live 12 Set via ableton-mcp-server (65 tools).
+<pre><code>You are connected to an active Ableton Live 12 Set via ableton-mcp-server (75 tools).
 Operational rules:
 1. Always inspect live set topology first via `get_session_overview()` or `get_track_list()`.
 2. Resolve target tracks by index or via fuzzy name matching (`live_find_track`).
@@ -625,7 +625,7 @@ Operational rules:
           
           <rect x="380" y="70" width="260" height="230" rx="8" fill="#101726" stroke="#1e293b" />
           <text x="400" y="100" fill="#2ec4b6" font-size="14" font-weight="bold">ableton_mcp_server</text>
-          <text x="400" y="125" fill="#94a3b8">• 65 Tool Dispatch Surface</text>
+          <text x="400" y="125" fill="#94a3b8">• 75 Tool Dispatch Surface</text>
           <text x="400" y="148" fill="#94a3b8">• Cross-bridge Error Taxonomy</text>
           <text x="400" y="171" fill="#94a3b8">• Offline Mix Analysis Engine</text>
           <text x="400" y="194" fill="#f2b94b">• WSL2 Loopback Executable</text>
@@ -671,8 +671,8 @@ Operational rules:
         </div>
         <div class="arch-card">
           <h3 style="color: var(--accent-blue); margin-bottom: 8px;" data-en="2. WebSocket Extension Host (Port 9889)" data-pt="2. Extension Host WebSocket (Porta 9889)">2. WebSocket Extension Host (Port 9889)</h3>
-          <p style="font-size: 14px; color: var(--text-muted);" data-en="Asynchronous WebSocket extension bridge handling complex operations: browser search and device loading, clip warping state, live fade clocking, and batch transaction rollbacks." data-pt="Ponte assíncrona via WebSocket responsável por operações complexas: busca no browser e carregamento de dispositivos, estado de warping em clips, curva de fade entre tracks e transações atômicas com rollback.">
-            Asynchronous WebSocket extension bridge handling complex operations: browser search and device loading, clip warping state, live fade clocking, and batch transaction rollbacks.
+          <p style="font-size: 14px; color: var(--text-muted);" data-en="Asynchronous loopback WebSocket bridge for the three Extension-only operations: reading warp state, writing supported warp state, and loading a device onto a track." data-pt="Ponte WebSocket assíncrona em loopback para as três operações exclusivas da Extension: ler warp, escrever o estado de warp suportado e carregar um dispositivo em uma track.">
+            Asynchronous loopback WebSocket bridge for the three Extension-only operations: reading warp state, writing supported warp state, and loading a device onto a track.
           </p>
         </div>
       </div>
@@ -835,14 +835,14 @@ Operational rules:
   <!-- Tools Catalog Matrix -->
   <section id="tools" class="arch-section">
     <div class="container">
-      <h2 class="section-title" data-en="Complete 65 MCP Tool Surface" data-pt="Catálogo Completo das 65 Ferramentas MCP">Complete 65 MCP Tool Surface</h2>
-      <p class="section-desc" data-en="Typed parameter signatures and descriptions for all 65 tools exposed to AI agents. Search by name, category, or parameter signature." data-pt="Assinaturas de parâmetros e descrições tipadas para todas as 65 ferramentas expostas aos agentes de IA. Pesquise por nome, categoria ou assinatura.">
-        Typed parameter signatures and descriptions for all 65 tools exposed to AI agents. Search by name, category, or parameter signature.
+      <h2 class="section-title" data-en="Complete 75 MCP Tool Surface" data-pt="Catálogo Completo das 75 Ferramentas MCP">Complete 75 MCP Tool Surface</h2>
+      <p class="section-desc" data-en="Typed parameter signatures and descriptions for all 75 tools exposed to AI agents. Search by name, category, or parameter signature." data-pt="Assinaturas de parâmetros e descrições tipadas para todas as 75 ferramentas expostas aos agentes de IA. Pesquise por nome, categoria ou assinatura.">
+        Typed parameter signatures and descriptions for all 75 tools exposed to AI agents. Search by name, category, or parameter signature.
       </p>
 
       <div class="tool-controls">
         <input type="text" id="tool-search" class="search-input" placeholder="Search tool by name, parameters, or signature..." oninput="filterTools()">
-        <button class="filter-btn active" onclick="setCategory('all', this)" data-en="All (65)" data-pt="Todas (65)">All (65)</button>
+        <button class="filter-btn active" onclick="setCategory('all', this)" data-en="All (75)" data-pt="Todas (75)">All (75)</button>
         <button class="filter-btn" onclick="setCategory('transport', this)" data-en="Transport & Session" data-pt="Transport e Sessão">Transport & Session</button>
         <button class="filter-btn" onclick="setCategory('track', this)" data-en="Tracks & Devices" data-pt="Tracks e Dispositivos">Tracks & Devices</button>
         <button class="filter-btn" onclick="setCategory('lifecycle', this)" data-en="Lifecycle & Fade" data-pt="Ciclo de Vida e Fade">Lifecycle & Fade</button>
@@ -860,7 +860,7 @@ Operational rules:
   <footer>
     <div class="container footer-inner">
       <div>
-        <strong>ableton-mcp-server v0.5.1</strong> — Source available under MIT License.
+        <strong>ableton-mcp-server v0.5.3</strong> — Source available under MIT License.
         <br>
         <a href="https://github.com/ntworm/ableton-mcp-server" target="_blank">github.com/ntworm/ableton-mcp-server</a>
       </div>
@@ -874,7 +874,7 @@ Operational rules:
     const TOOLS = [
       // Transport & Session
       { name: 'get_session_info', cat: 'transport', desc_en: 'Returns current song tempo, time signature, playing status, and song position.', desc_pt: 'Retorna o tempo atual (BPM), fórmula de compasso, estado de reprodução e posição do song.', sig: 'get_session_info()' },
-      { name: 'set_tempo', cat: 'transport', desc_en: 'Sets song tempo in BPM (supports floating point values e.g. 124.5).', desc_pt: 'Define o tempo da música em BPM (aceita valores decimais como 124.5).', sig: 'set_tempo(tempo: float)' },
+      { name: 'set_tempo', cat: 'transport', desc_en: 'Sets song tempo in BPM, or validates the request without writing when dry_run is true.', desc_pt: 'Define o tempo da música em BPM ou valida sem escrever quando dry_run é true.', sig: 'set_tempo(tempo: float, dry_run: bool = false)' },
       { name: 'start_playback', cat: 'transport', desc_en: 'Starts arrangement playback from the current song time.', desc_pt: 'Inicia a reprodução do arrangement a partir da posição atual do playhead.', sig: 'start_playback()' },
       { name: 'stop_playback', cat: 'transport', desc_en: 'Stops arrangement playback.', desc_pt: 'Pára a reprodução do arrangement.', sig: 'stop_playback()' },
       { name: 'get_loop_settings', cat: 'transport', desc_en: 'Queries loop enabled state, loop start beat, and loop length.', desc_pt: 'Consulta se o loop está ativo, a batida de início e a duração do loop.', sig: 'get_loop_settings()' },
@@ -892,27 +892,43 @@ Operational rules:
       // Tracks & Devices
       { name: 'get_track_list', cat: 'track', desc_en: 'Returns complete list of audio, MIDI, return, and master tracks.', desc_pt: 'Retorna a lista completa de tracks de áudio, MIDI, return e master.', sig: 'get_track_list()' },
       { name: 'live_find_track', cat: 'track', desc_en: 'Fuzzy-searches track by name and returns track index and type.', desc_pt: 'Busca aproximada de track por nome, retornando seu índice e tipo.', sig: 'live_find_track(name_pattern: str)' },
+      { name: 'live_find_device', cat: 'track', desc_en: 'Finds devices by case-insensitive name substring and returns fresh session-local locators.', desc_pt: 'Busca dispositivos por trecho do nome e retorna locators novos da sessão.', sig: 'live_find_device(track_index: int, query: str)' },
+      { name: 'live_find_clip', cat: 'track', desc_en: 'Finds Session clips by case-insensitive name substring and returns fresh locators.', desc_pt: 'Busca clips da Session por trecho do nome e retorna locators novos.', sig: 'live_find_clip(track_index: int, query: str)' },
       { name: 'get_track_state', cat: 'track', desc_en: 'Queries track volume, panning, mute, solo, arm, and device count.', desc_pt: 'Consulta volume, pan, mute, solo, arm e quantidade de dispositivos da track.', sig: 'get_track_state(track_index: int)' },
       { name: 'get_device_list', cat: 'track', desc_en: 'Returns list of devices on a track with device IDs and names.', desc_pt: 'Retorna a lista de dispositivos presentes em uma track com IDs e nomes.', sig: 'get_device_list(track_index: int)' },
+      { name: 'list_device_params', cat: 'track', desc_en: 'Lists every device and parameter resolved from a fresh track path ID.', desc_pt: 'Lista dispositivos e parâmetros resolvidos por um path ID atual da track.', sig: 'list_device_params(track_id: str)' },
       { name: 'get_parameter_value', cat: 'track', desc_en: 'Reads parameter value, min/max range, and formatted string.', desc_pt: 'Lê o valor numérico, intervalo min/max e texto formatado do parâmetro.', sig: 'get_parameter_value(track_index: int, device_index: int, parameter_index: int)' },
       { name: 'set_parameter_value', cat: 'track', desc_en: 'Sets normalized or raw parameter value on a specific device parameter.', desc_pt: 'Define o valor numérico normalizado ou bruto de um parâmetro de dispositivo.', sig: 'set_parameter_value(track_index: int, device_index: int, parameter_index: int, value: float)' },
       { name: 'get_clip_summary', cat: 'track', desc_en: 'Fetches clip metadata (name, length, color, warp mode, note count).', desc_pt: 'Obtém metadados do clip (nome, duração, cor, modo de warp, notas).', sig: 'get_clip_summary(track_index: int, clip_index: int)' },
-      { name: 'create_clip', cat: 'track', desc_en: 'Creates new MIDI or audio clip in specified clip slot.', desc_pt: 'Cria um novo clip de MIDI ou áudio no slot indicado.', sig: 'create_clip(track_index: int, clip_index: int, length_beats: float)' },
+      { name: 'create_clip', cat: 'track', desc_en: 'Creates a MIDI clip, or validates the target without writing when dry_run is true.', desc_pt: 'Cria um clip MIDI ou valida o alvo sem escrever quando dry_run é true.', sig: 'create_clip(track_index: int, clip_index: int, length_beats: float, dry_run: bool = false)' },
       { name: 'get_clip_notes', cat: 'track', desc_en: 'Reads MIDI notes from clip with pitch, start_time, duration, velocity, mute.', desc_pt: 'Lê as notas MIDI do clip (nota, tempo inicial, duração, velocidade, mute).', sig: 'get_clip_notes(track_index: int, clip_index: int)' },
       { name: 'add_notes_to_clip', cat: 'track', desc_en: 'Appends array of MIDI notes to an existing MIDI clip.', desc_pt: 'Adiciona um conjunto de notas MIDI a um clip MIDI existente.', sig: 'add_notes_to_clip(track_index: int, clip_index: int, notes: list)' },
       { name: 'delete_clip', cat: 'track', desc_en: 'Deletes clip from specified track and slot index.', desc_pt: 'Remove o clip da track e slot especificados.', sig: 'delete_clip(track_index: int, clip_index: int)' },
       { name: 'clear_clip_notes', cat: 'track', desc_en: 'Clears all MIDI notes from clip while preserving clip container.', desc_pt: 'Apaga todas as notas MIDI mantendo a estrutura do container do clip.', sig: 'clear_clip_notes(track_index: int, clip_index: int)' },
       { name: 'set_clip_properties', cat: 'track', desc_en: 'Updates clip name, color, signature, or loop bounds.', desc_pt: 'Atualiza nome, cor, fórmula de compasso ou limites de loop do clip.', sig: 'set_clip_properties(track_index: int, clip_index: int, properties: dict)' },
+      { name: 'set_clip_color', cat: 'track', desc_en: 'Sets a Session or Arrangement clip color and verifies the observed value.', desc_pt: 'Define a cor de um clip da Session ou Arrangement e verifica o valor observado.', sig: 'set_clip_color(track_index: int, clip_index: int, scope: str, color_index?: int, color?: int)' },
       { name: 'get_clip_info', cat: 'track', desc_en: 'Returns detailed clip properties and playback state.', sig: 'get_clip_info(track_index: int, clip_index: int)' },
       { name: 'set_track_property', cat: 'track', desc_en: 'Sets volume, pan, mute, solo, or arm state on a track.', sig: 'set_track_property(track_index: int, property_name: str, value: float)' },
+      { name: 'set_track_color', cat: 'track', desc_en: 'Sets a track palette index or packed RGB color with readback verification.', desc_pt: 'Define o índice da paleta ou a cor RGB da track com verificação por leitura.', sig: 'set_track_color(track_index: int, color_index?: int, color?: int)' },
+      { name: 'create_midi_track', cat: 'track', desc_en: 'Creates a MIDI track at an optional index.', desc_pt: 'Cria uma track MIDI em um índice opcional.', sig: 'create_midi_track(name: str = "MIDI Track", index?: int)' },
       { name: 'create_audio_track', cat: 'track', desc_en: 'Creates new audio track in the active Live Set.', desc_pt: 'Cria uma nova track de áudio no projeto ativo.', sig: 'create_audio_track(name: str = "")' },
+      { name: 'rename_track', cat: 'track', desc_en: 'Renames a track after validating its index and the new non-empty name.', desc_pt: 'Renomeia uma track após validar o índice e o novo nome.', sig: 'rename_track(track_index: int, new_name: str)' },
+      { name: 'move_track', cat: 'track', desc_en: 'Validates a move request, then returns CAPABILITY_UNAVAILABLE because Live exposes no public move API.', desc_pt: 'Valida a movimentação e retorna CAPABILITY_UNAVAILABLE porque o Live não expõe API pública.', sig: 'move_track(track_index: int, destination_index: int)' },
+      { name: 'reorder_tracks', cat: 'track', desc_en: 'Validates a complete track order, then refuses honestly because no public reorder API exists.', desc_pt: 'Valida a ordem completa e recusa porque não existe API pública de reordenação.', sig: 'reorder_tracks(order: list[int])' },
+      { name: 'move_track_to_group', cat: 'track', desc_en: 'Validates track and group targets, then returns CAPABILITY_UNAVAILABLE.', desc_pt: 'Valida a track e o grupo e retorna CAPABILITY_UNAVAILABLE.', sig: 'move_track_to_group(track_index: int, group_track_index: int)' },
+      { name: 'ungroup_track', cat: 'track', desc_en: 'Validates a grouped track, then reports that public APIs cannot ungroup it.', desc_pt: 'Valida uma track agrupada e informa que APIs públicas não podem desagrupá-la.', sig: 'ungroup_track(track_index: int)' },
+      { name: 'merge_groups', cat: 'track', desc_en: 'Validates source and destination groups, then refuses the unavailable merge operation.', desc_pt: 'Valida os grupos de origem e destino e recusa a operação indisponível.', sig: 'merge_groups(source_group_index: int, destination_group_index: int)' },
       { name: 'get_routing', cat: 'track', desc_en: 'Queries input/output audio and MIDI routing options for a track.', desc_pt: 'Consulta as opções de roteamento de entrada e saída de áudio/MIDI da track.', sig: 'get_routing(track_index: int)' },
       { name: 'diff_snapshots_tool', cat: 'track', desc_en: 'Diffs two parameter snapshots to highlight changed values.', desc_pt: 'Compara dois snapshots de parâmetros e destaca as alterações.', sig: 'diff_snapshots_tool(snapshot_a: dict, snapshot_b: dict)' },
       { name: 'take_snapshot', cat: 'track', desc_en: 'Captures full parameter state snapshot of current Live Set.', desc_pt: 'Captura um snapshot do estado completo de parâmetros do Live Set.', sig: 'take_snapshot()' },
+      { name: 'get_composition_structure', cat: 'track', desc_en: 'Summarizes song sections, track roles, and clip layout for composition analysis.', desc_pt: 'Resume seções, funções das tracks e organização dos clips para análise da composição.', sig: 'get_composition_structure()' },
+      { name: 'diagnose_midi_clip', cat: 'track', desc_en: 'Analyzes a MIDI clip for note range, density, timing, and optional scale context.', desc_pt: 'Analisa alcance, densidade, timing e contexto tonal opcional de um clip MIDI.', sig: 'diagnose_midi_clip(track_index: int, clip_index: int, scale_root?: str, scale_type?: str)' },
+      { name: 'diagnose_clip_targets', cat: 'track', desc_en: 'Reports reachable Session and Arrangement clip targets for safe color writes.', desc_pt: 'Relata alvos de clips alcançáveis na Session e Arrangement para escrita segura de cor.', sig: 'diagnose_clip_targets(track_index?: int)' },
       { name: 'get_selected_context', cat: 'track', desc_en: 'Returns user-selected track, device, and clip in Ableton UI.', desc_pt: 'Retorna a track, dispositivo e clip selecionados na interface do Ableton.', sig: 'get_selected_context()' },
       { name: 'search_browser', cat: 'track', desc_en: 'Searches Live browser database for instruments, effects, or samples.', desc_pt: 'Pesquisa na base de dados do browser do Live por instrumentos, efeitos ou samples.', sig: 'search_browser(query: str)' },
       { name: 'load_device_to_track', cat: 'track', desc_en: 'Loads instrument or audio effect to track by device name or URI.', desc_pt: 'Carrega um instrumento ou efeito de áudio na track pelo nome ou URI.', sig: 'load_device_to_track(track_index: int, device_name: str)' },
       { name: 'get_warp_state', cat: 'track', desc_en: 'Reads clip warp mode, warp markers, and tempo mapping.', desc_pt: 'Lê o modo de warp do clip, marcadores de warp e mapeamento de tempo.', sig: 'get_warp_state(track_index: int, clip_index: int)' },
+      { name: 'set_warp_state', cat: 'track', desc_en: 'Sets supported clip warp properties through the loopback Extension bridge.', desc_pt: 'Define propriedades de warp suportadas pela Extension em loopback.', sig: 'set_warp_state(track_index: int, clip_index: int, warping?: bool, warp_mode?: str)' },
 
       // Lifecycle & Fade
       { name: 'lifecycle_status', cat: 'lifecycle', desc_en: 'Queries server bridge connection health, uptime, and latency.', desc_pt: 'Consulta a saúde da conexão da ponte, tempo de atividade e latência.', sig: 'lifecycle_status()' },
@@ -928,7 +944,7 @@ Operational rules:
       { name: 'extract_single_cycle', cat: 'analysis', desc_en: 'Extracts pitch-matched single-cycle waveform from sample file.', desc_pt: 'Extrai forma de onda de ciclo único alinhada com o tom da amostra.', sig: 'extract_single_cycle(file_path: str, pitch_hz: float)' },
 
       // Inspection & Batch
-      { name: 'run_batch', cat: 'inspection', desc_en: 'Executes multiple MCP commands in atomic transaction with rollback.', desc_pt: 'Executa múltiplos comandos MCP em uma transação atômica com rollback.', sig: 'run_batch(operations: list)' },
+      { name: 'run_batch', cat: 'inspection', desc_en: 'Executes mutations in one grouped undo step; a successful prefix persists if a later command fails.', desc_pt: 'Executa mutações em um undo agrupado; o prefixo bem-sucedido persiste se uma chamada posterior falhar.', sig: 'run_batch(commands: list)' },
       { name: 'get_locators', cat: 'inspection', desc_en: 'Returns list of all arrangement cue points / locators.', desc_pt: 'Retorna a lista de todos os pontos de marcação (locators) do arrangement.', sig: 'get_locators()' },
       { name: 'create_cue_point', cat: 'inspection', desc_en: 'Creates arrangement locator at specified beat time.', desc_pt: 'Cria um locator no arrangement na batida especificada.', sig: 'create_cue_point(name: str, beat: float)' },
       { name: 'delete_cue_point', cat: 'inspection', desc_en: 'Deletes locator by index or name.', desc_pt: 'Apaga um locator por índice ou nome.', sig: 'delete_cue_point(index: int)' },
@@ -937,7 +953,9 @@ Operational rules:
       { name: 'get_browser_categories', cat: 'inspection', desc_en: 'Returns top-level categories from Ableton browser database.', desc_pt: 'Retorna as categorias principais da base de dados do browser.', sig: 'get_browser_categories()' },
       { name: 'get_project_metadata', cat: 'inspection', desc_en: 'Reads project directory name, set file path, and creation time.', desc_pt: 'Lê nome do diretório, caminho do arquivo do projeto e data.', sig: 'get_project_metadata()' },
       { name: 'get_ableton_logs', cat: 'inspection', desc_en: 'Reads latest log entries from Ableton Live Log.txt.', desc_pt: 'Lê as entradas mais recentes do arquivo de log do Ableton (Log.txt).', sig: 'get_ableton_logs(lines: int = 50)' },
-      { name: 'get_bridge_status', cat: 'inspection', desc_en: 'Queries socket buffer status and message counter metrics.', desc_pt: 'Consulta o estado dos buffers dos sockets e contadores de mensagens.', sig: 'get_bridge_status()' }
+      { name: 'get_bridge_status', cat: 'inspection', desc_en: 'Reports bridge health plus the canonical 75-tool capability matrix.', desc_pt: 'Relata a saúde das bridges e a matriz canônica das 75 ferramentas.', sig: 'get_bridge_status()' },
+      { name: 'scaffold_extension', cat: 'inspection', desc_en: 'Creates a local Ableton Extension project scaffold.', desc_pt: 'Cria localmente a estrutura inicial de uma Ableton Extension.', sig: 'scaffold_extension(project_path: str, name: str = "AbletonMCPServer")' },
+      { name: 'build_extension', cat: 'inspection', desc_en: 'Installs dependencies and builds an Ableton Extension project.', desc_pt: 'Instala dependências e compila um projeto de Ableton Extension.', sig: 'build_extension(project_path: str)' }
     ];
 
     let currentCat = 'all';
@@ -962,13 +980,13 @@ Operational rules:
       
       const filtered = TOOLS.filter(t => {
         const matchesCat = currentCat === 'all' || t.cat === currentCat;
-        const desc = currentLang === 'pt' ? t.desc_pt : t.desc_en;
+        const desc = (currentLang === 'pt' ? t.desc_pt : t.desc_en) || t.desc_en;
         const matchesSearch = t.name.toLowerCase().includes(search) || desc.toLowerCase().includes(search) || (t.sig && t.sig.toLowerCase().includes(search));
         return matchesCat && matchesSearch;
       });
 
       container.innerHTML = filtered.map(t => {
-        const desc = currentLang === 'pt' ? t.desc_pt : t.desc_en;
+        const desc = (currentLang === 'pt' ? t.desc_pt : t.desc_en) || t.desc_en;
         return `
           <div class="tool-card">
             <div class="tool-name">${t.name}</div>

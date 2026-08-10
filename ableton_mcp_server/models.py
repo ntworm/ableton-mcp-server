@@ -346,6 +346,32 @@ class LiveFindTrackRequest(RequestModel):
         return value
 
 
+class LiveFindDeviceRequest(RequestModel):
+    track_index: NonNegativeInt
+    query: Annotated[str, Field(min_length=1, max_length=256)]
+
+    @field_validator("query")
+    @classmethod
+    def strip_query(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("query must be non-empty")
+        return value
+
+
+class LiveFindClipRequest(RequestModel):
+    track_index: NonNegativeInt
+    query: Annotated[str, Field(min_length=1, max_length=256)]
+
+    @field_validator("query")
+    @classmethod
+    def strip_query(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("query must be non-empty")
+        return value
+
+
 class ListDeviceParamsRequest(RequestModel):
     track_id: Annotated[str, Field(pattern=r"^track:\d+$")]
 
@@ -388,6 +414,7 @@ class SetCurrentSongTimeRequest(RequestModel):
 
 class SetTempoRequest(RequestModel):
     tempo: Annotated[float, Field(ge=20, le=999)]
+    dry_run: bool = False
 
     @field_validator("tempo")
     @classmethod
@@ -461,6 +488,7 @@ class CreateClipRequest(RequestModel):
     track_index: NonNegativeInt
     clip_index: NonNegativeInt
     length_beats: PositiveBeat
+    dry_run: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -798,6 +826,8 @@ TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "diff_snapshots_tool": DiffSnapshotsRequest,
     "get_song_length": GetSongLengthRequest,
     "live_find_track": LiveFindTrackRequest,
+    "live_find_device": LiveFindDeviceRequest,
+    "live_find_clip": LiveFindClipRequest,
     "list_device_params": ListDeviceParamsRequest,
     "create_cue_point": CreateCuePointRequest,
     "bulk_create_cue_points": BulkCuePointsRequest,

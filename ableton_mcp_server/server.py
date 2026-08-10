@@ -469,6 +469,32 @@ def live_find_track(query: str) -> Any:
 
 
 @mcp.tool()
+def live_find_device(track_index: int, query: str) -> Any:
+    """Find devices in a track by case-insensitive name substring and return fresh path-ids.
+
+    Side effects: none.
+    Example: ``live_find_device(0, "operator")`` resolves matching devices on track 0.
+    Edge cases: no match is a valid empty result.
+    """
+    return _remote(
+        "live_find_device", models.LiveFindDeviceRequest(track_index=track_index, query=query)
+    )
+
+
+@mcp.tool()
+def live_find_clip(track_index: int, query: str) -> Any:
+    """Find clip slots in a track by case-insensitive name substring and return fresh path-ids.
+
+    Side effects: none.
+    Example: ``live_find_clip(0, "verse")`` resolves matching clips on track 0.
+    Edge cases: no match is a valid empty result.
+    """
+    return _remote(
+        "live_find_clip", models.LiveFindClipRequest(track_index=track_index, query=query)
+    )
+
+
+@mcp.tool()
 def list_device_params(track_id: str) -> Any:
     """Resolve a track path-id and list all device parameters.
 
@@ -528,14 +554,15 @@ def set_current_song_time(time: float) -> Any:
 
 
 @mcp.tool()
-def set_tempo(tempo: float) -> Any:
+def set_tempo(tempo: float, dry_run: bool = False) -> Any:
     """Set the Live Set tempo in BPM.
 
     Side effects: writes tempo in one undo step.
     Example: ``set_tempo(128.0)`` sets 128 BPM.
-    Edge cases: values outside 20..999 or non-finite values are rejected.
+    Edge cases: values outside 20..999 or non-finite values are rejected. With
+    ``dry_run=True``, the change is validated but not committed.
     """
-    return _remote("set_tempo", models.SetTempoRequest(tempo=tempo))
+    return _remote("set_tempo", models.SetTempoRequest(tempo=tempo, dry_run=dry_run))
 
 
 @mcp.tool()
@@ -637,12 +664,15 @@ def fire_clip(track_index: int, clip_index: int) -> Any:
 
 
 @mcp.tool()
-def create_clip(track_index: int, clip_index: int, length_beats: float) -> Any:
+def create_clip(
+    track_index: int, clip_index: int, length_beats: float, dry_run: bool = False
+) -> Any:
     """Create an empty MIDI clip in an empty Session slot.
 
     Side effects: creates a clip in one undo step.
     Example: ``create_clip(0, 1, 4.0)`` creates a four-beat clip.
-    Edge cases: only empty slots on MIDI tracks accept this operation.
+    Edge cases: only empty slots on MIDI tracks accept this operation. With
+    ``dry_run=True``, the change is validated but not committed.
     """
     return _remote(
         "create_clip",
@@ -650,6 +680,7 @@ def create_clip(track_index: int, clip_index: int, length_beats: float) -> Any:
             track_index=track_index,
             clip_index=clip_index,
             length_beats=length_beats,
+            dry_run=dry_run,
         ),
     )
 
@@ -1653,6 +1684,8 @@ PUBLIC_TOOL_FUNCTIONS_HEAD = (
     diff_snapshots_tool,
     get_song_length,
     live_find_track,
+    live_find_device,
+    live_find_clip,
     list_device_params,
     create_cue_point,
     bulk_create_cue_points,

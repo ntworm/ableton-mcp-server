@@ -92,6 +92,8 @@ _TCP_READS = (
     "diagnose_midi_clip",
     "lifecycle_status",
     "diagnose_clip_targets",
+    "live_find_device",
+    "live_find_clip",
 )
 # Routed like commands so the Remote Script can validate them against the real
 # Set, but they never mutate: Live's public API cannot perform any of them.

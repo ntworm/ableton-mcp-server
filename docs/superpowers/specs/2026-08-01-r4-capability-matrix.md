@@ -1,5 +1,12 @@
 # R4 — Capability matrix via `bridge_status`
 
+> **Status update (2026-08-09):** The original prohibition on a generated
+> `docs/api_capability_matrix.md` is superseded by the 75-tool documentation
+> update. The shipped generator consumes the canonical wire-facing
+> `bridge_status` payload and does not join `TOOL_CATALOG`, `contracts.*`, or
+> the public registry independently. The runtime payload remains the source of
+> truth; the Markdown file is a tested projection for human readers.
+
 **Status:** proposed (Wave-4 of `docs/ABLETON_AGENT_HUB_REFACTORING.md` §Fase 1)
 **Date:** 2026-08-01
 **Repo:** `ableton-mcp-server` (v0.5.1, branch `feature/v0-5-1-refactor-r1r3`)

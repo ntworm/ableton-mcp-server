@@ -42,10 +42,10 @@ def _status() -> dict[str, Any]:
     return bridge_status(_HealthyClient(), tool_count=len(PUBLIC_TOOL_NAMES))
 
 
-def test_bridge_status_tools_length_is_73() -> None:
+def test_bridge_status_tools_length_is_75() -> None:
     """§5 case 1: tools list length matches the public catalog."""
     result = _status()
-    assert len(result["tools"]) == 73
+    assert len(result["tools"]) == 75
 
 
 def test_bridge_status_tool_dict_schema() -> None:
@@ -70,18 +70,18 @@ def test_bridge_status_tool_dict_schema() -> None:
 
 def test_capability_counts_match_invariants() -> None:
     """§5 case 3: the six documented counts are exactly the catalog/contracts
-    values. ``live_required_tools`` is ``73 - 8`` because every tool whose
+    values. ``live_required_tools`` is ``75 - 8`` because every tool whose
     route is LOCAL (six LOCAL_READS plus two LOCAL_WRITES) does not require
     an Ableton Live process."""
     result = _status()
     counts = result["capability_counts"]
     assert counts == {
-        "public_tools": 73,
-        "routed_commands": 58,
+        "public_tools": 75,
+        "routed_commands": 60,
         "websocket_targets": 3,
         "read_only_blocked": 5,
         "feature_flags": 5,
-        "live_required_tools": 65,
+        "live_required_tools": 67,
         "capability_unavailable": 5,
     }
 
@@ -96,8 +96,8 @@ def test_websocket_targets_match_catalog_route() -> None:
 def test_routed_commands_cover_reads_and_mutations() -> None:
     """§5 case 5: routed_commands equals the union cardinality."""
     result = _status()
-    assert len(READ_COMMANDS) + len(ALLOWED_MUTATIONS) == 58
-    assert result["capability_counts"]["routed_commands"] == 58
+    assert len(READ_COMMANDS) + len(ALLOWED_MUTATIONS) == 60
+    assert result["capability_counts"]["routed_commands"] == 60
 
 
 def test_read_only_blocked_are_disjoint_from_routed() -> None:
@@ -134,6 +134,9 @@ def test_tool_count_agrees_with_capability_counts() -> None:
     result = _status()
     assert result["tool_count"] == result["capability_counts"]["public_tools"]
 
+    stale_caller_result = bridge_status(_HealthyClient(), tool_count=0)
+    assert stale_caller_result["tool_count"] == len(TOOL_CATALOG)
+
 
 def test_capability_source_names_canonical_modules() -> None:
     """Provenance: each capability_counts key points at its canonical source."""
@@ -161,11 +164,11 @@ def test_bridge_status_survives_live_probe_failure() -> None:
         ) -> Any:
             raise ConnectionError("connection refused")
 
-    result = bridge_status(_BrokenClient(), tool_count=73)
+    result = bridge_status(_BrokenClient(), tool_count=75)
     assert result["status"] == "error"
     assert result["bridge_available"] is False
-    assert len(result["tools"]) == 73
-    assert result["capability_counts"]["public_tools"] == 73
+    assert len(result["tools"]) == 75
+    assert result["capability_counts"]["public_tools"] == 75
 
 
 def test_tools_match_public_catalog_in_order() -> None:
@@ -175,3 +178,42 @@ def test_tools_match_public_catalog_in_order() -> None:
     wire_names = [entry["name"] for entry in result["tools"]]
     assert wire_names == [spec.name for spec in TOOL_CATALOG]
     assert set(wire_names) == set(PUBLIC_TOOL_NAMES)
+
+
+def test_capability_matrix_markdown_is_up_to_date() -> None:
+    """Ensure that docs/api_capability_matrix.md is up-to-date with the code."""
+    from pathlib import Path
+
+    from scripts.generate_capability_matrix import generate_markdown
+
+    expected_md = generate_markdown()
+
+    docs_dir = Path(__file__).parent.parent / "docs"
+    matrix_file = docs_dir / "api_capability_matrix.md"
+
+    if not matrix_file.exists():
+        raise AssertionError(f"Capability matrix file missing at {matrix_file}")
+
+    actual_md = matrix_file.read_text(encoding="utf-8")
+
+    assert "\\n" not in expected_md
+    assert expected_md.startswith("# API Capability Matrix\n\n")
+    assert "| `build_extension` | Write | No | No |" in expected_md
+    assert expected_md == actual_md, (
+        "Capability matrix is out of date. "
+        "Please run `python scripts/generate_capability_matrix.py` to update it."
+    )
+
+
+def test_capability_matrix_generator_uses_bridge_status_as_its_only_capability_source() -> None:
+    """The generated document must not recreate catalog/contract joins in parallel."""
+    from pathlib import Path
+
+    generator = (
+        Path(__file__).parent.parent / "scripts" / "generate_capability_matrix.py"
+    ).read_text(encoding="utf-8")
+
+    assert "from ableton_mcp_server.diagnostics import bridge_status" in generator
+    assert "from ableton_mcp_server.catalog" not in generator
+    assert "from ableton_mcp_server.server" not in generator
+    assert "from contracts" not in generator

@@ -63,6 +63,8 @@ _TCP_COMMAND_FIELDS: dict[str, dict[str, Any]] = {
     "search_browser": {"query": str, "limit": int},
     "get_song_length": {},
     "live_find_track": {"query": str},
+    "live_find_device": {"track_index": int, "query": str},
+    "live_find_clip": {"track_index": int, "query": str},
     "list_device_params": {"track_id": str},
     "get_composition_structure": {},
     "diagnose_midi_clip": {"track_index": int, "clip_index": int},
@@ -370,6 +372,8 @@ _READ_ONLY_TCP_COMMANDS = {
     "search_browser",
     "get_song_length",
     "live_find_track",
+    "live_find_device",
+    "live_find_clip",
     "list_device_params",
     "get_composition_structure",
     "diagnose_midi_clip",
@@ -568,6 +572,18 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str, params: dict[st
     if command == "live_find_track":
         q = params["query"].lower()
         return [t for t in s["tracks"] if q in t["name"].lower()]
+    if command == "live_find_device":
+        q = params["query"].lower()
+        t = next((x for x in s["tracks"] if x["index"] == params["track_index"]), None)
+        return [d for d in t.get("devices", []) if q in d.get("name", "").lower()] if t else []
+    if command == "live_find_clip":
+        q = params["query"].lower()
+        idx = params["track_index"]
+        return [
+            {"name": c.get("name", "")}
+            for (t_idx, _), c in s.get("clips", {}).items()
+            if t_idx == idx and q in c.get("name", "").lower()
+        ]
     if command == "list_device_params":
         # Mirrors the real handler: ``[{device_id, device_name,
         # parameters: [{name, value, min, max}]}]``. The runner must

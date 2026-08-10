@@ -10,6 +10,7 @@ build/
 dist/
 .coverage-data/
 .agent-context/generated/
+.agents/
 
 # Local backups of extension bundles from in-place upgrade experiments.
 *.ablx.bak-*

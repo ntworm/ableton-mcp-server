@@ -45,10 +45,10 @@ def _inject_fast_offline_probes(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(acceptance_module, "run_offline_probes", fast_offline_probes)
 
 
-def test_fake_runner_returns_65_certification_rows() -> None:
+def test_fake_runner_returns_75_certification_rows() -> None:
     """Every catalogued tool must produce exactly one verification row."""
     expected = len(TOOL_CATALOG)
-    assert expected == 73
+    assert expected == 75
 
     bridge = StrictFakeBridge()
     result = asyncio.run(
@@ -63,8 +63,8 @@ def test_fake_runner_returns_65_certification_rows() -> None:
         )
     )
     cert = result["certification"]
-    assert cert["tool_count"] == 73
-    assert len(cert["tools"]) == 73
+    assert cert["tool_count"] == 75
+    assert len(cert["tools"]) == 75
     catalog_names = {item.name for item in TOOL_CATALOG}
     assert {row["tool"] for row in cert["tools"]} == catalog_names
     # ``quit_ableton`` is explicitly ``manual_required`` in baseline.
@@ -165,7 +165,7 @@ def test_fake_runner_partial_profile_is_not_release_ready() -> None:
     for tool in BASELINE_PROBE_GROUPS["mutations"]:
         assert tool in statuses
     # The runner must NOT have skipped the missing tools entirely.
-    assert len(statuses) == 73
+    assert len(statuses) == 75
 
 
 def test_fake_runner_release_ready_false_when_one_tool_fails() -> None:
@@ -350,7 +350,7 @@ def test_baseline_probe_coverage_matches_catalog() -> None:
     flat = {name for group in BASELINE_PROBE_GROUPS.values() for name in group}
     catalog_names = {item.name for item in TOOL_CATALOG}
     assert flat == catalog_names
-    assert len(flat) == 73
+    assert len(flat) == 75
 
 
 def test_spy_proves_fast_offline_probes_is_called(

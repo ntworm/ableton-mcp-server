@@ -80,6 +80,10 @@ def test_v040_remote_reads_are_explicitly_registered() -> None:
     assert "get_session_overview" not in contracts.ALL_REMOTE_COMMANDS
 
 
+def test_search_reads_are_explicitly_registered() -> None:
+    assert {"live_find_device", "live_find_clip"} <= contracts.READ_COMMANDS
+
+
 def test_v040_work_units_and_slow_command_timeouts_are_bounded() -> None:
     assert contracts.request_timeout_seconds("load_device_to_track", {}) == 30.0
     assert contracts.request_timeout_seconds("search_browser", {"query": "Operator"}) == 30.0

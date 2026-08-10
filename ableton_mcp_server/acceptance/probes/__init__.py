@@ -86,6 +86,8 @@ BASELINE_PROBE_GROUPS: dict[str, tuple[str, ...]] = {
         "diagnose_midi_clip",
         "lifecycle_status",
         "diagnose_clip_targets",
+        "live_find_device",
+        "live_find_clip",
     ),
     "websocket_reads": ("get_warp_state",),
     # Tools whose contract is a refusal. The probe proves they reject a

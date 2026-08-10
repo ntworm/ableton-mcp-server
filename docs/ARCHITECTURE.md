@@ -200,7 +200,7 @@ tools = await mcp.list_tools()
 count = len(mcp.list_tools())
 ```
 
-Tests assert both counts match the cataloged public tools: 65 in the shipped v0.5.2 release, 73 on the current line (`set_track_color`, `set_clip_color`, `diagnose_clip_targets`, and the five hierarchy tools).
+Tests assert both counts match the cataloged public tools: 65 in the shipped v0.5.2 release, 75 on the current line (`set_track_color`, `set_clip_color`, `diagnose_clip_targets`, the five hierarchy tools, `live_find_device`, and `live_find_clip`).
 
 `tools/list` remains deterministic metadata discovery. `get_bridge_status` and the `ableton-mcp doctor` CLI perform an actual `get_session_info` round trip and report WSL-specific topology hints when unavailable.
 

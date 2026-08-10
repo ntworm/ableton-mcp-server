@@ -11,7 +11,7 @@ The paths below are curated because their responsibilities and coupled-change re
 
 ## Public MCP surface
 
-- `ableton_mcp_server/server.py`: owns all 65 public tools and the registry asserted by `tests/test_server_tools.py`, `tests/test_tool_registry.py`, and `tests/test_models.py`.
+- `ableton_mcp_server/server.py`: owns all 75 public tools and the registry asserted by `tests/test_server_tools.py`, `tests/test_tool_registry.py`, and `tests/test_models.py`.
 - `docs/TOOL_REFERENCE.md`: user-facing tool contract; update with public surface changes.
 
 ## Live execution

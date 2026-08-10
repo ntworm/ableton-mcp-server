@@ -1,10 +1,10 @@
 # ableton-mcp-server
 
-[**:globe_with_meridians: Live Landing Page & Interactive 65-Tool Catalog**](https://ntworm.github.io/ableton-mcp-server/) · [**Architecture Diagram**](docs/ARCHITECTURE.md) · [**Tool Index**](docs/TOOL_REFERENCE.md)
+[**:globe_with_meridians: Live Landing Page & Interactive 75-Tool Catalog**](https://ntworm.github.io/ableton-mcp-server/) · [**Architecture Diagram**](docs/ARCHITECTURE.md) · [**Tool Index**](docs/TOOL_REFERENCE.md)
 
 An open **Model Context Protocol (MCP)** server that enables AI agents (Claude, Antigravity, Gemini, Codex) and audio developers to query, analyze, drive, and automate a running Ableton Live 12 Set.
 
-Version 0.5.3 exposes 73 tools over TCP and WebSockets (with primary device resolution via device_name, track_index, and clip_index), up from the 65 certified in v0.5.2. A FastMCP server in Python communicates with a MIDI Remote Script on TCP `127.0.0.1:9888` and an Extension Host bridge over WebSockets on `127.0.0.1:9889`.
+Version 0.5.3 exposes 75 tools over TCP and WebSockets (with primary device resolution via device_name, track_index, and clip_index), up from the 65 certified in v0.5.2. A FastMCP server in Python communicates with a MIDI Remote Script on TCP `127.0.0.1:9888` and an Extension Host bridge over WebSockets on `127.0.0.1:9889`.
 
 ---
 
@@ -16,18 +16,18 @@ Version 0.5.3 exposes 73 tools over TCP and WebSockets (with primary device reso
 > `ableton-mcp-server` runs locally on your host OS over standard input/output (`stdio`) or IPC loopback. The AI agent spawns the `ableton-mcp-server.exe` process directly. There are no external cloud endpoints or API keys required, guaranteeing zero network latency and maximum privacy.
 
 ### How AI Agents Interact with Ableton Live:
-1. **Tool Discovery (`tools/list`)**: When an MCP client (Claude Desktop, Antigravity, Cursor) launches the server, it automatically discovers all 65 tool schemas.
+1. **Tool Discovery (`tools/list`)**: When an MCP client (Claude Desktop, Antigravity, Cursor) launches the server, it automatically discovers all 75 tool schemas.
 2. **Tool Execution (`tools/call`)**: When the LLM decides to manipulate Ableton Live, it issues JSON-RPC messages (e.g. `set_tempo(tempo=128.0)` or `create_clip(...)`).
 3. **Write-Then-Verify Loop**: The server writes to Live's local socket and verifies object model state before returning a result.
 4. **Self-Correcting Error Taxonomy**: If an error occurs, the server returns structured codes (`CAPABILITY_UNAVAILABLE`, `AMBIGUOUS_MATCH`, `VERIFICATION_FAILED`), enabling the agent to reason and adapt.
 
 ### Recommended System Prompt for AI Agents:
 ```text
-You have direct access to an active Ableton Live Set via ableton-mcp-server (65 tools).
+You have direct access to an active Ableton Live Set via ableton-mcp-server (75 tools).
 1. Always start by inspecting the project state using `get_session_overview()` or `get_track_list()`.
 2. To modify track properties, resolve the target track index using `live_find_track(name_pattern)` first.
 3. For parameter adjustments, query parameters via `get_device_list()` and `get_parameter_value()`, then apply changes using `set_parameter_value()`.
-4. When executing multiple operations, bundle them using `run_batch(operations)` to ensure atomic execution.
+4. When executing multiple operations, bundle them using `run_batch(commands)` for one grouped undo step; a successful prefix persists if a later command fails.
 5. Respect the error taxonomy: if you receive `AMBIGUOUS_MATCH` or `VERIFICATION_FAILED`, inspect track context and retry.
 ```
 
@@ -43,6 +43,19 @@ License is **MIT**. Copy, fork, ship — see [LICENSE](LICENSE).
 powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1
 ```
 
+Preview the exact Remote Script copy plan without creating `.venv-win`, installing
+dependencies, or writing to Ableton's User Library:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1 -DryRun
+```
+
+If the environment already exists, the equivalent CLI preview is:
+
+```powershell
+.\.venv-win\Scripts\ableton-mcp.exe install-script --dry-run
+```
+
 Then restart Live, select `AbletonMCPServer` under `Preferences -> Link, Tempo & MIDI -> Control Surfaces`, and verify the installation:
 
 ```powershell
@@ -51,14 +64,49 @@ Then restart Live, select `AbletonMCPServer` under `Preferences -> Link, Tempo &
 
 ### Verify Install
 
-Run the Remote Script status check after installation:
+You can verify your installation integrity using either the built-in CLI tool or direct SHA-256 hash comparison:
+
+#### 1. CLI Remote Script Status
+
+Run `install-status` to compare installed Remote Script files against the bundled source:
 
 ```powershell
 .\.venv-win\Scripts\ableton-mcp.exe install-status --json
 ```
 
-A current installation reports `"status": "current"`. The setup script also prints the
-installed Remote Script's SHA-256 `algorithm`, `hash`, and `path` for auditing.
+A healthy, up-to-date installation returns `"status": "current"`:
+
+```json
+{
+  "status": "current",
+  "source": "C:\\path\\to\\ableton-mcp-server\\AbletonMCPServer_RemoteScript",
+  "target": "C:\\Users\\<user>\\Documents\\Ableton\\User Library\\Remote Scripts\\AbletonMCPServer_RemoteScript",
+  "missing_files": [],
+  "mismatched_files": []
+}
+```
+
+#### 2. SHA-256 Checksum Audit
+
+During setup, `setup_windows.ps1` automatically verifies and prints the Remote Script's SHA-256 hash:
+
+```text
+Remote Script verification:
+  algorithm: SHA256
+  hash: 3E3504D661FA2DCE7582F50C56F0C71EB79892F7A4520BD3F1B8571EEDBB14DE
+  path: C:\Users\<user>\Documents\Ableton\User Library\Remote Scripts\AbletonMCPServer_RemoteScript\__init__.py
+```
+
+To manually compute and verify the SHA-256 checksum of the installed `__init__.py` at any time:
+
+- **Windows (PowerShell):**
+  ```powershell
+  Get-FileHash "$HOME\Documents\Ableton\User Library\Remote Scripts\AbletonMCPServer_RemoteScript\__init__.py" -Algorithm SHA256
+  ```
+- **macOS / Linux:**
+  ```bash
+  shasum -a 256 "$HOME/Music/Ableton/User Library/Remote Scripts/AbletonMCPServer_RemoteScript/__init__.py"
+  ```
 
 ### Agent Configuration (`claude_desktop_config.json` / `mcp.json`):
 
@@ -81,14 +129,14 @@ If you operate from **WSL2**, point the MCP client at the Windows binary so loop
 
 ---
 
-## 📦 What It Does (65 MCP Tools)
+## 📦 What It Does (75 MCP Tools)
 
-> v0.5.3 adds 8 tools to the 65-tool v0.5.2 baseline: `set_track_color`, `set_clip_color`, `diagnose_clip_targets`, and five track-hierarchy tools (`move_track`, `reorder_tracks`, `move_track_to_group`, `ungroup_track`, `merge_groups`) that validate a request and then return a typed `CAPABILITY_UNAVAILABLE` — Live's public API cannot move, reorder, re-parent or ungroup a track, and this server will not fake it. See [docs/KNOWN_BUGS.md](docs/KNOWN_BUGS.md) §Category O. The 65-tool grouping below is unchanged.
+> The current line adds 10 tools to the certified 65-tool v0.5.2 baseline. v0.5.3 introduced colour writes, clip-target diagnostics, and five hierarchy tools that validate then return `CAPABILITY_UNAVAILABLE`; the latest update adds `live_find_device` and `live_find_clip` for fresh session-local locators. See [docs/KNOWN_BUGS.md](docs/KNOWN_BUGS.md) §Category O.
 
-The 65 MCP tools are grouped into 5 operational domains:
+The 75 MCP tools are grouped into 5 operational domains:
 
 - **Transport & Session**: `get_session_info`, `set_tempo`, `start_playback`, `stop_playback`, `get_loop_settings`, `set_loop`, `set_loop_start`, `set_loop_length`, `set_current_song_time`, `get_song_length`, `get_session_overview`, `get_scenes`, `get_scene_state`, `fire_scene`, `fire_clip`.
-- **Tracks & Devices**: `get_track_list`, `live_find_track`, `get_track_state`, `get_device_list`, `get_parameter_value`, `get_clip_summary`, `set_parameter_value`, `create_clip`, `get_clip_notes`, `add_notes_to_clip`, `delete_clip`, `clear_clip_notes`, `set_clip_properties`, `get_clip_info`, `set_track_property`, `set_track_color`, `set_clip_color`, `diagnose_clip_targets`, `create_audio_track`, `get_routing`, `diff_snapshots_tool`, `take_snapshot`, `get_selected_context`, `search_browser`, `load_device_to_track`, `get_warp_state`.
+- **Tracks & Devices**: `get_track_list`, `live_find_track`, `live_find_device`, `live_find_clip`, `get_track_state`, `get_device_list`, `list_device_params`, `get_parameter_value`, `get_clip_summary`, `set_parameter_value`, `create_clip`, `get_clip_notes`, `add_notes_to_clip`, `delete_clip`, `clear_clip_notes`, `set_clip_properties`, `get_clip_info`, `set_track_property`, `set_track_color`, `set_clip_color`, `diagnose_clip_targets`, `create_midi_track`, `create_audio_track`, `rename_track`, `move_track`, `reorder_tracks`, `move_track_to_group`, `ungroup_track`, `merge_groups`, `get_routing`, `diff_snapshots_tool`, `take_snapshot`, `get_selected_context`, `get_composition_structure`, `diagnose_midi_clip`, `search_browser`, `load_device_to_track`, `get_warp_state`, `set_warp_state`.
 - **Lifecycle & Automation**: `lifecycle_status`, `save_set`, `quit_ableton`, `live_fade`, `create_clip_automation`.
 - **Offline Mix Analysis**: `analyze_audio`, `find_frequency_masking`, `analyze_mix`, `extract_single_cycle` (LUFS-I, True Peak, dynamic range, spectral collision).
 - **Inspection & Batch Execution**: `run_batch`, `get_locators`, `create_cue_point`, `delete_cue_point`, `bulk_create_cue_points`, `get_control_surfaces`, `get_browser_categories`, `get_project_metadata`, `get_ableton_logs`, `get_bridge_status`.

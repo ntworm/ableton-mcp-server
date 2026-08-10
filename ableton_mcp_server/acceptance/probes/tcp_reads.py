@@ -331,6 +331,18 @@ async def run(
         lambda: _matches,
         passed="live_passed",
     )
+    await _record_call(
+        report,
+        "live_find_device",
+        lambda: call("live_find_device", {"track_index": track_index, "query": "operator"}),
+        passed="live_passed",
+    )
+    await _record_call(
+        report,
+        "live_find_clip",
+        lambda: call("live_find_clip", {"track_index": track_index, "query": "verse"}),
+        passed="live_passed",
+    )
 
     # ``list_device_params`` requires ``track_id``, not
     # ``track_index/device_index``.

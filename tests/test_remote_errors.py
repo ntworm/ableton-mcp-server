@@ -88,6 +88,23 @@ def test_playback_loop_and_tempo_mutations_return_observed_state() -> None:
     assert (app.begin_count, app.end_count) == (4, 4)
 
 
+def test_live_searches_return_case_insensitive_fresh_locators() -> None:
+    song = FakeSong()
+    app = FakeApplication()
+
+    devices = execute_command(
+        song, app, "live_find_device", {"track_index": 0, "query": "operator"}
+    )
+    clips = execute_command(song, app, "live_find_clip", {"track_index": 0, "query": "clip"})
+
+    assert [(device["id"], device["name"]) for device in devices] == [
+        ("track:0/device:0", "Operator")
+    ]
+    assert [(clip["clip_id"], clip["clip_name"]) for clip in clips] == [
+        ("track:0/clipslot:0/clip", "Clip")
+    ]
+
+
 @pytest.mark.parametrize(
     ("command", "params"),
     [

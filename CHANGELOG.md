@@ -6,6 +6,20 @@ The canonical certification policy that governs the promotion decision
 (see `ableton-mcp acceptance --profile baseline` below) lives in
 [`docs/CERTIFICATION.md`](docs/CERTIFICATION.md).
 
+## [Unreleased] - 2026-08-09
+
+### Added
+
+- `live_find_device` and `live_find_clip` return fresh session-local locators from the connected Set.
+- `dry_run` for `set_tempo` and `create_clip` validates without writing or opening an undo step.
+- `ableton-mcp install-script --dry-run` and `setup_windows.ps1 -DryRun` preview Remote Script installation.
+- Generated API capability matrix covering all 75 public tools.
+
+### Fixed
+
+- Registered both live search commands in the canonical and vendored read-command contracts.
+- Aligned the 75-tool/60-command counts across runtime diagnostics, tests, and documentation.
+
 ## [0.5.3] - 2026-08-04
 
 Adds 8 tools to the 65-tool v0.5.2 baseline (73 total). Track hierarchy and

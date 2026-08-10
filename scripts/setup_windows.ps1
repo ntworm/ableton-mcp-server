@@ -1,10 +1,29 @@
 [CmdletBinding()]
-param()
+param(
+    [switch]$DryRun
+)
 
 $ErrorActionPreference = "Stop"
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $VenvRoot = Join-Path $RepoRoot ".venv-win"
 $Python = Join-Path $VenvRoot "Scripts\python.exe"
+
+if ($DryRun) {
+    Push-Location $RepoRoot
+    try {
+        if (Test-Path -LiteralPath $Python) {
+            & $Python -B -m ableton_mcp_server.cli install-script --dry-run
+        } else {
+            & py -3 -B -m ableton_mcp_server.cli install-script --dry-run
+        }
+        if ($LASTEXITCODE -ne 0) {
+            throw "Unable to preview installation of AbletonMCPServer_RemoteScript"
+        }
+    } finally {
+        Pop-Location
+    }
+    exit 0
+}
 
 if (-not (Test-Path -LiteralPath $Python)) {
     & py -3 -m venv $VenvRoot

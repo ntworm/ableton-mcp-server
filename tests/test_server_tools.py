@@ -76,7 +76,7 @@ FORWARD_CASES: list[tuple[Callable[..., Any], tuple[Any, ...], str, dict[str, An
         "set_current_song_time",
         {"time": 8.0},
     ),
-    (server.set_tempo, (128,), "set_tempo", {"tempo": 128.0}),
+    (server.set_tempo, (128,), "set_tempo", {"tempo": 128.0, "dry_run": False}),
     (server.start_playback, (), "start_playback", {}),
     (server.stop_playback, (), "stop_playback", {}),
     (server.set_loop, (True,), "set_loop", {"enabled": True}),
@@ -116,7 +116,7 @@ FORWARD_CASES: list[tuple[Callable[..., Any], tuple[Any, ...], str, dict[str, An
         server.create_clip,
         (0, 1, 4),
         "create_clip",
-        {"track_index": 0, "clip_index": 1, "length_beats": 4.0},
+        {"track_index": 0, "clip_index": 1, "length_beats": 4.0, "dry_run": False},
     ),
     (server.get_composition_structure, (), "get_composition_structure", {}),
     (
@@ -147,7 +147,7 @@ def test_bridge_status_tool_probes_the_backend_without_forwarding(
 ) -> None:
     mock_status.return_value = {"status": "ok", "bridge_available": True}
     assert server.get_bridge_status() == {"status": "ok", "bridge_available": True}
-    mock_status.assert_called_once_with(server.get_client(), tool_count=73)
+    mock_status.assert_called_once_with(server.get_client(), tool_count=75)
 
 
 @pytest.mark.parametrize(("function", "args", "command", "params"), FORWARD_CASES)
@@ -308,7 +308,7 @@ def test_log_tool_limits_lines_and_reads_locally(mock_find: MagicMock, tmp_path:
 
 
 def test_every_tool_docstring_has_contract_sections() -> None:
-    assert len(server.PUBLIC_TOOL_FUNCTIONS) == 73
+    assert len(server.PUBLIC_TOOL_FUNCTIONS) == 75
     for function in server.PUBLIC_TOOL_FUNCTIONS:
         docstring = function.__doc__ or ""
         assert "Side effects:" in docstring, function.__name__

@@ -123,7 +123,10 @@ def bridge_status(
         "endpoint": {"host": client.host, "port": client.port},
         "runtime": asdict(info),
         "server_version": __version__,
-        "tool_count": tool_count,
+        # Preserve the legacy field while deriving it from the same canonical
+        # source as capability_counts.public_tools. Callers may still pass the
+        # old argument, but stale values must not create contradictory output.
+        "tool_count": len(TOOL_CATALOG),
         "ws_endpoint": {"host": DEFAULT_HOST, "port": DEFAULT_WS_PORT},
         "extension_host_available": None,
         "ws_methods_registered": sorted(WEBSOCKET_TARGET_COMMANDS),
@@ -327,12 +330,34 @@ def remote_script_status(source: Path, destination_root: Path) -> dict[str, Any]
     }
 
 
-def install_remote_script(source: Path, destination_root: Path) -> dict[str, Any]:
+def install_remote_script(
+    source: Path, destination_root: Path, *, dry_run: bool = False
+) -> dict[str, Any]:
     for filename in REMOTE_SCRIPT_FILES:
         source_file = source / filename
         if not source_file.is_file():
             raise FileNotFoundError(f"Bundled Remote Script file is missing: {source_file}")
     target = destination_root / REMOTE_SCRIPT_NAME
+
+    if dry_run:
+        plan: list[dict[str, str | None]] = []
+        for filename in REMOTE_SCRIPT_FILES:
+            src_file = source / filename
+            tgt_file = target / filename
+            plan.append(
+                {
+                    "filename": filename,
+                    "source_hash": _sha256(src_file) if src_file.is_file() else None,
+                    "target_hash": _sha256(tgt_file) if tgt_file.is_file() else None,
+                }
+            )
+        return {
+            "status": "dry_run",
+            "source": str(source),
+            "target": str(target),
+            "plan": plan,
+        }
+
     target.mkdir(parents=True, exist_ok=True)
     for filename in REMOTE_SCRIPT_FILES:
         shutil.copy2(source / filename, target / filename)

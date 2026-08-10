@@ -840,6 +840,27 @@ def cmd_live_find_track(
     ]
 
 
+def cmd_live_find_device(
+    song: Any, application: Any, params: dict[str, Any]
+) -> list[dict[str, Any]]:
+    query = _string_param(params, "query").casefold()
+    return [
+        device
+        for device in cmd_get_device_list(song, application, params)
+        if query in str(device.get("name", "")).casefold()
+        or query in str(device.get("class_name", "")).casefold()
+    ]
+
+
+def cmd_live_find_clip(song: Any, application: Any, params: dict[str, Any]) -> list[dict[str, Any]]:
+    query = _string_param(params, "query").casefold()
+    return [
+        clip
+        for clip in cmd_get_clip_summary(song, application, params)
+        if clip.get("has_clip") and query in str(clip.get("clip_name", "")).casefold()
+    ]
+
+
 def cmd_list_device_params(
     song: Any, _application: Any, params: dict[str, Any]
 ) -> list[dict[str, Any]]:
@@ -1360,12 +1381,13 @@ def cmd_create_clip(song: Any, _application: Any, params: dict[str, Any]) -> dic
     track_index = _integer_param(params, "track_index")
     clip_index = _integer_param(params, "clip_index")
     length = _float_param(params, "length_beats", 0.0, 100000.0, strictly_positive=True)
+    dry_run = params.get("dry_run", False)
     track, slot = _clip_slot(song, track_index, clip_index)
     if _track_type(song, track) != "midi":
         raise RemoteError(ERROR_WRONG_TYPE, "create_clip requires a MIDI track.")
     if bool(_safe(lambda: slot.has_clip, False)):
         raise RemoteError(ERROR_BAD_INPUT, "Clip slot is not empty.")
-    slot.create_clip(length)
+
     clip_id = "track:%s/clipslot:%s/clip" % (track_index, clip_index)
     resolved = {
         "kind": "clip",
@@ -1376,6 +1398,17 @@ def cmd_create_clip(song: Any, _application: Any, params: dict[str, Any]) -> dic
     track_name = str(_safe(lambda: track.name, ""))
     if track_name:
         resolved["track_name"] = track_name
+
+    if dry_run:
+        return {
+            "created": False,
+            "committed": False,
+            "clip_id": clip_id,
+            "length_beats": length,
+            "resolved": resolved,
+        }
+
+    slot.create_clip(length)
     return {
         "created": True,
         "clip_id": clip_id,
@@ -2708,6 +2741,8 @@ COMMAND_HANDLERS: dict[str, CommandHandler] = {
     "search_browser": cmd_search_browser,
     "get_song_length": cmd_get_song_length,
     "live_find_track": cmd_live_find_track,
+    "live_find_device": cmd_live_find_device,
+    "live_find_clip": cmd_live_find_clip,
     "list_device_params": cmd_list_device_params,
     "create_clip": cmd_create_clip,
     "fire_clip": cmd_fire_clip,
@@ -2833,6 +2868,13 @@ def _dispatch_command_steps(
         return (yield from _verified_playhead_steps(song, target))
     if normalized == "set_tempo":
         tempo = _float_param(params, "tempo", 20.0, 999.0)
+        dry_run = params.get("dry_run", False)
+        if dry_run:
+            return {
+                "tempo": tempo,
+                "committed": False,
+                "resolved": {"kind": "tempo", "tempo": tempo},
+            }
         result: dict[str, Any] = yield from _verified_numeric_steps(
             song,
             attribute="tempo",
@@ -2947,7 +2989,8 @@ def _command_steps(
         return cmd_unavailable_capability(song, application, {**params, "__command": normalized})
     if not isinstance(params, dict):
         raise RemoteError(ERROR_INVALID_PARAMS, "Request params must be an object.")
-    owns_undo = normalized in ALLOWED_MUTATIONS and manage_undo
+    dry_run_only = _is_dry_run_only(normalized, params)
+    owns_undo = normalized in ALLOWED_MUTATIONS and manage_undo and not dry_run_only
     if owns_undo:
         _begin_undo(undo_target)
     try:
@@ -2964,6 +3007,29 @@ def _command_steps(
     finally:
         if owns_undo:
             _end_undo(undo_target)
+
+
+def _is_dry_run_only(normalized: str, params: dict[str, Any]) -> bool:
+    if normalized in ("set_tempo", "create_clip"):
+        dry_run = params.get("dry_run", False)
+        if not isinstance(dry_run, bool):
+            raise RemoteError(ERROR_INVALID_PARAMS, "Parameter 'dry_run' must be boolean.")
+        return dry_run
+    if normalized != "run_batch":
+        return False
+
+    commands = params.get("commands")
+    if not isinstance(commands, list) or not commands:
+        return False
+    for command in commands:
+        if not isinstance(command, dict):
+            return False
+        if command.get("type") not in ("set_tempo", "create_clip"):
+            return False
+        command_params = command.get("params", {})
+        if not isinstance(command_params, dict) or command_params.get("dry_run") is not True:
+            return False
+    return True
 
 
 def execute_command(

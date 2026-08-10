@@ -46,7 +46,7 @@ def test_bridge_status_probes_live_instead_of_tool_discovery() -> None:
     assert result["live"] == {"tempo": 120.0, "is_playing": False}
     assert result["runtime"]["is_wsl"] is False
     assert result["server_version"] == "0.5.3"
-    assert result["tool_count"] == 56
+    assert result["tool_count"] == 75
     assert result["ws_endpoint"] == {"host": "127.0.0.1", "port": 9889}
     assert result["extension_host_available"] is None
     assert result["ws_methods_registered"] == [
@@ -127,6 +127,25 @@ def test_remote_script_install_and_status_are_hash_verified(tmp_path: Path) -> N
     assert status["mismatched_files"] == ["__init__.py"]
 
 
+def test_remote_script_install_dry_run_reports_plan_without_writing(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    for name in ("__init__.py", "_contracts.py", "README.md"):
+        (source / name).write_text(name, encoding="utf-8")
+    destination_root = tmp_path / "Remote Scripts"
+
+    result = install_remote_script(source, destination_root, dry_run=True)
+
+    assert result["status"] == "dry_run"
+    assert result["target"] == str(destination_root / "AbletonMCPServer_RemoteScript")
+    assert [entry["filename"] for entry in result["plan"]] == [
+        "__init__.py",
+        "_contracts.py",
+        "README.md",
+    ]
+    assert not destination_root.exists()
+
+
 def test_bundled_remote_script_path_supports_checkout_and_wheel_layout(tmp_path: Path) -> None:
     package = tmp_path / "ableton_mcp_server"
     package.mkdir()
@@ -185,7 +204,7 @@ def test_bridge_status_reports_source_kind_and_python_executable(tmp_path: Path)
         "ableton_mcp_server.diagnostics.bundled_remote_script_source",
         return_value=bundled_remote_script_source(package),
     ):
-        status = bridge_status(_Stub(), tool_count=65)
+        status = bridge_status(_Stub(), tool_count=75)
 
     assert status["source_kind"] == "checkout"
     assert status["source"] == str(checkout_source)

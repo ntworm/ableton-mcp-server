@@ -9,7 +9,7 @@ Source: `pyproject.toml` and imports under `ableton_mcp_server/`.
 | `fastmcp>=3.4,<4` | Creates the MCP server, tool registry, tool metadata, and explicit tool results in `server.py`. |
 | `mcp>=1.28,<2` | Supplies MCP content types used at the server boundary. |
 | `pydantic>=2.12,<3` | Validates tool and batch requests in `models.py`. |
-| `websockets>=14,<15` | Implements the async Python client for the Extension WebSocket bridge. |
+| `websockets>=15.0.1,<17` | Implements the async Python client for the Extension WebSocket bridge. |
 
 Development dependencies are pytest/pytest-asyncio, Ruff, and strict Mypy. Hatchling builds the wheel and force-includes contracts plus the Remote Script.
 
@@ -40,4 +40,3 @@ The SDK and CLI are local `vendor/*.tgz` dependencies and are intentionally excl
 ## Optional local tools
 
 Git and `rg` support normal development and context discovery. Repomix and RTK are available locally but are not runtime dependencies; full snapshots are not part of the normal repository workflow.
-

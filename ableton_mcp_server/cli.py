@@ -10,9 +10,7 @@ from typing import Any
 
 from contracts import DEFAULT_HOST, DEFAULT_PORT
 
-from .acceptance import run_live_acceptance
 from .catalog import TOOL_CATALOG
-from .client import Client
 from .diagnostics import (
     bridge_status,
     bundled_remote_script_path,
@@ -20,6 +18,28 @@ from .diagnostics import (
     install_remote_script,
     remote_script_status,
 )
+
+# Loaded only by commands that need the Live bridge. Keeping install/status
+# commands dependency-light lets setup preview a clean checkout without first
+# creating an environment or installing third-party packages. The module-level
+# names remain patchable for the CLI tests.
+Client: Any = None
+
+
+def _client_type() -> Any:
+    global Client
+    if Client is None:
+        from .client import Client as client_type
+
+        Client = client_type
+    return Client
+
+
+async def run_live_acceptance(*args: Any, **kwargs: Any) -> Any:
+    """Load the acceptance stack only when that subcommand is invoked."""
+    from .acceptance import run_live_acceptance as acceptance_runner
+
+    return await acceptance_runner(*args, **kwargs)
 
 
 def _emit(result: dict[str, Any], *, as_json: bool) -> None:
@@ -72,6 +92,7 @@ def _parser() -> argparse.ArgumentParser:
 
     install = subparsers.add_parser("install-script", help="Install the MIDI Remote Script")
     _add_install_paths(install)
+    install.add_argument("--dry-run", action="store_true")
 
     status = subparsers.add_parser("install-status", help="Compare installed and bundled scripts")
     _add_install_paths(status)
@@ -84,7 +105,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         host = os.environ.get("ABLETON_MCP_SERVER_HOST", DEFAULT_HOST)
         port = int(os.environ.get("ABLETON_MCP_SERVER_PORT", str(DEFAULT_PORT)))
         result = bridge_status(
-            Client(host=host, port=port, reconnect=False),
+            _client_type()(host=host, port=port, reconnect=False),
             tool_count=len(TOOL_CATALOG),
         )
 
@@ -97,7 +118,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         profiles = tuple(args.profile) if args.profile else ("baseline",)
         result = asyncio.run(
             run_live_acceptance(
-                Client(host=host, port=port, reconnect=False),
+                _client_type()(host=host, port=port, reconnect=False),
                 confirm_project_name=str(args.confirm_project_name),
                 track_index=int(args.track_index),
                 clip_index=int(args.clip_index),
@@ -128,7 +149,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     source = bundled_remote_script_path() if args.source is None else args.source
     destination = default_remote_scripts_root() if args.destination is None else args.destination
     if args.command == "install-script":
-        result = install_remote_script(source, destination)
+        result = install_remote_script(source, destination, dry_run=bool(args.dry_run))
         _emit(result, as_json=bool(args.json))
         return 0
     result = remote_script_status(source, destination)
