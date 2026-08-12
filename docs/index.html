@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232EC4B6'><path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/></svg>">
   <title>Ableton MCP Server — Production Tool Surface for Ableton Live 12</title>
-  <meta name="description" content="Production MCP server exposing 75 tools over TCP and WebSockets for AI agents (Claude, Antigravity, Gemini, Codex) and audio developers to control Ableton Live 12.">
+  <meta name="description" content="Production MCP server exposing 77 tools over TCP and WebSockets for AI agents (Claude, Antigravity, Gemini, Codex) and audio developers to control Ableton Live 12.">
   <meta property="og:title" content="Ableton MCP Server — Technical Specification & 75-Tool Catalog">
   <meta property="og:description" content="Dual-bridge FastMCP server for querying parameters, driving transport, automating clips, and non-realtime mix analysis in Ableton Live 12.">
   <meta property="og:type" content="website">
@@ -566,7 +566,7 @@
             <span>agent_system_prompt_context.txt</span>
             <span>Production Prompt Injection</span>
           </div>
-<pre><code>You are connected to an active Ableton Live 12 Set via ableton-mcp-server (75 tools).
+<pre><code>You are connected to an active Ableton Live 12 Set via ableton-mcp-server (77 tools).
 Operational rules:
 1. Always inspect live set topology first via `get_session_overview()` or `get_track_list()`.
 2. Resolve target tracks by index or via fuzzy name matching (`live_find_track`).
@@ -835,9 +835,9 @@ Operational rules:
   <!-- Tools Catalog Matrix -->
   <section id="tools" class="arch-section">
     <div class="container">
-      <h2 class="section-title" data-en="Complete 75 MCP Tool Surface" data-pt="Catálogo Completo das 75 Ferramentas MCP">Complete 75 MCP Tool Surface</h2>
-      <p class="section-desc" data-en="Typed parameter signatures and descriptions for all 75 tools exposed to AI agents. Search by name, category, or parameter signature." data-pt="Assinaturas de parâmetros e descrições tipadas para todas as 75 ferramentas expostas aos agentes de IA. Pesquise por nome, categoria ou assinatura.">
-        Typed parameter signatures and descriptions for all 75 tools exposed to AI agents. Search by name, category, or parameter signature.
+      <h2 class="section-title" data-en="Complete 77 MCP Tool Surface" data-pt="Catálogo Completo das 77 Ferramentas MCP">Complete 77 MCP Tool Surface</h2>
+      <p class="section-desc" data-en="Typed parameter signatures and descriptions for all 77 tools exposed to AI agents. Search by name, category, or parameter signature." data-pt="Assinaturas de parâmetros e descrições tipadas para todas as 77 ferramentas expostas aos agentes de IA. Pesquise por nome, categoria ou assinatura.">
+        Typed parameter signatures and descriptions for all 77 tools exposed to AI agents. Search by name, category, or parameter signature.
       </p>
 
       <div class="tool-controls">
@@ -899,6 +899,8 @@ Operational rules:
       { name: 'list_device_params', cat: 'track', desc_en: 'Lists every device and parameter resolved from a fresh track path ID.', desc_pt: 'Lista dispositivos e parâmetros resolvidos por um path ID atual da track.', sig: 'list_device_params(track_id: str)' },
       { name: 'get_parameter_value', cat: 'track', desc_en: 'Reads parameter value, min/max range, and formatted string.', desc_pt: 'Lê o valor numérico, intervalo min/max e texto formatado do parâmetro.', sig: 'get_parameter_value(track_index: int, device_index: int, parameter_index: int)' },
       { name: 'set_parameter_value', cat: 'track', desc_en: 'Sets normalized or raw parameter value on a specific device parameter.', desc_pt: 'Define o valor numérico normalizado ou bruto de um parâmetro de dispositivo.', sig: 'set_parameter_value(track_index: int, device_index: int, parameter_index: int, value: float)' },
+      { name: 'get_plugin_presets', cat: 'track', desc_en: 'Lists a VST/VST3/AU plugin preset names and reports whether Live Configure exposed any parameters.', desc_pt: 'Lista os presets de um plugin VST/VST3/AU e informa se o Configure do Live expôs algum parâmetro.', sig: 'get_plugin_presets(track_index: int, device_index: int)' },
+      { name: 'set_plugin_preset', cat: 'track', desc_en: 'Selects one plugin preset by index or exact name and verifies the readback.', desc_pt: 'Seleciona um preset de plugin por índice ou nome exato e verifica a releitura.', sig: 'set_plugin_preset(track_index: int, device_index: int, preset_index?: int, preset_name?: str)' },
       { name: 'get_clip_summary', cat: 'track', desc_en: 'Fetches clip metadata (name, length, color, warp mode, note count).', desc_pt: 'Obtém metadados do clip (nome, duração, cor, modo de warp, notas).', sig: 'get_clip_summary(track_index: int, clip_index: int)' },
       { name: 'create_clip', cat: 'track', desc_en: 'Creates a MIDI clip, or validates the target without writing when dry_run is true.', desc_pt: 'Cria um clip MIDI ou valida o alvo sem escrever quando dry_run é true.', sig: 'create_clip(track_index: int, clip_index: int, length_beats: float, dry_run: bool = false)' },
       { name: 'get_clip_notes', cat: 'track', desc_en: 'Reads MIDI notes from clip with pitch, start_time, duration, velocity, mute.', desc_pt: 'Lê as notas MIDI do clip (nota, tempo inicial, duração, velocidade, mute).', sig: 'get_clip_notes(track_index: int, clip_index: int)' },

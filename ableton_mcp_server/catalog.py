@@ -94,6 +94,7 @@ _TCP_READS = (
     "diagnose_clip_targets",
     "live_find_device",
     "live_find_clip",
+    "get_plugin_presets",
 )
 # Routed like commands so the Remote Script can validate them against the real
 # Set, but they never mutate: Live's public API cannot perform any of them.
@@ -131,6 +132,9 @@ _TCP_MUTATIONS = (
     "create_audio_track",
     "rename_track",
     "set_parameter_value",
+    "set_plugin_preset",
+    # The trailing three carry non-reversible / lifecycle risk and are sliced
+    # off by TOOL_CATALOG below; keep new reversible mutations above them.
     "save_set",
     "quit_ableton",
     "live_fade",

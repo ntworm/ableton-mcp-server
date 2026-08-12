@@ -136,6 +136,8 @@ READ_COMMANDS = frozenset(
         "lifecycle_status",
         # v0.5.3 — clip colour target discovery (Session + Arrangement)
         "diagnose_clip_targets",
+        # v0.5.4 — plugin preset discovery (needs no Configure step)
+        "get_plugin_presets",
     }
 )
 
@@ -182,6 +184,8 @@ ALLOWED_MUTATIONS = frozenset(
         "live_fade",
         # v0.5.0 — audio-track mirror of create_midi_track
         "create_audio_track",
+        # v0.5.4 — verified plugin preset write (needs no Configure step)
+        "set_plugin_preset",
     }
 )
 
@@ -352,6 +356,42 @@ def assert_not_blocked(command_name: str) -> None:
         )
 
 
+# ---------------------------------------------------------------------------
+# Plugin devices (v0.5.4)
+# ---------------------------------------------------------------------------
+#
+# Live wraps VST/VST3/AU plugins in a device whose ``parameters`` list is not
+# the plugin's parameter set. It contains only ``Device On`` plus whatever the
+# user added by hand through the device's Configure button. Until somebody
+# does that in the Live GUI, the LOM has nothing to hand back, so a plugin
+# looks parameterless to every automation surface — the LOM, MIDI mapping and
+# clip automation alike. That is Live's design, not a bridge limitation, and
+# no remote API can add a parameter to the Configure list.
+#
+# ``PluginDevice.presets`` / ``selected_preset_index`` are the exception: they
+# are exposed without Configure, which is why ``get_plugin_presets`` and
+# ``set_plugin_preset`` are the one plugin surface an agent can drive alone.
+
+PLUGIN_DEVICE_CLASS_NAMES = frozenset({"PluginDevice", "AuPluginDevice"})
+
+PLUGIN_NOT_CONFIGURED = "PLUGIN_NOT_CONFIGURED"
+
+PLUGIN_NOT_CONFIGURED_HINT = (
+    "Live only exposes plugin parameters that were added through the device's "
+    "Configure button, so this plugin reports no automatable parameters. Ask "
+    "the user to open the plugin in Live, click Configure, and add the "
+    "controls they want; they then appear here with no change to this bridge. "
+    "Preset switching through get_plugin_presets / set_plugin_preset works "
+    "without the Configure step."
+)
+
+
+def is_plugin_device_class(class_name: str) -> bool:
+    """Return True when ``class_name`` names a Live plugin wrapper device."""
+
+    return class_name.strip() in PLUGIN_DEVICE_CLASS_NAMES
+
+
 # Set lifecycle and fader fade (v0.5.0)
 COMMAND_LIFECYCLE_STATUS = "lifecycle_status"
 COMMAND_SAVE_SET = "save_set"
@@ -362,3 +402,7 @@ COMMAND_ANALYZE_AUDIO = "analyze_audio"
 COMMAND_FIND_FREQUENCY_MASKING = "find_frequency_masking"
 COMMAND_ANALYZE_MIX = "analyze_mix"
 COMMAND_EXTRACT_SINGLE_CYCLE = "extract_single_cycle"
+
+# Plugin preset access (v0.5.4)
+COMMAND_GET_PLUGIN_PRESETS = "get_plugin_presets"
+COMMAND_SET_PLUGIN_PRESET = "set_plugin_preset"

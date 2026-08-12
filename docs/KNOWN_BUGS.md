@@ -146,6 +146,14 @@ If a connection fails after a mutation was sent, the client cannot know whether 
 
 **Mitigation:** prefer `ABLETON_MCP_LOG_PATH`, then search native Windows/macOS locations and mounted Windows profiles. The canonical WSL deployment uses Windows Python and therefore receives `APPDATA` normally.
 
+## Category Q — A plugin reports no parameters until the user clicks Configure
+
+**Symptom:** `get_device_list` on a track holding a VST/VST3/AU returns that device with a single `Device On` parameter, and `set_parameter_value` answers `INVALID_PARAMS` for every real plugin control. The plugin looks parameterless even though its own window is full of knobs.
+
+**Cause:** Live does not publish a plugin's parameters to the Live Object Model. `PluginDevice.parameters` contains `Device On` plus only the controls a user added by hand through the device's **Configure** button in Live's device panel. The same gate applies to MIDI mapping and clip automation, so this is Live's design and not a bridge limitation. No remote API can add an entry to the Configure list.
+
+**Mitigation:** the bridge reports the state instead of returning a silently empty list. Plugin devices carry a `plugin_state` block in `get_device_list` and `list_device_params`; with nothing configured it reads `{"status": "not_configured", "hint": "PLUGIN_NOT_CONFIGURED", ...}`, and parameter lookups fail with the same explanation under `details.hint_code`. Ask the user to configure the controls in Live. `PluginDevice.presets` and `selected_preset_index` are exempt from the Configure gate, so `get_plugin_presets` / `set_plugin_preset` work regardless.
+
 ## LOM calls used for clip debugging
 
 The implementation follows the official references for [`ClipSlot.create_clip` and `ClipSlot.fire`](https://docs.cycling74.com/apiref/lom/clipslot/) and adapts [`Clip.add_new_notes` / `get_notes_extended`](https://docs.cycling74.com/apiref/lom/clip/) to the embedded Python binding.

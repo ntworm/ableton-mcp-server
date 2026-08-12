@@ -6,19 +6,38 @@ The canonical certification policy that governs the promotion decision
 (see `ableton-mcp acceptance --profile baseline` below) lives in
 [`docs/CERTIFICATION.md`](docs/CERTIFICATION.md).
 
-## [Unreleased] - 2026-08-09
+## [Unreleased] - 2026-08-12
+
+### Added — plugin presets and the Configure gate
+
+- `get_plugin_presets` and `set_plugin_preset` read and write `PluginDevice.presets` /
+  `selected_preset_index`. These are the only plugin controls Live exposes without the
+  device's Configure button, so an agent can switch a VST/VST3/AU preset on a plugin
+  nobody has configured. The write verifies its readback and returns the canonical
+  `resolved` sub-object.
+- `get_device_list` and `list_device_params` carry a `plugin_state` block on plugin
+  wrapper devices. When no parameter was added through Configure the block reports
+  `hint: "PLUGIN_NOT_CONFIGURED"` with an explanation, so an empty parameter list is no
+  longer indistinguishable from a device with no controls.
+- `get_parameter_value` and `set_parameter_value` answer an unresolved name on an
+  unconfigured plugin with the same explanation in `details.hint_code` instead of a bare
+  "parameter not found".
+- `certification.ENVIRONMENT_OPTIONAL_TOOLS` names the tools whose acceptance probe needs
+  a fixture the environment is not required to provide. `build_extension` (Node toolchain)
+  moved into it; both plugin tools joined it, since a disposable acceptance Set normally
+  holds only native Live devices.
 
 ### Added
 
 - `live_find_device` and `live_find_clip` return fresh session-local locators from the connected Set.
 - `dry_run` for `set_tempo` and `create_clip` validates without writing or opening an undo step.
 - `ableton-mcp install-script --dry-run` and `setup_windows.ps1 -DryRun` preview Remote Script installation.
-- Generated API capability matrix covering all 75 public tools.
+- Generated API capability matrix covering all 77 public tools.
 
 ### Fixed
 
 - Registered both live search commands in the canonical and vendored read-command contracts.
-- Aligned the 75-tool/60-command counts across runtime diagnostics, tests, and documentation.
+- Aligned the 77-tool/62-command counts across runtime diagnostics, tests, and documentation.
 
 ## [0.5.3] - 2026-08-04
 

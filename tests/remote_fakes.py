@@ -112,6 +112,49 @@ class FakeDevice:
         self.parameters = [FakeParameter("Device On", 1.0), FakeParameter("Filter Freq", 0.5)]
 
 
+class FakePluginDevice:
+    """Live's VST/VST3/AU wrapper device.
+
+    Mirrors the split that motivates the plugin tools: ``parameters`` holds
+    only ``Device On`` plus whatever the user added through Live's Configure
+    button, while ``presets`` / ``selected_preset_index`` are exposed with no
+    Configure step at all.
+    """
+
+    def __init__(
+        self,
+        name: str = "Superior Drummer 3",
+        *,
+        configured: bool = False,
+        presets: list[str] | None = None,
+        selected_preset_index: int = 0,
+        stuck_writes: int = 0,
+    ) -> None:
+        self.name = name
+        self.class_name = "PluginDevice"
+        self.is_active = True
+        self.parameters = [FakeParameter("Device On", 1.0)]
+        if configured:
+            self.parameters.append(FakeParameter("Master Volume", 0.5))
+        self.presets = ["Default", "Rock Kit", "Jazz Kit"] if presets is None else list(presets)
+        self._selected_preset_index = selected_preset_index
+        # Live can lag one UI tick behind a write; ``stuck_writes`` reproduces a
+        # host that never lands it so the verification path can be tested.
+        self.stuck_writes = stuck_writes
+        self.write_attempts = 0
+
+    @property
+    def selected_preset_index(self) -> int:
+        return self._selected_preset_index
+
+    @selected_preset_index.setter
+    def selected_preset_index(self, value: int) -> None:
+        self.write_attempts += 1
+        if self.write_attempts <= self.stuck_writes:
+            return
+        self._selected_preset_index = value
+
+
 class FakeClip:
     def __init__(self, name: str = "Clip", length: float = 4.0, midi: bool = True) -> None:
         self.name = name

@@ -95,7 +95,7 @@ def test_v040_public_docs_cover_tools_and_attribution() -> None:
         "set_clip_properties",
         "create_clip_automation",
     }
-    assert "Version 0.5.3 exposes 75 tools" in readme
+    assert "Version 0.5.3 exposes 77 tools" in readme
     # The historical v0.5.2 baseline must stay visible; the tool surface grew
     # additively and readers need both numbers to reconcile older docs.
     assert "65" in readme
@@ -121,7 +121,7 @@ def test_v050_public_docs_cover_lifecycle_fade_tracks_and_analysis() -> None:
         "analyze_mix",
         "extract_single_cycle",
     }
-    assert "75 tools" in readme
+    assert "77 tools" in readme
     for tool in new_tools:
         assert f"`{tool}`" in readme
         assert f"`{tool}`" in reference or f"`{tool}(" in reference
@@ -217,11 +217,11 @@ def test_landing_page_catalog_matches_the_public_tool_registry() -> None:
 
     assert len(landing_names) == len(set(landing_names)) == len(PUBLIC_TOOL_NAMES)
     assert set(landing_names) == set(PUBLIC_TOOL_NAMES)
-    assert "Complete 75 MCP Tool Surface" in landing
+    assert "Complete 77 MCP Tool Surface" in landing
     assert "transaction rollbacks" not in landing
 
 
 def test_architecture_advertises_the_current_tool_count() -> None:
     architecture = (ROOT / "docs" / "ARCHITECTURE.md").read_text(encoding="utf-8")
-    assert "75 on the current line" in architecture
+    assert "77 on the current line" in architecture
     assert "73 on the current line" not in architecture

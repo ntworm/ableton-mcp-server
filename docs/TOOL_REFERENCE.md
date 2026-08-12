@@ -1,6 +1,6 @@
 # Tool Reference
 
-The FastMCP server exposes 75 snake_case tools, up from the certified 65-tool v0.5.2 baseline. Remote examples below show the JSONL command envelope after MCP/Pydantic validation. All error responses use `{"status":"error","code","message","hint?"}`.
+The FastMCP server exposes 77 snake_case tools, up from the certified 65-tool v0.5.2 baseline. Remote examples below show the JSONL command envelope after MCP/Pydantic validation. All error responses use `{"status":"error","code","message","hint?"}`.
 
 A machine-readable view of these tools (route, risk, acceptance mode, reversibility) is exposed at runtime via the `get_bridge_status` tool's `tools` list and `capability_counts` keys, derived from the canonical `TOOL_CATALOG`. A generated [API Capability Matrix](api_capability_matrix.md) is also available for quick reference.
 
@@ -9,6 +9,46 @@ the acceptance runner are documented in
 [`docs/CERTIFICATION.md`](CERTIFICATION.md). That document is canonical
 for what each status means and which `environment_unavailable` rows
 are explicitly allowed.
+
+## v0.5.4 plugin presets
+
+Live's plugin wrapper exposes only the parameters a user added through the
+device's **Configure** button, so `get_device_list` and `list_device_params`
+carry a `plugin_state` block on every `PluginDevice` / `AuPluginDevice`. When
+`configured_parameter_count` is zero the block adds
+`hint: "PLUGIN_NOT_CONFIGURED"` and a message explaining the Configure step,
+so a caller can tell an unconfigured plugin apart from one with no controls.
+`set_parameter_value` and `get_parameter_value` raise the same explanation in
+`details.hint_code` instead of a bare "parameter not found".
+
+Presets are the exception: `PluginDevice.presets` and `selected_preset_index`
+are exposed with no Configure step, so the two tools below work on a plugin an
+agent has never touched.
+
+### `get_plugin_presets(track_index: int, device_index: int)`
+
+- Params: non-negative track and device indexes.
+- Returns: preset names, `preset_count`, `selected_preset_index`, and the
+  device's `plugin_state`.
+- Request: `{"type":"get_plugin_presets","params":{"track_index":2,"device_index":2}}`
+- Response: `{"status":"ok","result":{"id":"track:2/device:2","presets":["Default","Rock Kit"],"preset_count":2,"selected_preset_index":0}}`
+- Edge cases / side effects: pure read; a native Live device returns
+  `WRONG_TYPE`, and a plugin exposing no presets returns an empty list rather
+  than an error.
+
+### `set_plugin_preset(track_index: int, device_index: int, preset_index: int | None = None, preset_name: str | None = None)`
+
+- Params: non-negative track and device indexes plus exactly one of
+  `preset_index` or `preset_name` (exact match).
+- Returns: `selected_preset_index`, `preset_name`, `previous_preset_index`, and
+  the canonical `resolved` identity sub-object.
+- Request: `{"type":"set_plugin_preset","params":{"track_index":2,"device_index":2,"preset_name":"Rock Kit"}}`
+- Response: `{"status":"ok","result":{"selected_preset_index":1,"preset_name":"Rock Kit","previous_preset_index":0}}`
+- Edge cases / side effects: writes in one Live undo step and verifies the
+  readback. Zero or two selectors return `INVALID_PARAMS`; a duplicated preset
+  name returns `AMBIGUOUS_MATCH`; a plugin with no presets returns
+  `CAPABILITY_UNAVAILABLE`; a write the host never lands returns
+  `VERIFICATION_FAILED`.
 
 ## v0.5.0 set lifecycle
 

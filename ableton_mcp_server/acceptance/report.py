@@ -10,7 +10,11 @@ import inspect
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from ..certification import CertificationReport, Verification  # re-export
+from ..certification import (  # re-export
+    ENVIRONMENT_OPTIONAL_TOOLS,
+    CertificationReport,
+    Verification,
+)
 
 __all__ = [
     "CertificationReport",
@@ -107,7 +111,9 @@ def _release_ready(
     2. Partial profiles (not full baseline) are never release-ready.
     3. ``fire_clip`` must have been exercised (the flag toggled on).
     4. ``host_unavailable`` blocks promotion.
-    5. ``environment_unavailable`` blocks promotion, except ``build_extension``.
+    5. ``environment_unavailable`` blocks promotion, except for the tools in
+       ``ENVIRONMENT_OPTIONAL_TOOLS`` whose probes need a fixture the
+       acceptance environment is not required to provide.
     6. ``manual_required`` blocks promotion, except ``quit_ableton`` and the
        strictly validated manual fallback for ``save_set``.
     7. Otherwise the report is release-ready.
@@ -122,7 +128,8 @@ def _release_ready(
     if any(row.status == "host_unavailable" for row in rows):
         return False
     if any(
-        row.status == "environment_unavailable" and row.tool != "build_extension" for row in rows
+        row.status == "environment_unavailable" and row.tool not in ENVIRONMENT_OPTIONAL_TOOLS
+        for row in rows
     ):
         return False
     return not any(

@@ -389,6 +389,50 @@ def set_parameter_value(
 
 
 @mcp.tool()
+def get_plugin_presets(track_index: int, device_index: int) -> Any:
+    """List a VST/VST3/AU plugin's presets and report its Configure state.
+
+    Side effects: none.
+    Example: ``get_plugin_presets(2, 2)`` returns the preset names plus
+    ``selected_preset_index`` for the plugin on track two.
+    Edge cases: native Live devices return ``WRONG_TYPE``; a plugin whose
+    parameters were never added through Live's Configure button reports
+    ``plugin_state.hint = "PLUGIN_NOT_CONFIGURED"``.
+    """
+    return _remote(
+        "get_plugin_presets",
+        models.GetPluginPresetsRequest(track_index=track_index, device_index=device_index),
+    )
+
+
+@mcp.tool()
+def set_plugin_preset(
+    track_index: int,
+    device_index: int,
+    preset_index: int | None = None,
+    preset_name: str | None = None,
+) -> Any:
+    """Select one plugin preset by index or exact name and verify the readback.
+
+    Side effects: switches the plugin preset in one Live undo step.
+    Example: ``set_plugin_preset(2, 2, preset_name="Rock Kit")`` selects a
+    preset without the Configure step ``set_parameter_value`` needs.
+    Edge cases: pass exactly one selector; unknown names, out-of-range indexes,
+    and plugins that expose no presets return structured errors.
+    """
+    return _remote(
+        "set_plugin_preset",
+        models.SetPluginPresetRequest(
+            track_index=track_index,
+            device_index=device_index,
+            preset_index=preset_index,
+            preset_name=preset_name,
+        ),
+        exclude_none=True,
+    )
+
+
+@mcp.tool()
 def get_routing(track_index: int) -> Any:
     """Read input and output routing labels for one track.
 
@@ -1715,6 +1759,9 @@ PUBLIC_TOOL_FUNCTIONS_HEAD = (
     merge_groups,
     set_clip_properties,
     create_clip_automation,
+    # v0.5.4 — plugin presets (no Configure step required)
+    get_plugin_presets,
+    set_plugin_preset,
     # v0.3.0
     get_composition_structure,
     diagnose_midi_clip,

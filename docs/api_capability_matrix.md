@@ -5,8 +5,8 @@
 
 ## Overview
 
-- **Total Public Tools**: 75
-- **Routed Remote Commands**: 60
+- **Total Public Tools**: 77
+- **Routed Remote Commands**: 62
 - **WebSocket Targets**: 3
 
 ## Categories
@@ -155,3 +155,10 @@
 | `live_find_clip` | Read-only | No | Yes |
 | `live_find_device` | Read-only | No | Yes |
 | `live_find_track` | Read-only | No | Yes |
+
+### Other
+
+| Tool | Read / Write | Requires Extension | Live Required |
+|---|---|---|---|
+| `get_plugin_presets` | Read-only | No | Yes |
+| `set_plugin_preset` | Write | No | Yes |

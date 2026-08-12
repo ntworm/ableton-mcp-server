@@ -45,10 +45,10 @@ def _inject_fast_offline_probes(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(acceptance_module, "run_offline_probes", fast_offline_probes)
 
 
-def test_fake_runner_returns_75_certification_rows() -> None:
+def test_fake_runner_returns_77_certification_rows() -> None:
     """Every catalogued tool must produce exactly one verification row."""
     expected = len(TOOL_CATALOG)
-    assert expected == 75
+    assert expected == 77
 
     bridge = StrictFakeBridge()
     result = asyncio.run(
@@ -63,8 +63,8 @@ def test_fake_runner_returns_75_certification_rows() -> None:
         )
     )
     cert = result["certification"]
-    assert cert["tool_count"] == 75
-    assert len(cert["tools"]) == 75
+    assert cert["tool_count"] == 77
+    assert len(cert["tools"]) == 77
     catalog_names = {item.name for item in TOOL_CATALOG}
     assert {row["tool"] for row in cert["tools"]} == catalog_names
     # ``quit_ableton`` is explicitly ``manual_required`` in baseline.
@@ -165,7 +165,7 @@ def test_fake_runner_partial_profile_is_not_release_ready() -> None:
     for tool in BASELINE_PROBE_GROUPS["mutations"]:
         assert tool in statuses
     # The runner must NOT have skipped the missing tools entirely.
-    assert len(statuses) == 75
+    assert len(statuses) == 77
 
 
 def test_fake_runner_release_ready_false_when_one_tool_fails() -> None:
@@ -212,8 +212,9 @@ def test_fake_runner_baseline_records_only_known_unavailable() -> None:
     unavailable = sorted(
         tool for tool, status in statuses.items() if status == "environment_unavailable"
     )
-    # Without ``--fire-clip``, fire_clip is also unavailable.
-    allowed = {"fire_clip", "build_extension"}
+    # Without ``--fire-clip``, fire_clip is also unavailable. The plugin rows
+    # need a third-party VST/VST3/AU that the fake Set does not carry.
+    allowed = {"fire_clip", "build_extension", "get_plugin_presets", "set_plugin_preset"}
     assert set(unavailable) <= allowed, f"unexpected unavailable tools: {unavailable}"
     for tool, status in statuses.items():
         if tool in allowed:
@@ -350,7 +351,7 @@ def test_baseline_probe_coverage_matches_catalog() -> None:
     flat = {name for group in BASELINE_PROBE_GROUPS.values() for name in group}
     catalog_names = {item.name for item in TOOL_CATALOG}
     assert flat == catalog_names
-    assert len(flat) == 75
+    assert len(flat) == 77
 
 
 def test_spy_proves_fast_offline_probes_is_called(

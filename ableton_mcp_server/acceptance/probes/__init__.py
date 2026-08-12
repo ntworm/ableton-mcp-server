@@ -88,6 +88,7 @@ BASELINE_PROBE_GROUPS: dict[str, tuple[str, ...]] = {
         "diagnose_clip_targets",
         "live_find_device",
         "live_find_clip",
+        "get_plugin_presets",
     ),
     "websocket_reads": ("get_warp_state",),
     # Tools whose contract is a refusal. The probe proves they reject a
@@ -127,6 +128,7 @@ BASELINE_PROBE_GROUPS: dict[str, tuple[str, ...]] = {
         "create_audio_track",
         "rename_track",
         "set_parameter_value",
+        "set_plugin_preset",
         "save_set",
         "live_fade",
         "set_warp_state",

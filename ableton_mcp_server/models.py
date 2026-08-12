@@ -301,6 +301,39 @@ class SetParameterValueRequest(GetParameterValueRequest):
         return value
 
 
+class GetPluginPresetsRequest(RequestModel):
+    track_index: NonNegativeInt
+    device_index: NonNegativeInt
+
+
+class SetPluginPresetRequest(GetPluginPresetsRequest):
+    """Select one plugin preset by index or by exact name.
+
+    Requiring exactly one selector keeps the write single-valued, so the
+    readback has one unambiguous target — the same rule the colour writes use.
+    """
+
+    preset_index: NonNegativeInt | None = None
+    preset_name: Annotated[str, Field(min_length=1, max_length=256)] | None = None
+
+    @field_validator("preset_name")
+    @classmethod
+    def strip_preset_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            raise ValueError("preset_name must be non-empty")
+        return value
+
+    @model_validator(mode="after")
+    def exactly_one_selector(self) -> SetPluginPresetRequest:
+        provided = [self.preset_index is not None, self.preset_name is not None]
+        if sum(provided) != 1:
+            raise ValueError("provide exactly one of preset_index or preset_name")
+        return self
+
+
 class GetRoutingRequest(RequestModel):
     track_index: NonNegativeInt
 
@@ -820,6 +853,8 @@ TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "get_device_list": GetDeviceListRequest,
     "get_parameter_value": GetParameterValueRequest,
     "set_parameter_value": SetParameterValueRequest,
+    "get_plugin_presets": GetPluginPresetsRequest,
+    "set_plugin_preset": SetPluginPresetRequest,
     "get_routing": GetRoutingRequest,
     "get_browser_categories": GetBrowserCategoriesRequest,
     "search_browser": SearchBrowserRequest,

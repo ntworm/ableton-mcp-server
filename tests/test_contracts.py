@@ -47,6 +47,8 @@ def test_debug_mutations_are_explicitly_allowed() -> None:
         "live_fade",
         # v0.5.0 — audio-track mirror
         "create_audio_track",
+        # v0.5.4 — verified plugin preset write
+        "set_plugin_preset",
     }
     assert frozenset(expected) == contracts.ALLOWED_MUTATIONS
     assert expected.isdisjoint(contracts.READ_ONLY_COMMANDS)

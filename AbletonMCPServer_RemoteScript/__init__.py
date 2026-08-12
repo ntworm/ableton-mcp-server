@@ -28,6 +28,7 @@ from ._contracts import (
     CUE_TIME_TOLERANCE,
     DEFAULT_HOST,
     DEFAULT_PORT,
+    ERROR_AMBIGUOUS_MATCH,
     ERROR_BAD_INPUT,
     ERROR_CAPABILITY_UNAVAILABLE,
     ERROR_CUE_SNAPPED_TO_GRID,
@@ -47,8 +48,11 @@ from ._contracts import (
     LIVE_COLOR_RGB_MAX,
     LIVE_COLOR_RGB_MIN,
     PLAYHEAD_MOVE_RETRIES,
+    PLUGIN_NOT_CONFIGURED,
+    PLUGIN_NOT_CONFIGURED_HINT,
     READ_ONLY_COMMANDS,
     UNSUPPORTED_CAPABILITIES,
+    is_plugin_device_class,
     request_timeout_seconds,
 )
 
@@ -344,19 +348,57 @@ def _capture_parameter(parameter: Any, path_id: str) -> dict[str, Any]:
     }
 
 
+def _configured_parameter_count(parameters: list[dict[str, Any]]) -> int:
+    """Count plugin parameters the user added through Live's Configure button.
+
+    ``Device On`` belongs to Live's wrapper, not to the plugin, so it is never
+    evidence that the plugin was configured.
+    """
+
+    return sum(1 for parameter in parameters if parameter.get("name") != "Device On")
+
+
+def _plugin_state(class_name: str, parameters: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Describe a plugin wrapper's Configure state, or ``None`` for native devices.
+
+    An empty ``parameters`` list on a plugin is ambiguous on its own: the
+    caller cannot tell "this plugin has no controls" from "nobody has
+    configured it yet". This block resolves that ambiguity so an agent knows
+    to ask the user for the Configure step instead of assuming the device is
+    not automatable.
+    """
+
+    if not is_plugin_device_class(class_name):
+        return None
+    configured = _configured_parameter_count(parameters)
+    state: dict[str, Any] = {
+        "configured_parameter_count": configured,
+        "status": "configured" if configured else "not_configured",
+    }
+    if not configured:
+        state["hint"] = PLUGIN_NOT_CONFIGURED
+        state["message"] = PLUGIN_NOT_CONFIGURED_HINT
+    return state
+
+
 def _capture_device(device: Any, track_index: int, device_index: int) -> dict[str, Any]:
     device_id = "track:%s/device:%s" % (track_index, device_index)
     parameters = [
         _capture_parameter(parameter, "%s/param:%s" % (device_id, parameter_index))
         for parameter_index, parameter in enumerate(_safe(lambda: device.parameters, []))
     ]
-    return {
+    class_name = str(_safe(lambda: device.class_name, ""))
+    payload = {
         "id": device_id,
         "name": str(_safe(lambda: device.name, "")),
-        "class_name": str(_safe(lambda: device.class_name, "")),
+        "class_name": class_name,
         "is_active": bool(_safe(lambda: device.is_active, True)),
         "parameters": parameters,
     }
+    plugin_state = _plugin_state(class_name, parameters)
+    if plugin_state is not None:
+        payload["plugin_state"] = plugin_state
+    return payload
 
 
 def _capture_clip_slot(slot: Any, track_index: int, slot_index: int) -> dict[str, Any]:
@@ -628,23 +670,176 @@ def cmd_get_device_list(
     ]
 
 
+def _device_at(song: Any, track_index: int, device_index: int) -> tuple[Any, Any]:
+    track = _track_at(song, track_index)
+    devices = list(_safe(lambda: track.devices, []))
+    if device_index < 0 or device_index >= len(devices):
+        raise RemoteError(ERROR_INVALID_PARAMS, "Device index %s does not exist." % device_index)
+    return track, devices[device_index]
+
+
+def _missing_parameter_error(device: Any, parameter_name: str, names: list[str]) -> RemoteError:
+    """Build the INVALID_PARAMS envelope for an unresolved parameter name.
+
+    On a plugin whose Configure list is empty the close-match suggestion has
+    nothing to work with, so the envelope carries the Configure explanation
+    instead of a bare "not found" the caller cannot act on.
+    """
+
+    suggestions = difflib.get_close_matches(parameter_name, names, n=3, cutoff=0.5)
+    suffix = " Did you mean: %s?" % ", ".join(suggestions) if suggestions else ""
+    class_name = str(_safe(lambda: device.class_name, ""))
+    if is_plugin_device_class(class_name) and not _configured_parameter_count(
+        [{"name": name} for name in names]
+    ):
+        return RemoteError(
+            ERROR_INVALID_PARAMS,
+            "Parameter %r was not found: plugin %r exposes no configured parameters."
+            % (parameter_name, str(_safe(lambda: device.name, ""))),
+            hint=PLUGIN_NOT_CONFIGURED_HINT,
+            details={"hint_code": PLUGIN_NOT_CONFIGURED, "class_name": class_name},
+        )
+    return RemoteError(
+        ERROR_INVALID_PARAMS,
+        "Parameter %r was not found.%s" % (parameter_name, suffix),
+    )
+
+
 def cmd_get_parameter_value(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, Any]:
     track_index = _integer_param(params, "track_index")
     device_index = _integer_param(params, "device_index")
     parameter_name = _string_param(params, "parameter_name")
-    track = _track_at(song, track_index)
-    devices = list(_safe(lambda: track.devices, []))
-    if device_index >= len(devices):
-        raise RemoteError(ERROR_INVALID_PARAMS, "Device index %s does not exist." % device_index)
-    for parameter_index, parameter in enumerate(
-        _safe(lambda: devices[device_index].parameters, [])
-    ):
-        if str(_safe(lambda parameter=parameter: parameter.name, "")) == parameter_name:
+    _track, device = _device_at(song, track_index, device_index)
+    names: list[str] = []
+    for parameter_index, parameter in enumerate(_safe(lambda: device.parameters, [])):
+        name = str(_safe(lambda parameter=parameter: parameter.name, ""))
+        names.append(name)
+        if name == parameter_name:
             return _capture_parameter(
                 parameter,
                 "track:%s/device:%s/param:%s" % (track_index, device_index, parameter_index),
             )
-    raise RemoteError(ERROR_INVALID_PARAMS, "Parameter %r was not found." % parameter_name)
+    raise _missing_parameter_error(device, parameter_name, names)
+
+
+def _plugin_device_at(song: Any, track_index: int, device_index: int) -> tuple[Any, Any]:
+    """Resolve a device and refuse when it is not a plugin wrapper."""
+
+    track, device = _device_at(song, track_index, device_index)
+    class_name = str(_safe(lambda: device.class_name, ""))
+    if not is_plugin_device_class(class_name):
+        raise RemoteError(
+            ERROR_WRONG_TYPE,
+            "Device %s on track %s is %r, not a plugin; presets are a "
+            "PluginDevice capability." % (device_index, track_index, class_name),
+        )
+    return track, device
+
+
+def _plugin_presets(device: Any) -> list[str]:
+    return [str(preset) for preset in _safe(lambda: device.presets, []) or []]
+
+
+def cmd_get_plugin_presets(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, Any]:
+    track_index = _integer_param(params, "track_index")
+    device_index = _integer_param(params, "device_index")
+    track, device = _plugin_device_at(song, track_index, device_index)
+    presets = _plugin_presets(device)
+    selected = _safe(lambda: device.selected_preset_index, None)
+    parameters = [
+        {"name": str(_safe(lambda parameter=parameter: parameter.name, ""))}
+        for parameter in _safe(lambda: device.parameters, [])
+    ]
+    result: dict[str, Any] = {
+        "id": "track:%s/device:%s" % (track_index, device_index),
+        "track_index": track_index,
+        "device_index": device_index,
+        "track_name": str(_safe(lambda: track.name, "")),
+        "device_name": str(_safe(lambda: device.name, "")),
+        "class_name": str(_safe(lambda: device.class_name, "")),
+        "presets": presets,
+        "preset_count": len(presets),
+        "selected_preset_index": int(selected) if isinstance(selected, int) else None,
+    }
+    plugin_state = _plugin_state(result["class_name"], parameters)
+    if plugin_state is not None:
+        result["plugin_state"] = plugin_state
+    return result
+
+
+def _resolve_preset_index(device: Any, presets: list[str], params: dict[str, Any]) -> int:
+    """Resolve ``preset_index`` or ``preset_name`` to one in-range index."""
+
+    has_index = params.get("preset_index") is not None
+    has_name = params.get("preset_name") is not None
+    if has_index == has_name:
+        raise RemoteError(
+            ERROR_INVALID_PARAMS,
+            "Provide exactly one of 'preset_index' or 'preset_name'.",
+        )
+    if not presets:
+        raise RemoteError(
+            ERROR_CAPABILITY_UNAVAILABLE,
+            "Plugin %r exposes no presets through the Live Object Model."
+            % str(_safe(lambda: device.name, "")),
+        )
+    if has_index:
+        index = _integer_param(params, "preset_index")
+        if index < 0 or index >= len(presets):
+            raise RemoteError(
+                ERROR_INVALID_PARAMS,
+                "Preset index %s is outside [0, %s]." % (index, len(presets) - 1),
+            )
+        return index
+    name = _string_param(params, "preset_name")
+    matches = [index for index, preset in enumerate(presets) if preset == name]
+    if not matches:
+        suggestions = difflib.get_close_matches(name, presets, n=3, cutoff=0.5)
+        suffix = " Did you mean: %s?" % ", ".join(suggestions) if suggestions else ""
+        raise RemoteError(ERROR_INVALID_PARAMS, "Preset %r was not found.%s" % (name, suffix))
+    if len(matches) > 1:
+        raise RemoteError(
+            ERROR_AMBIGUOUS_MATCH,
+            "Preset name %r matches %s presets; use 'preset_index'." % (name, len(matches)),
+        )
+    return matches[0]
+
+
+def _set_plugin_preset_steps(
+    song: Any,
+    params: dict[str, Any],
+) -> Generator[None, None, dict[str, Any]]:
+    track_index = _integer_param(params, "track_index")
+    device_index = _integer_param(params, "device_index")
+    track, device = _plugin_device_at(song, track_index, device_index)
+    presets = _plugin_presets(device)
+    target = _resolve_preset_index(device, presets, params)
+    previous = _safe(lambda: device.selected_preset_index, None)
+
+    observed: Any = previous
+    for _attempt in range(2):
+        device.selected_preset_index = target
+        yield
+        observed = _safe(lambda: device.selected_preset_index, None)
+        if isinstance(observed, int) and observed == target:
+            return {
+                "id": "track:%s/device:%s" % (track_index, device_index),
+                "selected_preset_index": target,
+                "preset_name": presets[target],
+                "previous_preset_index": int(previous) if isinstance(previous, int) else None,
+                "preset_count": len(presets),
+                "resolved": {
+                    "kind": "device",
+                    "track_index": track_index,
+                    "device_index": device_index,
+                    "track_name": str(_safe(lambda: track.name, "")),
+                    "device_name": str(_safe(lambda: device.name, "")),
+                },
+            }
+    raise RemoteError(
+        ERROR_VERIFICATION_FAILED,
+        "Plugin preset did not change: requested %s, observed %r." % (target, observed),
+    )
 
 
 def _set_parameter_value_steps(
@@ -655,12 +850,8 @@ def _set_parameter_value_steps(
     device_index = _integer_param(params, "device_index")
     parameter_name = _string_param(params, "parameter_name")
     requested = _float_param(params, "value", -1000000.0, 1000000.0)
-    track = _track_at(song, track_index)
-    devices = list(_safe(lambda: track.devices, []))
-    if device_index >= len(devices):
-        raise RemoteError(ERROR_INVALID_PARAMS, "Device index %s does not exist." % device_index)
-    parameters = list(_safe(lambda: devices[device_index].parameters, []))
-    device = devices[device_index]
+    track, device = _device_at(song, track_index, device_index)
+    parameters = list(_safe(lambda: device.parameters, []))
     parameter = next(
         (
             item
@@ -671,12 +862,7 @@ def _set_parameter_value_steps(
     )
     if parameter is None:
         names = [str(_safe(lambda item=item: item.name, "")) for item in parameters]
-        suggestions = difflib.get_close_matches(parameter_name, names, n=3, cutoff=0.5)
-        suffix = " Did you mean: %s?" % ", ".join(suggestions) if suggestions else ""
-        raise RemoteError(
-            ERROR_INVALID_PARAMS,
-            "Parameter %r was not found.%s" % (parameter_name, suffix),
-        )
+        raise _missing_parameter_error(device, parameter_name, names)
     if not bool(_safe(lambda: parameter.is_enabled, True)):
         raise RemoteError(ERROR_WRONG_TYPE, "Parameter %r is disabled." % parameter_name)
     minimum = float(_safe(lambda: parameter.min, 0.0))
@@ -866,22 +1052,28 @@ def cmd_list_device_params(
 ) -> list[dict[str, Any]]:
     track_id = _string_param(params, "track_id")
     track_index, track = _resolve_track_id(song, track_id)
-    return [
-        {
+    entries = []
+    for device_index, device in enumerate(_safe(lambda: track.devices, [])):
+        parameters = [
+            _capture_parameter(
+                parameter,
+                "track:%s/device:%s/param:%s" % (track_index, device_index, parameter_index),
+            )
+            for parameter_index, parameter in enumerate(
+                _safe(lambda device=device: device.parameters, [])
+            )
+        ]
+        class_name = str(_safe(lambda device=device: device.class_name, ""))
+        entry: dict[str, Any] = {
             "device_id": "track:%s/device:%s" % (track_index, device_index),
             "device_name": str(_safe(lambda device=device: device.name, "")),
-            "parameters": [
-                _capture_parameter(
-                    parameter,
-                    "track:%s/device:%s/param:%s" % (track_index, device_index, parameter_index),
-                )
-                for parameter_index, parameter in enumerate(
-                    _safe(lambda device=device: device.parameters, [])
-                )
-            ],
+            "parameters": parameters,
         }
-        for device_index, device in enumerate(_safe(lambda: track.devices, []))
-    ]
+        plugin_state = _plugin_state(class_name, parameters)
+        if plugin_state is not None:
+            entry["plugin_state"] = plugin_state
+        entries.append(entry)
+    return entries
 
 
 def _capture_snapshot(song: Any, application: Any) -> dict[str, Any]:
@@ -2744,6 +2936,8 @@ COMMAND_HANDLERS: dict[str, CommandHandler] = {
     "live_find_device": cmd_live_find_device,
     "live_find_clip": cmd_live_find_clip,
     "list_device_params": cmd_list_device_params,
+    # v0.5.4 — plugin presets bypass Live's Configure gate
+    "get_plugin_presets": cmd_get_plugin_presets,
     "create_clip": cmd_create_clip,
     "fire_clip": cmd_fire_clip,
     "delete_clip": cmd_delete_clip,
@@ -2885,6 +3079,8 @@ def _dispatch_command_steps(
         return result
     if normalized == "set_parameter_value":
         return (yield from _set_parameter_value_steps(song, params))
+    if normalized == "set_plugin_preset":
+        return (yield from _set_plugin_preset_steps(song, params))
     if normalized == "clear_clip_notes":
         return (yield from _clear_clip_notes_steps(song, params))
     if normalized == "set_track_property":

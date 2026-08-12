@@ -50,6 +50,9 @@ from .probes import (
 from .probes import (
     quit as _quit,
 )
+from .probes import (
+    tcp_reads as _tcp_reads,
+)
 from .report import (
     _record_call,
     _record_unavailable,
@@ -700,6 +703,36 @@ async def run_live_acceptance(
                         lambda: call("lifecycle_status"),
                         passed="live_passed",
                     )
+
+                    # ``get_plugin_presets`` needs a third-party plugin in the
+                    # Set. A disposable acceptance Set is not required to hold
+                    # one, so its absence is an environment gap rather than a
+                    # bridge failure — see ENVIRONMENT_OPTIONAL_TOOLS.
+                    (
+                        preset_track_index,
+                        preset_device_index,
+                    ) = _tcp_reads._discover_first_plugin_device(baseline, call)
+                    if preset_track_index is None:
+                        report.record(
+                            Verification(
+                                "get_plugin_presets",
+                                "environment_unavailable",
+                                "no VST/VST3/AU plugin device found in current Set",
+                            )
+                        )
+                    else:
+                        await _record_call(
+                            report,
+                            "get_plugin_presets",
+                            lambda: call(
+                                "get_plugin_presets",
+                                {
+                                    "track_index": preset_track_index,
+                                    "device_index": preset_device_index,
+                                },
+                            ),
+                            passed="live_passed",
+                        )
                 else:
                     # ``mutations`` / ``websocket_reads`` profiles still
                     # need a recorded ``get_project_metadata`` row to
@@ -1609,6 +1642,68 @@ async def run_live_acceptance(
 
                             await _record_call(
                                 report, "set_parameter_value", run_set_parameter_value
+                            )
+
+                        # ----- set_plugin_preset -----
+                        # The probe re-selects the preset that is already
+                        # active. That still exercises resolution, the write
+                        # and the verified readback, but leaves the owner's
+                        # plugin exactly as it was, so no restore is needed.
+                        (
+                            plugin_track_index,
+                            plugin_device_index,
+                        ) = _tcp_reads._discover_first_plugin_device(baseline, call)
+                        plugin_presets: list[Any] = []
+                        plugin_selected: Any = None
+                        if plugin_track_index is not None:
+                            presets_resp = call(
+                                "get_plugin_presets",
+                                {
+                                    "track_index": plugin_track_index,
+                                    "device_index": plugin_device_index,
+                                },
+                            )
+                            if isinstance(presets_resp, dict):
+                                raw_presets = presets_resp.get("presets")
+                                if isinstance(raw_presets, list):
+                                    plugin_presets = raw_presets
+                                plugin_selected = presets_resp.get("selected_preset_index")
+
+                        if not plugin_presets or not isinstance(plugin_selected, int):
+                            report.record(
+                                Verification(
+                                    "set_plugin_preset",
+                                    "environment_unavailable",
+                                    "no plugin exposing presets found in current Set",
+                                )
+                            )
+                        else:
+
+                            async def run_set_plugin_preset() -> str:
+                                response = call(
+                                    "set_plugin_preset",
+                                    {
+                                        "track_index": plugin_track_index,
+                                        "device_index": plugin_device_index,
+                                        "preset_index": plugin_selected,
+                                    },
+                                )
+                                if not isinstance(response, dict):
+                                    raise AssertionError("set_plugin_preset must return a dict")
+                                if response.get("selected_preset_index") != plugin_selected:
+                                    raise AssertionError(
+                                        "set_plugin_preset readback failed: expected "
+                                        f"{plugin_selected} but got "
+                                        f"{response.get('selected_preset_index')}"
+                                    )
+                                return (
+                                    f"track={plugin_track_index} "
+                                    f"device={plugin_device_index} "
+                                    f"preset={plugin_selected}"
+                                )
+
+                            await _record_call(
+                                report, "set_plugin_preset", run_set_plugin_preset
                             )
 
                         # ----- live_fade -----
