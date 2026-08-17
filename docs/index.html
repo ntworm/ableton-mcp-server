@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232EC4B6'><path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/></svg>">
   <title>Ableton MCP Server — Production Tool Surface for Ableton Live 12</title>
-  <meta name="description" content="Production MCP server exposing 77 tools over TCP and WebSockets for AI agents (Claude, Antigravity, Gemini, Codex) and audio developers to control Ableton Live 12.">
+  <meta name="description" content="Production MCP server exposing 77 tools over TCP and WebSockets for AI agents (Antigravity, Gemini, Codex) and audio developers to control Ableton Live 12.">
   <meta property="og:title" content="Ableton MCP Server — Technical Specification & 75-Tool Catalog">
   <meta property="og:description" content="Dual-bridge FastMCP server for querying parameters, driving transport, automating clips, and non-realtime mix analysis in Ableton Live 12.">
   <meta property="og:type" content="website">
@@ -606,7 +606,7 @@ Operational rules:
           <text x="40" y="48" fill="#64748b" font-weight="bold" font-size="12">AI AGENTS / MCP CLIENTS</text>
           
           <rect x="45" y="70" width="200" height="50" rx="6" fill="#101726" stroke="#3b82f6" stroke-width="1.5" />
-          <text x="60" y="100" fill="#3b82f6" font-weight="bold">Claude Desktop / Antigravity</text>
+          <text x="60" y="100" fill="#3b82f6" font-weight="bold">MCP Client / Antigravity</text>
 
           <rect x="45" y="145" width="200" height="50" rx="6" fill="#101726" stroke="#a855f7" stroke-width="1.5" />
           <text x="60" y="175" fill="#a855f7" font-weight="bold">Gemini CLI / Codex Agent</text>
@@ -683,20 +683,20 @@ Operational rules:
   <section id="config" class="arch-section">
     <div class="container">
       <h2 class="section-title" data-en="Agent Configuration" data-pt="Configuração do Agente">Agent Configuration</h2>
-      <p class="section-desc" data-en="Copy-paste server launch configurations for MCP client environments (Claude Desktop, Antigravity IDE, Cursor, Windsurf)." data-pt="Configurações de inicialização do servidor para ambientes de clientes MCP (Claude Desktop, Antigravity IDE, Cursor, Windsurf).">
-        Copy-paste server launch configurations for MCP client environments (Claude Desktop, Antigravity IDE, Cursor, Windsurf).
+      <p class="section-desc" data-en="Copy-paste server launch configurations for MCP client environments (Antigravity IDE, Cursor, Windsurf, and any MCP-capable host)." data-pt="Configurações de inicialização do servidor para ambientes de clientes MCP (Antigravity IDE, Cursor, Windsurf e qualquer host compatível com MCP).">
+        Copy-paste server launch configurations for MCP client environments (Antigravity IDE, Cursor, Windsurf, and any MCP-capable host).
       </p>
 
       <div class="tab-bar">
-        <button class="tab-btn active" onclick="switchTab('claude')">Claude Desktop</button>
+        <button class="tab-btn active" onclick="switchTab('generic')">Generic MCP Host</button>
         <button class="tab-btn" onclick="switchTab('antigravity')">Antigravity / Gemini CLI</button>
         <button class="tab-btn" onclick="switchTab('cursor')">Cursor / Windsurf</button>
       </div>
 
-      <!-- Claude Config -->
-      <div id="cfg-claude" class="code-box">
+      <!-- Generic MCP host config -->
+      <div id="cfg-generic" class="code-box">
         <div class="code-header">
-          <span>claude_desktop_config.json</span>
+          <span>mcp.json</span>
           <span>Windows / WSL2 Deployment</span>
         </div>
 <pre><code>{
@@ -1025,7 +1025,7 @@ Operational rules:
     function switchTab(id) {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       event.target.classList.add('active');
-      document.getElementById('cfg-claude').style.display = id === 'claude' ? 'block' : 'none';
+      document.getElementById('cfg-generic').style.display = id === 'generic' ? 'block' : 'none';
       document.getElementById('cfg-antigravity').style.display = id === 'antigravity' ? 'block' : 'none';
       document.getElementById('cfg-cursor').style.display = id === 'cursor' ? 'block' : 'none';
     }

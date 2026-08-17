@@ -2,7 +2,7 @@
 
 [**:globe_with_meridians: Live Landing Page & Interactive 88-Tool Catalog**](https://ntworm.github.io/ableton-mcp-server/) · [**Architecture Diagram**](docs/ARCHITECTURE.md) · [**Agent Playbook**](docs/AGENT_PLAYBOOK.md) · [**Tool Index**](docs/TOOL_REFERENCE.md)
 
-An open **Model Context Protocol (MCP)** server that enables AI agents (Claude, Antigravity, Gemini, Codex) and audio developers to query, analyze, drive, and automate a running Ableton Live 12 Set.
+An open **Model Context Protocol (MCP)** server that enables AI agents (Antigravity, Gemini, Codex) and audio developers to query, analyze, drive, and automate a running Ableton Live 12 Set.
 
 Version 0.5.6 exposes 88 tools over TCP and WebSockets (with primary device resolution via device_name, track_index, and clip_index), up from the 65 certified in v0.5.2. A FastMCP server in Python communicates with a MIDI Remote Script on TCP `127.0.0.1:9888` and an Extension Host bridge over WebSockets on `127.0.0.1:9889`.
 
@@ -16,7 +16,7 @@ Version 0.5.6 exposes 88 tools over TCP and WebSockets (with primary device reso
 > `ableton-mcp-server` runs locally on your host OS over standard input/output (`stdio`) or IPC loopback. The AI agent spawns the `ableton-mcp-server.exe` process directly. There are no external cloud endpoints or API keys required, guaranteeing zero network latency and maximum privacy.
 
 ### How AI Agents Interact with Ableton Live:
-1. **Tool Discovery (`tools/list`)**: When an MCP client (Claude Desktop, Antigravity, Cursor) launches the server, it automatically discovers all 88 tool schemas.
+1. **Tool Discovery (`tools/list`)**: When an MCP client (Antigravity, Cursor, Windsurf) launches the server, it automatically discovers all 88 tool schemas.
 2. **Tool Execution (`tools/call`)**: When the LLM decides to manipulate Ableton Live, it issues JSON-RPC messages (e.g. `set_tempo(tempo=128.0)` or `create_clip(...)`).
 3. **Write-Then-Verify Loop**: The server writes to Live's local socket and verifies object model state before returning a result.
 4. **Self-Correcting Error Taxonomy**: If an error occurs, the server returns structured codes (`CAPABILITY_UNAVAILABLE`, `AMBIGUOUS_MATCH`, `VERIFICATION_FAILED`), enabling the agent to reason and adapt.
@@ -108,7 +108,7 @@ To manually compute and verify the SHA-256 checksum of the installed `__init__.p
   shasum -a 256 "$HOME/Music/Ableton/User Library/Remote Scripts/AbletonMCPServer_RemoteScript/__init__.py"
   ```
 
-### Agent Configuration (`claude_desktop_config.json` / `mcp.json`):
+### Agent Configuration (`mcp.json`):
 
 ```json
 {
