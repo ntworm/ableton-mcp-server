@@ -6,7 +6,7 @@ import shutil
 import subprocess
 from collections.abc import Awaitable, Callable, Generator, Sequence
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 os.environ.setdefault("OTEL_SDK_DISABLED", "true")
 os.environ.setdefault("FASTMCP_TELEMETRY_DISABLED", "true")
@@ -347,12 +347,22 @@ def get_device_list(track_index: int) -> Any:
 
 
 @mcp.tool()
-def get_parameter_value(track_index: int, device_index: int, parameter_name: str) -> Any:
+def get_parameter_value(
+    track_index: int,
+    device_index: int,
+    parameter_name: str,
+    chain_index: int | None = None,
+    chain_device_index: int | None = None,
+) -> Any:
     """Read a named device parameter and its bounds.
 
     Side effects: none.
-    Example: ``get_parameter_value(0, 0, "Device On")`` reads a parameter.
+    Example: ``get_parameter_value(0, 0, "Device On")`` reads a top-level
+    parameter; ``get_parameter_value(4, 1, "Out Low", chain_index=0,
+    chain_device_index=0)`` reads one nested inside a rack chain.
     Edge cases: names are exact and missing parameters return ``INVALID_PARAMS``.
+    ``chain_index`` without ``chain_device_index`` addresses the chain's mixer,
+    which exposes only ``volume`` and ``panning``.
     """
     return _remote(
         "get_parameter_value",
@@ -360,7 +370,10 @@ def get_parameter_value(track_index: int, device_index: int, parameter_name: str
             track_index=track_index,
             device_index=device_index,
             parameter_name=parameter_name,
+            chain_index=chain_index,
+            chain_device_index=chain_device_index,
         ),
+        exclude_none=True,
     )
 
 
@@ -370,21 +383,30 @@ def set_parameter_value(
     device_index: int,
     parameter_name: str,
     value: float,
+    chain_index: int | None = None,
+    chain_device_index: int | None = None,
 ) -> Any:
     """Write a named device parameter and verify the observed Live value.
 
     Side effects: mutates one device parameter in one Live undo step.
-    Example: ``set_parameter_value(0, 0, "Filter Freq", 0.75)`` updates a device.
-    Edge cases: disabled, unknown, and out-of-range parameters return structured errors.
+    Example: ``set_parameter_value(0, 0, "Filter Freq", 0.75)`` updates a device;
+    ``set_parameter_value(4, 1, "Out Low", 20, chain_index=0, chain_device_index=0)``
+    reaches a Velocity device nested inside a rack chain.
+    Edge cases: ``chain_index`` alone addresses the chain's own mixer, where only
+    ``volume`` and ``panning`` exist. Disabled, unknown, and out-of-range
+    parameters return structured errors.
     """
     return _remote(
         "set_parameter_value",
         models.SetParameterValueRequest(
             track_index=track_index,
             device_index=device_index,
+            chain_index=chain_index,
+            chain_device_index=chain_device_index,
             parameter_name=parameter_name,
             value=value,
         ),
+        exclude_none=True,
     )
 
 
@@ -868,6 +890,250 @@ def diagnose_clip_targets(track_index: int | None = None) -> Any:
     )
 
 
+@mcp.tool()
+def get_arrangement_clips(track_index: int) -> Any:
+    """List one track's Arrangement clips with their placement on the timeline.
+
+    Side effects: none.
+    Example: ``get_arrangement_clips(3)`` returns each clip's ``start_time``,
+    ``end_time`` and length in beats, sorted by position.
+    Edge cases: a host without ``Track.arrangement_clips`` returns
+    ``CAPABILITY_UNAVAILABLE`` instead of an empty list.
+    """
+    return _remote(
+        "get_arrangement_clips",
+        models.GetArrangementClipsRequest(track_index=track_index),
+    )
+
+
+@mcp.tool()
+def duplicate_session_clip_to_arrangement(track_index: int, clip_index: int, time: float) -> Any:
+    """Place a Session clip onto the Arrangement timeline at an exact beat.
+
+    Side effects: adds one Arrangement clip in one Live undo step. The Session
+    clip stays where it is, and clip envelopes travel with the copy.
+    Example: ``duplicate_session_clip_to_arrangement(38, 0, 468.0)`` drops slot
+    one of track 38 at beat 468.
+    Edge cases: an empty slot returns ``BAD_INPUT``; a host without
+    ``Track.duplicate_clip_to_arrangement`` returns ``CAPABILITY_UNAVAILABLE``.
+    """
+    return _remote(
+        "duplicate_session_clip_to_arrangement",
+        models.DuplicateSessionClipToArrangementRequest(
+            track_index=track_index,
+            clip_index=clip_index,
+            time=time,
+        ),
+    )
+
+
+@mcp.tool()
+def delete_arrangement_clip(track_index: int, clip_index: int) -> Any:
+    """Delete one clip from the Arrangement timeline.
+
+    Side effects: removes one Arrangement clip in one Live undo step.
+    Example: ``delete_arrangement_clip(3, 2)`` deletes the third clip of the
+    track's Arrangement lane.
+    Edge cases: ``clip_index`` indexes ``Track.arrangement_clips``; re-read it
+    after any structural change because the indices shift.
+    """
+    return _remote(
+        "delete_arrangement_clip",
+        models.DeleteArrangementClipRequest(track_index=track_index, clip_index=clip_index),
+    )
+
+
+@mcp.tool()
+def get_device_chains(track_index: int, device_index: int) -> Any:
+    """Open one rack and list its chains, their mixer state and inner devices.
+
+    Side effects: none.
+    Example: ``get_device_chains(39, 0)`` reveals the four guitar chains and
+    the volume of each, which ``get_device_list`` cannot show.
+    Edge cases: a device that is not a rack returns ``WRONG_TYPE``.
+    """
+    return _remote(
+        "get_device_chains",
+        models.GetDeviceChainsRequest(track_index=track_index, device_index=device_index),
+    )
+
+
+@mcp.tool()
+def get_midi_chain_report(track_index: int) -> Any:
+    """Report the MIDI effects that rewrite what a clip says, before writing one.
+
+    Side effects: none.
+    Example: ``get_midi_chain_report(58)`` reveals that a Note Length device
+    overrides every written duration and which parameter actually controls it.
+    Edge cases: a track with no such device returns ``rewrites_input: false``.
+    """
+    return _remote(
+        "get_midi_chain_report",
+        models.GetMidiChainReportRequest(track_index=track_index),
+    )
+
+
+@mcp.tool()
+def describe_instrument(track_index: int) -> Any:
+    """Describe a track's instrument and what the user must still set up.
+
+    Side effects: none.
+    Example: ``describe_instrument(60)`` returns the SWAM plugin's automatable
+    parameters, or a ``setup_requests`` entry asking the user to press
+    Configure when a plugin exposes none.
+    Edge cases: a track without an instrument returns ``has_instrument: false``
+    with the request to load one.
+    """
+    return _remote(
+        "describe_instrument",
+        models.DescribeInstrumentRequest(track_index=track_index),
+    )
+
+
+@mcp.tool()
+def get_clip_automation(
+    track_index: int,
+    clip_index: int,
+    parameter_name: str,
+    device_index: int | None = None,
+    resolution: float = 0.25,
+) -> Any:
+    """Read back one clip envelope as a sampled curve.
+
+    Side effects: none.
+    Example: ``get_clip_automation(38, 0, "FILTER", resolution=0.5)`` returns
+    the written shape so intent can be compared against reality.
+    Edge cases: the LOM exposes no breakpoint list, so the answer is sampled at
+    ``resolution`` beats; a parameter name shared by several devices returns
+    ``AMBIGUOUS_MATCH`` unless ``device_index`` is given.
+    """
+    return _remote(
+        "get_clip_automation",
+        models.GetClipAutomationRequest(
+            track_index=track_index,
+            clip_index=clip_index,
+            parameter_name=parameter_name,
+            device_index=device_index,
+            resolution=resolution,
+        ),
+        exclude_none=True,
+    )
+
+
+@mcp.tool()
+def create_clip_automation_curve(
+    track_index: int,
+    clip_index: int,
+    parameter_name: str,
+    control_points: list[dict[str, float]],
+    shape: str = "linear",
+    resolution: float = 0.25,
+    device_index: int | None = None,
+) -> Any:
+    """Write a smooth envelope from a handful of control points.
+
+    Side effects: replaces one clip envelope in one Live undo step.
+    Example: ``create_clip_automation_curve(38, 0, "FILTER",
+    [{"time": 0, "value": 12}, {"time": 16, "value": 110}], shape="exp")``
+    expands into contiguous steps on the server.
+    Edge cases: Live's envelopes are stepped, so the expansion is a dense
+    staircase capped at 500 steps; raise ``resolution`` if it overflows.
+    """
+    return _remote(
+        "create_clip_automation_curve",
+        models.CreateClipAutomationCurveRequest(
+            track_index=track_index,
+            clip_index=clip_index,
+            parameter_name=parameter_name,
+            control_points=[models.CurveControlPoint(**point) for point in control_points],
+            shape=cast(Literal["linear", "exp", "log", "hold"], shape),
+            resolution=resolution,
+            device_index=device_index,
+        ),
+        exclude_none=True,
+    )
+
+
+@mcp.tool()
+def add_notes_pattern(
+    track_index: int,
+    clip_index: int,
+    cell: list[dict[str, Any]],
+    cell_length: float,
+    repeats: int,
+    transpose_per_repeat: int = 0,
+    velocity_scale_per_repeat: float = 1.0,
+) -> Any:
+    """Repeat one note cell N times instead of sending every note.
+
+    Side effects: adds notes in one Live undo step; existing notes remain.
+    Example: ``add_notes_pattern(59, 0, cell, cell_length=4, repeats=16,
+    transpose_per_repeat=0)`` writes a sixteen-bar ostinato from one bar.
+    Edge cases: the same validation as ``add_notes_to_clip`` applies to every
+    expanded note; pitch and velocity are clamped to the MIDI range.
+    """
+    return _remote(
+        "add_notes_pattern",
+        models.AddNotesPatternRequest(
+            track_index=track_index,
+            clip_index=clip_index,
+            cell=[models.PatternNote(**note) for note in cell],
+            cell_length=cell_length,
+            repeats=repeats,
+            transpose_per_repeat=transpose_per_repeat,
+            velocity_scale_per_repeat=velocity_scale_per_repeat,
+        ),
+    )
+
+
+@mcp.tool()
+def set_arrangement_clip_properties(
+    track_index: int,
+    clip_index: int,
+    name: str | None = None,
+    muted: bool | None = None,
+) -> Any:
+    """Rename or mute one Arrangement clip, verified by readback.
+
+    Side effects: changes one Arrangement clip in one Live undo step.
+    Example: ``set_arrangement_clip_properties(44, 2, muted=False)`` unmutes a
+    clip that was silenced by hand.
+    Edge cases: ``clip_index`` indexes ``Track.arrangement_clips`` and shifts
+    after structural changes; provide at least one of ``name`` or ``muted``.
+    """
+    return _remote(
+        "set_arrangement_clip_properties",
+        models.SetArrangementClipPropertiesRequest(
+            track_index=track_index,
+            clip_index=clip_index,
+            name=name,
+            muted=muted,
+        ),
+        exclude_none=True,
+    )
+
+
+@mcp.tool()
+def move_arrangement_clip(track_index: int, clip_index: int, time: float) -> Any:
+    """Move one Arrangement clip to a new beat.
+
+    Side effects: copies the clip to ``time`` and deletes the original, both
+    verified. The LOM exposes no setter for ``Clip.start_time``, so this is the
+    only way to reposition; a failed copy leaves the original in place.
+    Example: ``move_arrangement_clip(3, 2, 96.0)``.
+    Edge cases: indices shift after the move — re-read with
+    ``get_arrangement_clips``.
+    """
+    return _remote(
+        "move_arrangement_clip",
+        models.MoveArrangementClipRequest(
+            track_index=track_index,
+            clip_index=clip_index,
+            time=time,
+        ),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Track hierarchy — validated, never applied
 #
@@ -1004,22 +1270,28 @@ def create_clip_automation(
     clip_index: int,
     parameter_name: str,
     automation_points: list[dict[str, float]],
+    device_index: int | None = None,
 ) -> Any:
     """Replace one Session clip parameter envelope with verified breakpoints.
 
     Side effects: clears and rewrites one clip envelope in one Live undo step.
     Example: ``create_clip_automation(0, 1, "volume", [{"time": 0, "value": 0.5}])``.
-    Edge cases: requires Session-clip automation APIs and accepts at most 500 points.
+    Edge cases: requires Session-clip automation APIs and accepts at most 500
+    points. A parameter name carried by several devices of the track returns
+    ``AMBIGUOUS_MATCH``; pass ``device_index`` to choose one. Envelopes are
+    stepped, so a smooth ramp needs dense points — or use
+    ``create_clip_automation_curve`` and let the server expand it.
     """
-    request = models.CreateClipAutomationRequest.model_validate(
-        {
-            "track_index": track_index,
-            "clip_index": clip_index,
-            "parameter_name": parameter_name,
-            "automation_points": automation_points,
-        }
-    )
-    return _remote("create_clip_automation", request)
+    payload: dict[str, Any] = {
+        "track_index": track_index,
+        "clip_index": clip_index,
+        "parameter_name": parameter_name,
+        "automation_points": automation_points,
+    }
+    if device_index is not None:
+        payload["device_index"] = device_index
+    request = models.CreateClipAutomationRequest.model_validate(payload)
+    return _remote("create_clip_automation", request, exclude_none=True)
 
 
 # ---------------------------------------------------------------------------
@@ -1752,6 +2024,17 @@ PUBLIC_TOOL_FUNCTIONS_HEAD = (
     set_track_color,
     set_clip_color,
     diagnose_clip_targets,
+    get_arrangement_clips,
+    duplicate_session_clip_to_arrangement,
+    delete_arrangement_clip,
+    move_arrangement_clip,
+    get_device_chains,
+    get_midi_chain_report,
+    describe_instrument,
+    get_clip_automation,
+    create_clip_automation_curve,
+    add_notes_pattern,
+    set_arrangement_clip_properties,
     move_track,
     reorder_tracks,
     move_track_to_group,

@@ -147,7 +147,7 @@ def test_bridge_status_tool_probes_the_backend_without_forwarding(
 ) -> None:
     mock_status.return_value = {"status": "ok", "bridge_available": True}
     assert server.get_bridge_status() == {"status": "ok", "bridge_available": True}
-    mock_status.assert_called_once_with(server.get_client(), tool_count=77)
+    mock_status.assert_called_once_with(server.get_client(), tool_count=88)
 
 
 @pytest.mark.parametrize(("function", "args", "command", "params"), FORWARD_CASES)
@@ -308,7 +308,7 @@ def test_log_tool_limits_lines_and_reads_locally(mock_find: MagicMock, tmp_path:
 
 
 def test_every_tool_docstring_has_contract_sections() -> None:
-    assert len(server.PUBLIC_TOOL_FUNCTIONS) == 77
+    assert len(server.PUBLIC_TOOL_FUNCTIONS) == 88
     for function in server.PUBLIC_TOOL_FUNCTIONS:
         docstring = function.__doc__ or ""
         assert "Side effects:" in docstring, function.__name__

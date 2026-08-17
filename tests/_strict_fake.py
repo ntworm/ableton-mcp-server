@@ -102,6 +102,36 @@ _TCP_COMMAND_FIELDS: dict[str, dict[str, Any]] = {
     "set_track_color": {"track_index": int},
     "set_clip_color": {"track_index": int, "clip_index": int},
     "diagnose_clip_targets": {},
+    "get_arrangement_clips": {"track_index": int},
+    "get_device_chains": {"track_index": int, "device_index": int},
+    "get_midi_chain_report": {"track_index": int},
+    "describe_instrument": {"track_index": int},
+    "get_clip_automation": {"track_index": int, "clip_index": int, "parameter_name": str},
+    "create_clip_automation_curve": {
+        "track_index": int,
+        "clip_index": int,
+        "parameter_name": str,
+        "control_points": list,
+    },
+    "add_notes_pattern": {
+        "track_index": int,
+        "clip_index": int,
+        "cell": list,
+        "cell_length": (int, float),
+        "repeats": int,
+    },
+    "set_arrangement_clip_properties": {"track_index": int, "clip_index": int},
+    "duplicate_session_clip_to_arrangement": {
+        "track_index": int,
+        "clip_index": int,
+        "time": (int, float),
+    },
+    "delete_arrangement_clip": {"track_index": int, "clip_index": int},
+    "move_arrangement_clip": {
+        "track_index": int,
+        "clip_index": int,
+        "time": (int, float),
+    },
     # Validated like any other command, then refused: no public Live API can
     # perform these. The fake mirrors the Remote Script's ordering so a probe
     # cannot pass here and fail against the real bridge.
@@ -382,6 +412,11 @@ _READ_ONLY_TCP_COMMANDS = {
     "get_control_surfaces",
     "get_selected_context",
     "diagnose_clip_targets",
+    "get_arrangement_clips",
+    "get_device_chains",
+    "get_midi_chain_report",
+    "describe_instrument",
+    "get_clip_automation",
     # Refusals never touch the Set, so they must not mark it dirty either.
     "move_track",
     "reorder_tracks",
@@ -846,6 +881,135 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str, params: dict[st
             if track["index"] == idx:
                 track["name"] = params["new_name"]
         return {"new_name": params["new_name"]}
+    if command == "get_device_chains":
+        return {
+            "track_index": params["track_index"],
+            "device_index": params["device_index"],
+            "device_name": "Instrument Rack",
+            "chain_count": 1,
+            "chains": [
+                {
+                    "id": "track:%s/device:%s/chain:0"
+                    % (params["track_index"], params["device_index"]),
+                    "chain_index": 0,
+                    "name": "Chain",
+                    "devices": [],
+                    "volume": 0.85,
+                    "volume_min": 0.0,
+                    "volume_max": 1.0,
+                    "panning": 0.0,
+                    "muted": False,
+                    "soloed": False,
+                }
+            ],
+        }
+    if command == "get_midi_chain_report":
+        return {"track_index": params["track_index"], "rewrites_input": False, "devices": []}
+    if command == "describe_instrument":
+        return {
+            "track_index": params["track_index"],
+            "has_instrument": True,
+            "device_index": 0,
+            "name": "Instrument Rack",
+            "class_name": "InstrumentGroupDevice",
+            "is_plugin": False,
+            "configured_parameter_count": 2,
+            "parameter_count": 2,
+            "parameters": [],
+            "setup_requests": [],
+        }
+    if command == "get_clip_automation":
+        return {
+            "track_index": params["track_index"],
+            "clip_index": params["clip_index"],
+            "parameter_name": params["parameter_name"],
+            "has_envelope": False,
+            "samples": [],
+        }
+    if command == "create_clip_automation_curve":
+        return {
+            "parameter_name": params["parameter_name"],
+            "points_written": len(params["control_points"]),
+            "control_points": len(params["control_points"]),
+            "shape": params.get("shape", "linear"),
+        }
+    if command == "add_notes_pattern":
+        added = len(params["cell"]) * int(params["repeats"])
+        return {"added": added, "note_ids": list(range(added)), "repeats": int(params["repeats"])}
+    if command == "set_arrangement_clip_properties":
+        idx, position = params["track_index"], params["clip_index"]
+        lane = sorted(
+            s.setdefault("arrangement", {}).get(idx, []),
+            key=lambda entry: entry["start_time"],
+        )
+        if position >= len(lane):
+            raise RuntimeError("INVALID_PARAMS: arrangement clip %s does not exist" % position)
+        if "name" in params:
+            lane[position]["name"] = params["name"]
+        s["arrangement"][idx] = lane
+        return {"updated": True, "clip": {"clip_index": position}}
+    if command == "get_arrangement_clips":
+        idx = params["track_index"]
+        lane = sorted(
+            s.setdefault("arrangement", {}).get(idx, []),
+            key=lambda entry: entry["start_time"],
+        )
+        clips = [
+            {
+                "id": f"track:{idx}/arrangementclip:{position}",
+                "scope": "arrangement",
+                "track_index": idx,
+                "clip_index": position,
+                "name": entry["name"],
+                "start_time": entry["start_time"],
+                "end_time": entry["start_time"] + entry["length"],
+                "length_beats": entry["length"],
+                "is_midi_clip": True,
+                "muted": False,
+                "looping": False,
+                "loop_start": 0.0,
+                "loop_end": entry["length"],
+                "color_index": None,
+            }
+            for position, entry in enumerate(lane)
+        ]
+        return {"track_index": idx, "clip_count": len(clips), "clips": clips}
+    if command == "duplicate_session_clip_to_arrangement":
+        idx, slot = params["track_index"], params["clip_index"]
+        source = s["clips"].get((idx, slot))
+        if source is None:
+            raise RuntimeError(f"BAD_INPUT: session slot {slot} is empty")
+        lane = s.setdefault("arrangement", {}).setdefault(idx, [])
+        lane.append(
+            {
+                "name": source.get("name", ""),
+                "start_time": float(params["time"]),
+                "length": float(source.get("length_beats", 4.0)),
+            }
+        )
+        return {"placed": True, "clip_count": len(lane)}
+    if command == "move_arrangement_clip":
+        idx, position = params["track_index"], params["clip_index"]
+        lane = sorted(
+            s.setdefault("arrangement", {}).get(idx, []),
+            key=lambda entry: entry["start_time"],
+        )
+        if position >= len(lane):
+            raise RuntimeError(f"INVALID_PARAMS: arrangement clip {position} does not exist")
+        lane[position]["start_time"] = float(params["time"])
+        s["arrangement"][idx] = lane
+        return {"moved": True, "clip_count": len(lane)}
+    if command == "delete_arrangement_clip":
+        idx, position = params["track_index"], params["clip_index"]
+        lane = sorted(
+            s.setdefault("arrangement", {}).get(idx, []),
+            key=lambda entry: entry["start_time"],
+        )
+        if position >= len(lane):
+            raise RuntimeError(f"INVALID_PARAMS: arrangement clip {position} does not exist")
+        lane.pop(position)
+        s["arrangement"][idx] = lane
+        return {"deleted": True, "clip_count": len(lane)}
     if command == "delete_clip":
         track, slot = params["track_index"], params["clip_index"]
         s["clips"].pop((track, slot), None)

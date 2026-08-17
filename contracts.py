@@ -138,6 +138,14 @@ READ_COMMANDS = frozenset(
         "diagnose_clip_targets",
         # v0.5.4 — plugin preset discovery (needs no Configure step)
         "get_plugin_presets",
+        # v0.5.5 — Arrangement timeline read: placement, not just existence
+        "get_arrangement_clips",
+        # v0.5.6 — instrument comprehension: what an agent must know before it
+        # writes anything into a track it did not build
+        "get_device_chains",
+        "get_midi_chain_report",
+        "describe_instrument",
+        "get_clip_automation",
     }
 )
 
@@ -186,13 +194,23 @@ ALLOWED_MUTATIONS = frozenset(
         "create_audio_track",
         # v0.5.4 — verified plugin preset write (needs no Configure step)
         "set_plugin_preset",
+        # v0.5.5 — Arrangement authoring. Track.duplicate_clip_to_arrangement is
+        # the only public path from a Session slot onto the timeline; deletion
+        # and movement build on the same handle.
+        "duplicate_session_clip_to_arrangement",
+        "delete_arrangement_clip",
+        "move_arrangement_clip",
+        # v0.5.6 — authoring shorthands: the server expands them so callers do
+        # not ship hundreds of breakpoints or repeated note cells
+        "create_clip_automation_curve",
+        "add_notes_pattern",
+        "set_arrangement_clip_properties",
     }
 )
 
 READ_ONLY_COMMANDS = frozenset(
     {
         "delete_track",
-        "duplicate_session_clip_to_arrangement",
         "switch_to_arrangement_view",
         "load_instrument_or_effect",
         "load_browser_item",

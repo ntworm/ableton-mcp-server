@@ -42,10 +42,10 @@ def _status() -> dict[str, Any]:
     return bridge_status(_HealthyClient(), tool_count=len(PUBLIC_TOOL_NAMES))
 
 
-def test_bridge_status_tools_length_is_77() -> None:
+def test_bridge_status_tools_length_is_88() -> None:
     """§5 case 1: tools list length matches the public catalog."""
     result = _status()
-    assert len(result["tools"]) == 77
+    assert len(result["tools"]) == 88
 
 
 def test_bridge_status_tool_dict_schema() -> None:
@@ -70,18 +70,18 @@ def test_bridge_status_tool_dict_schema() -> None:
 
 def test_capability_counts_match_invariants() -> None:
     """§5 case 3: the six documented counts are exactly the catalog/contracts
-    values. ``live_required_tools`` is ``77 - 8`` because every tool whose
+    values. ``live_required_tools`` is ``88 - 8`` because every tool whose
     route is LOCAL (six LOCAL_READS plus two LOCAL_WRITES) does not require
     an Ableton Live process."""
     result = _status()
     counts = result["capability_counts"]
     assert counts == {
-        "public_tools": 77,
-        "routed_commands": 62,
+        "public_tools": 88,
+        "routed_commands": 73,
         "websocket_targets": 3,
-        "read_only_blocked": 5,
+        "read_only_blocked": 4,
         "feature_flags": 5,
-        "live_required_tools": 69,
+        "live_required_tools": 80,
         "capability_unavailable": 5,
     }
 
@@ -96,8 +96,8 @@ def test_websocket_targets_match_catalog_route() -> None:
 def test_routed_commands_cover_reads_and_mutations() -> None:
     """§5 case 5: routed_commands equals the union cardinality."""
     result = _status()
-    assert len(READ_COMMANDS) + len(ALLOWED_MUTATIONS) == 62
-    assert result["capability_counts"]["routed_commands"] == 62
+    assert len(READ_COMMANDS) + len(ALLOWED_MUTATIONS) == 73
+    assert result["capability_counts"]["routed_commands"] == 73
 
 
 def test_read_only_blocked_are_disjoint_from_routed() -> None:
@@ -164,11 +164,11 @@ def test_bridge_status_survives_live_probe_failure() -> None:
         ) -> Any:
             raise ConnectionError("connection refused")
 
-    result = bridge_status(_BrokenClient(), tool_count=77)
+    result = bridge_status(_BrokenClient(), tool_count=88)
     assert result["status"] == "error"
     assert result["bridge_available"] is False
-    assert len(result["tools"]) == 77
-    assert result["capability_counts"]["public_tools"] == 77
+    assert len(result["tools"]) == 88
+    assert result["capability_counts"]["public_tools"] == 88
 
 
 def test_tools_match_public_catalog_in_order() -> None:

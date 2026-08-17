@@ -7,7 +7,7 @@ from ableton_mcp_server.certification import CertificationReport, Verification
 
 
 def test_baseline_probe_names_equal_catalog() -> None:
-    """The flattened probe map must cover the full 77-tool baseline surface."""
+    """The flattened probe map must cover the full 88-tool baseline surface."""
     from ableton_mcp_server.acceptance import (
         BASELINE_PROBE_GROUPS,
         assert_baseline_probe_coverage,
@@ -15,15 +15,15 @@ def test_baseline_probe_names_equal_catalog() -> None:
 
     assert_baseline_probe_coverage()
     flattened = [name for names in BASELINE_PROBE_GROUPS.values() for name in names]
-    assert len(set(flattened)) == 77
-    assert len(flattened) == 77  # every tool appears in exactly one group
+    assert len(set(flattened)) == 88
+    assert len(flattened) == 88  # every tool appears in exactly one group
     assert set(flattened) == {item.name for item in TOOL_CATALOG}
 
 
 def test_report_rejects_missing_catalog_rows() -> None:
     report = CertificationReport(tool_names=tuple(item.name for item in TOOL_CATALOG))
     report.record(Verification("get_session_info", "live_passed", "ok"))
-    with pytest.raises(ValueError, match="76 tools are unclassified"):
+    with pytest.raises(ValueError, match="87 tools are unclassified"):
         report.finish()
 
 

@@ -5,8 +5,8 @@
 
 ## Overview
 
-- **Total Public Tools**: 77
-- **Routed Remote Commands**: 62
+- **Total Public Tools**: 88
+- **Routed Remote Commands**: 73
 - **WebSocket Targets**: 3
 
 ## Categories
@@ -160,5 +160,16 @@
 
 | Tool | Read / Write | Requires Extension | Live Required |
 |---|---|---|---|
+| `add_notes_pattern` | Write | No | Yes |
+| `create_clip_automation_curve` | Write | No | Yes |
+| `delete_arrangement_clip` | Write | No | Yes |
+| `describe_instrument` | Read-only | No | Yes |
+| `duplicate_session_clip_to_arrangement` | Write | No | Yes |
+| `get_arrangement_clips` | Read-only | No | Yes |
+| `get_clip_automation` | Read-only | No | Yes |
+| `get_device_chains` | Read-only | No | Yes |
+| `get_midi_chain_report` | Read-only | No | Yes |
 | `get_plugin_presets` | Read-only | No | Yes |
+| `move_arrangement_clip` | Write | No | Yes |
+| `set_arrangement_clip_properties` | Write | No | Yes |
 | `set_plugin_preset` | Write | No | Yes |

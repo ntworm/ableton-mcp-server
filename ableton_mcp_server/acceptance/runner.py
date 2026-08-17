@@ -526,6 +526,88 @@ async def run_live_acceptance(
                         )
 
                     await _record_call(report, "diagnose_clip_targets", run_diagnose_clip_targets)
+
+                    async def run_get_arrangement_clips() -> str:
+                        listing = call("get_arrangement_clips", {"track_index": track_index})
+                        if not isinstance(listing, dict) or "clips" not in listing:
+                            raise AssertionError("get_arrangement_clips must return clips")
+                        return f"clips={listing.get('clip_count')}"
+
+                    await _record_call(
+                        report,
+                        "get_arrangement_clips",
+                        run_get_arrangement_clips,
+                        passed="live_passed",
+                    )
+
+                    async def run_get_device_chains() -> str:
+                        payload = call(
+                            "get_device_chains", {"track_index": track_index, "device_index": 0}
+                        )
+                        if not isinstance(payload, dict) or "chains" not in payload:
+                            raise AssertionError("get_device_chains must return chains")
+                        return f"chains={payload.get('chain_count')}"
+
+                    await _record_call(
+                        report, "get_device_chains", run_get_device_chains, passed="live_passed"
+                    )
+
+                    async def run_get_midi_chain_report() -> str:
+                        payload = call("get_midi_chain_report", {"track_index": track_index})
+                        if "rewrites_input" not in payload:
+                            raise AssertionError("get_midi_chain_report must report rewrites_input")
+                        return f"rewrites={payload['rewrites_input']}"
+
+                    await _record_call(
+                        report,
+                        "get_midi_chain_report",
+                        run_get_midi_chain_report,
+                        passed="live_passed",
+                    )
+
+                    async def run_describe_instrument() -> str:
+                        payload = call("describe_instrument", {"track_index": track_index})
+                        if "has_instrument" not in payload:
+                            raise AssertionError("describe_instrument must report has_instrument")
+                        return f"instrument={payload.get('name', 'none')}"
+
+                    await _record_call(
+                        report, "describe_instrument", run_describe_instrument, passed="live_passed"
+                    )
+
+                    # Reading an envelope needs a clip in the probed slot. A
+                    # disposable Set is not required to have one, so absence is
+                    # an environment gap, not a bridge failure.
+                    async def run_get_clip_automation() -> str:
+                        payload = call(
+                            "get_clip_automation",
+                            {
+                                "track_index": track_index,
+                                "clip_index": clip_index,
+                                "parameter_name": "volume",
+                                "resolution": 1.0,
+                            },
+                        )
+                        if "has_envelope" not in payload:
+                            raise AssertionError("get_clip_automation must report has_envelope")
+                        return f"envelope={payload['has_envelope']}"
+
+                    try:
+                        await _record_call(
+                            report,
+                            "get_clip_automation",
+                            run_get_clip_automation,
+                            passed="live_passed",
+                        )
+                    except Exception:  # noqa: BLE001 - recorded below as an environment gap
+                        report.record(
+                            Verification(
+                                "get_clip_automation",
+                                "environment_unavailable",
+                                "probe slot holds no clip to read an envelope from",
+                            )
+                        )
+
                     await _record_call(
                         report,
                         "get_track_state",
@@ -1504,6 +1586,179 @@ async def run_live_acceptance(
                                 )
                         except Exception:
                             pass
+
+                        # ----- Arrangement round trip: place, move, delete -----
+                        # Everything happens far past the end of the Set so the
+                        # probe cannot collide with real material, and the clip
+                        # it creates is removed by the last step of the trip.
+                        if not create_clip_ok:
+                            for arrangement_tool in (
+                                "duplicate_session_clip_to_arrangement",
+                                "move_arrangement_clip",
+                                "delete_arrangement_clip",
+                                "set_arrangement_clip_properties",
+                                "add_notes_pattern",
+                                "create_clip_automation_curve",
+                            ):
+                                report.record(
+                                    Verification(
+                                        arrangement_tool,
+                                        "failed",
+                                        "Skipped: create_clip dependency failed",
+                                    )
+                                )
+                        else:
+                            probe_beat = 4096.0
+
+                            def arrangement_clip_at(beat: float) -> dict[str, Any] | None:
+                                listing = call(
+                                    "get_arrangement_clips",
+                                    {"track_index": midi_track_index},
+                                )
+                                for entry in listing.get("clips", []):
+                                    start = entry.get("start_time")
+                                    if start is not None and abs(float(start) - beat) < 0.01:
+                                        return dict(entry)
+                                return None
+
+                            async def run_duplicate_to_arrangement() -> str:
+                                call(
+                                    "duplicate_session_clip_to_arrangement",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "clip_index": clip_index,
+                                        "time": probe_beat,
+                                    },
+                                )
+                                placed = arrangement_clip_at(probe_beat)
+                                if placed is None:
+                                    raise AssertionError(
+                                        "duplicate_session_clip_to_arrangement left no clip "
+                                        f"at beat {probe_beat}"
+                                    )
+                                return f"placed at {probe_beat}"
+
+                            await _record_call(
+                                report,
+                                "duplicate_session_clip_to_arrangement",
+                                run_duplicate_to_arrangement,
+                            )
+
+                            async def run_add_notes_pattern() -> str:
+                                call(
+                                    "add_notes_pattern",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "clip_index": clip_index,
+                                        "cell": [
+                                            {
+                                                "pitch": 60,
+                                                "start_time": 0.0,
+                                                "duration": 0.25,
+                                                "velocity": 90,
+                                            }
+                                        ],
+                                        "cell_length": 1.0,
+                                        "repeats": 2,
+                                    },
+                                )
+                                return "cell repeated twice"
+
+                            await _record_call(
+                                report, "add_notes_pattern", run_add_notes_pattern
+                            )
+
+                            async def run_create_clip_automation_curve() -> str:
+                                call(
+                                    "create_clip_automation_curve",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "clip_index": clip_index,
+                                        "parameter_name": "volume",
+                                        "control_points": [
+                                            {"time": 0.0, "value": 0.6},
+                                            {"time": 2.0, "value": 0.85},
+                                        ],
+                                        "shape": "linear",
+                                        "resolution": 0.5,
+                                    },
+                                )
+                                return "curve expanded server-side"
+
+                            await _record_call(
+                                report,
+                                "create_clip_automation_curve",
+                                run_create_clip_automation_curve,
+                            )
+
+
+                            async def run_set_arrangement_clip_properties() -> str:
+                                placed = arrangement_clip_at(probe_beat)
+                                if placed is None:
+                                    raise AssertionError("no probe clip to rename")
+                                call(
+                                    "set_arrangement_clip_properties",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "clip_index": int(placed["clip_index"]),
+                                        "name": "acceptance probe",
+                                    },
+                                )
+                                return "arrangement clip renamed"
+
+                            await _record_call(
+                                report,
+                                "set_arrangement_clip_properties",
+                                run_set_arrangement_clip_properties,
+                            )
+
+
+                            async def run_move_arrangement_clip() -> str:
+                                placed = arrangement_clip_at(probe_beat)
+                                if placed is None:
+                                    raise AssertionError("no probe clip to move")
+                                call(
+                                    "move_arrangement_clip",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "clip_index": int(placed["clip_index"]),
+                                        "time": probe_beat + 64.0,
+                                    },
+                                )
+                                if arrangement_clip_at(probe_beat) is not None:
+                                    raise AssertionError("move left a clip at the old position")
+                                if arrangement_clip_at(probe_beat + 64.0) is None:
+                                    raise AssertionError(
+                                        "move produced no clip at the new position"
+                                    )
+                                return f"moved to {probe_beat + 64.0}"
+
+                            await _record_call(
+                                report,
+                                "move_arrangement_clip",
+                                run_move_arrangement_clip,
+                            )
+
+                            async def run_delete_arrangement_clip() -> str:
+                                placed = arrangement_clip_at(probe_beat + 64.0)
+                                if placed is None:
+                                    raise AssertionError("no probe clip to delete")
+                                call(
+                                    "delete_arrangement_clip",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "clip_index": int(placed["clip_index"]),
+                                    },
+                                )
+                                if arrangement_clip_at(probe_beat + 64.0) is not None:
+                                    raise AssertionError("delete_arrangement_clip left the clip")
+                                return "probe clip removed"
+
+                            await _record_call(
+                                report,
+                                "delete_arrangement_clip",
+                                run_delete_arrangement_clip,
+                            )
 
                         # ----- delete_clip + readback -----
                         if not create_clip_ok:

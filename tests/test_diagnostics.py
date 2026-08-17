@@ -46,7 +46,7 @@ def test_bridge_status_probes_live_instead_of_tool_discovery() -> None:
     assert result["live"] == {"tempo": 120.0, "is_playing": False}
     assert result["runtime"]["is_wsl"] is False
     assert result["server_version"] == "0.5.3"
-    assert result["tool_count"] == 77
+    assert result["tool_count"] == 88
     assert result["ws_endpoint"] == {"host": "127.0.0.1", "port": 9889}
     assert result["extension_host_available"] is None
     assert result["ws_methods_registered"] == [
@@ -204,7 +204,7 @@ def test_bridge_status_reports_source_kind_and_python_executable(tmp_path: Path)
         "ableton_mcp_server.diagnostics.bundled_remote_script_source",
         return_value=bundled_remote_script_source(package),
     ):
-        status = bridge_status(_Stub(), tool_count=77)
+        status = bridge_status(_Stub(), tool_count=88)
 
     assert status["source_kind"] == "checkout"
     assert status["source"] == str(checkout_source)

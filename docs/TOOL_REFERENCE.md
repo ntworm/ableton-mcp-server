@@ -1,6 +1,6 @@
 # Tool Reference
 
-The FastMCP server exposes 77 snake_case tools, up from the certified 65-tool v0.5.2 baseline. Remote examples below show the JSONL command envelope after MCP/Pydantic validation. All error responses use `{"status":"error","code","message","hint?"}`.
+The FastMCP server exposes 88 snake_case tools, up from the certified 65-tool v0.5.2 baseline. Remote examples below show the JSONL command envelope after MCP/Pydantic validation. All error responses use `{"status":"error","code","message","hint?"}`.
 
 A machine-readable view of these tools (route, risk, acceptance mode, reversibility) is exposed at runtime via the `get_bridge_status` tool's `tools` list and `capability_counts` keys, derived from the canonical `TOOL_CATALOG`. A generated [API Capability Matrix](api_capability_matrix.md) is also available for quick reference.
 
@@ -9,6 +9,79 @@ the acceptance runner are documented in
 [`docs/CERTIFICATION.md`](CERTIFICATION.md). That document is canonical
 for what each status means and which `environment_unavailable` rows
 are explicitly allowed.
+
+## v0.5.6 instrument comprehension and authoring shorthands
+
+An agent that did not build the Set cannot see what a rack hides, cannot tell
+which device owns a parameter name, and cannot read an envelope back. These
+tools close that gap; the two shorthands keep payloads proportional to the idea
+rather than to its length.
+
+### `get_device_chains(track_index, device_index)`
+
+- Lists a rack's chains: `name`, mixer `volume` / `panning` / `muted` / `soloed`, and the devices inside each chain with their parameter names.
+- This is the only way to reach a per-chain volume — the parameter that mixes, say, four guitar articulations into one performance.
+- Edge cases / side effects: pure read; a device without `chains` returns `WRONG_TYPE`.
+
+### `get_midi_chain_report(track_index)`
+
+- Names the MIDI effects that rewrite what a clip says, each with its current values and a one-line consequence.
+- Covers `MidiVelocity`, `MidiNoteLength`, `MidiPitcher`, `MidiArpeggiator`, `MidiChord`, `MidiScale`, `MidiRandom`.
+- Run it before writing notes into an unfamiliar track: a Note Length device makes written durations irrelevant, and a Velocity device caps the dynamic range whatever the clip holds.
+- Edge cases / side effects: pure read; `rewrites_input: false` means the clip is heard as written.
+
+### `describe_instrument(track_index)`
+
+- Returns the track's instrument, its class, whether it is a plugin wrapper, `configured_parameter_count`, every automatable parameter with range, and `setup_requests`.
+- `setup_requests` carries the sentence to relay to the user: press Configure on a plugin exposing nothing, or map and rename a rack's macros so they can be addressed unambiguously.
+- Edge cases / side effects: pure read; a track with no instrument returns `has_instrument: false` plus the request to load one.
+
+### `get_clip_automation(track_index, clip_index, parameter_name, device_index=None, resolution=0.25)`
+
+- Reads one clip envelope back as a sampled curve: `samples`, `min_value`, `max_value`.
+- The LOM exposes no breakpoint list, only `value_at_time`, so sampling is what Live can honestly answer.
+- Edge cases / side effects: pure read; an ambiguous parameter name returns `AMBIGUOUS_MATCH` unless `device_index` is given.
+
+### `create_clip_automation_curve(track_index, clip_index, parameter_name, control_points, shape="linear", resolution=0.25, device_index=None)`
+
+- Writes an envelope from 2..200 control points, expanded server-side into contiguous steps. `shape` is `linear`, `exp`, `log` or `hold`.
+- Live's clip envelopes are stepped, never interpolated: a smooth ramp *is* a dense staircase. The expansion happens here so callers stop shipping hundreds of breakpoints.
+- Edge cases / side effects: one undo step; an expansion beyond Live's 500-step budget returns `BAD_INPUT` naming `resolution` as the fix.
+
+### `add_notes_pattern(track_index, clip_index, cell, cell_length, repeats, transpose_per_repeat=0, velocity_scale_per_repeat=1.0)`
+
+- Repeats one note cell `repeats` times at `cell_length` spacing, optionally transposing and scaling velocity per repeat.
+- A sixteen-bar triplet ostinato is one bar plus two numbers instead of two hundred notes.
+- Edge cases / side effects: every expanded note passes the same validation as `add_notes_to_clip`; pitch and velocity are clamped to the MIDI range.
+
+### `set_arrangement_clip_properties(track_index, clip_index, name=None, muted=None)`
+
+- Renames or mutes one Arrangement clip, verified by readback.
+- Edge cases / side effects: `clip_index` indexes `Track.arrangement_clips` and shifts after any structural change; at least one of `name` or `muted` is required.
+
+### Chain addressing
+
+`get_parameter_value`, `set_parameter_value`, `create_clip_automation`,
+`create_clip_automation_curve` and `get_clip_automation` accept
+`chain_index` and `chain_device_index`.
+
+- Neither: a top-level device parameter, as before.
+- `chain_index` alone: the chain's own **mixer**, where only `volume` and
+  `panning` exist — this is how a rack blends four articulations of one
+  instrument.
+- Both: a parameter of a device **inside** that chain, such as the `Velocity`
+  device whose `Out Low` / `Out Hi` silently cap a whole drum track.
+
+Returned path-ids stay index-based:
+`track:4/device:1/chain:0/device:0/param:7`, or
+`track:39/device:0/chain:2/mixer:volume` for a chain mixer.
+
+### Parameter addressing
+
+`create_clip_automation`, `create_clip_automation_curve` and `get_clip_automation`
+accept an optional `device_index`. Without it, a name carried by several devices
+of the same track — every rack has a `Macro 1` — returns `AMBIGUOUS_MATCH` with
+the candidate device indexes, instead of silently writing to the first match.
 
 ## v0.5.4 plugin presets
 
@@ -500,6 +573,28 @@ agent has never touched.
 - Returns `{tracks, session_clip_count, arrangement_clip_count, inaccessible}`. Each track entry carries `session_clips`, `arrangement_clips`, and `arrangement_supported`; each clip entry carries `id`, `scope`, `name`, `is_midi_clip`, `color`, `color_index`, and `colorable`.
 - `inaccessible` names every target that cannot be coloured **and why** — a host without `Track.arrangement_clips` produces an entry per track rather than a silent zero count.
 - Edge cases / side effects: pure read; omit `track_index` to sweep the whole Set.
+
+### `get_arrangement_clips(track_index)`
+
+- Lists one track's Arrangement clips with their placement: `start_time`, `end_time`, `length_beats`, plus `name`, `is_midi_clip`, `muted`, `looping`, `loop_start`, `loop_end`, `color_index`.
+- The listing is sorted by position, but `clip_index` remains the real index into `Track.arrangement_clips` — that is the handle `move_arrangement_clip` and `delete_arrangement_clip` address.
+- Edge cases / side effects: pure read. A host without `Track.arrangement_clips` returns `CAPABILITY_UNAVAILABLE` instead of an empty list.
+
+### `duplicate_session_clip_to_arrangement(track_index, clip_index, time)`
+
+- Places a Session clip on the Arrangement timeline at `time`, in beats from bar 1, through `Track.duplicate_clip_to_arrangement`.
+- The Session clip is left in place, so one slot can seed many timeline positions. Clip envelopes travel with the copy, which is the only way to get automation onto the timeline (Arrangement-level automation is not exposed by the LOM).
+- Edge cases / side effects: one undo step, verified by an Arrangement clip-count increase. Empty slot returns `BAD_INPUT`; a host without the method returns `CAPABILITY_UNAVAILABLE`.
+
+### `move_arrangement_clip(track_index, clip_index, time)`
+
+- Moves one Arrangement clip. `Clip.start_time` has no setter, so the move is a copy to `time` followed by deletion of the original, each half verified separately.
+- Edge cases / side effects: a failed copy leaves the original untouched rather than losing the clip. Indices shift after the move — re-read with `get_arrangement_clips`.
+
+### `delete_arrangement_clip(track_index, clip_index)`
+
+- Deletes one clip from the Arrangement lane via `Track.delete_clip`, verified by a clip-count decrease.
+- Edge cases / side effects: `clip_index` indexes `Track.arrangement_clips`, not a Session slot; an out-of-range index returns `INVALID_PARAMS`.
 
 ### Track hierarchy: `move_track`, `reorder_tracks`, `move_track_to_group`, `ungroup_track`, `merge_groups`
 

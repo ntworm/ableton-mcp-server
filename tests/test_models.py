@@ -23,7 +23,7 @@ def test_every_public_tool_has_an_explicit_request_model() -> None:
     from ableton_mcp_server.catalog import TOOL_CATALOG
 
     assert set(TOOL_REQUEST_MODELS) == {item.name for item in TOOL_CATALOG}
-    assert len(TOOL_REQUEST_MODELS) == 77
+    assert len(TOOL_REQUEST_MODELS) == 88
 
 
 @pytest.mark.parametrize("tempo", [19.99, 999.01, math.nan, math.inf])

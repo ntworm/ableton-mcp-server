@@ -49,6 +49,14 @@ def test_debug_mutations_are_explicitly_allowed() -> None:
         "create_audio_track",
         # v0.5.4 — verified plugin preset write
         "set_plugin_preset",
+        # v0.5.5 — Arrangement authoring
+        "duplicate_session_clip_to_arrangement",
+        "delete_arrangement_clip",
+        "move_arrangement_clip",
+        # v0.5.6 — authoring shorthands
+        "create_clip_automation_curve",
+        "add_notes_pattern",
+        "set_arrangement_clip_properties",
     }
     assert frozenset(expected) == contracts.ALLOWED_MUTATIONS
     assert expected.isdisjoint(contracts.READ_ONLY_COMMANDS)
@@ -59,7 +67,6 @@ def test_creative_mutations_remain_blocked_without_prefix_rules() -> None:
         frozenset(
             {
                 "delete_track",
-                "duplicate_session_clip_to_arrangement",
                 "switch_to_arrangement_view",
                 "load_instrument_or_effect",
                 "load_browser_item",

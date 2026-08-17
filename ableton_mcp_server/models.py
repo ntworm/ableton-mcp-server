@@ -262,6 +262,10 @@ class AutomationPoint(RequestModel):
 class CreateClipAutomationRequest(GetClipNotesRequest):
     parameter_name: Annotated[str, Field(min_length=1, max_length=256)]
     automation_points: Annotated[list[AutomationPoint], Field(min_length=1, max_length=500)]
+    # A track can carry the same parameter name on several devices — every rack
+    # has a "Macro 1". Without this the bridge refuses with AMBIGUOUS_MATCH
+    # instead of guessing which device the caller meant.
+    device_index: NonNegativeInt | None = None
 
     @field_validator("parameter_name")
     @classmethod
@@ -270,6 +274,11 @@ class CreateClipAutomationRequest(GetClipNotesRequest):
         if not value:
             raise ValueError("parameter_name must be non-empty")
         return value
+    # Live nests the controls that matter. ``chain_index`` selects a rack chain;
+    # add ``chain_device_index`` for a device inside it, or leave it out to
+    # address the chain's own mixer (``volume`` / ``panning``).
+    chain_index: NonNegativeInt | None = None
+    chain_device_index: NonNegativeInt | None = None
 
 
 class GetDeviceListRequest(RequestModel):
@@ -288,6 +297,11 @@ class GetParameterValueRequest(RequestModel):
         if not value:
             raise ValueError("parameter_name must be non-empty")
         return value
+    # Live nests the controls that matter. ``chain_index`` selects a rack chain;
+    # add ``chain_device_index`` for a device inside it, or leave it out to
+    # address the chain's own mixer (``volume`` / ``panning``).
+    chain_index: NonNegativeInt | None = None
+    chain_device_index: NonNegativeInt | None = None
 
 
 class SetParameterValueRequest(GetParameterValueRequest):
@@ -299,6 +313,11 @@ class SetParameterValueRequest(GetParameterValueRequest):
         if not math.isfinite(value):
             raise ValueError("value must be finite")
         return value
+    # Live nests the controls that matter. ``chain_index`` selects a rack chain;
+    # add ``chain_device_index`` for a device inside it, or leave it out to
+    # address the chain's own mixer (``volume`` / ``panning``).
+    chain_index: NonNegativeInt | None = None
+    chain_device_index: NonNegativeInt | None = None
 
 
 class GetPluginPresetsRequest(RequestModel):
@@ -522,6 +541,121 @@ class CreateClipRequest(RequestModel):
     clip_index: NonNegativeInt
     length_beats: PositiveBeat
     dry_run: bool = False
+
+
+# ---------------------------------------------------------------------------
+# v0.5.5 — Arrangement timeline
+# ---------------------------------------------------------------------------
+
+
+class GetArrangementClipsRequest(RequestModel):
+    track_index: NonNegativeInt
+
+
+class DuplicateSessionClipToArrangementRequest(RequestModel):
+    """Place a Session clip on the timeline at ``time``, in beats from bar 1."""
+
+    track_index: NonNegativeInt
+    clip_index: NonNegativeInt
+    time: NonNegativeBeat
+
+
+class DeleteArrangementClipRequest(RequestModel):
+    """``clip_index`` indexes ``Track.arrangement_clips``, not a Session slot."""
+
+    track_index: NonNegativeInt
+    clip_index: NonNegativeInt
+
+
+class MoveArrangementClipRequest(DeleteArrangementClipRequest):
+    time: NonNegativeBeat
+
+
+class SetArrangementClipPropertiesRequest(DeleteArrangementClipRequest):
+    """At least one of ``name`` or ``muted`` must be present."""
+
+    name: str | None = None
+    muted: bool | None = None
+
+
+# ---------------------------------------------------------------------------
+# v0.5.6 — Instrument comprehension and authoring shorthands
+# ---------------------------------------------------------------------------
+
+
+class GetDeviceChainsRequest(RequestModel):
+    track_index: NonNegativeInt
+    device_index: NonNegativeInt
+
+
+class GetMidiChainReportRequest(RequestModel):
+    track_index: NonNegativeInt
+
+
+class DescribeInstrumentRequest(RequestModel):
+    track_index: NonNegativeInt
+
+
+class GetClipAutomationRequest(RequestModel):
+    """``device_index`` disambiguates a parameter name shared by several devices."""
+
+    track_index: NonNegativeInt
+    clip_index: NonNegativeInt
+    parameter_name: str
+    device_index: NonNegativeInt | None = None
+    resolution: Annotated[float, Field(gt=0, le=16)] = 0.25
+    # Live nests the controls that matter. ``chain_index`` selects a rack chain;
+    # add ``chain_device_index`` for a device inside it, or leave it out to
+    # address the chain's own mixer (``volume`` / ``panning``).
+    chain_index: NonNegativeInt | None = None
+    chain_device_index: NonNegativeInt | None = None
+
+
+class CurveControlPoint(RequestModel):
+    time: NonNegativeBeat
+    value: float
+
+
+class CreateClipAutomationCurveRequest(RequestModel):
+    """Few control points in, a dense step envelope out.
+
+    Live's clip envelopes are stepped, so a smooth ramp needs many steps. The
+    expansion happens on the server: the caller sends the shape, not its
+    hundreds of breakpoints.
+    """
+
+    track_index: NonNegativeInt
+    clip_index: NonNegativeInt
+    parameter_name: str
+    control_points: Annotated[list[CurveControlPoint], Field(min_length=2, max_length=200)]
+    shape: Literal["linear", "exp", "log", "hold"] = "linear"
+    resolution: Annotated[float, Field(gt=0, le=16)] = 0.25
+    device_index: NonNegativeInt | None = None
+    # Live nests the controls that matter. ``chain_index`` selects a rack chain;
+    # add ``chain_device_index`` for a device inside it, or leave it out to
+    # address the chain's own mixer (``volume`` / ``panning``).
+    chain_index: NonNegativeInt | None = None
+    chain_device_index: NonNegativeInt | None = None
+
+
+class PatternNote(RequestModel):
+    pitch: Annotated[int, Field(ge=0, le=127)]
+    start_time: NonNegativeBeat
+    duration: PositiveBeat
+    velocity: Annotated[int, Field(ge=1, le=127)] = 100
+    mute: bool = False
+
+
+class AddNotesPatternRequest(RequestModel):
+    """One cell, repeated, so the payload stays the size of the idea."""
+
+    track_index: NonNegativeInt
+    clip_index: NonNegativeInt
+    cell: Annotated[list[PatternNote], Field(min_length=1, max_length=256)]
+    cell_length: PositiveBeat
+    repeats: Annotated[int, Field(ge=1, le=128)]
+    transpose_per_repeat: Annotated[int, Field(ge=-48, le=48)] = 0
+    velocity_scale_per_repeat: Annotated[float, Field(gt=0, le=4)] = 1.0
 
 
 # ---------------------------------------------------------------------------
@@ -843,6 +977,17 @@ TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "set_track_color": SetTrackColorRequest,
     "set_clip_color": SetClipColorRequest,
     "diagnose_clip_targets": DiagnoseClipTargetsRequest,
+    "get_arrangement_clips": GetArrangementClipsRequest,
+    "duplicate_session_clip_to_arrangement": DuplicateSessionClipToArrangementRequest,
+    "delete_arrangement_clip": DeleteArrangementClipRequest,
+    "move_arrangement_clip": MoveArrangementClipRequest,
+    "set_arrangement_clip_properties": SetArrangementClipPropertiesRequest,
+    "get_device_chains": GetDeviceChainsRequest,
+    "get_midi_chain_report": GetMidiChainReportRequest,
+    "describe_instrument": DescribeInstrumentRequest,
+    "get_clip_automation": GetClipAutomationRequest,
+    "create_clip_automation_curve": CreateClipAutomationCurveRequest,
+    "add_notes_pattern": AddNotesPatternRequest,
     "move_track": MoveTrackRequest,
     "reorder_tracks": ReorderTracksRequest,
     "move_track_to_group": MoveTrackToGroupRequest,
