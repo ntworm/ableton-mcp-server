@@ -4,7 +4,7 @@
 
 An open **Model Context Protocol (MCP)** server that enables AI agents (Claude, Antigravity, Gemini, Codex) and audio developers to query, analyze, drive, and automate a running Ableton Live 12 Set.
 
-Version 0.5.3 exposes 88 tools over TCP and WebSockets (with primary device resolution via device_name, track_index, and clip_index), up from the 65 certified in v0.5.2. A FastMCP server in Python communicates with a MIDI Remote Script on TCP `127.0.0.1:9888` and an Extension Host bridge over WebSockets on `127.0.0.1:9889`.
+Version 0.5.6 exposes 88 tools over TCP and WebSockets (with primary device resolution via device_name, track_index, and clip_index), up from the 65 certified in v0.5.2. A FastMCP server in Python communicates with a MIDI Remote Script on TCP `127.0.0.1:9888` and an Extension Host bridge over WebSockets on `127.0.0.1:9889`.
 
 ---
 

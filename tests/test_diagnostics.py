@@ -45,7 +45,7 @@ def test_bridge_status_probes_live_instead_of_tool_discovery() -> None:
     assert result["endpoint"] == {"host": "127.0.0.1", "port": 9888}
     assert result["live"] == {"tempo": 120.0, "is_playing": False}
     assert result["runtime"]["is_wsl"] is False
-    assert result["server_version"] == "0.5.3"
+    assert result["server_version"] == "0.5.6"
     assert result["tool_count"] == 88
     assert result["ws_endpoint"] == {"host": "127.0.0.1", "port": 9889}
     assert result["extension_host_available"] is None
