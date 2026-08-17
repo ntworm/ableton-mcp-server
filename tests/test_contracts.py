@@ -38,12 +38,25 @@ def test_debug_mutations_are_explicitly_allowed() -> None:
         "set_track_property",
         "set_clip_properties",
         "create_clip_automation",
+        # v0.5.3 — verified track and clip colour writes
+        "set_track_color",
+        "set_clip_color",
         # v0.5.0 — set lifecycle mutations
         "save_set",
         "quit_ableton",
         "live_fade",
         # v0.5.0 — audio-track mirror
         "create_audio_track",
+        # v0.5.4 — verified plugin preset write
+        "set_plugin_preset",
+        # v0.5.5 — Arrangement authoring
+        "duplicate_session_clip_to_arrangement",
+        "delete_arrangement_clip",
+        "move_arrangement_clip",
+        # v0.5.6 — authoring shorthands
+        "create_clip_automation_curve",
+        "add_notes_pattern",
+        "set_arrangement_clip_properties",
     }
     assert frozenset(expected) == contracts.ALLOWED_MUTATIONS
     assert expected.isdisjoint(contracts.READ_ONLY_COMMANDS)
@@ -54,7 +67,6 @@ def test_creative_mutations_remain_blocked_without_prefix_rules() -> None:
         frozenset(
             {
                 "delete_track",
-                "duplicate_session_clip_to_arrangement",
                 "switch_to_arrangement_view",
                 "load_instrument_or_effect",
                 "load_browser_item",
@@ -75,6 +87,10 @@ def test_remote_command_sets_do_not_overlap() -> None:
 def test_v040_remote_reads_are_explicitly_registered() -> None:
     assert {"get_clip_info", "search_browser"} <= contracts.READ_COMMANDS
     assert "get_session_overview" not in contracts.ALL_REMOTE_COMMANDS
+
+
+def test_search_reads_are_explicitly_registered() -> None:
+    assert {"live_find_device", "live_find_clip"} <= contracts.READ_COMMANDS
 
 
 def test_v040_work_units_and_slow_command_timeouts_are_bounded() -> None:

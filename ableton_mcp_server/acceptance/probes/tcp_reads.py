@@ -21,6 +21,7 @@ __all__ = [
     "TOOLS",
     "run",
     "_discover_first_enabled_device_parameter",
+    "_discover_first_plugin_device",
 ]
 
 
@@ -50,7 +51,35 @@ TOOLS: tuple[str, ...] = (
     "get_composition_structure",
     "diagnose_midi_clip",
     "lifecycle_status",
+    "get_plugin_presets",
 )
+
+
+def _discover_first_plugin_device(
+    snapshot: BaselineSnapshot | None,
+    call: Callable[..., Any],
+) -> tuple[int | None, int | None]:
+    """Locate the first VST/VST3/AU plugin wrapper in the Set.
+
+    Returns ``(track_index, device_index)``, or ``(None, None)`` when there is
+    no snapshot to walk or the Set holds only native Live devices — the normal
+    case for a disposable acceptance Set, which is why the plugin rows are
+    environment-optional.
+    """
+
+    if snapshot is None:
+        return None, None
+    for track_index in sorted(snapshot["track_names"]):
+        try:
+            devices = call("get_device_list", {"track_index": track_index})
+        except Exception:
+            continue
+        if not isinstance(devices, list):
+            continue
+        for device_index, device in enumerate(devices):
+            if isinstance(device, dict) and device.get("plugin_state") is not None:
+                return track_index, device_index
+    return None, None
 
 
 def _discover_first_enabled_device_parameter(
@@ -97,10 +126,7 @@ def _discover_first_enabled_device_parameter(
                                 for p in params_list:
                                     if not isinstance(p, dict):
                                         continue
-                                    if (
-                                        p.get("is_enabled") is False
-                                        or p.get("enabled") is False
-                                    ):
+                                    if p.get("is_enabled") is False or p.get("enabled") is False:
                                         continue
                                     p_name = p.get("name")
                                     if not isinstance(p_name, str) or not p_name:
@@ -168,9 +194,7 @@ async def run(
             _min_val,
             _max_val,
             _is_quant,
-        ) = _discover_first_enabled_device_parameter(
-            client, snapshot, track_index, call
-        )
+        ) = _discover_first_enabled_device_parameter(client, snapshot, track_index, call)
     else:
         discovered_track_index = None
         discovered_device_index = None
@@ -334,6 +358,18 @@ async def run(
         report,
         "live_find_track",
         lambda: _matches,
+        passed="live_passed",
+    )
+    await _record_call(
+        report,
+        "live_find_device",
+        lambda: call("live_find_device", {"track_index": track_index, "query": "operator"}),
+        passed="live_passed",
+    )
+    await _record_call(
+        report,
+        "live_find_clip",
+        lambda: call("live_find_clip", {"track_index": track_index, "query": "verse"}),
         passed="live_passed",
     )
 

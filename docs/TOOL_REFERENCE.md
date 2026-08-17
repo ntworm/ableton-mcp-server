@@ -1,14 +1,127 @@
 # Tool Reference
 
-The FastMCP server exposes 65 snake_case tools. Remote examples below show the JSONL command envelope after MCP/Pydantic validation. All error responses use `{"status":"error","code","message","hint?"}`.
+The FastMCP server exposes 88 snake_case tools, up from the certified 65-tool v0.5.2 baseline. Remote examples below show the JSONL command envelope after MCP/Pydantic validation. All error responses use `{"status":"error","code","message","hint?"}`.
 
-A machine-readable view of these tools (route, risk, acceptance mode, reversibility) is exposed at runtime via the `get_bridge_status` tool's `tools` list and `capability_counts` keys, derived from the canonical `TOOL_CATALOG`.
+A machine-readable view of these tools (route, risk, acceptance mode, reversibility) is exposed at runtime via the `get_bridge_status` tool's `tools` list and `capability_counts` keys, derived from the canonical `TOOL_CATALOG`. A generated [API Capability Matrix](api_capability_matrix.md) is also available for quick reference.
 
 The promotion gates that consume the per-tool status rows recorded by
 the acceptance runner are documented in
 [`docs/CERTIFICATION.md`](CERTIFICATION.md). That document is canonical
 for what each status means and which `environment_unavailable` rows
 are explicitly allowed.
+
+## v0.5.6 instrument comprehension and authoring shorthands
+
+An agent that did not build the Set cannot see what a rack hides, cannot tell
+which device owns a parameter name, and cannot read an envelope back. These
+tools close that gap; the two shorthands keep payloads proportional to the idea
+rather than to its length.
+
+### `get_device_chains(track_index, device_index)`
+
+- Lists a rack's chains: `name`, mixer `volume` / `panning` / `muted` / `soloed`, and the devices inside each chain with their parameter names.
+- This is the only way to reach a per-chain volume — the parameter that mixes, say, four guitar articulations into one performance.
+- Edge cases / side effects: pure read; a device without `chains` returns `WRONG_TYPE`.
+
+### `get_midi_chain_report(track_index)`
+
+- Names the MIDI effects that rewrite what a clip says, each with its current values and a one-line consequence.
+- Covers `MidiVelocity`, `MidiNoteLength`, `MidiPitcher`, `MidiArpeggiator`, `MidiChord`, `MidiScale`, `MidiRandom`.
+- Run it before writing notes into an unfamiliar track: a Note Length device makes written durations irrelevant, and a Velocity device caps the dynamic range whatever the clip holds.
+- Edge cases / side effects: pure read; `rewrites_input: false` means the clip is heard as written.
+
+### `describe_instrument(track_index)`
+
+- Returns the track's instrument, its class, whether it is a plugin wrapper, `configured_parameter_count`, every automatable parameter with range, and `setup_requests`.
+- `setup_requests` carries the sentence to relay to the user: press Configure on a plugin exposing nothing, or map and rename a rack's macros so they can be addressed unambiguously.
+- Edge cases / side effects: pure read; a track with no instrument returns `has_instrument: false` plus the request to load one.
+
+### `get_clip_automation(track_index, clip_index, parameter_name, device_index=None, resolution=0.25)`
+
+- Reads one clip envelope back as a sampled curve: `samples`, `min_value`, `max_value`.
+- The LOM exposes no breakpoint list, only `value_at_time`, so sampling is what Live can honestly answer.
+- Edge cases / side effects: pure read; an ambiguous parameter name returns `AMBIGUOUS_MATCH` unless `device_index` is given.
+
+### `create_clip_automation_curve(track_index, clip_index, parameter_name, control_points, shape="linear", resolution=0.25, device_index=None)`
+
+- Writes an envelope from 2..200 control points, expanded server-side into contiguous steps. `shape` is `linear`, `exp`, `log` or `hold`.
+- Live's clip envelopes are stepped, never interpolated: a smooth ramp *is* a dense staircase. The expansion happens here so callers stop shipping hundreds of breakpoints.
+- Edge cases / side effects: one undo step; an expansion beyond Live's 500-step budget returns `BAD_INPUT` naming `resolution` as the fix.
+
+### `add_notes_pattern(track_index, clip_index, cell, cell_length, repeats, transpose_per_repeat=0, velocity_scale_per_repeat=1.0)`
+
+- Repeats one note cell `repeats` times at `cell_length` spacing, optionally transposing and scaling velocity per repeat.
+- A sixteen-bar triplet ostinato is one bar plus two numbers instead of two hundred notes.
+- Edge cases / side effects: every expanded note passes the same validation as `add_notes_to_clip`; pitch and velocity are clamped to the MIDI range.
+
+### `set_arrangement_clip_properties(track_index, clip_index, name=None, muted=None)`
+
+- Renames or mutes one Arrangement clip, verified by readback.
+- Edge cases / side effects: `clip_index` indexes `Track.arrangement_clips` and shifts after any structural change; at least one of `name` or `muted` is required.
+
+### Chain addressing
+
+`get_parameter_value`, `set_parameter_value`, `create_clip_automation`,
+`create_clip_automation_curve` and `get_clip_automation` accept
+`chain_index` and `chain_device_index`.
+
+- Neither: a top-level device parameter, as before.
+- `chain_index` alone: the chain's own **mixer**, where only `volume` and
+  `panning` exist — this is how a rack blends four articulations of one
+  instrument.
+- Both: a parameter of a device **inside** that chain, such as the `Velocity`
+  device whose `Out Low` / `Out Hi` silently cap a whole drum track.
+
+Returned path-ids stay index-based:
+`track:4/device:1/chain:0/device:0/param:7`, or
+`track:39/device:0/chain:2/mixer:volume` for a chain mixer.
+
+### Parameter addressing
+
+`create_clip_automation`, `create_clip_automation_curve` and `get_clip_automation`
+accept an optional `device_index`. Without it, a name carried by several devices
+of the same track — every rack has a `Macro 1` — returns `AMBIGUOUS_MATCH` with
+the candidate device indexes, instead of silently writing to the first match.
+
+## v0.5.4 plugin presets
+
+Live's plugin wrapper exposes only the parameters a user added through the
+device's **Configure** button, so `get_device_list` and `list_device_params`
+carry a `plugin_state` block on every `PluginDevice` / `AuPluginDevice`. When
+`configured_parameter_count` is zero the block adds
+`hint: "PLUGIN_NOT_CONFIGURED"` and a message explaining the Configure step,
+so a caller can tell an unconfigured plugin apart from one with no controls.
+`set_parameter_value` and `get_parameter_value` raise the same explanation in
+`details.hint_code` instead of a bare "parameter not found".
+
+Presets are the exception: `PluginDevice.presets` and `selected_preset_index`
+are exposed with no Configure step, so the two tools below work on a plugin an
+agent has never touched.
+
+### `get_plugin_presets(track_index: int, device_index: int)`
+
+- Params: non-negative track and device indexes.
+- Returns: preset names, `preset_count`, `selected_preset_index`, and the
+  device's `plugin_state`.
+- Request: `{"type":"get_plugin_presets","params":{"track_index":2,"device_index":2}}`
+- Response: `{"status":"ok","result":{"id":"track:2/device:2","presets":["Default","Rock Kit"],"preset_count":2,"selected_preset_index":0}}`
+- Edge cases / side effects: pure read; a native Live device returns
+  `WRONG_TYPE`, and a plugin exposing no presets returns an empty list rather
+  than an error.
+
+### `set_plugin_preset(track_index: int, device_index: int, preset_index: int | None = None, preset_name: str | None = None)`
+
+- Params: non-negative track and device indexes plus exactly one of
+  `preset_index` or `preset_name` (exact match).
+- Returns: `selected_preset_index`, `preset_name`, `previous_preset_index`, and
+  the canonical `resolved` identity sub-object.
+- Request: `{"type":"set_plugin_preset","params":{"track_index":2,"device_index":2,"preset_name":"Rock Kit"}}`
+- Response: `{"status":"ok","result":{"selected_preset_index":1,"preset_name":"Rock Kit","previous_preset_index":0}}`
+- Edge cases / side effects: writes in one Live undo step and verifies the
+  readback. Zero or two selectors return `INVALID_PARAMS`; a duplicated preset
+  name returns `AMBIGUOUS_MATCH`; a plugin with no presets returns
+  `CAPABILITY_UNAVAILABLE`; a write the host never lands returns
+  `VERIFICATION_FAILED`.
 
 ## v0.5.0 set lifecycle
 
@@ -97,17 +210,19 @@ are explicitly allowed.
 ### `get_track_list()`
 
 - Params: none.
-- Returns: all regular, return, and master tracks as `{id,index,name,type}`.
+- Returns: all regular, return, and master tracks as `{id,index,name,type}` plus the hierarchy block `{color,color_index,is_group_track,is_grouped,group_track_index,group_track_id,is_visible,fold_state}`.
 - Request: `{"type":"get_track_list","params":{}}`
-- Response: `{"status":"ok","result":[{"id":"track:0","index":0,"name":"Bass","type":"midi"}]}`
-- Edge cases / side effects: pure read; re-list after structural changes.
+- Response: `{"status":"ok","result":[{"id":"track:0","index":0,"name":"Bass","type":"midi","color":3368601,"color_index":3,"is_group_track":false,"is_grouped":false,"group_track_index":null,"group_track_id":null,"is_visible":true,"fold_state":0}]}`
+- Edge cases / side effects: pure read; re-list after structural changes. Mixer state (`mute`/`solo`/`arm`/`volume`) is deliberately **not** here — read it from `get_track_state`.
+- Group Tracks: `type` stays `audio` for a Group Track because Live gives it no MIDI input. Detect groups with `is_group_track` (LOM `Track.is_foldable`), membership with `is_grouped`, and the parent with `group_track_index`. Never infer "group" from `type == "audio"`.
+- Properties a host does not expose are reported as `null` (`color_index`, `fold_state`, `group_track_index`) or `false`, never invented. `is_visible` is `false` for a track hidden inside a folded group.
 
 ### `get_track_state(track_index: int)`
 
 - Params: non-negative `track_index` in the combined regular/return/master list.
-- Returns: path-id, mixer state, sends, devices, parameters, and Session clip slots.
+- Returns: path-id, the same hierarchy block as `get_track_list`, mixer state, sends, devices, parameters, and Session clip slots.
 - Request: `{"type":"get_track_state","params":{"track_index":0}}`
-- Response: `{"status":"ok","result":{"id":"track:0","name":"Bass","devices":[],"clip_slots":[]}}`
+- Response: `{"status":"ok","result":{"id":"track:0","name":"Bass","color_index":3,"is_group_track":false,"devices":[],"clip_slots":[]}}`
 - Edge cases / side effects: pure read; invalid indexes return `INVALID_PARAMS`.
 
 ### `get_locators()`
@@ -254,6 +369,20 @@ are explicitly allowed.
 - Response: `{"status":"ok","result":[{"id":"track:0","index":0,"name":"Bass","type":"midi"}]}`
 - Edge cases / side effects: pure read; no match returns `[]`.
 
+### `live_find_device(track_index: int, query: str)`
+
+- Params: non-negative track index and non-empty case-insensitive name substring.
+- Returns: matching device snapshots for that track.
+- Request: `{"type":"live_find_device","params":{"track_index":0,"query":"operator"}}`
+- Edge cases / side effects: pure read; no match returns `[]`.
+
+### `live_find_clip(track_index: int, query: str)`
+
+- Params: non-negative track index and non-empty case-insensitive name substring.
+- Returns: matching clip slot snapshots for that track.
+- Request: `{"type":"live_find_clip","params":{"track_index":0,"query":"verse"}}`
+- Edge cases / side effects: pure read; no match returns `[]`.
+
 ### `list_device_params(track_id: str)`
 
 - Params: current path-id in exact form `track:N`.
@@ -296,13 +425,13 @@ are explicitly allowed.
 - Response: `{"status":"ok","result":{"current_song_time":32.0}}`
 - Edge cases / side effects: one undo step; set/yield/read/retry across up to ten Live UI ticks; exhaustion returns `PLAYHEAD_NOT_MOVED`.
 
-### `set_tempo(tempo: float)`
+### `set_tempo(tempo: float, dry_run: bool = False)`
 
-- Params: finite BPM 20..999.
+- Params: finite BPM 20..999, optional boolean `dry_run`.
 - Returns: observed tempo plus canonical `resolved` identity (`kind: "tempo"` and observed `tempo`).
 - Request: `{"type":"set_tempo","params":{"tempo":128.0}}`
 - Response: `{"status":"ok","result":{"tempo":128.0,"resolved":{"kind":"tempo","tempo":128.0}}}`
-- Edge cases / side effects: one undo step; tempo automation can subsequently change the value.
+- Edge cases / side effects: one undo step; tempo automation can subsequently change the value. When `dry_run` is `True`, the new tempo is not committed to Live and `committed: False` is returned.
 
 ### `start_playback()`
 
@@ -368,13 +497,13 @@ are explicitly allowed.
 - Response: `{"status":"ok","result":{"fired":true,"clip_id":"track:0/clipslot:0/clip"}}`
 - Edge cases / side effects: launches the clip; empty slots are rejected rather than starting recording.
 
-### `create_clip(track_index: int, clip_index: int, length_beats: float)`
+### `create_clip(track_index: int, clip_index: int, length_beats: float, dry_run: bool = False)`
 
-- Params: non-negative track/slot indexes and finite positive length up to 100000 beats.
+- Params: non-negative track/slot indexes, finite positive length up to 100000 beats, and optional boolean `dry_run`.
 - Returns: creation flag, clip path-id, length, and canonical `resolved` clip identity (resolved indexes, track name when available, and post-mutation clip path-id).
 - Request: `{"type":"create_clip","params":{"track_index":0,"clip_index":1,"length_beats":4.0}}`
 - Response: `{"status":"ok","result":{"created":true,"clip_id":"track:0/clipslot:1/clip","length_beats":4.0,"resolved":{"kind":"clip","track_index":0,"clip_index":1,"track_name":"Bass","clip_id":"track:0/clipslot:1/clip"}}}`
-- Edge cases / side effects: one undo step; only empty Session slots on MIDI tracks are supported.
+- Edge cases / side effects: one undo step; only empty Session slots on MIDI tracks are supported. When `dry_run` is `True`, the clip is not created and `committed: False` is returned.
 
 ## v0.4.0 capability expansion
 
@@ -422,6 +551,69 @@ are explicitly allowed.
 - `property` is exactly `mute`, `solo`, or `arm`; `value` is boolean.
 - Returns the verified observed property value.
 - Edge cases / side effects: one undo step; return/master tracks cannot be armed.
+
+### `set_track_color(track_index, color_index=None, color=None)`
+
+- Exactly one of `color_index` (Live's 70-swatch palette, `0..69`) and `color` (packed `0x00rrggbb`, `0..0xFFFFFF`) is required; supplying both or neither returns `INVALID_PARAMS`.
+- Writes LOM `Track.color_index` or `Track.color`, then reads the value back on a later Live UI tick and returns `{track_id, track_index, property, color, color_index, resolved}`.
+- `resolved` follows the canonical convention: `{"kind":"track","track_index":N,"track_name":"…"}` with `track_name` omitted when the name is unavailable.
+- Edge cases / side effects: one undo step; clips are never recoloured — clip colour is a separate LOM property and there is no tool for it. A track that does not expose the property returns `WRONG_TYPE`; a write that does not land returns `VERIFICATION_FAILED`. The write is issued **once** — mutations are never retried. Return and master tracks accept colour.
+- The `color_index` upper bound is enforced by this server, not by the LOM reference (which documents `color` but leaves the `color_index` range unspecified). A host that disagrees fails the readback rather than silently accepting a bad slot.
+
+### `set_clip_color(track_index, clip_index, scope="session", color_index=None, color=None)`
+
+- Exactly one of `color_index` (`0..69`) and `color` (packed `0x00rrggbb`) is required; both or neither returns `INVALID_PARAMS`.
+- `scope="session"` addresses `track.clip_slots[clip_index].clip`; `scope="arrangement"` addresses `track.arrangement_clips[clip_index]`. `Clip.color` and `Clip.color_index` are `getsetobserve` in the LOM, so **both lanes are genuinely writable** — unlike track reordering.
+- Writes once, reads back on a later UI tick, returns `{clip_id, scope, track_index, clip_index, property, color, color_index, resolved}` with `resolved.kind == "clip"`.
+- Edge cases / side effects: one undo step. An empty Session slot returns `BAD_INPUT`. `Track.arrangement_clips` needs Live 11+; a host without it returns `CAPABILITY_UNAVAILABLE` for `scope="arrangement"`. An out-of-range Arrangement index returns `INVALID_PARAMS`. No retry on failure.
+
+### `diagnose_clip_targets(track_index=None)`
+
+- Read-only sweep answering "which clips can `set_clip_color` actually reach?".
+- Returns `{tracks, session_clip_count, arrangement_clip_count, inaccessible}`. Each track entry carries `session_clips`, `arrangement_clips`, and `arrangement_supported`; each clip entry carries `id`, `scope`, `name`, `is_midi_clip`, `color`, `color_index`, and `colorable`.
+- `inaccessible` names every target that cannot be coloured **and why** — a host without `Track.arrangement_clips` produces an entry per track rather than a silent zero count.
+- Edge cases / side effects: pure read; omit `track_index` to sweep the whole Set.
+
+### `get_arrangement_clips(track_index)`
+
+- Lists one track's Arrangement clips with their placement: `start_time`, `end_time`, `length_beats`, plus `name`, `is_midi_clip`, `muted`, `looping`, `loop_start`, `loop_end`, `color_index`.
+- The listing is sorted by position, but `clip_index` remains the real index into `Track.arrangement_clips` — that is the handle `move_arrangement_clip` and `delete_arrangement_clip` address.
+- Edge cases / side effects: pure read. A host without `Track.arrangement_clips` returns `CAPABILITY_UNAVAILABLE` instead of an empty list.
+
+### `duplicate_session_clip_to_arrangement(track_index, clip_index, time)`
+
+- Places a Session clip on the Arrangement timeline at `time`, in beats from bar 1, through `Track.duplicate_clip_to_arrangement`.
+- The Session clip is left in place, so one slot can seed many timeline positions. Clip envelopes travel with the copy, which is the only way to get automation onto the timeline (Arrangement-level automation is not exposed by the LOM).
+- Edge cases / side effects: one undo step, verified by an Arrangement clip-count increase. Empty slot returns `BAD_INPUT`; a host without the method returns `CAPABILITY_UNAVAILABLE`.
+
+### `move_arrangement_clip(track_index, clip_index, time)`
+
+- Moves one Arrangement clip. `Clip.start_time` has no setter, so the move is a copy to `time` followed by deletion of the original, each half verified separately.
+- Edge cases / side effects: a failed copy leaves the original untouched rather than losing the clip. Indices shift after the move — re-read with `get_arrangement_clips`.
+
+### `delete_arrangement_clip(track_index, clip_index)`
+
+- Deletes one clip from the Arrangement lane via `Track.delete_clip`, verified by a clip-count decrease.
+- Edge cases / side effects: `clip_index` indexes `Track.arrangement_clips`, not a Session slot; an out-of-range index returns `INVALID_PARAMS`.
+
+### Track hierarchy: `move_track`, `reorder_tracks`, `move_track_to_group`, `ungroup_track`, `merge_groups`
+
+These five tools are registered, documented, and fully validated — and they **always refuse**. No public API can perform them.
+
+| Tool | Signature |
+|---|---|
+| `move_track` | `(track_index, destination_index)` |
+| `reorder_tracks` | `(order: list[int])` |
+| `move_track_to_group` | `(track_index, group_track_index)` |
+| `ungroup_track` | `(track_index)` |
+| `merge_groups` | `(source_group_index, destination_group_index, delete_empty_source=False)` |
+
+- **Validation runs first**, against the live Set, so a malformed request stays distinguishable from the capability gap: unknown indexes return `INVALID_PARAMS`; return/main tracks return `WRONG_TYPE`; a non-foldable group target returns `WRONG_TYPE`; a non-permutation `order`, a self-nesting request, a cycle, or `delete_empty_source=True` return `BAD_INPUT`.
+- A well-formed request returns `CAPABILITY_UNAVAILABLE`. The error carries a `details` object with the exact evidence: `lom_song_functions_checked`, `lom_verdict`, `sdk_bindings_checked`, `sdk_verdict`, `rejected_workarounds`, `supported_alternative`, the echoed `request`, and `applied: false`.
+- **Nothing is written.** No undo step is opened, no track is added or removed, and no clip, device, note, automation, mixer value, routing or colour changes. This is covered by tests, not just by intent.
+- Evidence: Live's LOM `Song` exposes `create_audio_track(index)`, `create_midi_track(index)`, `duplicate_track(index)`, `delete_track(index)`, `move_device(...)` — and no reposition call. `song.tracks` / `song.visible_tracks` are get/observe lists and `Track.group_track` is get-only, so re-parenting is impossible too. The Ableton Extension SDK 1.0.0-beta.0 matches: `songCreateMidiTrack`, `songCreateAudioTrack`, `songDuplicateTrack`, `songDeleteTrack`, `trackGetGroupTrack` — no move, no grouping, and its create calls take no index.
+- Duplicate + delete is not an escape hatch: `duplicate_track` always inserts the copy immediately after the original, so relative order cannot change at all — and it would destroy the original track. Devices, unlike tracks, *can* be moved between tracks (`Song.move_device`), but no tool exposes that yet.
+- Discover the gap without triggering it: `get_bridge_status().capability_gaps` carries the same evidence.
 
 ### `set_clip_properties(track_index, clip_index, loop_start=None, loop_end=None, name=None)`
 

@@ -13,12 +13,30 @@ Statuses
   confirmation is required before this row can flip to ``manual_passed``.
 - ``host_unavailable`` — host does not expose the seam; verified by probe.
 - ``environment_unavailable`` — environment (Node, audio clip, etc.) missing.
+- ``capability_unavailable`` — the operation has no public API in any Live
+  version this project targets, and the tool proved it refuses cleanly. This
+  is the expected steady state for those tools, so it does **not** block a
+  release the way ``host_unavailable`` does.
 - ``failed`` — probe reached but readback failed; release blocker.
 """
 
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+
+# Tools whose probe depends on a fixture the acceptance environment is not
+# required to provide: ``build_extension`` needs a Node toolchain, and the two
+# plugin tools need a third-party VST/VST3/AU in the Set. A disposable
+# acceptance Set normally holds only native Live devices, so
+# ``environment_unavailable`` is the expected steady state for those rows and
+# must not block a release the way it does for a bridge tool.
+ENVIRONMENT_OPTIONAL_TOOLS = frozenset(
+    {
+        "build_extension",
+        "get_plugin_presets",
+        "set_plugin_preset",
+    }
+)
 
 _ALLOWED_STATUSES = {
     "offline_passed",
@@ -27,6 +45,7 @@ _ALLOWED_STATUSES = {
     "manual_required",
     "host_unavailable",
     "environment_unavailable",
+    "capability_unavailable",
     "failed",
 }
 
@@ -73,7 +92,8 @@ class CertificationReport:
         has_failed = any(row["status"] == "failed" for row in rows)
         has_host_unavailable = any(row["status"] == "host_unavailable" for row in rows)
         has_invalid_env_unavail = any(
-            row["status"] == "environment_unavailable" and row["tool"] != "build_extension"
+            row["status"] == "environment_unavailable"
+            and row["tool"] not in ENVIRONMENT_OPTIONAL_TOOLS
             for row in rows
         )
         has_invalid_manual = any(

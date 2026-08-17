@@ -10,7 +10,11 @@ import inspect
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from ..certification import CertificationReport, Verification  # re-export
+from ..certification import (  # re-export
+    ENVIRONMENT_OPTIONAL_TOOLS,
+    CertificationReport,
+    Verification,
+)
 
 __all__ = [
     "CertificationReport",
@@ -41,21 +45,25 @@ async def _record_call(
     records the result of the whole encapsulated action.
 
     ``BridgeError`` with code ``CAPABILITY_UNAVAILABLE`` is mapped to
-    ``host_unavailable``; every other exception becomes ``failed``.
+    ``host_unavailable``, except for the tools listed in
+    ``contracts.UNSUPPORTED_CAPABILITIES``: those have no public API in any
+    targeted Live version, so a clean refusal is the *expected* result and is
+    recorded as ``capability_unavailable``. Membership is read from contracts,
+    never from the probe, so a probe cannot downgrade its own failure. Every
+    other exception becomes ``failed``.
     """
+    from contracts import UNSUPPORTED_CAPABILITIES
+
     try:
         value = action()
         if inspect.isawaitable(value):
             value = await value
     except Exception as error:  # noqa: BLE001 — recording layer swallows all
         if getattr(error, "code", None) == "CAPABILITY_UNAVAILABLE":
-            report.record(
-                Verification(
-                    tool,
-                    "host_unavailable",
-                    f"{getattr(error, 'code', 'CAPABILITY_UNAVAILABLE')}: {error}",
-                )
+            status = (
+                "capability_unavailable" if tool in UNSUPPORTED_CAPABILITIES else "host_unavailable"
             )
+            report.record(Verification(tool, status, f"CAPABILITY_UNAVAILABLE: {error}"))
         else:
             report.record(Verification(tool, "failed", f"{type(error).__name__}: {error}"))
         return None
@@ -103,7 +111,9 @@ def _release_ready(
     2. Partial profiles (not full baseline) are never release-ready.
     3. ``fire_clip`` must have been exercised (the flag toggled on).
     4. ``host_unavailable`` blocks promotion.
-    5. ``environment_unavailable`` blocks promotion, except ``build_extension``.
+    5. ``environment_unavailable`` blocks promotion, except for the tools in
+       ``ENVIRONMENT_OPTIONAL_TOOLS`` whose probes need a fixture the
+       acceptance environment is not required to provide.
     6. ``manual_required`` blocks promotion, except ``quit_ableton`` and the
        strictly validated manual fallback for ``save_set``.
     7. Otherwise the report is release-ready.
@@ -118,8 +128,7 @@ def _release_ready(
     if any(row.status == "host_unavailable" for row in rows):
         return False
     if any(
-        row.status == "environment_unavailable"
-        and row.tool != "build_extension"
+        row.status == "environment_unavailable" and row.tool not in ENVIRONMENT_OPTIONAL_TOOLS
         for row in rows
     ):
         return False

@@ -39,8 +39,12 @@ def test_create_clip_automation_clears_and_inserts_sorted_steps() -> None:
     }
     clip = song.tracks[0].clip_slots[0].clip
     parameter = song.tracks[0].devices[0].parameters[1]
+    # Each step must reach the next breakpoint. A zero-length step occupies no
+    # time, so Live falls back to the parameter value in between and the
+    # envelope plays as isolated spikes instead of a continuous curve. The last
+    # step keeps the zero length because no breakpoint follows it.
     assert clip.automation_envelope(parameter).steps == [
-        (0.0, 0.0, 0.2),
+        (0.0, 2.0, 0.2),
         (2.0, 0.0, 0.8),
     ]
 

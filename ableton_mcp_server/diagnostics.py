@@ -13,10 +13,12 @@ from typing import Any, Protocol
 
 from contracts import (
     ALLOWED_MUTATIONS,
+    CAPABILITY_EVIDENCE,
     DEFAULT_HOST,
     DEFAULT_WS_PORT,
     READ_COMMANDS,
     READ_ONLY_COMMANDS,
+    UNSUPPORTED_CAPABILITIES,
     WEBSOCKET_TARGET_COMMANDS,
 )
 
@@ -121,7 +123,10 @@ def bridge_status(
         "endpoint": {"host": client.host, "port": client.port},
         "runtime": asdict(info),
         "server_version": __version__,
-        "tool_count": tool_count,
+        # Preserve the legacy field while deriving it from the same canonical
+        # source as capability_counts.public_tools. Callers may still pass the
+        # old argument, but stale values must not create contradictory output.
+        "tool_count": len(TOOL_CATALOG),
         "ws_endpoint": {"host": DEFAULT_HOST, "port": DEFAULT_WS_PORT},
         "extension_host_available": None,
         "ws_methods_registered": sorted(WEBSOCKET_TARGET_COMMANDS),
@@ -154,6 +159,7 @@ def bridge_status(
         ],
         "capability_counts": _capability_counts(),
         "capability_source": _capability_source(),
+        "capability_gaps": capability_gaps(),
     }
     try:
         live = client.call("get_session_info", {}, timeout=timeout)
@@ -205,6 +211,25 @@ def _capability_counts() -> dict[str, int]:
         "read_only_blocked": len(READ_ONLY_COMMANDS),
         "feature_flags": 5,
         "live_required_tools": live_required,
+        # Tools that validate a request and then refuse it because no public
+        # Live API can perform it. They are neither reads nor mutations.
+        "capability_unavailable": len(UNSUPPORTED_CAPABILITIES),
+    }
+
+
+def capability_gaps() -> dict[str, dict[str, Any]]:
+    """Return the evidence behind every permanently unavailable operation.
+
+    Surfaced by ``get_bridge_status`` so an agent can discover *why* an
+    operation is refused without having to trigger the refusal first.
+    """
+
+    return {
+        name: {
+            "message": message,
+            "evidence": CAPABILITY_EVIDENCE[name],
+        }
+        for name, message in UNSUPPORTED_CAPABILITIES.items()
     }
 
 
@@ -220,6 +245,7 @@ def _capability_source() -> dict[str, str]:
         "websocket_targets": "contracts:WEBSOCKET_TARGET_COMMANDS",
         "read_only": "contracts:READ_ONLY_COMMANDS",
         "features": "ableton_mcp_server.diagnostics.bridge_status:features",
+        "capability_unavailable": "contracts:UNSUPPORTED_CAPABILITIES",
     }
 
 
@@ -304,12 +330,34 @@ def remote_script_status(source: Path, destination_root: Path) -> dict[str, Any]
     }
 
 
-def install_remote_script(source: Path, destination_root: Path) -> dict[str, Any]:
+def install_remote_script(
+    source: Path, destination_root: Path, *, dry_run: bool = False
+) -> dict[str, Any]:
     for filename in REMOTE_SCRIPT_FILES:
         source_file = source / filename
         if not source_file.is_file():
             raise FileNotFoundError(f"Bundled Remote Script file is missing: {source_file}")
     target = destination_root / REMOTE_SCRIPT_NAME
+
+    if dry_run:
+        plan: list[dict[str, str | None]] = []
+        for filename in REMOTE_SCRIPT_FILES:
+            src_file = source / filename
+            tgt_file = target / filename
+            plan.append(
+                {
+                    "filename": filename,
+                    "source_hash": _sha256(src_file) if src_file.is_file() else None,
+                    "target_hash": _sha256(tgt_file) if tgt_file.is_file() else None,
+                }
+            )
+        return {
+            "status": "dry_run",
+            "source": str(source),
+            "target": str(target),
+            "plan": plan,
+        }
+
     target.mkdir(parents=True, exist_ok=True)
     for filename in REMOTE_SCRIPT_FILES:
         shutil.copy2(source / filename, target / filename)

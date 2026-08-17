@@ -5,9 +5,17 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from contracts import ALLOWED_MUTATIONS
+from contracts import (
+    ALLOWED_MUTATIONS,
+    TRACK_COLOR_INDEX_MAX,
+    TRACK_COLOR_INDEX_MIN,
+    TRACK_COLOR_RGB_MAX,
+    TRACK_COLOR_RGB_MIN,
+)
 
 NonNegativeInt = Annotated[int, Field(ge=0)]
+PaletteIndex = Annotated[int, Field(ge=TRACK_COLOR_INDEX_MIN, le=TRACK_COLOR_INDEX_MAX)]
+PackedRgb = Annotated[int, Field(ge=TRACK_COLOR_RGB_MIN, le=TRACK_COLOR_RGB_MAX)]
 NonNegativeBeat = Annotated[float, Field(ge=0, le=100000)]
 PositiveBeat = Annotated[float, Field(gt=0, le=100000)]
 
@@ -107,6 +115,110 @@ class SetTrackPropertyRequest(RequestModel):
     value: bool
 
 
+class SetTrackColorRequest(RequestModel):
+    """Exactly one of ``color_index`` (palette slot) or ``color`` (packed RGB).
+
+    ``color_index`` addresses Live's 70-swatch colour palette; ``color`` is the
+    ``0x00rrggbb`` value documented for ``Track.color``. Requiring exactly one
+    keeps the write single-valued, so the readback has one unambiguous target.
+    """
+
+    track_index: NonNegativeInt
+    color_index: PaletteIndex | None = None
+    color: PackedRgb | None = None
+
+    @model_validator(mode="after")
+    def exactly_one_colour_source(self) -> SetTrackColorRequest:
+        provided = [value for value in (self.color_index, self.color) if value is not None]
+        if len(provided) != 1:
+            raise ValueError("provide exactly one of color_index or color")
+        return self
+
+
+class SetClipColorRequest(RequestModel):
+    """Colour one Session or Arrangement clip.
+
+    ``scope`` selects the lane. Session clips are addressed by clip-slot
+    index; Arrangement clips by their position in ``Track.arrangement_clips``.
+    Run ``diagnose_clip_targets`` first if you are unsure which clips the
+    connected Live host exposes.
+    """
+
+    track_index: NonNegativeInt
+    clip_index: NonNegativeInt
+    scope: Literal["session", "arrangement"] = "session"
+    color_index: PaletteIndex | None = None
+    color: PackedRgb | None = None
+
+    @model_validator(mode="after")
+    def exactly_one_colour_source(self) -> SetClipColorRequest:
+        provided = [value for value in (self.color_index, self.color) if value is not None]
+        if len(provided) != 1:
+            raise ValueError("provide exactly one of color_index or color")
+        return self
+
+
+class DiagnoseClipTargetsRequest(RequestModel):
+    """``track_index`` omitted means every track in the Set."""
+
+    track_index: NonNegativeInt | None = None
+
+
+# ---------------------------------------------------------------------------
+# Track hierarchy requests
+#
+# These are fully validated even though Live's public API cannot perform any
+# of them: a caller must be able to tell "my request was malformed" from "no
+# API can do this". The bridge answers a well-formed request with a typed
+# CAPABILITY_UNAVAILABLE carrying the evidence, and never mutates the Set.
+# ---------------------------------------------------------------------------
+
+
+class MoveTrackRequest(RequestModel):
+    track_index: NonNegativeInt
+    destination_index: NonNegativeInt
+
+
+class ReorderTracksRequest(RequestModel):
+    order: list[NonNegativeInt] = Field(min_length=1, max_length=512)
+
+    @model_validator(mode="after")
+    def order_has_no_duplicates(self) -> ReorderTracksRequest:
+        if len(set(self.order)) != len(self.order):
+            raise ValueError("order must not repeat a track index")
+        return self
+
+
+class MoveTrackToGroupRequest(RequestModel):
+    track_index: NonNegativeInt
+    group_track_index: NonNegativeInt
+
+    @model_validator(mode="after")
+    def group_is_not_itself(self) -> MoveTrackToGroupRequest:
+        if self.track_index == self.group_track_index:
+            raise ValueError("a track cannot be moved into itself")
+        return self
+
+
+class UngroupTrackRequest(RequestModel):
+    track_index: NonNegativeInt
+
+
+class MergeGroupsRequest(RequestModel):
+    source_group_index: NonNegativeInt
+    destination_group_index: NonNegativeInt
+    # Deleting the emptied source is never performed by this bridge; the flag
+    # exists so an explicit request for it is rejected loudly instead of being
+    # silently ignored.
+    delete_empty_source: bool = False
+
+    @model_validator(mode="after")
+    def groups_differ(self) -> MergeGroupsRequest:
+        if self.source_group_index == self.destination_group_index:
+            raise ValueError("source and destination groups must differ")
+        return self
+
+
 class SetClipPropertiesRequest(GetClipNotesRequest):
     loop_start: NonNegativeBeat | None = None
     loop_end: NonNegativeBeat | None = None
@@ -150,6 +262,10 @@ class AutomationPoint(RequestModel):
 class CreateClipAutomationRequest(GetClipNotesRequest):
     parameter_name: Annotated[str, Field(min_length=1, max_length=256)]
     automation_points: Annotated[list[AutomationPoint], Field(min_length=1, max_length=500)]
+    # A track can carry the same parameter name on several devices — every rack
+    # has a "Macro 1". Without this the bridge refuses with AMBIGUOUS_MATCH
+    # instead of guessing which device the caller meant.
+    device_index: NonNegativeInt | None = None
 
     @field_validator("parameter_name")
     @classmethod
@@ -158,6 +274,11 @@ class CreateClipAutomationRequest(GetClipNotesRequest):
         if not value:
             raise ValueError("parameter_name must be non-empty")
         return value
+    # Live nests the controls that matter. ``chain_index`` selects a rack chain;
+    # add ``chain_device_index`` for a device inside it, or leave it out to
+    # address the chain's own mixer (``volume`` / ``panning``).
+    chain_index: NonNegativeInt | None = None
+    chain_device_index: NonNegativeInt | None = None
 
 
 class GetDeviceListRequest(RequestModel):
@@ -176,6 +297,11 @@ class GetParameterValueRequest(RequestModel):
         if not value:
             raise ValueError("parameter_name must be non-empty")
         return value
+    # Live nests the controls that matter. ``chain_index`` selects a rack chain;
+    # add ``chain_device_index`` for a device inside it, or leave it out to
+    # address the chain's own mixer (``volume`` / ``panning``).
+    chain_index: NonNegativeInt | None = None
+    chain_device_index: NonNegativeInt | None = None
 
 
 class SetParameterValueRequest(GetParameterValueRequest):
@@ -187,6 +313,44 @@ class SetParameterValueRequest(GetParameterValueRequest):
         if not math.isfinite(value):
             raise ValueError("value must be finite")
         return value
+    # Live nests the controls that matter. ``chain_index`` selects a rack chain;
+    # add ``chain_device_index`` for a device inside it, or leave it out to
+    # address the chain's own mixer (``volume`` / ``panning``).
+    chain_index: NonNegativeInt | None = None
+    chain_device_index: NonNegativeInt | None = None
+
+
+class GetPluginPresetsRequest(RequestModel):
+    track_index: NonNegativeInt
+    device_index: NonNegativeInt
+
+
+class SetPluginPresetRequest(GetPluginPresetsRequest):
+    """Select one plugin preset by index or by exact name.
+
+    Requiring exactly one selector keeps the write single-valued, so the
+    readback has one unambiguous target — the same rule the colour writes use.
+    """
+
+    preset_index: NonNegativeInt | None = None
+    preset_name: Annotated[str, Field(min_length=1, max_length=256)] | None = None
+
+    @field_validator("preset_name")
+    @classmethod
+    def strip_preset_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            raise ValueError("preset_name must be non-empty")
+        return value
+
+    @model_validator(mode="after")
+    def exactly_one_selector(self) -> SetPluginPresetRequest:
+        provided = [self.preset_index is not None, self.preset_name is not None]
+        if sum(provided) != 1:
+            raise ValueError("provide exactly one of preset_index or preset_name")
+        return self
 
 
 class GetRoutingRequest(RequestModel):
@@ -223,6 +387,32 @@ class GetSongLengthRequest(EmptyRequest):
 
 
 class LiveFindTrackRequest(RequestModel):
+    query: Annotated[str, Field(min_length=1, max_length=256)]
+
+    @field_validator("query")
+    @classmethod
+    def strip_query(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("query must be non-empty")
+        return value
+
+
+class LiveFindDeviceRequest(RequestModel):
+    track_index: NonNegativeInt
+    query: Annotated[str, Field(min_length=1, max_length=256)]
+
+    @field_validator("query")
+    @classmethod
+    def strip_query(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("query must be non-empty")
+        return value
+
+
+class LiveFindClipRequest(RequestModel):
+    track_index: NonNegativeInt
     query: Annotated[str, Field(min_length=1, max_length=256)]
 
     @field_validator("query")
@@ -276,6 +466,7 @@ class SetCurrentSongTimeRequest(RequestModel):
 
 class SetTempoRequest(RequestModel):
     tempo: Annotated[float, Field(ge=20, le=999)]
+    dry_run: bool = False
 
     @field_validator("tempo")
     @classmethod
@@ -349,6 +540,122 @@ class CreateClipRequest(RequestModel):
     track_index: NonNegativeInt
     clip_index: NonNegativeInt
     length_beats: PositiveBeat
+    dry_run: bool = False
+
+
+# ---------------------------------------------------------------------------
+# v0.5.5 — Arrangement timeline
+# ---------------------------------------------------------------------------
+
+
+class GetArrangementClipsRequest(RequestModel):
+    track_index: NonNegativeInt
+
+
+class DuplicateSessionClipToArrangementRequest(RequestModel):
+    """Place a Session clip on the timeline at ``time``, in beats from bar 1."""
+
+    track_index: NonNegativeInt
+    clip_index: NonNegativeInt
+    time: NonNegativeBeat
+
+
+class DeleteArrangementClipRequest(RequestModel):
+    """``clip_index`` indexes ``Track.arrangement_clips``, not a Session slot."""
+
+    track_index: NonNegativeInt
+    clip_index: NonNegativeInt
+
+
+class MoveArrangementClipRequest(DeleteArrangementClipRequest):
+    time: NonNegativeBeat
+
+
+class SetArrangementClipPropertiesRequest(DeleteArrangementClipRequest):
+    """At least one of ``name`` or ``muted`` must be present."""
+
+    name: str | None = None
+    muted: bool | None = None
+
+
+# ---------------------------------------------------------------------------
+# v0.5.6 — Instrument comprehension and authoring shorthands
+# ---------------------------------------------------------------------------
+
+
+class GetDeviceChainsRequest(RequestModel):
+    track_index: NonNegativeInt
+    device_index: NonNegativeInt
+
+
+class GetMidiChainReportRequest(RequestModel):
+    track_index: NonNegativeInt
+
+
+class DescribeInstrumentRequest(RequestModel):
+    track_index: NonNegativeInt
+
+
+class GetClipAutomationRequest(RequestModel):
+    """``device_index`` disambiguates a parameter name shared by several devices."""
+
+    track_index: NonNegativeInt
+    clip_index: NonNegativeInt
+    parameter_name: str
+    device_index: NonNegativeInt | None = None
+    resolution: Annotated[float, Field(gt=0, le=16)] = 0.25
+    # Live nests the controls that matter. ``chain_index`` selects a rack chain;
+    # add ``chain_device_index`` for a device inside it, or leave it out to
+    # address the chain's own mixer (``volume`` / ``panning``).
+    chain_index: NonNegativeInt | None = None
+    chain_device_index: NonNegativeInt | None = None
+
+
+class CurveControlPoint(RequestModel):
+    time: NonNegativeBeat
+    value: float
+
+
+class CreateClipAutomationCurveRequest(RequestModel):
+    """Few control points in, a dense step envelope out.
+
+    Live's clip envelopes are stepped, so a smooth ramp needs many steps. The
+    expansion happens on the server: the caller sends the shape, not its
+    hundreds of breakpoints.
+    """
+
+    track_index: NonNegativeInt
+    clip_index: NonNegativeInt
+    parameter_name: str
+    control_points: Annotated[list[CurveControlPoint], Field(min_length=2, max_length=200)]
+    shape: Literal["linear", "exp", "log", "hold"] = "linear"
+    resolution: Annotated[float, Field(gt=0, le=16)] = 0.25
+    device_index: NonNegativeInt | None = None
+    # Live nests the controls that matter. ``chain_index`` selects a rack chain;
+    # add ``chain_device_index`` for a device inside it, or leave it out to
+    # address the chain's own mixer (``volume`` / ``panning``).
+    chain_index: NonNegativeInt | None = None
+    chain_device_index: NonNegativeInt | None = None
+
+
+class PatternNote(RequestModel):
+    pitch: Annotated[int, Field(ge=0, le=127)]
+    start_time: NonNegativeBeat
+    duration: PositiveBeat
+    velocity: Annotated[int, Field(ge=1, le=127)] = 100
+    mute: bool = False
+
+
+class AddNotesPatternRequest(RequestModel):
+    """One cell, repeated, so the payload stays the size of the idea."""
+
+    track_index: NonNegativeInt
+    clip_index: NonNegativeInt
+    cell: Annotated[list[PatternNote], Field(min_length=1, max_length=256)]
+    cell_length: PositiveBeat
+    repeats: Annotated[int, Field(ge=1, le=128)]
+    transpose_per_repeat: Annotated[int, Field(ge=-48, le=48)] = 0
+    velocity_scale_per_repeat: Annotated[float, Field(gt=0, le=4)] = 1.0
 
 
 # ---------------------------------------------------------------------------
@@ -667,17 +974,40 @@ TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "clear_clip_notes": ClearClipNotesRequest,
     "fire_scene": FireSceneRequest,
     "set_track_property": SetTrackPropertyRequest,
+    "set_track_color": SetTrackColorRequest,
+    "set_clip_color": SetClipColorRequest,
+    "diagnose_clip_targets": DiagnoseClipTargetsRequest,
+    "get_arrangement_clips": GetArrangementClipsRequest,
+    "duplicate_session_clip_to_arrangement": DuplicateSessionClipToArrangementRequest,
+    "delete_arrangement_clip": DeleteArrangementClipRequest,
+    "move_arrangement_clip": MoveArrangementClipRequest,
+    "set_arrangement_clip_properties": SetArrangementClipPropertiesRequest,
+    "get_device_chains": GetDeviceChainsRequest,
+    "get_midi_chain_report": GetMidiChainReportRequest,
+    "describe_instrument": DescribeInstrumentRequest,
+    "get_clip_automation": GetClipAutomationRequest,
+    "create_clip_automation_curve": CreateClipAutomationCurveRequest,
+    "add_notes_pattern": AddNotesPatternRequest,
+    "move_track": MoveTrackRequest,
+    "reorder_tracks": ReorderTracksRequest,
+    "move_track_to_group": MoveTrackToGroupRequest,
+    "ungroup_track": UngroupTrackRequest,
+    "merge_groups": MergeGroupsRequest,
     "set_clip_properties": SetClipPropertiesRequest,
     "create_clip_automation": CreateClipAutomationRequest,
     "get_device_list": GetDeviceListRequest,
     "get_parameter_value": GetParameterValueRequest,
     "set_parameter_value": SetParameterValueRequest,
+    "get_plugin_presets": GetPluginPresetsRequest,
+    "set_plugin_preset": SetPluginPresetRequest,
     "get_routing": GetRoutingRequest,
     "get_browser_categories": GetBrowserCategoriesRequest,
     "search_browser": SearchBrowserRequest,
     "diff_snapshots_tool": DiffSnapshotsRequest,
     "get_song_length": GetSongLengthRequest,
     "live_find_track": LiveFindTrackRequest,
+    "live_find_device": LiveFindDeviceRequest,
+    "live_find_clip": LiveFindClipRequest,
     "list_device_params": ListDeviceParamsRequest,
     "create_cue_point": CreateCuePointRequest,
     "bulk_create_cue_points": BulkCuePointsRequest,

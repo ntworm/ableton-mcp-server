@@ -44,9 +44,5 @@ async def run(report: CertificationReport, *, client: AcceptanceClient) -> None:
             "scenes": client.call("get_scenes", {}),
         }
 
-    await _record_call(
-        report, "get_bridge_status", bridge_status_probe, passed="live_passed"
-    )
-    await _record_call(
-        report, "get_session_overview", session_overview_probe, passed="live_passed"
-    )
+    await _record_call(report, "get_bridge_status", bridge_status_probe, passed="live_passed")
+    await _record_call(report, "get_session_overview", session_overview_probe, passed="live_passed")

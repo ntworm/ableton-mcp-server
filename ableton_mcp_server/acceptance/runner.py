@@ -50,6 +50,9 @@ from .probes import (
 from .probes import (
     quit as _quit,
 )
+from .probes import (
+    tcp_reads as _tcp_reads,
+)
 from .report import (
     _record_call,
     _record_unavailable,
@@ -309,9 +312,7 @@ async def run_live_acceptance(
             if offline_probes is None:
                 import sys as _sys
 
-                probe_callable = _sys.modules[
-                    "ableton_mcp_server.acceptance"
-                ].run_offline_probes
+                probe_callable = _sys.modules["ableton_mcp_server.acceptance"].run_offline_probes
             else:
                 probe_callable = offline_probes
             await probe_callable(report, offline_dir)
@@ -325,10 +326,15 @@ async def run_live_acceptance(
         if "composed" in expanded:
             await _composed.run(report, client=client)
 
-        if "quit" in profiles and not {"tcp_reads", "mutations", "websocket_reads"} & set(expanded):
+        if "quit" in profiles and not {
+            "tcp_reads",
+            "mutations",
+            "websocket_reads",
+            "capability",
+        } & set(expanded):
             await _quit.run(report)
 
-        if {"tcp_reads", "mutations", "websocket_reads"} & set(expanded):
+        if {"tcp_reads", "mutations", "websocket_reads", "capability"} & set(expanded):
             baseline: BaselineSnapshot | None = None
             try:
                 metadata = call("get_project_metadata")
@@ -400,6 +406,94 @@ async def run_live_acceptance(
                     except Exception:
                         pass
 
+                if "capability" in expanded:
+                    # Prove the refusal, not the operation. Each of these
+                    # tools must reject a *well-formed* request with
+                    # CAPABILITY_UNAVAILABLE and leave the Set untouched. A
+                    # success is a hard failure: it would mean the tool found
+                    # some unverified path into the Set.
+                    _hierarchy = call("get_track_list")
+                    _regular = [
+                        int(track["index"])
+                        for track in _hierarchy
+                        if track.get("type") in ("midi", "audio")
+                    ]
+                    _groups = [
+                        int(track["index"])
+                        for track in _hierarchy
+                        if bool(track.get("is_group_track", False))
+                    ]
+                    _grouped = [
+                        int(track["index"])
+                        for track in _hierarchy
+                        if bool(track.get("is_grouped", False))
+                    ]
+                    _capability_requests: dict[str, dict[str, Any] | None] = {
+                        "move_track": (
+                            {"track_index": _regular[0], "destination_index": _regular[-1]}
+                            if _regular
+                            else None
+                        ),
+                        "reorder_tracks": ({"order": sorted(_regular)} if _regular else None),
+                        # These three need a Set that actually has groups. On a
+                        # disposable Set without any, the row is recorded as
+                        # not exercised rather than as a passed refusal.
+                        "move_track_to_group": (
+                            {"track_index": _regular[0], "group_track_index": _groups[0]}
+                            if _groups and _regular and _regular[0] != _groups[0]
+                            else None
+                        ),
+                        "ungroup_track": ({"track_index": _grouped[0]} if _grouped else None),
+                        "merge_groups": (
+                            {
+                                "source_group_index": _groups[0],
+                                "destination_group_index": _groups[1],
+                            }
+                            if len(_groups) >= 2
+                            else None
+                        ),
+                    }
+                    for _tool, _request in _capability_requests.items():
+                        if _request is None:
+                            # No Group Track in this Set, so a well-formed
+                            # request cannot be built. The row still reads
+                            # capability_unavailable — the operation has no
+                            # public API either way — but the evidence says
+                            # plainly that the refusal was not exercised here.
+                            report.record(
+                                Verification(
+                                    _tool,
+                                    "capability_unavailable",
+                                    "not exercised: this Set has no Group Track to build a "
+                                    "well-formed request from; the refusal is proven by the "
+                                    "unit tests. Use a Set containing groups for full "
+                                    "hierarchy coverage.",
+                                )
+                            )
+                            continue
+
+                        async def run_capability(
+                            _tool: str = _tool,
+                            _request: dict[str, Any] = _request,
+                        ) -> str:
+                            try:
+                                call(_tool, _request)
+                            except BridgeError as error:
+                                if error.code != "CAPABILITY_UNAVAILABLE":
+                                    raise
+                                return f"{_tool} refused with CAPABILITY_UNAVAILABLE"
+                            raise AssertionError(
+                                f"{_tool} returned success; Live's public API cannot "
+                                "perform it, so the refusal contract is broken"
+                            )
+
+                        await _record_call(
+                            report,
+                            _tool,
+                            run_capability,
+                            passed="capability_unavailable",
+                        )
+
                 if "tcp_reads" in expanded:
                     await _record_call(
                         report, "get_project_metadata", lambda: metadata, passed="live_passed"
@@ -416,6 +510,104 @@ async def run_live_acceptance(
                         lambda: call("get_track_list"),
                         passed="live_passed",
                     )
+
+                    async def run_diagnose_clip_targets() -> str:
+                        report_payload = call("diagnose_clip_targets", {})
+                        if not isinstance(report_payload, dict):
+                            raise AssertionError("diagnose_clip_targets must return a dict")
+                        for key in ("tracks", "session_clip_count", "arrangement_clip_count"):
+                            if key not in report_payload:
+                                raise AssertionError(
+                                    f"diagnose_clip_targets response missing {key!r}"
+                                )
+                        return (
+                            f"session={report_payload['session_clip_count']} "
+                            f"arrangement={report_payload['arrangement_clip_count']}"
+                        )
+
+                    await _record_call(report, "diagnose_clip_targets", run_diagnose_clip_targets)
+
+                    async def run_get_arrangement_clips() -> str:
+                        listing = call("get_arrangement_clips", {"track_index": track_index})
+                        if not isinstance(listing, dict) or "clips" not in listing:
+                            raise AssertionError("get_arrangement_clips must return clips")
+                        return f"clips={listing.get('clip_count')}"
+
+                    await _record_call(
+                        report,
+                        "get_arrangement_clips",
+                        run_get_arrangement_clips,
+                        passed="live_passed",
+                    )
+
+                    async def run_get_device_chains() -> str:
+                        payload = call(
+                            "get_device_chains", {"track_index": track_index, "device_index": 0}
+                        )
+                        if not isinstance(payload, dict) or "chains" not in payload:
+                            raise AssertionError("get_device_chains must return chains")
+                        return f"chains={payload.get('chain_count')}"
+
+                    await _record_call(
+                        report, "get_device_chains", run_get_device_chains, passed="live_passed"
+                    )
+
+                    async def run_get_midi_chain_report() -> str:
+                        payload = call("get_midi_chain_report", {"track_index": track_index})
+                        if "rewrites_input" not in payload:
+                            raise AssertionError("get_midi_chain_report must report rewrites_input")
+                        return f"rewrites={payload['rewrites_input']}"
+
+                    await _record_call(
+                        report,
+                        "get_midi_chain_report",
+                        run_get_midi_chain_report,
+                        passed="live_passed",
+                    )
+
+                    async def run_describe_instrument() -> str:
+                        payload = call("describe_instrument", {"track_index": track_index})
+                        if "has_instrument" not in payload:
+                            raise AssertionError("describe_instrument must report has_instrument")
+                        return f"instrument={payload.get('name', 'none')}"
+
+                    await _record_call(
+                        report, "describe_instrument", run_describe_instrument, passed="live_passed"
+                    )
+
+                    # Reading an envelope needs a clip in the probed slot. A
+                    # disposable Set is not required to have one, so absence is
+                    # an environment gap, not a bridge failure.
+                    async def run_get_clip_automation() -> str:
+                        payload = call(
+                            "get_clip_automation",
+                            {
+                                "track_index": track_index,
+                                "clip_index": clip_index,
+                                "parameter_name": "volume",
+                                "resolution": 1.0,
+                            },
+                        )
+                        if "has_envelope" not in payload:
+                            raise AssertionError("get_clip_automation must report has_envelope")
+                        return f"envelope={payload['has_envelope']}"
+
+                    try:
+                        await _record_call(
+                            report,
+                            "get_clip_automation",
+                            run_get_clip_automation,
+                            passed="live_passed",
+                        )
+                    except Exception:  # noqa: BLE001 - recorded below as an environment gap
+                        report.record(
+                            Verification(
+                                "get_clip_automation",
+                                "environment_unavailable",
+                                "probe slot holds no clip to read an envelope from",
+                            )
+                        )
+
                     await _record_call(
                         report,
                         "get_track_state",
@@ -547,6 +739,22 @@ async def run_live_acceptance(
                     await _record_call(
                         report, "live_find_track", lambda: matches, passed="live_passed"
                     )
+                    await _record_call(
+                        report,
+                        "live_find_device",
+                        lambda: call(
+                            "live_find_device", {"track_index": track_index, "query": "operator"}
+                        ),
+                        passed="live_passed",
+                    )
+                    await _record_call(
+                        report,
+                        "live_find_clip",
+                        lambda: call(
+                            "live_find_clip", {"track_index": track_index, "query": "verse"}
+                        ),
+                        passed="live_passed",
+                    )
                     # ``list_device_params`` requires ``track_id``, not
                     # ``track_index/device_index``.
                     track_id = _resolve_track_id(client, track_index)
@@ -577,6 +785,36 @@ async def run_live_acceptance(
                         lambda: call("lifecycle_status"),
                         passed="live_passed",
                     )
+
+                    # ``get_plugin_presets`` needs a third-party plugin in the
+                    # Set. A disposable acceptance Set is not required to hold
+                    # one, so its absence is an environment gap rather than a
+                    # bridge failure — see ENVIRONMENT_OPTIONAL_TOOLS.
+                    (
+                        preset_track_index,
+                        preset_device_index,
+                    ) = _tcp_reads._discover_first_plugin_device(baseline, call)
+                    if preset_track_index is None:
+                        report.record(
+                            Verification(
+                                "get_plugin_presets",
+                                "environment_unavailable",
+                                "no VST/VST3/AU plugin device found in current Set",
+                            )
+                        )
+                    else:
+                        await _record_call(
+                            report,
+                            "get_plugin_presets",
+                            lambda: call(
+                                "get_plugin_presets",
+                                {
+                                    "track_index": preset_track_index,
+                                    "device_index": preset_device_index,
+                                },
+                            ),
+                            passed="live_passed",
+                        )
                 else:
                     # ``mutations`` / ``websocket_reads`` profiles still
                     # need a recorded ``get_project_metadata`` row to
@@ -720,9 +958,7 @@ async def run_live_acceptance(
                     # Original warp state for restore.
                     original_warp = None
                     track_creation_runner: Callable[[str], Awaitable[str]] | None = None
-                    if (
-                        baseline["track_types"].get(audio_track_index) == "audio"
-                    ):
+                    if baseline["track_types"].get(audio_track_index) == "audio":
                         try:
                             audio_slots = call(
                                 "get_clip_summary", {"track_index": audio_track_index}
@@ -771,9 +1007,7 @@ async def run_live_acceptance(
                                         "save_set returned saved=true but "
                                         f"get_project_metadata still shows is_dirty={dirty_val}"
                                     )
-                                report.record(
-                                    Verification("save_set", "live_passed", "saved=true")
-                                )
+                                report.record(Verification("save_set", "live_passed", "saved=true"))
                                 return
                             if saved is False and api_avail is False:
                                 save_steps = (
@@ -822,6 +1056,7 @@ async def run_live_acceptance(
                                         "save_set", "failed", f"{type(error).__name__}: {error}"
                                     )
                                 )
+
                         # ----- cue points -----
                         async def run_create_cue() -> str:
                             call("create_cue_point", {"name": cue_name, "time": cue_time})
@@ -1237,6 +1472,87 @@ async def run_live_acceptance(
                         except Exception:
                             pass
 
+                        # ----- set_track_color + readback -----
+                        # Live's palette has 70 swatches. We pick a slot the
+                        # track is not already using so the readback proves a
+                        # real write instead of matching the prior value.
+                        _baseline_color_index = baseline.get("track_color_indexes", {}).get(
+                            midi_track_index
+                        )
+                        _probe_color_index = 1 if _baseline_color_index == 0 else 0
+
+                        async def run_set_track_color() -> str:
+                            call(
+                                "set_track_color",
+                                {
+                                    "track_index": midi_track_index,
+                                    "color_index": _probe_color_index,
+                                },
+                            )
+                            state = call("get_track_state", {"track_index": midi_track_index})
+                            observed = state.get("color_index")
+                            if observed != _probe_color_index:
+                                raise AssertionError(
+                                    "set_track_color readback mismatch: "
+                                    f"observed={observed!r} expected={_probe_color_index!r}"
+                                )
+                            return f"color_index={_probe_color_index} readback OK"
+
+                        await _record_call(report, "set_track_color", run_set_track_color)
+                        try:
+                            if _baseline_color_index is not None:
+                                call(
+                                    "set_track_color",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "color_index": _baseline_color_index,
+                                    },
+                                )
+                        except Exception:
+                            pass
+
+                        # ----- set_clip_color + readback -----
+                        # Only runs when create_clip produced a clip we own;
+                        # recolouring a pre-existing clip would change the
+                        # operator's Set beyond what cleanup restores.
+                        if not create_clip_ok:
+                            report.record(
+                                Verification(
+                                    "set_clip_color",
+                                    "failed",
+                                    "Skipped: create_clip dependency failed",
+                                )
+                            )
+                        else:
+
+                            async def run_set_clip_color() -> str:
+                                call(
+                                    "set_clip_color",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "clip_index": clip_index,
+                                        "color_index": 1,
+                                    },
+                                )
+                                info = call(
+                                    "get_clip_info",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "clip_index": clip_index,
+                                    },
+                                )
+                                observed = (
+                                    info.get("color_index") if isinstance(info, dict) else None
+                                )
+                                if observed != 1:
+                                    raise AssertionError(
+                                        "set_clip_color readback mismatch: "
+                                        f"observed={observed!r} expected=1"
+                                    )
+                                return "clip color_index=1 readback OK"
+
+                            await _record_call(report, "set_clip_color", run_set_clip_color)
+
                         # ----- rename_track + readback -----
                         async def run_rename_track() -> str:
                             tag_name = "ABLETON_MCP_ACCEPTANCE"
@@ -1270,6 +1586,179 @@ async def run_live_acceptance(
                                 )
                         except Exception:
                             pass
+
+                        # ----- Arrangement round trip: place, move, delete -----
+                        # Everything happens far past the end of the Set so the
+                        # probe cannot collide with real material, and the clip
+                        # it creates is removed by the last step of the trip.
+                        if not create_clip_ok:
+                            for arrangement_tool in (
+                                "duplicate_session_clip_to_arrangement",
+                                "move_arrangement_clip",
+                                "delete_arrangement_clip",
+                                "set_arrangement_clip_properties",
+                                "add_notes_pattern",
+                                "create_clip_automation_curve",
+                            ):
+                                report.record(
+                                    Verification(
+                                        arrangement_tool,
+                                        "failed",
+                                        "Skipped: create_clip dependency failed",
+                                    )
+                                )
+                        else:
+                            probe_beat = 4096.0
+
+                            def arrangement_clip_at(beat: float) -> dict[str, Any] | None:
+                                listing = call(
+                                    "get_arrangement_clips",
+                                    {"track_index": midi_track_index},
+                                )
+                                for entry in listing.get("clips", []):
+                                    start = entry.get("start_time")
+                                    if start is not None and abs(float(start) - beat) < 0.01:
+                                        return dict(entry)
+                                return None
+
+                            async def run_duplicate_to_arrangement() -> str:
+                                call(
+                                    "duplicate_session_clip_to_arrangement",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "clip_index": clip_index,
+                                        "time": probe_beat,
+                                    },
+                                )
+                                placed = arrangement_clip_at(probe_beat)
+                                if placed is None:
+                                    raise AssertionError(
+                                        "duplicate_session_clip_to_arrangement left no clip "
+                                        f"at beat {probe_beat}"
+                                    )
+                                return f"placed at {probe_beat}"
+
+                            await _record_call(
+                                report,
+                                "duplicate_session_clip_to_arrangement",
+                                run_duplicate_to_arrangement,
+                            )
+
+                            async def run_add_notes_pattern() -> str:
+                                call(
+                                    "add_notes_pattern",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "clip_index": clip_index,
+                                        "cell": [
+                                            {
+                                                "pitch": 60,
+                                                "start_time": 0.0,
+                                                "duration": 0.25,
+                                                "velocity": 90,
+                                            }
+                                        ],
+                                        "cell_length": 1.0,
+                                        "repeats": 2,
+                                    },
+                                )
+                                return "cell repeated twice"
+
+                            await _record_call(
+                                report, "add_notes_pattern", run_add_notes_pattern
+                            )
+
+                            async def run_create_clip_automation_curve() -> str:
+                                call(
+                                    "create_clip_automation_curve",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "clip_index": clip_index,
+                                        "parameter_name": "volume",
+                                        "control_points": [
+                                            {"time": 0.0, "value": 0.6},
+                                            {"time": 2.0, "value": 0.85},
+                                        ],
+                                        "shape": "linear",
+                                        "resolution": 0.5,
+                                    },
+                                )
+                                return "curve expanded server-side"
+
+                            await _record_call(
+                                report,
+                                "create_clip_automation_curve",
+                                run_create_clip_automation_curve,
+                            )
+
+
+                            async def run_set_arrangement_clip_properties() -> str:
+                                placed = arrangement_clip_at(probe_beat)
+                                if placed is None:
+                                    raise AssertionError("no probe clip to rename")
+                                call(
+                                    "set_arrangement_clip_properties",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "clip_index": int(placed["clip_index"]),
+                                        "name": "acceptance probe",
+                                    },
+                                )
+                                return "arrangement clip renamed"
+
+                            await _record_call(
+                                report,
+                                "set_arrangement_clip_properties",
+                                run_set_arrangement_clip_properties,
+                            )
+
+
+                            async def run_move_arrangement_clip() -> str:
+                                placed = arrangement_clip_at(probe_beat)
+                                if placed is None:
+                                    raise AssertionError("no probe clip to move")
+                                call(
+                                    "move_arrangement_clip",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "clip_index": int(placed["clip_index"]),
+                                        "time": probe_beat + 64.0,
+                                    },
+                                )
+                                if arrangement_clip_at(probe_beat) is not None:
+                                    raise AssertionError("move left a clip at the old position")
+                                if arrangement_clip_at(probe_beat + 64.0) is None:
+                                    raise AssertionError(
+                                        "move produced no clip at the new position"
+                                    )
+                                return f"moved to {probe_beat + 64.0}"
+
+                            await _record_call(
+                                report,
+                                "move_arrangement_clip",
+                                run_move_arrangement_clip,
+                            )
+
+                            async def run_delete_arrangement_clip() -> str:
+                                placed = arrangement_clip_at(probe_beat + 64.0)
+                                if placed is None:
+                                    raise AssertionError("no probe clip to delete")
+                                call(
+                                    "delete_arrangement_clip",
+                                    {
+                                        "track_index": midi_track_index,
+                                        "clip_index": int(placed["clip_index"]),
+                                    },
+                                )
+                                if arrangement_clip_at(probe_beat + 64.0) is not None:
+                                    raise AssertionError("delete_arrangement_clip left the clip")
+                                return "probe clip removed"
+
+                            await _record_call(
+                                report,
+                                "delete_arrangement_clip",
+                                run_delete_arrangement_clip,
+                            )
 
                         # ----- delete_clip + readback -----
                         if not create_clip_ok:
@@ -1393,8 +1882,7 @@ async def run_live_acceptance(
                                 )
                                 if not isinstance(rb_value, dict):
                                     raise AssertionError(
-                                        "set_parameter_value readback failed "
-                                        "(no dict response)"
+                                        "set_parameter_value readback failed (no dict response)"
                                     )
                                 rb_val = float(rb_value.get("value", 0.0))
                                 if abs(rb_val - target) > prop_tol:
@@ -1409,6 +1897,68 @@ async def run_live_acceptance(
 
                             await _record_call(
                                 report, "set_parameter_value", run_set_parameter_value
+                            )
+
+                        # ----- set_plugin_preset -----
+                        # The probe re-selects the preset that is already
+                        # active. That still exercises resolution, the write
+                        # and the verified readback, but leaves the owner's
+                        # plugin exactly as it was, so no restore is needed.
+                        (
+                            plugin_track_index,
+                            plugin_device_index,
+                        ) = _tcp_reads._discover_first_plugin_device(baseline, call)
+                        plugin_presets: list[Any] = []
+                        plugin_selected: Any = None
+                        if plugin_track_index is not None:
+                            presets_resp = call(
+                                "get_plugin_presets",
+                                {
+                                    "track_index": plugin_track_index,
+                                    "device_index": plugin_device_index,
+                                },
+                            )
+                            if isinstance(presets_resp, dict):
+                                raw_presets = presets_resp.get("presets")
+                                if isinstance(raw_presets, list):
+                                    plugin_presets = raw_presets
+                                plugin_selected = presets_resp.get("selected_preset_index")
+
+                        if not plugin_presets or not isinstance(plugin_selected, int):
+                            report.record(
+                                Verification(
+                                    "set_plugin_preset",
+                                    "environment_unavailable",
+                                    "no plugin exposing presets found in current Set",
+                                )
+                            )
+                        else:
+
+                            async def run_set_plugin_preset() -> str:
+                                response = call(
+                                    "set_plugin_preset",
+                                    {
+                                        "track_index": plugin_track_index,
+                                        "device_index": plugin_device_index,
+                                        "preset_index": plugin_selected,
+                                    },
+                                )
+                                if not isinstance(response, dict):
+                                    raise AssertionError("set_plugin_preset must return a dict")
+                                if response.get("selected_preset_index") != plugin_selected:
+                                    raise AssertionError(
+                                        "set_plugin_preset readback failed: expected "
+                                        f"{plugin_selected} but got "
+                                        f"{response.get('selected_preset_index')}"
+                                    )
+                                return (
+                                    f"track={plugin_track_index} "
+                                    f"device={plugin_device_index} "
+                                    f"preset={plugin_selected}"
+                                )
+
+                            await _record_call(
+                                report, "set_plugin_preset", run_set_plugin_preset
                             )
 
                         # ----- live_fade -----
@@ -1441,10 +1991,7 @@ async def run_live_acceptance(
                             ):
                                 raise AssertionError("live_fade immediate readback failed")
                             _expected_immediate = LIVE_FADE_UNITY_VALUE * (50.0 / 100.0)
-                            if (
-                                abs(float(post_immediate["volume"]) - _expected_immediate)
-                                > 0.05
-                            ):
+                            if abs(float(post_immediate["volume"]) - _expected_immediate) > 0.05:
                                 raise AssertionError(
                                     "live_fade immediate target mismatch "
                                     f"(expected {_expected_immediate}, "
@@ -1547,9 +2094,7 @@ async def run_live_acceptance(
                                 or len(devs_after) != count_before + 1
                             ):
                                 post_str = (
-                                    len(devs_after)
-                                    if isinstance(devs_after, list)
-                                    else "non-list"
+                                    len(devs_after) if isinstance(devs_after, list) else "non-list"
                                 )
                                 raise AssertionError(
                                     "load_device_to_track did not increase device count by 1: "
@@ -1634,11 +2179,7 @@ async def run_live_acceptance(
                                 )
 
                             created_track = next(
-                                (
-                                    t
-                                    for t in post_tracks
-                                    if int(t.get("index", -1)) == new_index
-                                ),
+                                (t for t in post_tracks if int(t.get("index", -1)) == new_index),
                                 None,
                             )
                             if created_track is None or created_track.get("type") != kind:
@@ -1881,9 +2422,7 @@ async def run_live_acceptance(
                             if ttype in ("midi", "audio")
                         )
                         for idx in _cleanup_indices_mute_solo:
-                            original = bool(
-                                baseline.get("track_mutes", {}).get(idx, False)
-                            )
+                            original = bool(baseline.get("track_mutes", {}).get(idx, False))
 
                             def _restore_mute(
                                 _idx: int = idx,
@@ -1920,9 +2459,7 @@ async def run_live_acceptance(
                                 verify=_verify_mute,
                             )
                         for idx in _cleanup_indices_mute_solo:
-                            original = bool(
-                                baseline.get("track_solos", {}).get(idx, False)
-                            )
+                            original = bool(baseline.get("track_solos", {}).get(idx, False))
 
                             def _restore_solo(
                                 _idx: int = idx,
@@ -1959,9 +2496,7 @@ async def run_live_acceptance(
                                 verify=_verify_solo,
                             )
                         for idx in _cleanup_indices_arm:
-                            original = bool(
-                                baseline.get("track_arms", {}).get(idx, False)
-                            )
+                            original = bool(baseline.get("track_arms", {}).get(idx, False))
 
                             def _restore_arm(
                                 _idx: int = idx,
@@ -1997,6 +2532,44 @@ async def run_live_acceptance(
                                 _restore_arm,
                                 verify=_verify_arm,
                             )
+                        # Restore each track's palette slot. Tracks whose
+                        # baseline colour the bridge never reported are
+                        # skipped: writing a default would recolour a Set the
+                        # runner was never able to read.
+                        for idx, original_index in sorted(
+                            (baseline.get("track_color_indexes", {}) or {}).items()
+                        ):
+                            if original_index is None:
+                                continue
+
+                            def _restore_color(
+                                _idx: int = idx,
+                                _original: int = original_index,
+                            ) -> Any:
+                                return call(
+                                    "set_track_color",
+                                    {"track_index": _idx, "color_index": _original},
+                                )
+
+                            def _verify_color(
+                                _observed: Any,
+                                _idx: int = idx,
+                                _original: int = original_index,
+                            ) -> None:
+                                _eq(
+                                    call("get_track_state", {"track_index": _idx}).get(
+                                        "color_index"
+                                    ),
+                                    _original,
+                                    f"track:{_idx}.color_index",
+                                )
+
+                            _restore_call(
+                                f"set_track_color({idx})",
+                                "set_track_color",
+                                _restore_color,
+                                verify=_verify_color,
+                            )
                         # Restore the live_fade target volume to its
                         # Restore the live_fade mixer volume to its pre-fade value.
                         # ``live_fade`` mutates
@@ -2009,9 +2582,7 @@ async def run_live_acceptance(
                         if "live_fade_volume_original" in artifacts:
                             restore_target = artifacts["live_fade_volume_original"]
                             target_track = int(
-                                artifacts.get(
-                                    "live_fade_track_index", fade_track_index
-                                )
+                                artifacts.get("live_fade_track_index", fade_track_index)
                             )
 
                             def _verify_volume(_o: Any) -> None:

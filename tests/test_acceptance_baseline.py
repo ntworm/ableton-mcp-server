@@ -105,10 +105,14 @@ class TestDiscoverBaseline:
                 if command == "get_project_metadata":
                     return {"song_name": "TESTE_CODEX"}
                 if command == "get_track_list":
-                    return get_track_list_return if get_track_list_return is not None else [
-                        {"index": 0, "name": "Bass", "type": "midi"},
-                        {"index": 1, "name": "Lead", "type": "audio"},
-                    ]
+                    return (
+                        get_track_list_return
+                        if get_track_list_return is not None
+                        else [
+                            {"index": 0, "name": "Bass", "type": "midi"},
+                            {"index": 1, "name": "Lead", "type": "audio"},
+                        ]
+                    )
                 if command == "get_track_state":
                     idx = params["track_index"]
                     default = {

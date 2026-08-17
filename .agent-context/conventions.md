@@ -41,6 +41,10 @@ Configuration: `AbletonMCPServer_Extension/package.json`, `tsconfig.json`, and `
 
 Do not treat a proposal in `prompts/` as implemented until all these layers exist.
 
+`live_find_device` and `live_find_clip` return fresh session-local locators. Their path IDs are not persistent handles; callers must search again after structural edits.
+
+Dry-run behavior is deliberately bounded: only `set_tempo` and `create_clip` accept `dry_run`, and a dry run must validate without writing or opening an undo step. Installer previews use `ableton-mcp install-script --dry-run`; the PowerShell `-DryRun` switch delegates to that command.
+
 ## Deferred Live writes
 
 Python LOM work must execute through the Remote Script request processor on `update_display()`. For writes that settle asynchronously, use the existing generator/read-back pattern and contract retry/tolerance values. Never block Live's UI thread with `sleep()`.
@@ -71,4 +75,3 @@ npm run build
 - Preserve unrelated dirty changes; inspect status before and after work.
 - Do not push, tag, publish, or rewrite history without explicit authorization.
 - Keep `pyproject.toml`, `manifest.json`, Extension package version, changelog, and release notes aligned.
-

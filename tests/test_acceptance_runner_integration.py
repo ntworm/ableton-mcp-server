@@ -21,6 +21,7 @@ from ableton_mcp_server.acceptance import (
     run_live_acceptance,
 )
 from ableton_mcp_server.catalog import TOOL_CATALOG
+from contracts import UNSUPPORTED_CAPABILITIES
 
 from ._offline_probe_fixture import fast_offline_probes
 from ._strict_fake import _READ_ONLY_TCP_COMMANDS, StrictFakeBridge
@@ -44,10 +45,10 @@ def _inject_fast_offline_probes(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(acceptance_module, "run_offline_probes", fast_offline_probes)
 
 
-def test_fake_runner_returns_65_certification_rows() -> None:
+def test_fake_runner_returns_77_certification_rows() -> None:
     """Every catalogued tool must produce exactly one verification row."""
     expected = len(TOOL_CATALOG)
-    assert expected == 65
+    assert expected == 88
 
     bridge = StrictFakeBridge()
     result = asyncio.run(
@@ -62,8 +63,8 @@ def test_fake_runner_returns_65_certification_rows() -> None:
         )
     )
     cert = result["certification"]
-    assert cert["tool_count"] == 65
-    assert len(cert["tools"]) == 65
+    assert cert["tool_count"] == 88
+    assert len(cert["tools"]) == 88
     catalog_names = {item.name for item in TOOL_CATALOG}
     assert {row["tool"] for row in cert["tools"]} == catalog_names
     # ``quit_ableton`` is explicitly ``manual_required`` in baseline.
@@ -164,7 +165,7 @@ def test_fake_runner_partial_profile_is_not_release_ready() -> None:
     for tool in BASELINE_PROBE_GROUPS["mutations"]:
         assert tool in statuses
     # The runner must NOT have skipped the missing tools entirely.
-    assert len(statuses) == 65
+    assert len(statuses) == 88
 
 
 def test_fake_runner_release_ready_false_when_one_tool_fails() -> None:
@@ -211,8 +212,9 @@ def test_fake_runner_baseline_records_only_known_unavailable() -> None:
     unavailable = sorted(
         tool for tool, status in statuses.items() if status == "environment_unavailable"
     )
-    # Without ``--fire-clip``, fire_clip is also unavailable.
-    allowed = {"fire_clip", "build_extension"}
+    # Without ``--fire-clip``, fire_clip is also unavailable. The plugin rows
+    # need a third-party VST/VST3/AU that the fake Set does not carry.
+    allowed = {"fire_clip", "build_extension", "get_plugin_presets", "set_plugin_preset"}
     assert set(unavailable) <= allowed, f"unexpected unavailable tools: {unavailable}"
     for tool, status in statuses.items():
         if tool in allowed:
@@ -222,6 +224,13 @@ def test_fake_runner_baseline_records_only_known_unavailable() -> None:
             # ``manual_required``; other rows must not be silently
             # downgraded without an out-of-band signal.
             assert tool == "quit_ableton", f"unexpected manual_required row: {tool}"
+            continue
+        if status == "capability_unavailable":
+            # Only the hierarchy tools may carry this status, and membership
+            # comes from contracts — a probe cannot elect itself into it.
+            assert tool in UNSUPPORTED_CAPABILITIES, (
+                f"{tool} is not a documented capability gap but claimed one"
+            )
             continue
         assert status in {"live_passed", "offline_passed"}, f"{tool} unexpectedly {status!r}"
 
@@ -342,7 +351,7 @@ def test_baseline_probe_coverage_matches_catalog() -> None:
     flat = {name for group in BASELINE_PROBE_GROUPS.values() for name in group}
     catalog_names = {item.name for item in TOOL_CATALOG}
     assert flat == catalog_names
-    assert len(flat) == 65
+    assert len(flat) == 88
 
 
 def test_spy_proves_fast_offline_probes_is_called(
@@ -482,6 +491,7 @@ def test_save_set_order_and_is_dirty_checking() -> None:
 
 def test_preflight_is_dirty_missing_or_ambiguous() -> None:
     """Verify that metadata missing is_dirty or non-False value raises error."""
+
     class MissingDirtyBridge(StrictFakeBridge):
         def call(self, command_type: str, params: Any = None, *, timeout: Any = None) -> Any:
             if command_type == "get_project_metadata":
@@ -856,6 +866,7 @@ def test_parameter_discovery_stale_list_device_params_and_small_range() -> None:
 
 def test_parameter_write_ignored_by_fake_causes_probe_failure() -> None:
     """Verify that if set_parameter_value fails to apply on host, the probe records failed."""
+
     class RefusingParamBridge(StrictFakeBridge):
         def call(self, command_type: str, params: Any = None, *, timeout: Any = None) -> Any:
             if command_type == "set_parameter_value":
@@ -881,6 +892,7 @@ def test_parameter_write_ignored_by_fake_causes_probe_failure() -> None:
 
 def test_load_device_to_track_preexisting_operator_causes_failure() -> None:
     """Verify that returning success without increasing device count fails load_device_to_track."""
+
     class NoOpLoadBridge(StrictFakeBridge):
         async def call_ws(self, method: str, params: Any = None, *, timeout: float = 2.0) -> Any:
             if method == "load_device_to_track":
@@ -912,6 +924,7 @@ def test_load_device_to_track_preexisting_operator_causes_failure() -> None:
 
 def test_create_track_existing_index_or_inconsistent_type_causes_failure() -> None:
     """Verify that returning existing track index for create_audio_track fails the probe."""
+
     class ExistingIndexTrackBridge(StrictFakeBridge):
         def call(self, command_type: str, params: Any = None, *, timeout: Any = None) -> Any:
             if command_type == "create_audio_track":
@@ -958,6 +971,7 @@ def test_live_fade_restore_uses_fallback_track_index() -> None:
 
 def test_small_parameter_range_write_failure() -> None:
     """Verify write failure on micro range (0.0 to 0.000001) is detected."""
+
     class RefusingMicroBridge(StrictFakeBridge):
         def call(self, command_type: str, params: Any = None, *, timeout: Any = None) -> Any:
             if command_type == "set_parameter_value":
@@ -1007,6 +1021,7 @@ def test_small_parameter_range_write_failure() -> None:
 )
 def test_load_device_to_track_contract_robustness(t_case: str, expected_err: str) -> None:
     """Verify load_device_to_track fails when pre-query is non-list or index is negative."""
+
     class RobustnessBridge(StrictFakeBridge):
         def call(self, command_type: str, params: Any = None, *, timeout: Any = None) -> Any:
             if command_type == "get_device_list" and t_case == "non_list_devs":
@@ -1061,7 +1076,8 @@ def test_save_set_precedes_all_mutations_global_timeline() -> None:
         )
     )
     mutations = [
-        t for t in bridge.timeline_calls
+        t
+        for t in bridge.timeline_calls
         if t[1] not in _READ_ONLY_TCP_COMMANDS and t[1] != "get_warp_state"
     ]
     assert mutations[0][1] == "save_set"
@@ -1088,6 +1104,7 @@ def test_save_set_precedes_all_mutations_global_timeline() -> None:
 )
 def test_track_creation_negative_matrix(tool_name: str, subclass_behavior: str) -> None:
     """Verify track creation negative cases result in probe failure."""
+
     class TrackCreationBadBridge(StrictFakeBridge):
         def call(self, command_type: str, params: Any = None, *, timeout: Any = None) -> Any:
             if command_type == tool_name:
@@ -1133,6 +1150,7 @@ def test_track_creation_negative_matrix(tool_name: str, subclass_behavior: str) 
 
 def test_save_set_api_unavailable_recorded_as_manual_required_and_release_ready() -> None:
     """Verify save_set api_available=false is manual_required and permits release_ready."""
+
     class ApiUnavailSaveBridge(StrictFakeBridge):
         def call(self, command_type: str, params: Any = None, *, timeout: Any = None) -> Any:
             if command_type == "save_set":

@@ -94,9 +94,7 @@ def test_build_extension_surfaces_nonzero_returncode(
     _patch_os_name(monkeypatch, "posix")
 
     def failing_run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-        return subprocess.CompletedProcess(
-            command, 1, stdout="", stderr="npm ERR! missing script"
-        )
+        return subprocess.CompletedProcess(command, 1, stdout="", stderr="npm ERR! missing script")
 
     monkeypatch.setattr(server.subprocess, "run", failing_run)
 

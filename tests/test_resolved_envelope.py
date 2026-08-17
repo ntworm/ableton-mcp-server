@@ -196,7 +196,9 @@ def test_resolved_omitted_keys_when_name_unavailable() -> None:
     song.tracks[0].name = ""
 
     payload = execute_command(
-        song, FakeApplication(), "create_clip",
+        song,
+        FakeApplication(),
+        "create_clip",
         {"track_index": 0, "clip_index": 0, "length_beats": 4.0},
     )
 
@@ -212,7 +214,9 @@ def test_resolved_omitted_keys_when_name_unavailable() -> None:
     song2 = FakeSong()
     song2.tracks[0].clip_slots = [FakeClipSlot()]
     payload_with_name = execute_command(
-        song2, FakeApplication(), "create_clip",
+        song2,
+        FakeApplication(),
+        "create_clip",
         {"track_index": 0, "clip_index": 0, "length_beats": 4.0},
     )
     assert payload_with_name["resolved"]["track_name"] == "Bass"

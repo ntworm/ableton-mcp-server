@@ -52,6 +52,24 @@ The five categories below are the most likely to surprise or burn an AI agent th
 
 **Mitigation:** cast `float(cue.time)` and compare with `0.01` beat tolerance.
 
+## Category O — Track reordering has no public API
+
+**Symptom:** an agent is asked to "move the drums group above the bass" and looks for a `move_track` tool, or invents one by duplicating the track and deleting the original.
+
+**Root cause:** the public LOM exposes track *creation at an index* and track *deletion by index* — `Song.create_audio_track(index)`, `Song.create_midi_track(index)`, `Song.duplicate_track(index)`, `Song.delete_track(index)` — and nothing that repositions an existing track. `song.tracks` and `song.visible_tracks` are read-only lists (the [Song LOM reference](https://docs.cycling74.com/apiref/lom/song/) marks them get/observe), and `Track.group_track` is read-only, so a track cannot be moved into or out of a group either. The Ableton Extension SDK has the same gap: `ableton-extensions-sdk` 1.0.0-beta.0 ships `songCreateMidiTrack`, `songCreateAudioTrack`, `songDuplicateTrack` and `songDeleteTrack`, its `Song.createAudioTrack()` / `createMidiTrack()` do not even take an index ("Inserted after the last selected track, or appended if no track is selected"), and there is no reposition binding anywhere in its DataModel surface.
+
+**Mitigation:** five tools — `move_track`, `reorder_tracks`, `move_track_to_group`, `ungroup_track`, `merge_groups` — are registered so the gap is discoverable, and every one of them validates the request against the live Set and then refuses with a typed `CAPABILITY_UNAVAILABLE` whose `details` carry the API evidence (`contracts.UNSUPPORTED_CAPABILITIES` / `contracts.CAPABILITY_EVIDENCE`). Validation runs *first*, so a bad index still returns `INVALID_PARAMS` / `WRONG_TYPE` / `BAD_INPUT` and stays distinguishable from the permanent gap. None of them opens an undo step or writes anything. `get_bridge_status().capability_gaps` exposes the same evidence without triggering a refusal.
+
+Duplicate-then-delete is **not** an acceptable emulation, and it does not even work: `duplicate_track(index)` always inserts the copy immediately after the original, so relative order cannot change — and it would destroy the original track. Devices, unlike tracks, *can* be moved between tracks via `Song.move_device(device, target, target_position)`; that is the one repositioning primitive the LOM does offer. Create tracks at the index you want, or reorder and group by hand in Live.
+
+## Category P — `#` in a track name is Live's auto-numbering token
+
+**Symptom:** a track renamed to `# DRUMS` shows up as `1 DRUMS`, and reading the name back returns the rendered form, not the string that was sent.
+
+**Root cause:** Live treats `#` inside a track or clip name as a placeholder for the track's automatic number, exactly as it does in the Rename dialog. This is native Live behaviour, not a bridge bug and not a transport encoding problem. The LOM has no escape syntax for a literal `#` and no separate "display name" property, so there is nothing to preserve the character with.
+
+**Mitigation:** `rename_track` sends the string unchanged and verifies the readback, so the substitution is visible instead of silent. Do not add an escape mechanism or rewrite names on the way through — that would hide a real Live behaviour from the caller. If a literal `#` is required, it cannot be had through the public API. Identifying a Group Track never depends on its rendered name: use `is_group_track` from `get_track_list` / `get_track_state`, which reads `Track.is_foldable`.
+
 ## Category F — Duplicated protocol constants drift
 
 **Symptom:** one process permits a command that the other rejects.
@@ -127,6 +145,14 @@ If a connection fails after a mutation was sent, the client cannot know whether 
 **Symptom:** `get_ableton_logs` cannot find `APPDATA` when the MCP process is not a Windows process.
 
 **Mitigation:** prefer `ABLETON_MCP_LOG_PATH`, then search native Windows/macOS locations and mounted Windows profiles. The canonical WSL deployment uses Windows Python and therefore receives `APPDATA` normally.
+
+## Category Q — A plugin reports no parameters until the user clicks Configure
+
+**Symptom:** `get_device_list` on a track holding a VST/VST3/AU returns that device with a single `Device On` parameter, and `set_parameter_value` answers `INVALID_PARAMS` for every real plugin control. The plugin looks parameterless even though its own window is full of knobs.
+
+**Cause:** Live does not publish a plugin's parameters to the Live Object Model. `PluginDevice.parameters` contains `Device On` plus only the controls a user added by hand through the device's **Configure** button in Live's device panel. The same gate applies to MIDI mapping and clip automation, so this is Live's design and not a bridge limitation. No remote API can add an entry to the Configure list.
+
+**Mitigation:** the bridge reports the state instead of returning a silently empty list. Plugin devices carry a `plugin_state` block in `get_device_list` and `list_device_params`; with nothing configured it reads `{"status": "not_configured", "hint": "PLUGIN_NOT_CONFIGURED", ...}`, and parameter lookups fail with the same explanation under `details.hint_code`. Ask the user to configure the controls in Live. `PluginDevice.presets` and `selected_preset_index` are exempt from the Configure gate, so `get_plugin_presets` / `set_plugin_preset` work regardless.
 
 ## LOM calls used for clip debugging
 

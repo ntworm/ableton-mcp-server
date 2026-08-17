@@ -23,11 +23,14 @@ from typing import Any
 
 from ._contracts import (
     ALLOWED_MUTATIONS,
+    CAPABILITY_EVIDENCE,
     CUE_OPERATION_VERIFY_TICKS,
     CUE_TIME_TOLERANCE,
     DEFAULT_HOST,
     DEFAULT_PORT,
+    ERROR_AMBIGUOUS_MATCH,
     ERROR_BAD_INPUT,
+    ERROR_CAPABILITY_UNAVAILABLE,
     ERROR_CUE_SNAPPED_TO_GRID,
     ERROR_INTERNAL_ERROR,
     ERROR_INVALID_PARAMS,
@@ -40,8 +43,16 @@ from ._contracts import (
     ERROR_UNKNOWN_COMMAND,
     ERROR_VERIFICATION_FAILED,
     ERROR_WRONG_TYPE,
+    LIVE_COLOR_INDEX_MAX,
+    LIVE_COLOR_INDEX_MIN,
+    LIVE_COLOR_RGB_MAX,
+    LIVE_COLOR_RGB_MIN,
     PLAYHEAD_MOVE_RETRIES,
+    PLUGIN_NOT_CONFIGURED,
+    PLUGIN_NOT_CONFIGURED_HINT,
     READ_ONLY_COMMANDS,
+    UNSUPPORTED_CAPABILITIES,
+    is_plugin_device_class,
     request_timeout_seconds,
 )
 
@@ -83,10 +94,20 @@ def _dbg(message: str) -> None:
 class RemoteError(Exception):
     """Structured error produced by a Remote Script handler."""
 
-    def __init__(self, code: str, message: str, hint: str | None = None) -> None:
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        hint: str | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> None:
         super().__init__(message)
         self.code = code
         self.hint = hint
+        # Machine-readable payload for errors that carry more than prose.
+        # ``CAPABILITY_UNAVAILABLE`` uses it for the API evidence behind the
+        # refusal and for the request the caller made.
+        self.details = details
 
     def to_envelope(self) -> dict[str, Any]:
         envelope: dict[str, Any] = {
@@ -96,6 +117,8 @@ class RemoteError(Exception):
         }
         if self.hint:
             envelope["hint"] = self.hint
+        if self.details:
+            envelope["details"] = self.details
         return envelope
 
 
@@ -151,6 +174,32 @@ def _safe(getter: Callable[[], Any], default: Any) -> Any:
         return default
 
 
+def _optional_int(value: Any) -> int | None:
+    """Coerce a LOM integer property to ``int``, or ``None`` when absent.
+
+    ``bool`` is excluded on purpose: it is an ``int`` subclass in Python, and
+    a host that answered ``True`` for ``color_index`` would otherwise be
+    reported as colour ``1``.
+    """
+
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return int(value)
+
+
+def _optional_float(value: Any) -> float | None:
+    """Coerce a LOM numeric property to ``float``, or ``None`` when absent.
+
+    Beat times arrive as floats but a host that has no value answers ``None``,
+    and ``bool`` is refused for the same reason as in ``_optional_int``.
+    """
+
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    number = float(value)
+    return number if math.isfinite(number) else None
+
+
 def _required(params: dict[str, Any], name: str) -> Any:
     if name not in params:
         raise RemoteError(ERROR_INVALID_PARAMS, "Missing required parameter %r." % name)
@@ -204,6 +253,16 @@ def _all_tracks(song: Any) -> list[Any]:
 
 
 def _track_type(song: Any, track: Any) -> str:
+    """Return the routing kind of a track: master, return, midi, or audio.
+
+    A Group Track has no MIDI input and therefore lands on ``audio`` here.
+    That is deliberate: ``type`` describes what the track carries, and the
+    value set is part of the wire contract (``_clip_slot`` and the acceptance
+    cleanup both branch on it). Group membership is reported separately by
+    :func:`_track_hierarchy` through ``is_group_track`` / ``is_grouped``;
+    callers must never infer "this is a group" from ``type == "audio"``.
+    """
+
     if track == song.master_track:
         return "master"
     if track in song.return_tracks:
@@ -211,6 +270,48 @@ def _track_type(song: Any, track: Any) -> str:
     if bool(_safe(lambda: track.has_midi_input, False)):
         return "midi"
     return "audio"
+
+
+def _group_track_index(song: Any, track: Any) -> int | None:
+    """Return the session index of ``track.group_track``, or ``None``.
+
+    ``Track.group_track`` is read-only and Live returns ``id 0`` (a falsy
+    object, not ``None``) for an ungrouped track. We therefore resolve the
+    parent through the same ``_all_tracks`` ordering used by every path-id so
+    the value a client gets back is directly usable as ``track_index``.
+    """
+
+    parent = _safe(lambda: track.group_track, None)
+    if parent is None:
+        return None
+    for index, candidate in enumerate(_all_tracks(song)):
+        if candidate == parent:
+            return index
+    return None
+
+
+def _track_hierarchy(song: Any, track: Any) -> dict[str, Any]:
+    """Capture the LOM grouping and colour fields shared by track reads.
+
+    Every field is read through ``_safe`` because return and master tracks do
+    not expose the full Track surface, and older Live builds may omit
+    individual properties. A property Live does not expose is reported as
+    ``None`` (or ``False`` for the booleans) rather than being invented.
+    """
+
+    color_index = _optional_int(_safe(lambda: track.color_index, None))
+    fold_state = _optional_int(_safe(lambda: track.fold_state, None))
+    group_index = _group_track_index(song, track)
+    return {
+        "color": int(_safe(lambda: track.color, 0)),
+        "color_index": color_index,
+        "is_group_track": bool(_safe(lambda: track.is_foldable, False)),
+        "is_grouped": bool(_safe(lambda: track.is_grouped, False)),
+        "group_track_index": group_index,
+        "group_track_id": "track:%s" % group_index if group_index is not None else None,
+        "is_visible": bool(_safe(lambda: track.is_visible, True)),
+        "fold_state": fold_state,
+    }
 
 
 def _track_at(song: Any, index: int) -> Any:
@@ -260,19 +361,57 @@ def _capture_parameter(parameter: Any, path_id: str) -> dict[str, Any]:
     }
 
 
+def _configured_parameter_count(parameters: list[dict[str, Any]]) -> int:
+    """Count plugin parameters the user added through Live's Configure button.
+
+    ``Device On`` belongs to Live's wrapper, not to the plugin, so it is never
+    evidence that the plugin was configured.
+    """
+
+    return sum(1 for parameter in parameters if parameter.get("name") != "Device On")
+
+
+def _plugin_state(class_name: str, parameters: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Describe a plugin wrapper's Configure state, or ``None`` for native devices.
+
+    An empty ``parameters`` list on a plugin is ambiguous on its own: the
+    caller cannot tell "this plugin has no controls" from "nobody has
+    configured it yet". This block resolves that ambiguity so an agent knows
+    to ask the user for the Configure step instead of assuming the device is
+    not automatable.
+    """
+
+    if not is_plugin_device_class(class_name):
+        return None
+    configured = _configured_parameter_count(parameters)
+    state: dict[str, Any] = {
+        "configured_parameter_count": configured,
+        "status": "configured" if configured else "not_configured",
+    }
+    if not configured:
+        state["hint"] = PLUGIN_NOT_CONFIGURED
+        state["message"] = PLUGIN_NOT_CONFIGURED_HINT
+    return state
+
+
 def _capture_device(device: Any, track_index: int, device_index: int) -> dict[str, Any]:
     device_id = "track:%s/device:%s" % (track_index, device_index)
     parameters = [
         _capture_parameter(parameter, "%s/param:%s" % (device_id, parameter_index))
         for parameter_index, parameter in enumerate(_safe(lambda: device.parameters, []))
     ]
-    return {
+    class_name = str(_safe(lambda: device.class_name, ""))
+    payload = {
         "id": device_id,
         "name": str(_safe(lambda: device.name, "")),
-        "class_name": str(_safe(lambda: device.class_name, "")),
+        "class_name": class_name,
         "is_active": bool(_safe(lambda: device.is_active, True)),
         "parameters": parameters,
     }
+    plugin_state = _plugin_state(class_name, parameters)
+    if plugin_state is not None:
+        payload["plugin_state"] = plugin_state
+    return payload
 
 
 def _capture_clip_slot(slot: Any, track_index: int, slot_index: int) -> dict[str, Any]:
@@ -325,7 +464,7 @@ def _capture_track(song: Any, track: Any, index: int) -> dict[str, Any]:
         "index": index,
         "name": str(_safe(lambda: track.name, "")),
         "type": track_kind,
-        "color": int(_safe(lambda: track.color, 0)),
+        **_track_hierarchy(song, track),
         "mute": bool(_safe(lambda: track.mute, False)),
         "solo": bool(_safe(lambda: track.solo, False)),
         "arm": bool(_safe(lambda: track.arm, False)),
@@ -365,6 +504,7 @@ def cmd_get_track_list(
             "index": index,
             "name": str(_safe(lambda track=track: track.name, "")),
             "type": _track_type(song, track),
+            **_track_hierarchy(song, track),
         }
         for index, track in enumerate(_all_tracks(song))
     ]
@@ -543,39 +683,246 @@ def cmd_get_device_list(
     ]
 
 
+def _device_at(song: Any, track_index: int, device_index: int) -> tuple[Any, Any]:
+    track = _track_at(song, track_index)
+    devices = list(_safe(lambda: track.devices, []))
+    if device_index < 0 or device_index >= len(devices):
+        raise RemoteError(ERROR_INVALID_PARAMS, "Device index %s does not exist." % device_index)
+    return track, devices[device_index]
+
+
+def _missing_parameter_error(device: Any, parameter_name: str, names: list[str]) -> RemoteError:
+    """Build the INVALID_PARAMS envelope for an unresolved parameter name.
+
+    On a plugin whose Configure list is empty the close-match suggestion has
+    nothing to work with, so the envelope carries the Configure explanation
+    instead of a bare "not found" the caller cannot act on.
+    """
+
+    suggestions = difflib.get_close_matches(parameter_name, names, n=3, cutoff=0.5)
+    suffix = " Did you mean: %s?" % ", ".join(suggestions) if suggestions else ""
+    class_name = str(_safe(lambda: device.class_name, ""))
+    if is_plugin_device_class(class_name) and not _configured_parameter_count(
+        [{"name": name} for name in names]
+    ):
+        return RemoteError(
+            ERROR_INVALID_PARAMS,
+            "Parameter %r was not found: plugin %r exposes no configured parameters."
+            % (parameter_name, str(_safe(lambda: device.name, ""))),
+            hint=PLUGIN_NOT_CONFIGURED_HINT,
+            details={"hint_code": PLUGIN_NOT_CONFIGURED, "class_name": class_name},
+        )
+    return RemoteError(
+        ERROR_INVALID_PARAMS,
+        "Parameter %r was not found.%s" % (parameter_name, suffix),
+    )
+
+
 def cmd_get_parameter_value(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, Any]:
     track_index = _integer_param(params, "track_index")
     device_index = _integer_param(params, "device_index")
     parameter_name = _string_param(params, "parameter_name")
-    track = _track_at(song, track_index)
-    devices = list(_safe(lambda: track.devices, []))
-    if device_index >= len(devices):
-        raise RemoteError(ERROR_INVALID_PARAMS, "Device index %s does not exist." % device_index)
-    for parameter_index, parameter in enumerate(
-        _safe(lambda: devices[device_index].parameters, [])
-    ):
-        if str(_safe(lambda parameter=parameter: parameter.name, "")) == parameter_name:
-            return _capture_parameter(
-                parameter,
-                "track:%s/device:%s/param:%s" % (track_index, device_index, parameter_index),
+    chain_index = params.get("chain_index")
+    chain_device_index = params.get("chain_device_index")
+    _track, parameter, path_id = _resolve_device_parameter(
+        song, track_index, device_index, parameter_name, chain_index, chain_device_index
+    )
+    return _capture_parameter(parameter, path_id)
+
+
+def _plugin_device_at(song: Any, track_index: int, device_index: int) -> tuple[Any, Any]:
+    """Resolve a device and refuse when it is not a plugin wrapper."""
+
+    track, device = _device_at(song, track_index, device_index)
+    class_name = str(_safe(lambda: device.class_name, ""))
+    if not is_plugin_device_class(class_name):
+        raise RemoteError(
+            ERROR_WRONG_TYPE,
+            "Device %s on track %s is %r, not a plugin; presets are a "
+            "PluginDevice capability." % (device_index, track_index, class_name),
+        )
+    return track, device
+
+
+def _plugin_presets(device: Any) -> list[str]:
+    return [str(preset) for preset in _safe(lambda: device.presets, []) or []]
+
+
+def cmd_get_plugin_presets(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, Any]:
+    track_index = _integer_param(params, "track_index")
+    device_index = _integer_param(params, "device_index")
+    track, device = _plugin_device_at(song, track_index, device_index)
+    presets = _plugin_presets(device)
+    selected = _safe(lambda: device.selected_preset_index, None)
+    parameters = [
+        {"name": str(_safe(lambda parameter=parameter: parameter.name, ""))}
+        for parameter in _safe(lambda: device.parameters, [])
+    ]
+    result: dict[str, Any] = {
+        "id": "track:%s/device:%s" % (track_index, device_index),
+        "track_index": track_index,
+        "device_index": device_index,
+        "track_name": str(_safe(lambda: track.name, "")),
+        "device_name": str(_safe(lambda: device.name, "")),
+        "class_name": str(_safe(lambda: device.class_name, "")),
+        "presets": presets,
+        "preset_count": len(presets),
+        "selected_preset_index": int(selected) if isinstance(selected, int) else None,
+    }
+    plugin_state = _plugin_state(result["class_name"], parameters)
+    if plugin_state is not None:
+        result["plugin_state"] = plugin_state
+    return result
+
+
+def _resolve_preset_index(device: Any, presets: list[str], params: dict[str, Any]) -> int:
+    """Resolve ``preset_index`` or ``preset_name`` to one in-range index."""
+
+    has_index = params.get("preset_index") is not None
+    has_name = params.get("preset_name") is not None
+    if has_index == has_name:
+        raise RemoteError(
+            ERROR_INVALID_PARAMS,
+            "Provide exactly one of 'preset_index' or 'preset_name'.",
+        )
+    if not presets:
+        raise RemoteError(
+            ERROR_CAPABILITY_UNAVAILABLE,
+            "Plugin %r exposes no presets through the Live Object Model."
+            % str(_safe(lambda: device.name, "")),
+        )
+    if has_index:
+        index = _integer_param(params, "preset_index")
+        if index < 0 or index >= len(presets):
+            raise RemoteError(
+                ERROR_INVALID_PARAMS,
+                "Preset index %s is outside [0, %s]." % (index, len(presets) - 1),
             )
-    raise RemoteError(ERROR_INVALID_PARAMS, "Parameter %r was not found." % parameter_name)
+        return index
+    name = _string_param(params, "preset_name")
+    matches = [index for index, preset in enumerate(presets) if preset == name]
+    if not matches:
+        suggestions = difflib.get_close_matches(name, presets, n=3, cutoff=0.5)
+        suffix = " Did you mean: %s?" % ", ".join(suggestions) if suggestions else ""
+        raise RemoteError(ERROR_INVALID_PARAMS, "Preset %r was not found.%s" % (name, suffix))
+    if len(matches) > 1:
+        raise RemoteError(
+            ERROR_AMBIGUOUS_MATCH,
+            "Preset name %r matches %s presets; use 'preset_index'." % (name, len(matches)),
+        )
+    return matches[0]
 
 
-def _set_parameter_value_steps(
+def _set_plugin_preset_steps(
     song: Any,
     params: dict[str, Any],
 ) -> Generator[None, None, dict[str, Any]]:
     track_index = _integer_param(params, "track_index")
     device_index = _integer_param(params, "device_index")
-    parameter_name = _string_param(params, "parameter_name")
-    requested = _float_param(params, "value", -1000000.0, 1000000.0)
-    track = _track_at(song, track_index)
-    devices = list(_safe(lambda: track.devices, []))
-    if device_index >= len(devices):
-        raise RemoteError(ERROR_INVALID_PARAMS, "Device index %s does not exist." % device_index)
-    parameters = list(_safe(lambda: devices[device_index].parameters, []))
-    device = devices[device_index]
+    track, device = _plugin_device_at(song, track_index, device_index)
+    presets = _plugin_presets(device)
+    target = _resolve_preset_index(device, presets, params)
+    previous = _safe(lambda: device.selected_preset_index, None)
+
+    observed: Any = previous
+    for _attempt in range(2):
+        device.selected_preset_index = target
+        yield
+        observed = _safe(lambda: device.selected_preset_index, None)
+        if isinstance(observed, int) and observed == target:
+            return {
+                "id": "track:%s/device:%s" % (track_index, device_index),
+                "selected_preset_index": target,
+                "preset_name": presets[target],
+                "previous_preset_index": int(previous) if isinstance(previous, int) else None,
+                "preset_count": len(presets),
+                "resolved": {
+                    "kind": "device",
+                    "track_index": track_index,
+                    "device_index": device_index,
+                    "track_name": str(_safe(lambda: track.name, "")),
+                    "device_name": str(_safe(lambda: device.name, "")),
+                },
+            }
+    raise RemoteError(
+        ERROR_VERIFICATION_FAILED,
+        "Plugin preset did not change: requested %s, observed %r." % (target, observed),
+    )
+
+
+def _chain_at(device: Any, chain_index: int, track_index: int, device_index: int) -> Any:
+    chains = list(_safe(lambda: device.chains, []) or [])
+    if not chains:
+        raise RemoteError(
+            ERROR_WRONG_TYPE,
+            "Device %s on track %s is not a rack; it exposes no chains."
+            % (device_index, track_index),
+        )
+    if chain_index < 0 or chain_index >= len(chains):
+        raise RemoteError(
+            ERROR_INVALID_PARAMS,
+            "Chain %s does not exist on device %s." % (chain_index, device_index),
+        )
+    return chains[chain_index]
+
+
+def _resolve_device_parameter(
+    song: Any,
+    track_index: int,
+    device_index: int,
+    parameter_name: str,
+    chain_index: Any = None,
+    chain_device_index: Any = None,
+) -> tuple[Any, Any, str]:
+    """Resolve a parameter at top level, inside a chain, or on a chain's mixer.
+
+    Live nests the controls that matter: the Velocity device that caps a drum
+    track and the volume that balances one guitar articulation against another
+    both live inside rack chains, where a top-level lookup cannot reach them.
+    """
+
+    track, device = _device_at(song, track_index, device_index)
+    base_id = "track:%s/device:%s" % (track_index, device_index)
+    if chain_index is None:
+        parameters = list(_safe(lambda: device.parameters, []))
+        owner = device
+    else:
+        if isinstance(chain_index, bool) or not isinstance(chain_index, int):
+            raise RemoteError(ERROR_INVALID_PARAMS, "Parameter 'chain_index' must be an integer.")
+        chain = _chain_at(device, chain_index, track_index, device_index)
+        if chain_device_index is None:
+            # No inner device named: the target is the chain's own mixer, which
+            # is how a rack blends its chains.
+            mixer = _safe(lambda: chain.mixer_device, None)
+            normalized = parameter_name.strip().casefold()
+            alias = {"volume": "volume", "pan": "panning", "panning": "panning"}.get(normalized)
+            if mixer is None or alias is None:
+                raise RemoteError(
+                    ERROR_INVALID_PARAMS,
+                    "A chain mixer exposes 'volume' and 'panning'; pass "
+                    "'chain_device_index' to reach a device inside the chain.",
+                )
+            parameter = _safe(lambda: getattr(mixer, alias), None)
+            if parameter is None:
+                raise RemoteError(
+                    ERROR_CAPABILITY_UNAVAILABLE,
+                    "This chain does not expose %r on its mixer." % alias,
+                )
+            return track, parameter, "%s/chain:%s/mixer:%s" % (base_id, chain_index, alias)
+        if isinstance(chain_device_index, bool) or not isinstance(chain_device_index, int):
+            raise RemoteError(
+                ERROR_INVALID_PARAMS, "Parameter 'chain_device_index' must be an integer."
+            )
+        devices = list(_safe(lambda: chain.devices, []))
+        if chain_device_index < 0 or chain_device_index >= len(devices):
+            raise RemoteError(
+                ERROR_INVALID_PARAMS,
+                "Chain device %s does not exist in chain %s."
+                % (chain_device_index, chain_index),
+            )
+        owner = devices[chain_device_index]
+        parameters = list(_safe(lambda: owner.parameters, []))
+        base_id = "%s/chain:%s/device:%s" % (base_id, chain_index, chain_device_index)
     parameter = next(
         (
             item
@@ -586,12 +933,29 @@ def _set_parameter_value_steps(
     )
     if parameter is None:
         names = [str(_safe(lambda item=item: item.name, "")) for item in parameters]
-        suggestions = difflib.get_close_matches(parameter_name, names, n=3, cutoff=0.5)
-        suffix = " Did you mean: %s?" % ", ".join(suggestions) if suggestions else ""
-        raise RemoteError(
-            ERROR_INVALID_PARAMS,
-            "Parameter %r was not found.%s" % (parameter_name, suffix),
-        )
+        raise _missing_parameter_error(owner, parameter_name, names)
+    return track, parameter, "%s/param:%s" % (base_id, parameters.index(parameter))
+
+
+def _set_parameter_value_steps(
+    song: Any,
+    params: dict[str, Any],
+) -> Generator[None, None, dict[str, Any]]:
+    track_index = _integer_param(params, "track_index")
+    device_index = _integer_param(params, "device_index")
+    parameter_name = _string_param(params, "parameter_name")
+    requested = _float_param(params, "value", -1000000.0, 1000000.0)
+    chain_index = params.get("chain_index")
+    chain_device_index = params.get("chain_device_index")
+    track, parameter, _path_id = _resolve_device_parameter(
+        song,
+        track_index,
+        device_index,
+        parameter_name,
+        chain_index,
+        chain_device_index,
+    )
+    _track_for_name, device = _device_at(song, track_index, device_index)
     if not bool(_safe(lambda: parameter.is_enabled, True)):
         raise RemoteError(ERROR_WRONG_TYPE, "Parameter %r is disabled." % parameter_name)
     minimum = float(_safe(lambda: parameter.min, 0.0))
@@ -615,6 +979,10 @@ def _set_parameter_value_steps(
                 "device_index": device_index,
                 "parameter_name": parameter_name,
             }
+            if chain_index is not None:
+                resolved["chain_index"] = chain_index
+            if chain_device_index is not None:
+                resolved["chain_device_index"] = chain_device_index
             track_name = str(_safe(lambda: track.name, ""))
             device_name = str(_safe(lambda: device.name, ""))
             if track_name:
@@ -755,27 +1123,54 @@ def cmd_live_find_track(
     ]
 
 
+def cmd_live_find_device(
+    song: Any, application: Any, params: dict[str, Any]
+) -> list[dict[str, Any]]:
+    query = _string_param(params, "query").casefold()
+    return [
+        device
+        for device in cmd_get_device_list(song, application, params)
+        if query in str(device.get("name", "")).casefold()
+        or query in str(device.get("class_name", "")).casefold()
+    ]
+
+
+def cmd_live_find_clip(song: Any, application: Any, params: dict[str, Any]) -> list[dict[str, Any]]:
+    query = _string_param(params, "query").casefold()
+    return [
+        clip
+        for clip in cmd_get_clip_summary(song, application, params)
+        if clip.get("has_clip") and query in str(clip.get("clip_name", "")).casefold()
+    ]
+
+
 def cmd_list_device_params(
     song: Any, _application: Any, params: dict[str, Any]
 ) -> list[dict[str, Any]]:
     track_id = _string_param(params, "track_id")
     track_index, track = _resolve_track_id(song, track_id)
-    return [
-        {
+    entries = []
+    for device_index, device in enumerate(_safe(lambda: track.devices, [])):
+        parameters = [
+            _capture_parameter(
+                parameter,
+                "track:%s/device:%s/param:%s" % (track_index, device_index, parameter_index),
+            )
+            for parameter_index, parameter in enumerate(
+                _safe(lambda device=device: device.parameters, [])
+            )
+        ]
+        class_name = str(_safe(lambda device=device: device.class_name, ""))
+        entry: dict[str, Any] = {
             "device_id": "track:%s/device:%s" % (track_index, device_index),
             "device_name": str(_safe(lambda device=device: device.name, "")),
-            "parameters": [
-                _capture_parameter(
-                    parameter,
-                    "track:%s/device:%s/param:%s" % (track_index, device_index, parameter_index),
-                )
-                for parameter_index, parameter in enumerate(
-                    _safe(lambda device=device: device.parameters, [])
-                )
-            ],
+            "parameters": parameters,
         }
-        for device_index, device in enumerate(_safe(lambda: track.devices, []))
-    ]
+        plugin_state = _plugin_state(class_name, parameters)
+        if plugin_state is not None:
+            entry["plugin_state"] = plugin_state
+        entries.append(entry)
+    return entries
 
 
 def _capture_snapshot(song: Any, application: Any) -> dict[str, Any]:
@@ -1275,12 +1670,13 @@ def cmd_create_clip(song: Any, _application: Any, params: dict[str, Any]) -> dic
     track_index = _integer_param(params, "track_index")
     clip_index = _integer_param(params, "clip_index")
     length = _float_param(params, "length_beats", 0.0, 100000.0, strictly_positive=True)
+    dry_run = params.get("dry_run", False)
     track, slot = _clip_slot(song, track_index, clip_index)
     if _track_type(song, track) != "midi":
         raise RemoteError(ERROR_WRONG_TYPE, "create_clip requires a MIDI track.")
     if bool(_safe(lambda: slot.has_clip, False)):
         raise RemoteError(ERROR_BAD_INPUT, "Clip slot is not empty.")
-    slot.create_clip(length)
+
     clip_id = "track:%s/clipslot:%s/clip" % (track_index, clip_index)
     resolved = {
         "kind": "clip",
@@ -1291,6 +1687,17 @@ def cmd_create_clip(song: Any, _application: Any, params: dict[str, Any]) -> dic
     track_name = str(_safe(lambda: track.name, ""))
     if track_name:
         resolved["track_name"] = track_name
+
+    if dry_run:
+        return {
+            "created": False,
+            "committed": False,
+            "clip_id": clip_id,
+            "length_beats": length,
+            "resolved": resolved,
+        }
+
+    slot.create_clip(length)
     return {
         "created": True,
         "clip_id": clip_id,
@@ -1383,6 +1790,1173 @@ def _set_track_property_steps(
     return {"property": property_name, "value": observed["value"]}
 
 
+def _bounded_int_param(params: dict[str, Any], name: str, minimum: int, maximum: int) -> int:
+    value = _required(params, name)
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise RemoteError(ERROR_INVALID_PARAMS, "Parameter %r must be an integer." % name)
+    if value < minimum or value > maximum:
+        raise RemoteError(
+            ERROR_BAD_INPUT,
+            "Parameter %r must be in %s..%s." % (name, minimum, maximum),
+        )
+    return value
+
+
+def _require_regular_track(song: Any, index: int, label: str) -> Any:
+    """Resolve a regular (non-return, non-master) track by session index."""
+
+    track = _track_at(song, index)
+    kind = _track_type(song, track)
+    if kind in ("return", "master"):
+        raise RemoteError(
+            ERROR_WRONG_TYPE,
+            "%s must be a regular track; track %s is the %s track."
+            % (label, index, "main/master" if kind == "master" else "return"),
+        )
+    return track
+
+
+def _require_group_track(song: Any, index: int, label: str) -> Any:
+    track = _require_regular_track(song, index, label)
+    if not bool(_safe(lambda: track.is_foldable, False)):
+        raise RemoteError(
+            ERROR_WRONG_TYPE,
+            "%s must be a Group Track; track %s is not foldable." % (label, index),
+        )
+    return track
+
+
+def _group_ancestors(song: Any, track: Any) -> list[int]:
+    """Return the chain of group indexes above ``track``, outermost last."""
+
+    chain: list[int] = []
+    current = track
+    for _depth in range(len(_all_tracks(song)) + 1):
+        parent_index = _group_track_index(song, current)
+        if parent_index is None:
+            return chain
+        if parent_index in chain:
+            # Live cannot produce this, but a corrupt chain must not hang the
+            # UI thread in an unbounded walk.
+            return chain
+        chain.append(parent_index)
+        current = _track_at(song, parent_index)
+    return chain
+
+
+def _reject_group_cycle(song: Any, track_index: int, group_index: int) -> None:
+    if track_index == group_index:
+        raise RemoteError(
+            ERROR_BAD_INPUT,
+            "A Group Track cannot be placed inside itself (track %s)." % track_index,
+        )
+    group = _track_at(song, group_index)
+    if track_index in _group_ancestors(song, group):
+        raise RemoteError(
+            ERROR_BAD_INPUT,
+            "Track %s already contains group %s; nesting it there would create a cycle."
+            % (track_index, group_index),
+        )
+
+
+def _validate_hierarchy_request(song: Any, command: str, params: dict[str, Any]) -> dict[str, Any]:
+    """Validate a hierarchy request and echo back what was asked for.
+
+    Validation runs *before* the capability refusal on purpose: a caller must
+    be able to tell a malformed request (INVALID_PARAMS / BAD_INPUT /
+    WRONG_TYPE) apart from a well-formed request that Live's API cannot
+    perform (CAPABILITY_UNAVAILABLE). Nothing here writes to the Set.
+    """
+
+    regular_count = len(list(_safe(lambda: song.tracks, [])))
+    if command == "move_track":
+        source = _integer_param(params, "track_index")
+        destination = _integer_param(params, "destination_index")
+        _require_regular_track(song, source, "track_index")
+        if destination >= regular_count:
+            raise RemoteError(
+                ERROR_INVALID_PARAMS,
+                "destination_index %s is outside the %s regular tracks."
+                % (destination, regular_count),
+            )
+        return {"track_index": source, "destination_index": destination}
+    if command == "reorder_tracks":
+        order = _required(params, "order")
+        if not isinstance(order, list) or not order:
+            raise RemoteError(ERROR_INVALID_PARAMS, "Parameter 'order' must be a non-empty list.")
+        if any(isinstance(item, bool) or not isinstance(item, int) for item in order):
+            raise RemoteError(ERROR_INVALID_PARAMS, "Parameter 'order' must contain integers.")
+        if sorted(order) != list(range(regular_count)):
+            raise RemoteError(
+                ERROR_BAD_INPUT,
+                "Parameter 'order' must be a permutation of the %s regular track indexes."
+                % regular_count,
+            )
+        return {"order": list(order)}
+    if command == "move_track_to_group":
+        source = _integer_param(params, "track_index")
+        group_index = _integer_param(params, "group_track_index")
+        _require_regular_track(song, source, "track_index")
+        _require_group_track(song, group_index, "group_track_index")
+        _reject_group_cycle(song, source, group_index)
+        return {"track_index": source, "group_track_index": group_index}
+    if command == "ungroup_track":
+        source = _integer_param(params, "track_index")
+        track = _require_regular_track(song, source, "track_index")
+        if not bool(_safe(lambda: track.is_grouped, False)):
+            raise RemoteError(
+                ERROR_WRONG_TYPE,
+                "Track %s is not inside a Group Track." % source,
+            )
+        return {"track_index": source, "group_track_index": _group_track_index(song, track)}
+    if command == "merge_groups":
+        source = _integer_param(params, "source_group_index")
+        destination = _integer_param(params, "destination_group_index")
+        delete_empty_source = params.get("delete_empty_source", False)
+        if not isinstance(delete_empty_source, bool):
+            raise RemoteError(
+                ERROR_INVALID_PARAMS,
+                "Parameter 'delete_empty_source' must be boolean.",
+            )
+        if delete_empty_source:
+            raise RemoteError(
+                ERROR_BAD_INPUT,
+                "delete_empty_source is not supported: this bridge never deletes a track.",
+                "Leave the emptied group in place and remove it by hand if you want it gone.",
+            )
+        _require_group_track(song, source, "source_group_index")
+        _require_group_track(song, destination, "destination_group_index")
+        if source == destination:
+            raise RemoteError(
+                ERROR_BAD_INPUT,
+                "source_group_index and destination_group_index must differ.",
+            )
+        _reject_group_cycle(song, source, destination)
+        return {
+            "source_group_index": source,
+            "destination_group_index": destination,
+            "delete_empty_source": False,
+        }
+    raise RemoteError(ERROR_UNKNOWN_COMMAND, "Unknown command %r." % command)
+
+
+def cmd_unavailable_capability(song: Any, _application: Any, params: dict[str, Any]) -> Any:
+    """Never returns: validates, then refuses with the API evidence."""
+
+    command = str(params.get("__command", ""))
+    request = _validate_hierarchy_request(song, command, params)
+    evidence = dict(CAPABILITY_EVIDENCE[command])
+    evidence["request"] = request
+    evidence["applied"] = False
+    raise RemoteError(
+        ERROR_CAPABILITY_UNAVAILABLE,
+        UNSUPPORTED_CAPABILITIES[command],
+        "The request is well-formed; Live's public API has no operation that performs it. "
+        "Nothing was changed in the Set.",
+        evidence,
+    )
+
+
+def _requested_colour(params: dict[str, Any]) -> tuple[str, int]:
+    """Resolve the single colour property to write and its validated value.
+
+    Tracks and clips share Live's palette and the same packed-RGB encoding, so
+    both colour commands validate through here.
+    """
+
+    requested = [name for name in ("color_index", "color") if name in params]
+    if len(requested) != 1:
+        raise RemoteError(
+            ERROR_INVALID_PARAMS,
+            "Provide exactly one of color_index or color.",
+        )
+    attribute = requested[0]
+    if attribute == "color_index":
+        return attribute, _bounded_int_param(
+            params,
+            "color_index",
+            LIVE_COLOR_INDEX_MIN,
+            LIVE_COLOR_INDEX_MAX,
+        )
+    return attribute, _bounded_int_param(
+        params,
+        "color",
+        LIVE_COLOR_RGB_MIN,
+        LIVE_COLOR_RGB_MAX,
+    )
+
+
+def _verified_colour_write_steps(
+    target: Any,
+    *,
+    attribute: str,
+    expected: int,
+    label: str,
+) -> Generator[None, None, dict[str, int | None]]:
+    """Write one colour property once and confirm it on a later UI tick.
+
+    There is no retry: the write is issued a single time, Live is given a tick,
+    and the observed value is read back. A rejected or clamped write surfaces
+    as ``VERIFICATION_FAILED`` instead of a fabricated success.
+    """
+
+    if _safe(lambda: getattr(target, attribute), None) is None:
+        raise RemoteError(ERROR_WRONG_TYPE, "%s does not expose %r." % (label, attribute))
+    try:
+        setattr(target, attribute, expected)
+    except (AttributeError, RuntimeError, TypeError) as error:
+        raise RemoteError(
+            ERROR_WRONG_TYPE,
+            "%s rejected %r: %s" % (label, attribute, error),
+        ) from error
+    yield
+    observed = _optional_int(_safe(lambda: getattr(target, attribute), None))
+    if observed != expected:
+        raise RemoteError(
+            ERROR_VERIFICATION_FAILED,
+            "%s %s readback returned %r, expected %r." % (label, attribute, observed, expected),
+        )
+    return {
+        "color": _optional_int(_safe(lambda: target.color, None)),
+        "color_index": _optional_int(_safe(lambda: target.color_index, None)),
+    }
+
+
+def _set_track_color_steps(
+    song: Any,
+    params: dict[str, Any],
+) -> Generator[None, None, dict[str, Any]]:
+    """Write ``Track.color_index`` or ``Track.color`` and read the value back."""
+
+    track_index = _integer_param(params, "track_index")
+    attribute, expected = _requested_colour(params)
+    track = _track_at(song, track_index)
+    observed = yield from _verified_colour_write_steps(
+        track,
+        attribute=attribute,
+        expected=expected,
+        label="Track %s" % track_index,
+    )
+    result: dict[str, Any] = {
+        "track_id": "track:%s" % track_index,
+        "track_index": track_index,
+        "property": attribute,
+        "color": observed["color"] if observed["color"] is not None else 0,
+        "color_index": observed["color_index"],
+    }
+    resolved: dict[str, Any] = {"kind": "track", "track_index": track_index}
+    track_name = str(_safe(lambda: track.name, ""))
+    if track_name:
+        resolved["track_name"] = track_name
+    result["resolved"] = resolved
+    return result
+
+
+def _arrangement_clips(track: Any) -> list[Any] | None:
+    """Return this track's Arrangement clips, or ``None`` when unavailable.
+
+    ``Track.arrangement_clips`` was added to the Live 11 LOM. A host that
+    predates it (or a track type that has no Arrangement lane) must be
+    reported as inaccessible rather than silently treated as empty — an empty
+    list and "the host cannot tell me" are different answers.
+    """
+
+    clips = _safe(lambda: track.arrangement_clips, None)
+    if clips is None:
+        return None
+    try:
+        return list(clips)
+    except TypeError:
+        return None
+
+
+def _capture_clip_colour_target(
+    clip: Any,
+    *,
+    scope: str,
+    track_index: int,
+    clip_index: int,
+) -> dict[str, Any]:
+    identifier = (
+        "track:%s/clipslot:%s/clip" % (track_index, clip_index)
+        if scope == "session"
+        else "track:%s/arrangementclip:%s" % (track_index, clip_index)
+    )
+    return {
+        "id": identifier,
+        "scope": scope,
+        "track_index": track_index,
+        "clip_index": clip_index,
+        "name": str(_safe(lambda: clip.name, "")),
+        "is_midi_clip": bool(_safe(lambda: clip.is_midi_clip, False)),
+        "color": _optional_int(_safe(lambda: clip.color, None)),
+        "color_index": _optional_int(_safe(lambda: clip.color_index, None)),
+        # ``color`` is documented ``getsetobserve`` on Clip, so a clip whose
+        # colour reads back as an integer is writable. Anything else is
+        # reported as not colourable instead of being attempted blindly.
+        "colorable": _optional_int(_safe(lambda: clip.color, None)) is not None,
+    }
+
+
+def _require_arrangement_clips(song: Any, track_index: int) -> tuple[Any, list[Any]]:
+    """Resolve a track's Arrangement lane or fail with the reason it is missing."""
+
+    track = _track_at(song, track_index)
+    clips = _arrangement_clips(track)
+    if clips is None:
+        raise RemoteError(
+            ERROR_CAPABILITY_UNAVAILABLE,
+            "Track %s does not expose Track.arrangement_clips on this host." % track_index,
+        )
+    return track, clips
+
+
+def _arrangement_clip_at(
+    song: Any, track_index: int, clip_index: int
+) -> tuple[Any, Any, list[Any]]:
+    track, clips = _require_arrangement_clips(song, track_index)
+    if clip_index < 0 or clip_index >= len(clips):
+        raise RemoteError(
+            ERROR_INVALID_PARAMS,
+            "Arrangement clip %s does not exist on track %s." % (clip_index, track_index),
+        )
+    return track, clips[clip_index], clips
+
+
+def _capture_arrangement_clip(clip: Any, track_index: int, clip_index: int) -> dict[str, Any]:
+    """Describe one Arrangement clip, placement first.
+
+    ``start_time`` and ``end_time`` are what makes a clip locatable on the
+    timeline; without them a caller knows a clip exists but not when it plays.
+    """
+
+    start = _safe(lambda: clip.start_time, None)
+    end = _safe(lambda: clip.end_time, None)
+    return {
+        "id": "track:%s/arrangementclip:%s" % (track_index, clip_index),
+        "scope": "arrangement",
+        "track_index": track_index,
+        "clip_index": clip_index,
+        "name": str(_safe(lambda: clip.name, "")),
+        "start_time": _optional_float(start),
+        "end_time": _optional_float(end),
+        "length_beats": (
+            _optional_float(end - start) if start is not None and end is not None else None
+        ),
+        "is_midi_clip": bool(_safe(lambda: clip.is_midi_clip, False)),
+        "muted": bool(_safe(lambda: clip.muted, False)),
+        "looping": bool(_safe(lambda: clip.looping, False)),
+        "loop_start": _optional_float(_safe(lambda: clip.loop_start, None)),
+        "loop_end": _optional_float(_safe(lambda: clip.loop_end, None)),
+        "color_index": _optional_int(_safe(lambda: clip.color_index, None)),
+    }
+
+
+def cmd_get_arrangement_clips(
+    song: Any, _application: Any, params: dict[str, Any]
+) -> dict[str, Any]:
+    """List one track's Arrangement clips with their timeline placement."""
+
+    track_index = _integer_param(params, "track_index")
+    _track, clips = _require_arrangement_clips(song, track_index)
+    captured = [
+        _capture_arrangement_clip(clip, track_index, clip_index)
+        for clip_index, clip in enumerate(clips)
+    ]
+    captured.sort(key=lambda entry: (entry["start_time"] is None, entry["start_time"]))
+    return {
+        "track_index": track_index,
+        "clip_count": len(captured),
+        "clips": captured,
+    }
+
+
+def _duplicate_session_clip_to_arrangement_steps(
+    song: Any,
+    params: dict[str, Any],
+) -> Generator[None, None, dict[str, Any]]:
+    """Place a Session clip on the Arrangement timeline at an exact beat.
+
+    ``Track.duplicate_clip_to_arrangement`` is the only public path from the
+    Session grid onto the timeline. The Session clip is left untouched, so the
+    caller keeps a reusable source; clip envelopes travel with the copy.
+    """
+
+    track_index = _integer_param(params, "track_index")
+    clip_index = _integer_param(params, "clip_index")
+    destination = _float_param(params, "time")
+
+    track, slot = _clip_slot(song, track_index, clip_index)
+    clip = _safe(lambda: slot.clip, None)
+    if clip is None:
+        raise RemoteError(ERROR_BAD_INPUT, "Session slot %s is empty." % clip_index)
+
+    duplicate = _safe(lambda: track.duplicate_clip_to_arrangement, None)
+    if not callable(duplicate):
+        raise RemoteError(
+            ERROR_CAPABILITY_UNAVAILABLE,
+            "This host does not expose Track.duplicate_clip_to_arrangement.",
+        )
+
+    before = _arrangement_clips(track) or []
+    count_before = len(before)
+    duplicate(clip, destination)
+    yield
+    after = _arrangement_clips(track) or []
+    if len(after) <= count_before:
+        raise RemoteError(
+            ERROR_LIVE_UNAVAILABLE,
+            "Arrangement clip creation was not observed on track %s." % track_index,
+        )
+
+    placed_index, placed = min(
+        ((index, item) for index, item in enumerate(after)),
+        key=lambda pair: abs((_safe(lambda: pair[1].start_time, 0.0) or 0.0) - destination),
+    )
+    return {
+        "placed": True,
+        "source": "track:%s/clipslot:%s/clip" % (track_index, clip_index),
+        "arrangement_clip": _capture_arrangement_clip(placed, track_index, placed_index),
+        "clip_count": len(after),
+    }
+
+
+def _delete_arrangement_clip_steps(
+    song: Any,
+    params: dict[str, Any],
+) -> Generator[None, None, dict[str, Any]]:
+    """Remove one clip from the Arrangement timeline."""
+
+    track_index = _integer_param(params, "track_index")
+    clip_index = _integer_param(params, "clip_index")
+    track, clip, clips = _arrangement_clip_at(song, track_index, clip_index)
+    captured = _capture_arrangement_clip(clip, track_index, clip_index)
+    count_before = len(clips)
+
+    delete = _safe(lambda: track.delete_clip, None)
+    if not callable(delete):
+        raise RemoteError(
+            ERROR_CAPABILITY_UNAVAILABLE,
+            "This host does not expose Track.delete_clip.",
+        )
+    delete(clip)
+    yield
+    remaining = _arrangement_clips(track) or []
+    if len(remaining) >= count_before:
+        raise RemoteError(
+            ERROR_LIVE_UNAVAILABLE,
+            "Arrangement clip deletion was not observed on track %s." % track_index,
+        )
+    return {"deleted": True, "clip": captured, "clip_count": len(remaining)}
+
+
+def _move_arrangement_clip_steps(
+    song: Any,
+    params: dict[str, Any],
+) -> Generator[None, None, dict[str, Any]]:
+    """Move an Arrangement clip to a new beat.
+
+    The LOM has no setter for ``Clip.start_time``, so the move is a copy to the
+    destination followed by deletion of the original. Both halves are verified;
+    a failed copy leaves the original in place rather than losing the clip.
+    """
+
+    track_index = _integer_param(params, "track_index")
+    clip_index = _integer_param(params, "clip_index")
+    destination = _float_param(params, "time")
+
+    track, clip, clips = _arrangement_clip_at(song, track_index, clip_index)
+    origin = _safe(lambda: clip.start_time, None)
+    count_before = len(clips)
+
+    duplicate = _safe(lambda: track.duplicate_clip_to_arrangement, None)
+    delete = _safe(lambda: track.delete_clip, None)
+    if not callable(duplicate) or not callable(delete):
+        raise RemoteError(
+            ERROR_CAPABILITY_UNAVAILABLE,
+            "Moving an Arrangement clip needs both "
+            "Track.duplicate_clip_to_arrangement and Track.delete_clip.",
+        )
+
+    duplicate(clip, destination)
+    yield
+    after_copy = _arrangement_clips(track) or []
+    if len(after_copy) <= count_before:
+        raise RemoteError(
+            ERROR_LIVE_UNAVAILABLE,
+            "The copy step of the move was not observed; the original clip was kept.",
+        )
+
+    delete(clip)
+    yield
+    remaining = _arrangement_clips(track) or []
+    if len(remaining) != count_before:
+        raise RemoteError(
+            ERROR_LIVE_UNAVAILABLE,
+            "The delete step of the move was not observed; the track now holds "
+            "%s clips instead of %s." % (len(remaining), count_before),
+        )
+
+    moved_index, moved = min(
+        ((index, item) for index, item in enumerate(remaining)),
+        key=lambda pair: abs((_safe(lambda: pair[1].start_time, 0.0) or 0.0) - destination),
+    )
+    return {
+        "moved": True,
+        "from_time": _optional_float(origin),
+        "arrangement_clip": _capture_arrangement_clip(moved, track_index, moved_index),
+        "clip_count": len(remaining),
+    }
+
+
+# ---------------------------------------------------------------------------
+# v0.5.6 — Instrument comprehension and authoring shorthands
+# ---------------------------------------------------------------------------
+
+_MIDI_EFFECT_CONSEQUENCES = {
+    "MidiVelocity": (
+        "Rewrites incoming velocity. 'Out Low' and 'Out Hi' are the real "
+        "dynamic floor and ceiling of this track, whatever the clip says."
+    ),
+    "MidiNoteLength": (
+        "Overrides note duration. With 'Sync On' off the length comes from "
+        "'Time Length'; 'Gate' only acts in synced mode."
+    ),
+    "MidiPitcher": "Transposes every note; the clip's written pitches are not what sounds.",
+    "MidiArpeggiator": (
+        "Generates its own note stream from held notes; written rhythm is a source, not the result."
+    ),
+    "MidiChord": "Adds intervals to every note, so one written note sounds as a chord.",
+    "MidiScale": "Snaps pitches to a scale; out-of-scale notes are moved, not refused.",
+    "MidiRandom": "Randomises pitch, so exact written pitches are not guaranteed.",
+}
+
+_INSTRUMENT_CLASSES = (
+    "InstrumentGroupDevice",
+    "PluginDevice",
+    "InstrumentVector",
+    "MultiSampler",
+    "SimplerDevice",
+    "Operator",
+    "InstrumentImpulse",
+    "DrumGroupDevice",
+    "UltraAnalog",
+    "Collision",
+    "Tension",
+    "Electric",
+    "Wavetable",
+)
+
+
+def _chain_mixer_state(chain: Any) -> dict[str, Any]:
+    mixer = _safe(lambda: chain.mixer_device, None)
+    volume = _safe(lambda: mixer.volume, None) if mixer is not None else None
+    panning = _safe(lambda: mixer.panning, None) if mixer is not None else None
+    return {
+        "volume": _optional_float(_safe(lambda: volume.value, None)),
+        "volume_min": _optional_float(_safe(lambda: volume.min, None)),
+        "volume_max": _optional_float(_safe(lambda: volume.max, None)),
+        "panning": _optional_float(_safe(lambda: panning.value, None)),
+        "muted": bool(_safe(lambda: chain.mute, False)),
+        "soloed": bool(_safe(lambda: chain.solo, False)),
+    }
+
+
+def cmd_get_device_chains(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, Any]:
+    """Open one rack: its chains, their mixer state and the devices inside.
+
+    ``get_device_list`` stops at the top level, so a rack reads as a wall of
+    macros. What actually shapes the sound — the sampler in chain three, the
+    Velocity device hidden in a MIDI rack — only appears here.
+    """
+
+    track_index = _integer_param(params, "track_index")
+    device_index = _integer_param(params, "device_index")
+    _track, device = _device_at(song, track_index, device_index)
+    chains = _safe(lambda: device.chains, None)
+    if chains is None:
+        raise RemoteError(
+            ERROR_WRONG_TYPE,
+            "Device %s on track %s is not a rack; it exposes no chains."
+            % (device_index, track_index),
+        )
+    captured = []
+    for chain_index, chain in enumerate(list(chains)):
+        devices = []
+        for inner_index, inner in enumerate(list(_safe(lambda chain=chain: chain.devices, []))):
+            parameters = list(_safe(lambda inner=inner: inner.parameters, []))
+            devices.append(
+                {
+                    "id": "track:%s/device:%s/chain:%s/device:%s"
+                    % (track_index, device_index, chain_index, inner_index),
+                    "chain_index": chain_index,
+                    "device_index": inner_index,
+                    "name": str(_safe(lambda inner=inner: inner.name, "")),
+                    "class_name": str(_safe(lambda inner=inner: inner.class_name, "")),
+                    "is_active": bool(_safe(lambda inner=inner: inner.is_active, True)),
+                    "parameter_count": len(parameters),
+                    "parameter_names": [
+                        str(_safe(lambda parameter=parameter: parameter.name, ""))
+                        for parameter in parameters[:24]
+                    ],
+                }
+            )
+        captured.append(
+            {
+                "id": "track:%s/device:%s/chain:%s" % (track_index, device_index, chain_index),
+                "chain_index": chain_index,
+                "name": str(_safe(lambda chain=chain: chain.name, "")),
+                "devices": devices,
+                **_chain_mixer_state(chain),
+            }
+        )
+    return {
+        "track_index": track_index,
+        "device_index": device_index,
+        "device_name": str(_safe(lambda: device.name, "")),
+        "chain_count": len(captured),
+        "chains": captured,
+    }
+
+
+def _midi_effect_finding(device: Any, path: str, device_index: int) -> dict[str, Any] | None:
+    class_name = str(_safe(lambda: device.class_name, ""))
+    consequence = _MIDI_EFFECT_CONSEQUENCES.get(class_name)
+    if consequence is None:
+        return None
+    values = {}
+    for parameter in list(_safe(lambda: device.parameters, [])):
+        name = str(_safe(lambda parameter=parameter: parameter.name, ""))
+        values[name] = _optional_float(_safe(lambda parameter=parameter: parameter.value, None))
+    return {
+        "path": path,
+        "device_index": device_index,
+        "name": str(_safe(lambda: device.name, "")),
+        "class_name": class_name,
+        "is_active": bool(_safe(lambda: device.is_active, True)),
+        "consequence": consequence,
+        "values": values,
+    }
+
+
+def cmd_get_midi_chain_report(
+    song: Any, _application: Any, params: dict[str, Any]
+) -> dict[str, Any]:
+    """Report the MIDI effects that rewrite what a clip says, before writing one.
+
+    Racks are walked, not just listed: the Velocity device that caps a drum
+    track's dynamics usually sits inside a MIDI Effect Rack chain, where a
+    top-level scan cannot see it.
+    """
+
+    track_index = _integer_param(params, "track_index")
+    track = _track_at(song, track_index)
+    findings: list[dict[str, Any]] = []
+    for device_index, device in enumerate(list(_safe(lambda: track.devices, []))):
+        path = "track:%s/device:%s" % (track_index, device_index)
+        finding = _midi_effect_finding(device, path, device_index)
+        if finding is not None:
+            findings.append(finding)
+        chains = list(_safe(lambda device=device: device.chains, []) or [])
+        for chain_index, chain in enumerate(chains):
+            for inner_index, inner in enumerate(
+                list(_safe(lambda chain=chain: chain.devices, []))
+            ):
+                inner_path = "%s/chain:%s/device:%s" % (path, chain_index, inner_index)
+                inner_finding = _midi_effect_finding(inner, inner_path, device_index)
+                if inner_finding is not None:
+                    inner_finding["chain_index"] = chain_index
+                    inner_finding["chain_name"] = str(_safe(lambda chain=chain: chain.name, ""))
+                    findings.append(inner_finding)
+    return {
+        "track_index": track_index,
+        "rewrites_input": bool(findings),
+        "devices": findings,
+    }
+
+
+def cmd_describe_instrument(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, Any]:
+    """Describe a track's instrument and state what the user must still set up.
+
+    An agent cannot control what it cannot address. When a plugin exposes no
+    configured parameter, or a rack's macros are unmapped and unnamed, the fix
+    belongs to the user inside Live — so the answer carries the request to
+    make, not only the gap.
+    """
+
+    track_index = _integer_param(params, "track_index")
+    track = _track_at(song, track_index)
+    instrument = None
+    instrument_index = None
+    for device_index, device in enumerate(list(_safe(lambda: track.devices, []))):
+        class_name = str(_safe(lambda device=device: device.class_name, ""))
+        drum_capable = bool(_safe(lambda device=device: device.can_have_drum_pads, False))
+        if class_name in _INSTRUMENT_CLASSES or drum_capable:
+            instrument = device
+            instrument_index = device_index
+            break
+    if instrument is None:
+        return {
+            "track_index": track_index,
+            "has_instrument": False,
+            "setup_requests": [
+                "This track has no instrument device; load one before writing notes."
+            ],
+        }
+
+    class_name = str(_safe(lambda: instrument.class_name, ""))
+    parameters = list(_safe(lambda: instrument.parameters, []))
+    captured = [
+        {
+            "name": str(_safe(lambda parameter=parameter: parameter.name, "")),
+            "value": _optional_float(_safe(lambda parameter=parameter: parameter.value, None)),
+            "min": _optional_float(_safe(lambda parameter=parameter: parameter.min, None)),
+            "max": _optional_float(_safe(lambda parameter=parameter: parameter.max, None)),
+            "quantized": bool(_safe(lambda parameter=parameter: parameter.is_quantized, False)),
+        }
+        for parameter in parameters
+    ]
+    named = [item["name"] for item in captured]
+    setup_requests: list[str] = []
+
+    is_plugin = is_plugin_device_class(class_name)
+    configured = _configured_parameter_count([{"name": name} for name in named])
+    if is_plugin and not configured:
+        setup_requests.append(
+            "This plugin exposes no automatable parameter. In Live, open the "
+            "device, press Configure, move the controls an agent should drive, "
+            "then leave Configure."
+        )
+    macros = [name for name in named if name.startswith("Macro ")]
+    if len(macros) >= 8:
+        setup_requests.append(
+            "The rack's macros still carry default names. Map each macro to the "
+            "parameter it should drive and rename it: a unique name is what "
+            "lets an agent address it without ambiguity."
+        )
+    return {
+        "track_index": track_index,
+        "has_instrument": True,
+        "device_index": instrument_index,
+        "name": str(_safe(lambda: instrument.name, "")),
+        "class_name": class_name,
+        "is_plugin": is_plugin,
+        "configured_parameter_count": configured,
+        "parameter_count": len(captured),
+        "parameters": captured,
+        "setup_requests": setup_requests,
+    }
+
+
+def cmd_get_clip_automation(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, Any]:
+    """Sample one clip envelope so a caller can read back what it wrote.
+
+    The LOM exposes no breakpoint list, only ``value_at_time``, so the envelope
+    is reported as a sampled curve. That is what Live can actually answer; a
+    caller comparing intent against reality gets the shape, not a promise.
+    """
+
+    track_index = _integer_param(params, "track_index")
+    clip_index = _integer_param(params, "clip_index")
+    parameter_name = _string_param(params, "parameter_name")
+    device_index = params.get("device_index")
+    resolution = float(params.get("resolution", 0.25))
+    if resolution <= 0 or resolution > 16:
+        raise RemoteError(ERROR_BAD_INPUT, "Parameter 'resolution' must be in (0, 16].")
+
+    _track, slot = _clip_slot(song, track_index, clip_index)
+    clip = _safe(lambda: slot.clip, None)
+    if clip is None:
+        raise RemoteError(ERROR_BAD_INPUT, "Session slot %s is empty." % clip_index)
+    parameter = _automation_parameter(
+        _track_at(song, track_index),
+        parameter_name,
+        device_index,
+        params.get("chain_index"),
+        params.get("chain_device_index"),
+    )
+    if parameter is None:
+        raise RemoteError(
+            ERROR_INVALID_PARAMS,
+            "Parameter %r was not found on track %s." % (parameter_name, track_index),
+        )
+    envelope_getter = _safe(lambda: clip.automation_envelope, None)
+    if not callable(envelope_getter):
+        raise RemoteError(
+            ERROR_LIVE_UNAVAILABLE,
+            "Live runtime does not expose the clip automation envelope API.",
+        )
+    envelope = envelope_getter(parameter)
+    if envelope is None:
+        return {
+            "track_index": track_index,
+            "clip_index": clip_index,
+            "parameter_name": str(_safe(lambda: parameter.name, parameter_name)),
+            "has_envelope": False,
+            "samples": [],
+        }
+    value_at_time = _safe(lambda: envelope.value_at_time, None)
+    if not callable(value_at_time):
+        raise RemoteError(
+            ERROR_LIVE_UNAVAILABLE,
+            "Live runtime does not expose value_at_time on the clip envelope.",
+        )
+    length = float(_safe(lambda: clip.length, 0.0) or 0.0)
+    samples = []
+    time = 0.0
+    while time < length - 1e-9 and len(samples) < 2000:
+        samples.append({"time": round(time, 4), "value": _optional_float(value_at_time(time))})
+        time += resolution
+    values = [item["value"] for item in samples if item["value"] is not None]
+    return {
+        "track_index": track_index,
+        "clip_index": clip_index,
+        "parameter_name": str(_safe(lambda: parameter.name, parameter_name)),
+        "has_envelope": True,
+        "resolution": resolution,
+        "sample_count": len(samples),
+        "min_value": min(values) if values else None,
+        "max_value": max(values) if values else None,
+        "samples": samples,
+    }
+
+
+def _expand_curve(
+    control_points: list[tuple[float, float]],
+    shape: str,
+    resolution: float,
+) -> list[tuple[float, float]]:
+    """Densify control points into contiguous steps.
+
+    Live's clip envelope only accepts steps, so a smooth ramp is a dense
+    staircase. Expanding server-side is what keeps a caller from shipping
+    hundreds of breakpoints over the wire for one crescendo.
+    """
+
+    expanded: list[tuple[float, float]] = []
+    pairs = zip(control_points, control_points[1:], strict=False)
+    for (time_a, value_a), (time_b, value_b) in pairs:
+        span = time_b - time_a
+        if span <= 0:
+            continue
+        if shape == "hold":
+            expanded.append((time_a, value_a))
+            continue
+        steps = max(1, int(math.ceil(span / resolution)))
+        for step in range(steps):
+            progress = step / steps
+            if shape == "exp":
+                weight = progress**2.0
+            elif shape == "log":
+                weight = 1.0 - (1.0 - progress) ** 2.0
+            else:
+                weight = progress
+            expanded.append((time_a + progress * span, value_a + (value_b - value_a) * weight))
+    expanded.append(control_points[-1])
+    deduped: list[tuple[float, float]] = []
+    for point in expanded:
+        if deduped and abs(point[0] - deduped[-1][0]) < 1e-6:
+            deduped[-1] = point
+            continue
+        deduped.append(point)
+    return deduped
+
+
+def _create_clip_automation_curve_steps(
+    song: Any,
+    params: dict[str, Any],
+) -> Generator[None, None, dict[str, Any]]:
+    track_index = _integer_param(params, "track_index")
+    _clip_index = _integer_param(params, "clip_index")
+    _parameter_name = _string_param(params, "parameter_name")
+    raw_points = _required(params, "control_points")
+    shape = str(params.get("shape", "linear")).strip().lower()
+    resolution = float(params.get("resolution", 0.25))
+    if shape not in ("linear", "exp", "log", "hold"):
+        raise RemoteError(
+            ERROR_INVALID_PARAMS,
+            "Parameter 'shape' must be one of linear, exp, log, hold.",
+        )
+    if resolution <= 0 or resolution > 16:
+        raise RemoteError(ERROR_BAD_INPUT, "Parameter 'resolution' must be in (0, 16].")
+    if not isinstance(raw_points, list) or len(raw_points) < 2 or len(raw_points) > 200:
+        raise RemoteError(
+            ERROR_INVALID_PARAMS,
+            "Parameter 'control_points' must hold between 2 and 200 points.",
+        )
+    control: list[tuple[float, float]] = []
+    for raw_point in raw_points:
+        if not isinstance(raw_point, dict):
+            raise RemoteError(ERROR_INVALID_PARAMS, "Each control point must be an object.")
+        control.append(
+            (
+                _float_param(raw_point, "time", 0.0, 100000.0),
+                _float_param(raw_point, "value", -100000.0, 100000.0),
+            )
+        )
+    control.sort(key=lambda item: item[0])
+    expanded = _expand_curve(control, shape, resolution)
+    if len(expanded) > 500:
+        raise RemoteError(
+            ERROR_BAD_INPUT,
+            "The expansion produced %s steps; raise 'resolution' or shorten the span "
+            "so it stays inside Live's 500-step envelope budget." % len(expanded),
+        )
+    forwarded = dict(params)
+    forwarded["automation_points"] = [{"time": time, "value": value} for time, value in expanded]
+    result = yield from _create_clip_automation_steps(song, forwarded)
+    result["control_points"] = len(control)
+    result["shape"] = shape
+    result["resolution"] = resolution
+    result["track_index"] = track_index
+    return result
+
+
+def cmd_add_notes_pattern(song: Any, _application: Any, params: dict[str, Any]) -> dict[str, Any]:
+    """Repeat one note cell N times, with optional transposition and dynamics.
+
+    A sixteen-bar triplet sequence is nearly two hundred near-identical notes.
+    Sending the cell once and letting the server repeat it keeps the payload
+    proportional to the idea instead of to its length.
+    """
+
+    _track_index = _integer_param(params, "track_index")
+    _clip_index = _integer_param(params, "clip_index")
+    raw_cell = _required(params, "cell")
+    repeats = _integer_param(params, "repeats", minimum=1)
+    cell_length = _float_param(params, "cell_length", 0.0, 100000.0, strictly_positive=True)
+    transpose = params.get("transpose_per_repeat", 0)
+    velocity_scale = params.get("velocity_scale_per_repeat", 1.0)
+    if not isinstance(raw_cell, list) or not raw_cell:
+        raise RemoteError(ERROR_INVALID_PARAMS, "Parameter 'cell' must be a non-empty list.")
+    if repeats > 128:
+        raise RemoteError(ERROR_BAD_INPUT, "Parameter 'repeats' must be <= 128.")
+    if isinstance(transpose, bool) or not isinstance(transpose, (int, float)):
+        raise RemoteError(ERROR_INVALID_PARAMS, "Parameter 'transpose_per_repeat' must be numeric.")
+    if isinstance(velocity_scale, bool) or not isinstance(velocity_scale, (int, float)):
+        raise RemoteError(
+            ERROR_INVALID_PARAMS, "Parameter 'velocity_scale_per_repeat' must be numeric."
+        )
+
+    notes: list[dict[str, Any]] = []
+    for repeat in range(repeats):
+        offset = repeat * cell_length
+        for raw_note in raw_cell:
+            if not isinstance(raw_note, dict):
+                raise RemoteError(ERROR_INVALID_PARAMS, "Each note must be an object.")
+            pitch = _integer_param(raw_note, "pitch") + int(round(float(transpose) * repeat))
+            velocity = float(raw_note.get("velocity", 100)) * (float(velocity_scale) ** repeat)
+            notes.append(
+                {
+                    **raw_note,
+                    "pitch": max(0, min(127, pitch)),
+                    "velocity": int(max(1, min(127, round(velocity)))),
+                    "start_time": _float_param(raw_note, "start_time", 0.0, 100000.0) + offset,
+                }
+            )
+    forwarded = dict(params)
+    forwarded["notes"] = notes
+    result = cmd_add_notes_to_clip(song, _application, forwarded)
+    result["repeats"] = repeats
+    result["cell_notes"] = len(raw_cell)
+    return result
+
+
+def _set_arrangement_clip_properties_steps(
+    song: Any,
+    params: dict[str, Any],
+) -> Generator[None, None, dict[str, Any]]:
+    """Rename or mute one Arrangement clip, verified by readback."""
+
+    track_index = _integer_param(params, "track_index")
+    clip_index = _integer_param(params, "clip_index")
+    new_name = params.get("name")
+    muted = params.get("muted")
+    if new_name is None and muted is None:
+        raise RemoteError(ERROR_INVALID_PARAMS, "Provide at least one of 'name' or 'muted'.")
+    _track, clip, _clips = _arrangement_clip_at(song, track_index, clip_index)
+    if new_name is not None:
+        if not isinstance(new_name, str) or not new_name.strip():
+            raise RemoteError(ERROR_BAD_INPUT, "Parameter 'name' must be a non-empty string.")
+        clip.name = new_name.strip()
+    if muted is not None:
+        if not isinstance(muted, bool):
+            raise RemoteError(ERROR_INVALID_PARAMS, "Parameter 'muted' must be a boolean.")
+        clip.muted = muted
+    yield
+    observed_name = str(_safe(lambda: clip.name, ""))
+    observed_muted = bool(_safe(lambda: clip.muted, False))
+    if new_name is not None and observed_name != new_name.strip():
+        raise RemoteError(ERROR_VERIFICATION_FAILED, "Arrangement clip rename was not observed.")
+    if muted is not None and observed_muted != muted:
+        raise RemoteError(ERROR_VERIFICATION_FAILED, "Arrangement clip mute was not observed.")
+    return {
+        "updated": True,
+        "clip": _capture_arrangement_clip(clip, track_index, clip_index),
+    }
+
+
+def cmd_diagnose_clip_targets(
+    song: Any, _application: Any, params: dict[str, Any]
+) -> dict[str, Any]:
+    """Enumerate which clips ``set_clip_color`` can and cannot reach.
+
+    Reports Session slots and Arrangement clips per track, plus an explicit
+    reason for every target that is not colourable. Nothing is written.
+    """
+
+    requested_index = params.get("track_index")
+    if requested_index is not None:
+        if isinstance(requested_index, bool) or not isinstance(requested_index, int):
+            raise RemoteError(ERROR_INVALID_PARAMS, "Parameter 'track_index' must be an integer.")
+        indices = [requested_index]
+        _track_at(song, requested_index)
+    else:
+        indices = list(range(len(_all_tracks(song))))
+
+    tracks: list[dict[str, Any]] = []
+    inaccessible: list[dict[str, Any]] = []
+    session_total = 0
+    arrangement_total = 0
+    for index in indices:
+        track = _track_at(song, index)
+        kind = _track_type(song, track)
+        session: list[dict[str, Any]] = []
+        for slot_index, slot in enumerate(_safe(lambda track=track: track.clip_slots, [])):
+            clip = _safe(lambda slot=slot: slot.clip, None)
+            if clip is None:
+                continue
+            session.append(
+                _capture_clip_colour_target(
+                    clip,
+                    scope="session",
+                    track_index=index,
+                    clip_index=slot_index,
+                )
+            )
+        arrangement_clips = _arrangement_clips(track)
+        arrangement: list[dict[str, Any]] = []
+        if arrangement_clips is None:
+            inaccessible.append(
+                {
+                    "track_index": index,
+                    "scope": "arrangement",
+                    "reason": (
+                        "This host does not expose Track.arrangement_clips; "
+                        "Arrangement clips cannot be reached from the Remote "
+                        "Script on this Live version."
+                    ),
+                }
+            )
+        else:
+            for clip_index, clip in enumerate(arrangement_clips):
+                arrangement.append(
+                    _capture_clip_colour_target(
+                        clip,
+                        scope="arrangement",
+                        track_index=index,
+                        clip_index=clip_index,
+                    )
+                )
+        session_total += len(session)
+        arrangement_total += len(arrangement)
+        for entry in (*session, *arrangement):
+            if not entry["colorable"]:
+                inaccessible.append(
+                    {
+                        "track_index": index,
+                        "scope": entry["scope"],
+                        "clip_index": entry["clip_index"],
+                        "reason": "Clip.color did not read back as an integer on this host.",
+                    }
+                )
+        tracks.append(
+            {
+                "track_index": index,
+                "track_id": "track:%s" % index,
+                "name": str(_safe(lambda track=track: track.name, "")),
+                "type": kind,
+                "session_clips": session,
+                "arrangement_clips": arrangement,
+                "arrangement_supported": arrangement_clips is not None,
+            }
+        )
+    return {
+        "tracks": tracks,
+        "session_clip_count": session_total,
+        "arrangement_clip_count": arrangement_total,
+        "inaccessible": inaccessible,
+    }
+
+
+def _set_clip_color_steps(
+    song: Any,
+    params: dict[str, Any],
+) -> Generator[None, None, dict[str, Any]]:
+    """Write ``Clip.color_index`` or ``Clip.color`` and read the value back.
+
+    ``scope`` selects the lane: ``session`` resolves ``track.clip_slots[i]``,
+    ``arrangement`` resolves ``track.arrangement_clips[i]``. Both properties
+    are ``getsetobserve`` on Clip, so both lanes are genuinely writable where
+    the host exposes them; ``diagnose_clip_targets`` reports which ones do.
+    """
+
+    track_index = _integer_param(params, "track_index")
+    clip_index = _integer_param(params, "clip_index")
+    scope = str(params.get("scope", "session")).strip().lower()
+    if scope not in ("session", "arrangement"):
+        raise RemoteError(ERROR_BAD_INPUT, "Parameter 'scope' must be 'session' or 'arrangement'.")
+    attribute, expected = _requested_colour(params)
+    if scope == "session":
+        _track, slot = _clip_slot(song, track_index, clip_index)
+        clip = _safe(lambda: slot.clip, None)
+        if clip is None:
+            raise RemoteError(ERROR_BAD_INPUT, "Clip slot is empty.")
+        clip_id = "track:%s/clipslot:%s/clip" % (track_index, clip_index)
+    else:
+        track = _track_at(song, track_index)
+        clips = _arrangement_clips(track)
+        if clips is None:
+            raise RemoteError(
+                ERROR_CAPABILITY_UNAVAILABLE,
+                "This Live host does not expose Track.arrangement_clips.",
+                "Run diagnose_clip_targets to see which clips are reachable.",
+            )
+        if clip_index >= len(clips):
+            raise RemoteError(
+                ERROR_INVALID_PARAMS,
+                "Arrangement clip %s does not exist on track %s." % (clip_index, track_index),
+            )
+        clip = clips[clip_index]
+        clip_id = "track:%s/arrangementclip:%s" % (track_index, clip_index)
+    observed = yield from _verified_colour_write_steps(
+        clip,
+        attribute=attribute,
+        expected=expected,
+        label="Clip %s" % clip_id,
+    )
+    resolved: dict[str, Any] = {
+        "kind": "clip",
+        "track_index": track_index,
+        "clip_index": clip_index,
+        "scope": scope,
+        "clip_id": clip_id,
+    }
+    clip_name = str(_safe(lambda: clip.name, ""))
+    if clip_name:
+        resolved["clip_name"] = clip_name
+    return {
+        "clip_id": clip_id,
+        "scope": scope,
+        "track_index": track_index,
+        "clip_index": clip_index,
+        "property": attribute,
+        "color": observed["color"],
+        "color_index": observed["color_index"],
+        "resolved": resolved,
+    }
+
+
 def _set_clip_properties_steps(
     song: Any,
     params: dict[str, Any],
@@ -1439,7 +3013,13 @@ def _set_clip_properties_steps(
     return result
 
 
-def _automation_parameter(track: Any, parameter_name: str) -> Any:
+def _automation_parameter(
+    track: Any,
+    parameter_name: str,
+    device_index: Any = None,
+    chain_index: Any = None,
+    chain_device_index: Any = None,
+) -> Any:
     normalized = parameter_name.casefold().replace(" ", "_")
     mixer = _safe(lambda: track.mixer_device, None)
     if normalized == "volume":
@@ -1451,11 +3031,74 @@ def _automation_parameter(track: Any, parameter_name: str) -> Any:
         index = ord(send_match.group(1)) - ord("a")
         sends = list(_safe(lambda: mixer.sends, []))
         return sends[index] if index < len(sends) else None
-    for device in _safe(lambda: track.devices, []):
-        for parameter in _safe(lambda device=device: device.parameters, []):
+    devices = list(_safe(lambda: track.devices, []))
+    if chain_index is not None:
+        if device_index is None:
+            raise RemoteError(
+                ERROR_INVALID_PARAMS,
+                "Addressing a chain parameter needs 'device_index' as well as 'chain_index'.",
+            )
+        if isinstance(device_index, bool) or not isinstance(device_index, int):
+            raise RemoteError(ERROR_INVALID_PARAMS, "Parameter 'device_index' must be an integer.")
+        if device_index < 0 or device_index >= len(devices):
+            raise RemoteError(
+                ERROR_INVALID_PARAMS, "Device index %s does not exist." % device_index
+            )
+        chain = _chain_at(devices[device_index], chain_index, -1, device_index)
+        if chain_device_index is None:
+            mixer = _safe(lambda: chain.mixer_device, None)
+            alias = {"volume": "volume", "pan": "panning", "panning": "panning"}.get(
+                parameter_name.strip().casefold()
+            )
+            if mixer is None or alias is None:
+                raise RemoteError(
+                    ERROR_INVALID_PARAMS,
+                    "A chain mixer exposes 'volume' and 'panning'; pass "
+                    "'chain_device_index' to reach a device inside the chain.",
+                )
+            return _safe(lambda: getattr(mixer, alias), None)
+        inner_devices = list(_safe(lambda: chain.devices, []))
+        if (
+            isinstance(chain_device_index, bool)
+            or not isinstance(chain_device_index, int)
+            or chain_device_index < 0
+            or chain_device_index >= len(inner_devices)
+        ):
+            raise RemoteError(
+                ERROR_INVALID_PARAMS,
+                "Chain device %s does not exist in chain %s."
+                % (chain_device_index, chain_index),
+            )
+        for parameter in _safe(lambda: inner_devices[chain_device_index].parameters, []):
             if str(_safe(lambda parameter=parameter: parameter.name, "")) == parameter_name:
                 return parameter
-    return None
+        return None
+    if device_index is not None:
+        if isinstance(device_index, bool) or not isinstance(device_index, int):
+            raise RemoteError(ERROR_INVALID_PARAMS, "Parameter 'device_index' must be an integer.")
+        if device_index < 0 or device_index >= len(devices):
+            raise RemoteError(
+                ERROR_INVALID_PARAMS, "Device index %s does not exist." % device_index
+            )
+        devices = [devices[device_index]]
+    matches = []
+    for position, device in enumerate(devices):
+        for parameter in _safe(lambda device=device: device.parameters, []):
+            if str(_safe(lambda parameter=parameter: parameter.name, "")) == parameter_name:
+                matches.append((position if device_index is None else device_index, parameter))
+    if not matches:
+        return None
+    if len(matches) > 1:
+        # Silently taking the first match is how an envelope lands on the wrong
+        # rack: "Macro 1" exists on every rack of a track. Name the candidates
+        # and let the caller disambiguate with device_index.
+        raise RemoteError(
+            ERROR_AMBIGUOUS_MATCH,
+            "Parameter %r exists on devices %s of this track. Pass 'device_index' "
+            "to choose one." % (parameter_name, [position for position, _ in matches]),
+            details={"candidates": [position for position, _ in matches]},
+        )
+    return matches[0][1]
 
 
 def _create_clip_automation_steps(
@@ -1477,7 +3120,13 @@ def _create_clip_automation_steps(
         raise RemoteError(ERROR_BAD_INPUT, "Clip slot is empty.")
     if not bool(_safe(lambda: clip.is_session_clip, True)):
         raise RemoteError(ERROR_WRONG_TYPE, "Automation is limited to Session clips.")
-    parameter = _automation_parameter(track, parameter_name)
+    parameter = _automation_parameter(
+        track,
+        parameter_name,
+        params.get("device_index"),
+        params.get("chain_index"),
+        params.get("chain_device_index"),
+    )
     if parameter is None:
         raise RemoteError(ERROR_INVALID_PARAMS, "Parameter %r was not found." % parameter_name)
     if not bool(_safe(lambda: parameter.is_enabled, True)):
@@ -1525,8 +3174,14 @@ def _create_clip_automation_steps(
             ERROR_LIVE_UNAVAILABLE,
             "Live runtime does not expose automation envelope insertion.",
         )
-    for point_time, value in points:
-        insert_step(point_time, 0.0, value)
+    for index, (point_time, value) in enumerate(points):
+        # A zero-length step writes a value that occupies no time, so the
+        # envelope falls back to the parameter value between breakpoints and
+        # the curve reads as a comb of spikes. Each step has to reach the next
+        # breakpoint for the envelope to be continuous; the last one keeps the
+        # zero length because there is nothing after it to cover.
+        duration = points[index + 1][0] - point_time if index + 1 < len(points) else 0.0
+        insert_step(point_time, duration, value)
     yield
     if not bool(_safe(lambda: clip.has_envelopes, False)):
         raise RemoteError(ERROR_LIVE_UNAVAILABLE, "Clip automation write was not observed.")
@@ -2154,7 +3809,11 @@ COMMAND_HANDLERS: dict[str, CommandHandler] = {
     "search_browser": cmd_search_browser,
     "get_song_length": cmd_get_song_length,
     "live_find_track": cmd_live_find_track,
+    "live_find_device": cmd_live_find_device,
+    "live_find_clip": cmd_live_find_clip,
     "list_device_params": cmd_list_device_params,
+    # v0.5.4 — plugin presets bypass Live's Configure gate
+    "get_plugin_presets": cmd_get_plugin_presets,
     "create_clip": cmd_create_clip,
     "fire_clip": cmd_fire_clip,
     "delete_clip": cmd_delete_clip,
@@ -2167,6 +3826,16 @@ COMMAND_HANDLERS: dict[str, CommandHandler] = {
     "rename_track": cmd_rename_track,
     # v0.5.0 — audio-track mirror of create_midi_track. Zero-touch on the midi path.
     "create_audio_track": cmd_create_audio_track,
+    # v0.5.3 — clip colour target discovery (Session + Arrangement)
+    "diagnose_clip_targets": cmd_diagnose_clip_targets,
+    # v0.5.5 — Arrangement timeline read
+    "get_arrangement_clips": cmd_get_arrangement_clips,
+    # v0.5.6 — instrument comprehension and authoring shorthands
+    "get_device_chains": cmd_get_device_chains,
+    "get_midi_chain_report": cmd_get_midi_chain_report,
+    "describe_instrument": cmd_describe_instrument,
+    "get_clip_automation": cmd_get_clip_automation,
+    "add_notes_pattern": cmd_add_notes_pattern,
     # v0.5.0 — set lifecycle
     "lifecycle_status": cmd_lifecycle_status,
     "save_set": cmd_save_set,
@@ -2277,6 +3946,13 @@ def _dispatch_command_steps(
         return (yield from _verified_playhead_steps(song, target))
     if normalized == "set_tempo":
         tempo = _float_param(params, "tempo", 20.0, 999.0)
+        dry_run = params.get("dry_run", False)
+        if dry_run:
+            return {
+                "tempo": tempo,
+                "committed": False,
+                "resolved": {"kind": "tempo", "tempo": tempo},
+            }
         result: dict[str, Any] = yield from _verified_numeric_steps(
             song,
             attribute="tempo",
@@ -2287,14 +3963,30 @@ def _dispatch_command_steps(
         return result
     if normalized == "set_parameter_value":
         return (yield from _set_parameter_value_steps(song, params))
+    if normalized == "set_plugin_preset":
+        return (yield from _set_plugin_preset_steps(song, params))
     if normalized == "clear_clip_notes":
         return (yield from _clear_clip_notes_steps(song, params))
     if normalized == "set_track_property":
         return (yield from _set_track_property_steps(song, params))
+    if normalized == "set_track_color":
+        return (yield from _set_track_color_steps(song, params))
+    if normalized == "set_clip_color":
+        return (yield from _set_clip_color_steps(song, params))
     if normalized == "set_clip_properties":
         return (yield from _set_clip_properties_steps(song, params))
     if normalized == "create_clip_automation":
         return (yield from _create_clip_automation_steps(song, params))
+    if normalized == "duplicate_session_clip_to_arrangement":
+        return (yield from _duplicate_session_clip_to_arrangement_steps(song, params))
+    if normalized == "delete_arrangement_clip":
+        return (yield from _delete_arrangement_clip_steps(song, params))
+    if normalized == "move_arrangement_clip":
+        return (yield from _move_arrangement_clip_steps(song, params))
+    if normalized == "create_clip_automation_curve":
+        return (yield from _create_clip_automation_curve_steps(song, params))
+    if normalized == "set_arrangement_clip_properties":
+        return (yield from _set_arrangement_clip_properties_steps(song, params))
     if normalized == "start_playback":
         return (
             yield from _verified_boolean_steps(
@@ -2378,9 +4070,17 @@ def _command_steps(
             ERROR_READ_ONLY_VIOLATION,
             "Command %r is blocked: creative mutation is not available." % command,
         )
+    if normalized in UNSUPPORTED_CAPABILITIES:
+        # Distinct from UNKNOWN_COMMAND on purpose: the operation is real in
+        # Live's UI but has no supported entry point in the public LOM or the
+        # Extension SDK, so no amount of bridge work will make it available.
+        # The request is still validated against the real Set first, and no
+        # undo step is opened because nothing is ever written.
+        return cmd_unavailable_capability(song, application, {**params, "__command": normalized})
     if not isinstance(params, dict):
         raise RemoteError(ERROR_INVALID_PARAMS, "Request params must be an object.")
-    owns_undo = normalized in ALLOWED_MUTATIONS and manage_undo
+    dry_run_only = _is_dry_run_only(normalized, params)
+    owns_undo = normalized in ALLOWED_MUTATIONS and manage_undo and not dry_run_only
     if owns_undo:
         _begin_undo(undo_target)
     try:
@@ -2397,6 +4097,29 @@ def _command_steps(
     finally:
         if owns_undo:
             _end_undo(undo_target)
+
+
+def _is_dry_run_only(normalized: str, params: dict[str, Any]) -> bool:
+    if normalized in ("set_tempo", "create_clip"):
+        dry_run = params.get("dry_run", False)
+        if not isinstance(dry_run, bool):
+            raise RemoteError(ERROR_INVALID_PARAMS, "Parameter 'dry_run' must be boolean.")
+        return dry_run
+    if normalized != "run_batch":
+        return False
+
+    commands = params.get("commands")
+    if not isinstance(commands, list) or not commands:
+        return False
+    for command in commands:
+        if not isinstance(command, dict):
+            return False
+        if command.get("type") not in ("set_tempo", "create_clip"):
+            return False
+        command_params = command.get("params", {})
+        if not isinstance(command_params, dict) or command_params.get("dry_run") is not True:
+            return False
+    return True
 
 
 def execute_command(

@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
+import pytest
+
 from ableton_mcp_server import __version__
+from ableton_mcp_server.server import PUBLIC_TOOL_NAMES
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -21,12 +27,13 @@ def test_release_version_is_aligned_across_package_metadata() -> None:
     extension_lock = json.loads(
         (ROOT / "AbletonMCPServer_Extension" / "package-lock.json").read_text(encoding="utf-8")
     )
-    assert __version__ == "0.5.2"
-    assert manifest["version"] == "0.5.2"
-    assert extension_manifest["version"] == "0.5.2"
-    assert extension_manifest_json["version"] == "0.5.2"
-    assert extension_lock["version"] == "0.5.2"
-    assert 'version = "0.5.2"' in pyproject
+    assert __version__ == "0.5.6"
+    assert manifest["version"] == "0.5.6"
+    assert extension_manifest["version"] == "0.5.6"
+    assert extension_manifest_json["version"] == "0.5.6"
+    assert extension_lock["version"] == "0.5.6"
+    assert 'version = "0.5.6"' in pyproject
+    assert extension_lock["packages"][""]["version"] == "0.5.6"
 
 
 def test_runtime_dependencies_cover_imported_analysis_and_fastmcp_websockets() -> None:
@@ -53,8 +60,8 @@ def test_baseline_docs_match_current_state() -> None:
         ("TOOL_REFERENCE", tool_reference),
         ("CHANGELOG", changelog),
     ):
-        # The count must be present; the wording may be "65 tools" or
-        # "65 snake_case tools" / "65 cataloged public tools".
+        # The historical baseline count must remain present so the additive
+        # v0.5.3 changes can be reconciled with the certified v0.5.2 release.
         assert re.search(r"\b65\b", text), f"{label} should advertise the 65-tool baseline"
         assert "37 registered tools" not in text, (
             f"{label} still references the stale 37-tool count"
@@ -88,7 +95,10 @@ def test_v040_public_docs_cover_tools_and_attribution() -> None:
         "set_clip_properties",
         "create_clip_automation",
     }
-    assert "Version 0.5.2 exposes 65 tools" in readme
+    assert "Version 0.5.6 exposes 88 tools" in readme
+    # The historical v0.5.2 baseline must stay visible; the tool surface grew
+    # additively and readers need both numbers to reconcile older docs.
+    assert "65" in readme
     for tool in new_tools:
         assert f"`{tool}`" in readme
         assert f"`{tool}" in reference
@@ -111,7 +121,7 @@ def test_v050_public_docs_cover_lifecycle_fade_tracks_and_analysis() -> None:
         "analyze_mix",
         "extract_single_cycle",
     }
-    assert "65 tools" in readme
+    assert "88 tools" in readme
     for tool in new_tools:
         assert f"`{tool}`" in readme
         assert f"`{tool}`" in reference or f"`{tool}(" in reference
@@ -151,4 +161,67 @@ def test_windows_bootstrap_uses_a_distinct_native_virtualenv() -> None:
     assert ".venv-win" in script
     assert "py -3" in script
     assert 'pip install -e "$RepoRoot"' in script
+    assert "[switch]$DryRun" in script
+    assert "install-script --dry-run" in script
     assert ".venv-win/" in (ROOT / ".gitignore").read_text(encoding="utf-8")
+
+
+def test_windows_dry_run_does_not_bootstrap_or_install(tmp_path: Path) -> None:
+    if os.name != "nt" or shutil.which("powershell") is None or shutil.which("py") is None:
+        pytest.skip("Windows PowerShell and the Python launcher are required")
+
+    checkout = tmp_path / "checkout"
+    for relative in (
+        "contracts.py",
+        "scripts/setup_windows.ps1",
+        "ableton_mcp_server/__init__.py",
+        "ableton_mcp_server/catalog.py",
+        "ableton_mcp_server/cli.py",
+        "ableton_mcp_server/diagnostics.py",
+        "AbletonMCPServer_RemoteScript/__init__.py",
+        "AbletonMCPServer_RemoteScript/_contracts.py",
+        "AbletonMCPServer_RemoteScript/README.md",
+    ):
+        destination = checkout / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / relative, destination)
+
+    install_target = tmp_path / "Remote Scripts"
+    completed = subprocess.run(
+        [
+            "powershell",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(checkout / "scripts" / "setup_windows.ps1"),
+            "-DryRun",
+        ],
+        cwd=checkout,
+        env={**os.environ, "ABLETON_MCP_REMOTE_SCRIPTS_DIR": str(install_target)},
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert "status: dry_run" in completed.stdout
+    assert not (checkout / ".venv-win").exists()
+    assert not install_target.exists()
+
+
+def test_landing_page_catalog_matches_the_public_tool_registry() -> None:
+    landing = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+    landing_names = re.findall(r"\{ name: '([^']+)'", landing)
+
+    assert len(landing_names) == len(set(landing_names)) == len(PUBLIC_TOOL_NAMES)
+    assert set(landing_names) == set(PUBLIC_TOOL_NAMES)
+    assert "Complete 88 MCP Tool Surface" in landing
+    assert "transaction rollbacks" not in landing
+
+
+def test_architecture_advertises_the_current_tool_count() -> None:
+    architecture = (ROOT / "docs" / "ARCHITECTURE.md").read_text(encoding="utf-8")
+    assert "88 on the current line" in architecture
+    assert "73 on the current line" not in architecture

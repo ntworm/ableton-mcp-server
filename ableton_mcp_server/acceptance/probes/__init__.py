@@ -44,7 +44,7 @@ QUIT_ABLETON_MANUAL_REASON = (
 )
 
 # Slice 1 Task 9: baseline probe map. The flattened names must equal the
-# 65-name ``PUBLIC_TOOL_NAMES`` set, so each catalogued tool has a home in
+# 66-name ``PUBLIC_TOOL_NAMES`` set, so each catalogued tool has a home in
 # exactly one probe group. The runner never fabricates
 # ``environment_unavailable`` for a tool that is actually selected.
 BASELINE_PROBE_GROUPS: dict[str, tuple[str, ...]] = {
@@ -85,8 +85,27 @@ BASELINE_PROBE_GROUPS: dict[str, tuple[str, ...]] = {
         "get_composition_structure",
         "diagnose_midi_clip",
         "lifecycle_status",
+        "diagnose_clip_targets",
+        "live_find_device",
+        "live_find_clip",
+        "get_plugin_presets",
+        "get_arrangement_clips",
+        "get_device_chains",
+        "get_midi_chain_report",
+        "describe_instrument",
+        "get_clip_automation",
     ),
     "websocket_reads": ("get_warp_state",),
+    # Tools whose contract is a refusal. The probe proves they reject a
+    # well-formed request with CAPABILITY_UNAVAILABLE and change nothing;
+    # a success is recorded as a hard failure.
+    "capability": (
+        "move_track",
+        "reorder_tracks",
+        "move_track_to_group",
+        "ungroup_track",
+        "merge_groups",
+    ),
     "mutations": (
         "create_cue_point",
         "bulk_create_cue_points",
@@ -106,12 +125,21 @@ BASELINE_PROBE_GROUPS: dict[str, tuple[str, ...]] = {
         "clear_clip_notes",
         "fire_scene",
         "set_track_property",
+        "set_track_color",
+        "set_clip_color",
         "set_clip_properties",
         "create_clip_automation",
         "create_midi_track",
         "create_audio_track",
         "rename_track",
         "set_parameter_value",
+        "set_plugin_preset",
+        "duplicate_session_clip_to_arrangement",
+        "delete_arrangement_clip",
+        "move_arrangement_clip",
+        "create_clip_automation_curve",
+        "add_notes_pattern",
+        "set_arrangement_clip_properties",
         "save_set",
         "live_fade",
         "set_warp_state",

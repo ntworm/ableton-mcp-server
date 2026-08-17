@@ -20,6 +20,7 @@ fixture's song length was large but fails on the canonical 232-beat
 ``TESTE_CODEX`` Set: Live refuses with
 ``Cannot set the Songtime behind the Songlength``.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -246,8 +247,7 @@ def test_baseline_run_passes_cue_probes_when_song_length_is_232() -> None:
     assert cue_rows, "the baseline run must include cue_point probes"
     for row in cue_rows:
         assert row.status == "live_passed", (
-            f"cue probe {row.tool!r} expected live_passed, got "
-            f"{row.status!r}: {row.evidence!r}"
+            f"cue probe {row.tool!r} expected live_passed, got {row.status!r}: {row.evidence!r}"
         )
 
 
@@ -260,7 +260,9 @@ def test_cleanup_uses_chosen_times_not_legacy_offset() -> None:
     """The cleanup path must delete the times the helper picked, not
     blindly assume ``cue_time + 64``."""
     t1, t2 = acceptance_module._acceptance_safe_cue_times(
-        song_length=232.0, locators=[], grid=8.0,
+        song_length=232.0,
+        locators=[],
+        grid=8.0,
     )
     # Both chosen times are inside song_length and distinct.
     assert t1 <= 232.0 and t2 <= 232.0

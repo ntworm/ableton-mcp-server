@@ -70,7 +70,22 @@ def test_context_scene_locator_browser_and_control_surface_reads() -> None:
 
 def test_path_reads_resolve_against_current_state() -> None:
     matches = call("live_find_track", {"query": "bass"})
-    assert matches == [{"id": "track:0", "index": 0, "name": "Bass", "type": "midi"}]
+    assert matches == [
+        {
+            "id": "track:0",
+            "index": 0,
+            "name": "Bass",
+            "type": "midi",
+            "color": 0x336699,
+            "color_index": 0,
+            "is_group_track": False,
+            "is_grouped": False,
+            "group_track_index": None,
+            "group_track_id": None,
+            "is_visible": True,
+            "fold_state": 0,
+        }
+    ]
     params = call("list_device_params", {"track_id": "track:0"})
     assert params[0]["device_id"] == "track:0/device:0"
     assert params[0]["parameters"][0]["id"] == "track:0/device:0/param:0"
