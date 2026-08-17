@@ -10,7 +10,7 @@ Version 0.5.6 exposes 88 tools over TCP and WebSockets (with primary device reso
 
 ## ⚡ What is Model Context Protocol (MCP) & How Agents Use It
 
-**Model Context Protocol (MCP)** is an open standard developed by Anthropic for secure, local communication between Large Language Models (LLMs) and desktop applications.
+**Model Context Protocol (MCP)** is an open standard for secure, local communication between Large Language Models (LLMs) and desktop applications.
 
 > **Local IPC / stdio (Not a Cloud Service):**  
 > `ableton-mcp-server` runs locally on your host OS over standard input/output (`stdio`) or IPC loopback. The AI agent spawns the `ableton-mcp-server.exe` process directly. There are no external cloud endpoints or API keys required, guaranteeing zero network latency and maximum privacy.
