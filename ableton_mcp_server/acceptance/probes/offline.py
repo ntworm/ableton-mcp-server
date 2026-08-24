@@ -1,16 +1,26 @@
 """Offline probe group.
 
-Drives the eight offline tools in :data:`BASELINE_PROBE_GROUPS["offline"]`
-without ever talking to the bridge. Each helper calls the **real**
-implementation rather than returning a synthetic object, so an upstream
-regression cannot be hidden by a hard-coded response.
-``build_extension`` is the only legitimate ``environment_unavailable`` —
-and only when ``node`` is genuinely absent from PATH.
+Drives the offline tools in :data:`BASELINE_PROBE_GROUPS["offline"]` without
+ever talking to the bridge. Each helper calls the **real** implementation
+rather than returning a synthetic object, so an upstream regression cannot be
+hidden by a hard-coded response. ``build_extension`` is the only legitimate
+``environment_unavailable`` — and only when ``node`` is genuinely absent from
+PATH.
+
+.. warning::
+   ``run`` below is currently dead code. The runner imports only the
+   ``composed`` and ``quit`` probe submodules and executes
+   ``ableton_mcp_server.acceptance.runner.run_offline_probes`` instead, which
+   holds a parallel copy of this logic. ``TOOLS`` here is still authoritative
+   as the declaration of the group, but ``run`` records only the eight
+   pre-v0.6.0 rows. Change ``runner.run_offline_probes`` when you change probe
+   behaviour, and reconcile the duplication before relying on this module.
 """
 
 from __future__ import annotations
 
 import shutil
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, cast
 
@@ -29,10 +39,32 @@ TOOLS: tuple[str, ...] = (
     "find_frequency_masking",
     "analyze_mix",
     "extract_single_cycle",
+    "music_generate_drum_groove",
+    "music_generate_bass",
+    "music_plan_production",
+    "groove_search",
+    "groove_evidence",
+    "groove_generate",
+    "groove_compare",
+    "groove_apply",
 )
 
 
-async def run(report: CertificationReport, workdir: Path) -> None:
+def get_client() -> Any:
+    """Compatibility seam for tests proving offline probes avoid the bridge."""
+
+    from ...server import get_client as _get_client
+
+    return _get_client()
+
+
+async def run(
+    report: CertificationReport,
+    workdir: Path,
+    *,
+    runtime: Any | None = None,
+    requests: Mapping[str, Any] | None = None,
+) -> None:
     """Drive the four offline mix analysis probes plus 4 helpers.
 
     Each helper calls the **real** implementation rather than returning a
@@ -41,6 +73,48 @@ async def run(report: CertificationReport, workdir: Path) -> None:
     ``environment_unavailable`` — and only when ``node`` is genuinely
     absent from PATH.
     """
+    if runtime is not None and requests is not None:
+        from ...groove_intelligence.deterministic import deterministic_generate
+        from ...groove_intelligence.evidence import compare, evidence
+        from ...groove_intelligence.search import search
+        from .groove_apply import preview_probe
+
+        await _record_call(
+            report,
+            "groove_search",
+            lambda: search(runtime, requests["search"]),
+            passed="offline_passed",
+        )
+        await _record_call(
+            report,
+            "groove_evidence",
+            lambda: evidence(runtime, requests["evidence"]),
+            passed="offline_passed",
+        )
+        await _record_call(
+            report,
+            "groove_generate",
+            lambda: deterministic_generate(runtime, requests["generate"]),
+            passed="offline_passed",
+        )
+        await _record_call(
+            report,
+            "groove_compare",
+            lambda: compare(runtime, requests["compare"]),
+            passed="offline_passed",
+        )
+        await _record_call(
+            report,
+            "groove_apply",
+            lambda: preview_probe(
+                confirm_project_name="TESTE_CODEX",
+                expected_empty_slot=True,
+                disposable=True,
+            ),
+            passed="offline_passed",
+        )
+        return
+
     # ``_synthesize_offline_inputs`` is the canonical input generator
     # for every offline probe. It lives in ``acceptance.helpers`` because
     # it is reused by the synth-only tests too; we lazy-import it so

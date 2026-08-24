@@ -1,21 +1,20 @@
-"""Build v0.5.1-rc1 release candidates into an injected output directory.
+"""Build traceable Ableton MCP Server candidate or stable release artifacts.
 
 This script produces three artifacts plus a SHA256SUMS file, an
 INSTALL.md, a RELEASE-NOTES.md, and a manifest.json:
 
-- ``ableton_mcp_server-0.5.1-py3-none-any.whl``
-- ``AbletonMCPServer_RemoteScript-0.5.1.zip``
-- ``AbletonMCPServer-Extension-0.5.1.ablx``
+- a Python wheel carrying the version declared by ``pyproject.toml``;
+- a versioned Remote Script ZIP;
+- a versioned Extension ``.ablx`` archive.
 
 The script is deliberately testable: every public function takes the
 output directory as a parameter so unit tests can run in ``tmp_path``
 without polluting the project tree. The CLI entrypoint keeps the
-default ``releases/v0.5.1-rc1`` location so existing workflows do not
-change.
+default candidate directory so existing workflows do not change.
 
-The manifest always flags ``live_certified=false`` and
-``promotion_ready=false``; the owner flips both to ``true`` after the
-Live acceptance checkpoint returns 65 rows with zero failures.
+Candidate manifests always block promotion. Stable manifests require an
+acceptance report for the active source commit with all 96 catalog tools and
+``release_ready=true``.
 """
 
 from __future__ import annotations
@@ -33,9 +32,26 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-VERSION = "0.5.1"
+from ableton_mcp_server.catalog import TOOL_CATALOG
+
 ROOT = Path(__file__).resolve().parents[1]
+_PROJECT_VERSION_PATTERN = re.compile(
+    r"^version\s*=\s*['\"]([^'\"]+)['\"]\s*$", re.MULTILINE
+)
+
+
+def _project_version(root: Path) -> str:
+    """Read the PEP 621 project version without requiring Python 3.11 tomllib."""
+    text = (root / "pyproject.toml").read_text(encoding="utf-8")
+    match = _PROJECT_VERSION_PATTERN.search(text)
+    if match is None:
+        raise ValueError("pyproject.toml does not declare project.version")
+    return match.group(1)
+
+
+VERSION = _project_version(ROOT)
 DEFAULT_RELEASE_DIR = ROOT / "releases" / f"v{VERSION}-rc1"
+EXPECTED_TOOL_COUNT = len(TOOL_CATALOG)
 
 _HEX_COMMIT_PATTERN = re.compile(r"^[0-9a-fA-F]{40}$")
 
@@ -189,10 +205,10 @@ def _build_python_wheel(root: Path, output_directory: Path) -> Path:
     return wheels[0]
 
 
-def _build_remote_script_zip(root: Path, output_directory: Path) -> Path:
+def _build_remote_script_zip(root: Path, output_directory: Path, *, version: str) -> Path:
     """Zip the vendored Remote Script payload (Live drop-in folder)."""
     src = root / "AbletonMCPServer_RemoteScript"
-    out = output_directory / f"AbletonMCPServer_RemoteScript-{VERSION}.zip"
+    out = output_directory / f"AbletonMCPServer_RemoteScript-{version}.zip"
     if out.exists():
         out.unlink()
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -210,7 +226,11 @@ def _build_remote_script_zip(root: Path, output_directory: Path) -> Path:
 
 
 def _build_extension_ablx(
-    root: Path, output_directory: Path, *, subprocess_runner: Callable[..., Any] | None = None
+    root: Path,
+    output_directory: Path,
+    *,
+    version: str,
+    subprocess_runner: Callable[..., Any] | None = None,
 ) -> Path:
     """Build the Extension Host ``.ablx`` payload using ``extensions-cli``.
 
@@ -237,7 +257,7 @@ def _build_extension_ablx(
     if not candidates:
         raise RuntimeError("extensions-cli did not produce an .ablx archive")
     src = candidates[0]
-    out = output_directory / f"AbletonMCPServer-Extension-{VERSION}.ablx"
+    out = output_directory / f"AbletonMCPServer-Extension-{version}.ablx"
     shutil.copy2(src, out)
     return out
 
@@ -253,24 +273,29 @@ def _write_sha256_sums(artifacts: list[Path], output_directory: Path) -> Path:
     return out
 
 
-def _write_install_md(output_directory: Path, root: Path) -> Path:
+def _write_install_md(output_directory: Path, *, version: str, stable: bool) -> Path:
+    suffix = "" if stable else "-rc1"
+    audience = (
+        "This stable release passed the repository's guarded certification gate."
+        if stable
+        else "This release candidate is not promoted until guarded certification passes."
+    )
     body = (
-        f"# Install v{VERSION}-rc1\n\n"
-        "These release candidates install on the owner machine only. Do "
-        "not run them from a CI environment.\n\n"
+        f"# Install v{version}{suffix}\n\n"
+        f"{audience}\n\n"
         "## Python wheel\n\n"
         "```\n"
         f"pip install {output_directory.as_posix()}"
-        f"/ableton_mcp_server-{VERSION}-py3-none-any.whl\n"
+        f"/ableton_mcp_server-{version}-py3-none-any.whl\n"
         "```\n\n"
         "## MIDI Remote Script\n\n"
-        f"Extract `AbletonMCPServer_RemoteScript-{VERSION}.zip` into "
+        f"Extract `AbletonMCPServer_RemoteScript-{version}.zip` into "
         "your Live MIDI Remote Scripts folder, e.g.\n"
         "`%USERPROFILE%\\Documents\\Ableton\\User Library\\"
         "Remote Scripts\\`.\n\n"
         "## Extension Host\n\n"
         "### 1. Preferred Installation Flow (Auto)\n"
-        f"Double-click `AbletonMCPServer-Extension-{VERSION}.ablx` or drag and drop "
+        f"Double-click `AbletonMCPServer-Extension-{version}.ablx` or drag and drop "
         "it directly into the Ableton Live window to let Ableton install the "
         "extension automatically.\n\n"
         "### 2. Manual Extraction Fallback\n"
@@ -301,27 +326,31 @@ def _write_install_md(output_directory: Path, root: Path) -> Path:
     return out
 
 
-def _write_release_notes(artifacts: dict[str, Path], output_directory: Path) -> Path:
+def _write_release_notes(
+    artifacts: dict[str, Path],
+    output_directory: Path,
+    *,
+    version: str,
+    stable: bool,
+) -> Path:
+    state = (
+        "This stable release is bound to a guarded acceptance report with "
+        "`release_ready=true`."
+        if stable
+        else "This candidate is not certified and cannot be promoted until the guarded "
+        "acceptance report returns `release_ready=true`."
+    )
     body = (
-        f"# v{VERSION} — Slice 1 stabilization\n\n"
-        "This release candidate bundles the Slice 1 corrections on top of "
-        "v0.5.0. It is **not yet certified** — the baseline acceptance "
-        "run against the disposable `TESTE_CODEX` Set must finish with "
-        "zero `failed` rows before promotion to a stable tag.\n\n"
+        f"# v{version}\n\n"
+        f"{state}\n\n"
         "## Highlights\n\n"
-        "- 65-tool capability catalog is the single source of truth for "
+        f"- {EXPECTED_TOOL_COUNT}-tool capability catalog is the single source of truth for "
         "the FastMCP surface and the per-tool certification report.\n"
-        "- `live_fade` distributes its writes across the requested "
-        "`duration` via `time.monotonic` and never blocks the Live main "
-        "thread.\n"
+        "- Deterministic offline music generation and Groove Intelligence are included.\n"
         "- The Extension WebSocket binds explicitly to `127.0.0.1:9889`; "
         "LAN exposure is forbidden by design.\n"
-        "- Cross-bridge error taxonomy adds `CAPABILITY_UNAVAILABLE`, "
-        "`AMBIGUOUS_MATCH`, `VERIFICATION_FAILED`, "
-        "`ACCEPTANCE_GUARD_FAILED` on top of the existing transport "
-        "codes.\n"
         "- `ableton-mcp acceptance --profile baseline` runs the full "
-        "65-tool surface against the disposable Set, returns a "
+        f"{EXPECTED_TOOL_COUNT}-tool surface against the disposable Set, returns a "
         "CertificationReport, and the CLI exits non-zero on any "
         "`failed` row.\n\n"
         "## Artifacts\n\n"
@@ -333,6 +362,40 @@ def _write_release_notes(artifacts: dict[str, Path], output_directory: Path) -> 
     return out
 
 
+def _validated_acceptance_report(
+    path: Path,
+    *,
+    source_commit: str,
+    expected_tool_count: int,
+) -> dict[str, Any]:
+    """Validate the evidence required to promote stable artifacts."""
+    try:
+        report = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"acceptance report is unreadable: {error}") from error
+    if not isinstance(report, dict):
+        raise ValueError("acceptance report must contain a JSON object")
+
+    certification = report.get("certification", report)
+    if not isinstance(certification, dict) or certification.get("release_ready") is not True:
+        raise ValueError("stable release requires acceptance report release_ready=true")
+
+    report_tool_count = report.get("tool_count", certification.get("tool_count"))
+    if report_tool_count != expected_tool_count:
+        raise ValueError(
+            "acceptance report tool count does not match the catalog: "
+            f"{report_tool_count!r} != {expected_tool_count}"
+        )
+
+    report_commit = report.get("source_commit")
+    if report_commit is not None and report_commit != source_commit:
+        raise ValueError(
+            "acceptance report source commit does not match HEAD: "
+            f"{report_commit!r} != {source_commit!r}"
+        )
+    return report
+
+
 def build_release(
     *,
     root: Path = ROOT,
@@ -340,6 +403,8 @@ def build_release(
     subprocess_runner: Callable[..., Any] | None = None,
     source_commit: str | None = None,
     git_runner: Callable[..., Any] | None = None,
+    stable: bool = False,
+    acceptance_report: Path | None = None,
 ) -> dict[str, Any]:
     """Build the release candidates and return a structured summary.
 
@@ -358,6 +423,8 @@ def build_release(
     if subprocess_runner is None:
         subprocess_runner = subprocess.run
 
+    version = _project_version(root)
+
     resolved_head = _resolve_source_commit(root=root, runner=git_runner)
 
     if source_commit is None:
@@ -373,7 +440,19 @@ def build_release(
 
         source_commit = validated_commit
 
-    output_directory = output_directory or DEFAULT_RELEASE_DIR
+    if stable and acceptance_report is None:
+        raise ValueError("stable release requires an acceptance report")
+
+    validated_report: dict[str, Any] | None = None
+    if stable and acceptance_report is not None:
+        validated_report = _validated_acceptance_report(
+            acceptance_report,
+            source_commit=source_commit,
+            expected_tool_count=EXPECTED_TOOL_COUNT,
+        )
+
+    default_name = f"v{version}" if stable else f"v{version}-rc1"
+    output_directory = output_directory or root / "releases" / default_name
     output_directory.mkdir(parents=True, exist_ok=True)
 
     # Always clear stale candidates before producing fresh ones so the
@@ -391,10 +470,11 @@ def build_release(
         path.unlink()
 
     wheel = _build_python_wheel(root, output_directory)
-    remote_zip = _build_remote_script_zip(root, output_directory)
+    remote_zip = _build_remote_script_zip(root, output_directory, version=version)
     ablx = _build_extension_ablx(
         root,
         output_directory,
+        version=version,
         subprocess_runner=subprocess_runner,
     )
 
@@ -407,12 +487,27 @@ def build_release(
         [wheel, remote_zip, ablx],
         output_directory,
     )
-    install = _write_install_md(output_directory, root)
-    notes = _write_release_notes(artifacts, output_directory)
+    install = _write_install_md(output_directory, version=version, stable=stable)
+    notes = _write_release_notes(
+        artifacts,
+        output_directory,
+        version=version,
+        stable=stable,
+    )
+
+    certification: dict[str, str] | None = None
+    if validated_report is not None and acceptance_report is not None:
+        report_copy = output_directory / acceptance_report.name
+        if acceptance_report.resolve() != report_copy.resolve():
+            shutil.copy2(acceptance_report, report_copy)
+        certification = {
+            "report": report_copy.name,
+            "sha256": _sha256(report_copy),
+        }
 
     manifest: dict[str, Any] = {
-        "version": VERSION,
-        "candidate": "rc1",
+        "version": version,
+        "candidate": None if stable else "rc1",
         "source_commit": source_commit,
         "artifacts": {
             label: {
@@ -425,9 +520,11 @@ def build_release(
             }
             for label, path in artifacts.items()
         },
-        "live_certified": False,
-        "promotion_ready": False,
+        "live_certified": stable,
+        "promotion_ready": stable,
     }
+    if certification is not None:
+        manifest["certification"] = certification
 
     (output_directory / "manifest.json").write_text(
         json.dumps(manifest, indent=2), encoding="utf-8"
@@ -454,10 +551,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     """
     parser = argparse.ArgumentParser(
         prog="build_release_candidates",
-        description=(
-            "Build the v0.5.1-rc1 release candidates (wheel, Remote "
-            "Script zip, Extension .ablx) into releases/v0.5.1-rc1/."
-        ),
+        description="Build version-aware candidate or certified stable release artifacts.",
     )
     parser.add_argument(
         "--source-commit",
@@ -472,7 +566,17 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output-directory",
         default=None,
-        help=("Optional output directory; defaults to releases/v0.5.1-rc1/ in the worktree root."),
+        help="Optional output directory; defaults under releases/v<project-version>.",
+    )
+    parser.add_argument(
+        "--stable",
+        action="store_true",
+        help="Build stable artifacts; requires --acceptance-report.",
+    )
+    parser.add_argument(
+        "--acceptance-report",
+        default=None,
+        help="Path to the guarded acceptance JSON used for stable promotion.",
     )
     return parser
 
@@ -481,10 +585,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
     output_directory = Path(args.output_directory) if args.output_directory else None
+    acceptance_report = Path(args.acceptance_report) if args.acceptance_report else None
     try:
         summary = build_release(
             output_directory=output_directory,
             source_commit=args.source_commit,
+            stable=args.stable,
+            acceptance_report=acceptance_report,
         )
     except ValueError as error:
         # ``source_commit`` validation (or any other builder invariant)
@@ -492,7 +599,7 @@ def main(argv: list[str] | None = None) -> int:
         # before producing a release with the ``unknown`` placeholder.
         print(f"build_release failed: {error}", file=__import__("sys").stderr)
         return 1
-    print(f"Building into {output_directory or DEFAULT_RELEASE_DIR}")
+    print(f"Building into {output_directory or 'the version-derived release directory'}")
     for label in ("wheel", "remote_script_zip", "extension_ablx"):
         print(f"  {label:20s} {summary['artifacts'][label]['path']}")
     print(f"  sha256sums           {summary['files']['sha256sums']}")

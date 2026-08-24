@@ -23,6 +23,10 @@ from typing import Any
 
 from ._contracts import (
     ALLOWED_MUTATIONS,
+    BRIDGE_OWNER,
+    BRIDGE_PRECONDITION_CAPABILITY,
+    BRIDGE_PROTOCOL_VERSION,
+    BRIDGE_SCHEMA_VERSION,
     CAPABILITY_EVIDENCE,
     CUE_OPERATION_VERIFY_TICKS,
     CUE_TIME_TOLERANCE,
@@ -36,6 +40,8 @@ from ._contracts import (
     ERROR_INVALID_PARAMS,
     ERROR_LIVE_UNAVAILABLE,
     ERROR_PLAYHEAD_NOT_MOVED,
+    ERROR_PRECONDITION_FAILED,
+    ERROR_PRECONDITION_INVALID,
     ERROR_READ_ONLY_VIOLATION,
     ERROR_STALE_REFERENCE,
     ERROR_TIMEOUT,
@@ -492,6 +498,12 @@ def cmd_get_session_info(song: Any, _application: Any, _params: dict[str, Any]) 
         "signature_denominator": int(song.signature_denominator),
         "is_playing": bool(song.is_playing),
         "current_song_time": float(song.current_song_time),
+        "bridge_contract": {
+            "schema_version": BRIDGE_SCHEMA_VERSION,
+            "owner": BRIDGE_OWNER,
+            "protocol_version": BRIDGE_PROTOCOL_VERSION,
+            "capabilities": {BRIDGE_PRECONDITION_CAPABILITY: "v1"},
+        },
     }
 
 
@@ -3864,6 +3876,126 @@ def _end_undo(target: Any) -> None:
     method()
 
 
+def _validate_preconditions(raw: Any) -> tuple[list[dict[str, Any]] | None, RemoteError | None]:
+    """Validate the closed, pre-undo ``run_batch`` admission surface.
+
+    Validation deliberately visits every item before returning.  This keeps a
+    malformed request from making its outcome depend on list ordering and
+    gives callers one stable error category before any Live mutation begins.
+    """
+
+    if raw is None:
+        return [], None
+    if not isinstance(raw, list):
+        return None, RemoteError(ERROR_PRECONDITION_INVALID, "preconditions must be a list.")
+    if len(raw) > 16:
+        return None, RemoteError(
+            ERROR_PRECONDITION_INVALID, "at most 16 preconditions are allowed."
+        )
+    normalized: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, int, int]] = set()
+    first_error: RemoteError | None = None
+    for item in raw:
+        if not isinstance(item, dict):
+            first_error = first_error or RemoteError(
+                ERROR_PRECONDITION_INVALID, "precondition must be an object."
+            )
+            continue
+        if set(item) != {"type", "version", "params"}:
+            first_error = first_error or RemoteError(
+                ERROR_PRECONDITION_INVALID, "precondition fields are invalid."
+            )
+            continue
+        if item.get("type") != "slot_empty" or item.get("version") != "v1":
+            first_error = first_error or RemoteError(
+                ERROR_PRECONDITION_INVALID, "unsupported precondition type or version."
+            )
+            continue
+        params = item.get("params")
+        if not isinstance(params, dict) or set(params) != {"track_index", "clip_index"}:
+            first_error = first_error or RemoteError(
+                ERROR_PRECONDITION_INVALID, "slot_empty params are invalid."
+            )
+            continue
+        track_index = params.get("track_index")
+        clip_index = params.get("clip_index")
+        if (
+            isinstance(track_index, bool)
+            or not isinstance(track_index, int)
+            or track_index < 0
+            or isinstance(clip_index, bool)
+            or not isinstance(clip_index, int)
+            or clip_index < 0
+        ):
+            first_error = first_error or RemoteError(
+                ERROR_PRECONDITION_INVALID,
+                "slot indices must be non-negative integers.",
+            )
+            continue
+        key = ("slot_empty", "v1", track_index, clip_index)
+        if key in seen:
+            first_error = first_error or RemoteError(
+                ERROR_PRECONDITION_INVALID,
+                "preconditions must not contain duplicates.",
+            )
+            continue
+        seen.add(key)
+        normalized.append(
+            {
+                "type": "slot_empty",
+                "version": "v1",
+                "params": {"track_index": track_index, "clip_index": clip_index},
+            }
+        )
+    return normalized, first_error
+
+
+def _evaluate_preconditions(song: Any, preconditions: list[dict[str, Any]]) -> RemoteError | None:
+    """Evaluate all slot predicates, returning the first failure by index."""
+
+    first_failure: RemoteError | None = None
+    for index, item in enumerate(preconditions):
+        params = item["params"]
+        try:
+            _track, slot = _clip_slot(song, int(params["track_index"]), int(params["clip_index"]))
+            occupied = bool(
+                _safe(
+                    lambda slot=slot: slot.has_clip,
+                    _safe(lambda slot=slot: slot.clip is not None, False),
+                )
+            )
+        except RemoteError as error:
+            failure = RemoteError(
+                ERROR_PRECONDITION_INVALID,
+                str(error),
+                details={"index": index, "bridge_stage": "precondition"},
+            )
+            first_failure = first_failure or failure
+            continue
+        if occupied:
+            failure = RemoteError(
+                ERROR_PRECONDITION_FAILED,
+                "slot is not empty.",
+                details={
+                    "index": index,
+                    "bridge_stage": "precondition",
+                    "track_index": params["track_index"],
+                    "clip_index": params["clip_index"],
+                },
+            )
+            first_failure = first_failure or failure
+    return first_failure
+
+
+def _admit_batch(song: Any, params: dict[str, Any]) -> dict[str, Any] | None:
+    preconditions, validation_error = _validate_preconditions(params.get("preconditions"))
+    if validation_error is not None:
+        return validation_error.to_envelope()
+    assert preconditions is not None
+    failure = _evaluate_preconditions(song, preconditions)
+    return failure.to_envelope() if failure is not None else None
+
+
 def _run_batch_steps(
     song: Any,
     application: Any,
@@ -3874,6 +4006,13 @@ def _run_batch_steps(
     commands = _required(params, "commands")
     if not isinstance(commands, list) or not commands:
         raise RemoteError(ERROR_INVALID_PARAMS, "Parameter 'commands' must be a non-empty list.")
+    admission_error = (
+        None
+        if params.pop("__preconditions_admitted", False)
+        else _admit_batch(song, params)
+    )
+    if admission_error is not None:
+        return admission_error
     results = []
     completed = 0
     aborted_at = None
@@ -4079,6 +4218,13 @@ def _command_steps(
         return cmd_unavailable_capability(song, application, {**params, "__command": normalized})
     if not isinstance(params, dict):
         raise RemoteError(ERROR_INVALID_PARAMS, "Request params must be an object.")
+    if normalized == "run_batch":
+        admission_error = _admit_batch(song, params)
+        if admission_error is not None:
+            return admission_error
+        # Keep the exact admission result stable through the dispatch layer;
+        # the batch implementation must not evaluate a precondition twice.
+        params = {**params, "__preconditions_admitted": True}
     dry_run_only = _is_dry_run_only(normalized, params)
     owns_undo = normalized in ALLOWED_MUTATIONS and manage_undo and not dry_run_only
     if owns_undo:

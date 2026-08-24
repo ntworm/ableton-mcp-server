@@ -243,7 +243,13 @@ class StrictFakeBridge:
                     "arm": False,
                     "color": 0x336699,
                     "color_index": 3,
-                    "devices": [{"name": "MIDI Device", "parameters": ["Device On"]}],
+                    "devices": [
+                        {
+                            "name": "Instrument Rack",
+                            "class_name": "InstrumentGroupDevice",
+                            "parameters": ["Device On"],
+                        }
+                    ],
                 },
                 {
                     **_HIERARCHY_DEFAULTS,
@@ -770,7 +776,8 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str, params: dict[st
         # index 2 (commands[2]).
         return {"completed": 2, "aborted_at": 2, "rolled_back": False}
     if command == "fire_scene":
-        s["is_playing"] = True
+        scene_index = params["scene_index"]
+        s["is_playing"] = any(slot == scene_index for _, slot in s["clips"])
         return {"scene_index": params["scene_index"], "fired": True}
     if command == "set_track_property":
         idx = params["track_index"]
@@ -882,6 +889,16 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str, params: dict[st
                 track["name"] = params["new_name"]
         return {"new_name": params["new_name"]}
     if command == "get_device_chains":
+        track = next(
+            (item for item in s["tracks"] if item["index"] == params["track_index"]),
+            None,
+        )
+        devices = track.get("devices", []) if track is not None else []
+        device_index = params["device_index"]
+        if device_index < 0 or device_index >= len(devices):
+            raise RuntimeError("BAD_DEVICE_INDEX")
+        if devices[device_index].get("class_name") != "InstrumentGroupDevice":
+            raise RuntimeError("WRONG_TYPE: device does not expose chains")
         return {
             "track_index": params["track_index"],
             "device_index": params["device_index"],
@@ -919,6 +936,8 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str, params: dict[st
             "setup_requests": [],
         }
     if command == "get_clip_automation":
+        if (params["track_index"], params["clip_index"]) not in s["clips"]:
+            raise RuntimeError("EMPTY_CLIP_SLOT")
         return {
             "track_index": params["track_index"],
             "clip_index": params["clip_index"],

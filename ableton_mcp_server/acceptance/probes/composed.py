@@ -31,7 +31,9 @@ async def run(report: CertificationReport, *, client: AcceptanceClient) -> None:
         # ``diagnostics.bridge_status(client, tool_count=...)``. The
         # runner must call the wrapper, not the underlying
         # ``get_session_info`` TCP command.
-        return _bridge_status_fn(client, tool_count=65)
+        from ...tool_counts import build_tool_count_snapshot
+
+        return _bridge_status_fn(client, tool_count=build_tool_count_snapshot().active_total)
 
     def session_overview_probe() -> dict[str, Any]:
         # ``get_session_overview`` is composed from three TCP reads.

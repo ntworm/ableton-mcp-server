@@ -10,7 +10,6 @@ from typing import Any
 
 from contracts import DEFAULT_HOST, DEFAULT_PORT
 
-from .catalog import TOOL_CATALOG
 from .diagnostics import (
     bridge_status,
     bundled_remote_script_path,
@@ -104,9 +103,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "doctor":
         host = os.environ.get("ABLETON_MCP_SERVER_HOST", DEFAULT_HOST)
         port = int(os.environ.get("ABLETON_MCP_SERVER_PORT", str(DEFAULT_PORT)))
+        from .tool_counts import build_tool_count_snapshot
+
         result = bridge_status(
             _client_type()(host=host, port=port, reconnect=False),
-            tool_count=len(TOOL_CATALOG),
+            tool_count=build_tool_count_snapshot().active_total,
         )
 
         _emit(result, as_json=bool(args.json))

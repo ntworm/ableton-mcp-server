@@ -5,9 +5,9 @@
 
 ## Overview
 
-- **Total Public Tools**: 88
-- **Routed Remote Commands**: 73
-- **WebSocket Targets**: 3
+- **Total Public Tools**: 96 <!-- TOOL_COUNT: active_total -->
+- **Routed Remote Commands**: 73 <!-- TOOL_COUNT: route=tcp -->
+- **WebSocket Targets**: 3 <!-- TOOL_COUNT: route=websocket -->
 
 ## Categories
 
@@ -156,6 +156,16 @@
 | `live_find_device` | Read-only | No | Yes |
 | `live_find_track` | Read-only | No | Yes |
 
+### Drum Groove Intelligence
+
+| Tool | Read / Write | Requires Extension | Live Required |
+|---|---|---|---|
+| `groove_apply` | Write | No | Yes |
+| `groove_compare` | Read-only | No | No |
+| `groove_evidence` | Read-only | No | No |
+| `groove_generate` | Write | No | No |
+| `groove_search` | Read-only | No | No |
+
 ### Other
 
 | Tool | Read / Write | Requires Extension | Live Required |
@@ -171,5 +181,8 @@
 | `get_midi_chain_report` | Read-only | No | Yes |
 | `get_plugin_presets` | Read-only | No | Yes |
 | `move_arrangement_clip` | Write | No | Yes |
+| `music_generate_bass` | Write | No | Yes |
+| `music_generate_drum_groove` | Write | No | Yes |
+| `music_plan_production` | Read-only | No | No |
 | `set_arrangement_clip_properties` | Write | No | Yes |
 | `set_plugin_preset` | Write | No | Yes |

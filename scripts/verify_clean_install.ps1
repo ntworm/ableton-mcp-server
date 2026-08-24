@@ -39,8 +39,11 @@ try {
 import json, sys
 from pathlib import Path
 import ableton_mcp_server.server as s
+from ableton_mcp_server.catalog import TOOL_CATALOG
 
-assert len(s.PUBLIC_TOOL_NAMES) == 65, f"Expected 65 tools, got {len(s.PUBLIC_TOOL_NAMES)}"
+assert len(s.PUBLIC_TOOL_NAMES) == len(TOOL_CATALOG), (
+    f"Catalog/server mismatch: {len(TOOL_CATALOG)} != {len(s.PUBLIC_TOOL_NAMES)}"
+)
 
 scaffold_dir = Path(r"$tempEscaped").resolve() / "scaffold_out"
 res_str = s.scaffold_extension("WheelSmoke", output_directory=str(scaffold_dir))

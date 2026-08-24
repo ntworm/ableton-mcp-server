@@ -23,7 +23,7 @@ from contracts import (
 )
 
 from . import __version__
-from .catalog import TOOL_CATALOG, Route
+from .catalog import TOOL_CATALOG
 
 
 @dataclass(frozen=True)
@@ -116,8 +116,12 @@ def bridge_status(
     runtime: RuntimeInfo | None = None,
     timeout: float = 2.0,
     tool_count: int = 0,
+    session_info: Any | None = None,
 ) -> dict[str, Any]:
     info = detect_runtime() if runtime is None else runtime
+    from .tool_counts import build_tool_count_snapshot
+
+    count_snapshot = build_tool_count_snapshot()
     bundled = bundled_remote_script_source()
     base: dict[str, Any] = {
         "endpoint": {"host": client.host, "port": client.port},
@@ -126,7 +130,7 @@ def bridge_status(
         # Preserve the legacy field while deriving it from the same canonical
         # source as capability_counts.public_tools. Callers may still pass the
         # old argument, but stale values must not create contradictory output.
-        "tool_count": len(TOOL_CATALOG),
+        "tool_count": count_snapshot.active_total,
         "ws_endpoint": {"host": DEFAULT_HOST, "port": DEFAULT_WS_PORT},
         "extension_host_available": None,
         "ws_methods_registered": sorted(WEBSOCKET_TARGET_COMMANDS),
@@ -162,7 +166,11 @@ def bridge_status(
         "capability_gaps": capability_gaps(),
     }
     try:
-        live = client.call("get_session_info", {}, timeout=timeout)
+        live = (
+            session_info
+            if session_info is not None
+            else client.call("get_session_info", {}, timeout=timeout)
+        )
     except Exception as error:
         if info.is_wsl:
             hint = (
@@ -182,6 +190,32 @@ def bridge_status(
             "error": str(error),
             "hint": hint,
         }
+    contract_value = live.get("bridge_contract") if isinstance(live, Mapping) else None
+    if contract_value is not None:
+        try:
+            from .client import BridgeContractV1
+
+            contract = BridgeContractV1.model_validate(contract_value)
+            if contract.capabilities.get("run_batch_preconditions") != "v1":
+                raise ValueError("run_batch_preconditions capability is missing")
+        except Exception as error:
+            return {
+                **base,
+                "status": "error",
+                "bridge_available": False,
+                "live": live,
+                "error": {"code": "CAPABILITY_INVALID", "message": str(error)},
+                "hint": "Reconnect to a compatible AbletonMCPServer Remote Script.",
+            }
+        return {
+            **base,
+            "status": "ok",
+            "bridge_available": True,
+            "live": live,
+            "bridge_contract": contract.model_dump(mode="json"),
+            "error": None,
+            "hint": None,
+        }
     return {
         **base,
         "status": "ok",
@@ -198,14 +232,17 @@ def _capability_counts() -> dict[str, int]:
     Every value is computed at call time from the canonical sources
     (TOOL_CATALOG and contracts.*); nothing is cached at module level.
     live_required_tools is the public tool count minus every tool whose
-    route is LOCAL (the six LOCAL_READS plus the two LOCAL_WRITES); none
-    of those eight tools require an Ableton Live process.
+    route is LOCAL (the six LOCAL_READS, the two LOCAL_WRITES and
+    ``music_plan_production``); none of those nine tools require an
+    Ableton Live process.
     """
+    from .tool_counts import build_tool_count_snapshot
+
     routed = READ_COMMANDS | ALLOWED_MUTATIONS
-    local_tools = {spec.name for spec in TOOL_CATALOG if spec.route is Route.LOCAL}
-    live_required = len(TOOL_CATALOG) - len(local_tools)
+    snapshot = build_tool_count_snapshot()
+    live_required = snapshot.live_required_total
     return {
-        "public_tools": len(TOOL_CATALOG),
+        "public_tools": snapshot.active_total,
         "routed_commands": len(routed),
         "websocket_targets": len(WEBSOCKET_TARGET_COMMANDS),
         "read_only_blocked": len(READ_ONLY_COMMANDS),

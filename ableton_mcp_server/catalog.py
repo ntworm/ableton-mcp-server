@@ -228,4 +228,41 @@ TOOL_CATALOG = (
         AcceptanceMode.ENVIRONMENT,
         True,
     ),
+    # v0.6.0 — offline music generation. The two generators are COMPOSED, not
+    # LOCAL: generation itself is pure, but their opt-in ``apply`` writes a clip
+    # through the bridge, so they can require a running Live. ``music_plan_
+    # production`` never reaches Live at all and stays LOCAL.
+    ToolSpec(
+        "music_generate_drum_groove",
+        "music",
+        Route.COMPOSED,
+        Risk.REVERSIBLE,
+        AcceptanceMode.GUARDED,
+        True,
+    ),
+    ToolSpec(
+        "music_generate_bass",
+        "music",
+        Route.COMPOSED,
+        Risk.REVERSIBLE,
+        AcceptanceMode.GUARDED,
+        True,
+    ),
+    ToolSpec(
+        "music_plan_production",
+        "music",
+        Route.LOCAL,
+        Risk.READ,
+        AcceptanceMode.OFFLINE,
+        True,
+    ),
+    ToolSpec("groove_search", "groove", Route.LOCAL, Risk.READ, AcceptanceMode.OFFLINE, True),
+    ToolSpec("groove_evidence", "groove", Route.LOCAL, Risk.READ, AcceptanceMode.OFFLINE, True),
+    ToolSpec(
+        "groove_generate", "groove", Route.LOCAL, Risk.LOCAL_WRITE, AcceptanceMode.OFFLINE, True
+    ),
+    ToolSpec("groove_compare", "groove", Route.LOCAL, Risk.READ, AcceptanceMode.OFFLINE, True),
+    ToolSpec(
+        "groove_apply", "groove", Route.COMPOSED, Risk.REVERSIBLE, AcceptanceMode.GUARDED, True
+    ),
 )

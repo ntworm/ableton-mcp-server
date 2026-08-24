@@ -134,6 +134,45 @@ class AcceptanceGuardFailedError(BridgeError):
     default_code = "ACCEPTANCE_GUARD_FAILED"
 
 
+class BridgeEpochMismatchError(BridgeError):
+    default_code = "BRIDGE_EPOCH_MISMATCH"
+
+    def __init__(self, reason: str, *, bytes_sent: int = 0) -> None:
+        self.reason = reason
+        self.bytes_sent = bytes_sent
+        super().__init__(
+            f"bridge connection epoch cannot satisfy the request ({reason}).",
+            "Refresh bridge capability and retry only after explicit admission.",
+        )
+
+
+class BridgePreSendError(BridgeError):
+    default_code = "BRIDGE_PRE_SEND_ERROR"
+
+    def __init__(self, *, bytes_sent: int = 0) -> None:
+        self.bytes_sent = bytes_sent
+        super().__init__("request could not be encoded before transmission.")
+
+
+class BridgeTransportAmbiguousError(BridgeError):
+    default_code = "BRIDGE_TRANSPORT_AMBIGUOUS"
+
+    def __init__(
+        self, message: str = "transport failed after transmission may have started"
+    ) -> None:
+        self.outcome = "unknown"
+        self.transmission = "possible"
+        self.bytes_sent: str = "unknown"
+        super().__init__(message, "Inspect Live state before any retry.")
+
+
+class BridgeCapabilityRequired(BridgeError):
+    default_code = "GROOVE_PRECONDITION_UNSUPPORTED"
+
+    def __init__(self, message: str = "exact bridge precondition capability is required") -> None:
+        super().__init__(message, "Reconnect to a compatible Remote Script bridge.")
+
+
 _ERROR_TYPES: dict[str, type[BridgeError]] = {
     cls.default_code: cls
     for cls in (
@@ -154,6 +193,10 @@ _ERROR_TYPES: dict[str, type[BridgeError]] = {
         AmbiguousMatchError,
         VerificationFailedError,
         AcceptanceGuardFailedError,
+        BridgeEpochMismatchError,
+        BridgePreSendError,
+        BridgeTransportAmbiguousError,
+        BridgeCapabilityRequired,
     )
 }
 

@@ -89,7 +89,7 @@ The client automatically retries reads after connection failure. It never automa
 
 ## v0.5.0 set lifecycle, fader fade, and offline mix analysis
 
-The public surface contains 65 tools. Nine v0.5.0 tools add a read-only `lifecycle_status` probe, `save_set` / `quit_ableton` lifecycle mutations with scheduled GUI fallback, `live_fade` smoothstep/linear interpolation that distributes writes across `duration` seconds via `time.monotonic` and yields to `Song.update_display` between steps (no `time.sleep`, never blocks the Live main thread), `create_audio_track` mirroring `create_midi_track`, and a `ableton_mcp_server.analysis` package of four offline mix analysis tools (`analyze_audio`, `find_frequency_masking`, `analyze_mix`, `extract_single_cycle`) that are dependency-free of Live and the bridge.
+The historical v0.5.2 public surface contains 65 tools <!-- HISTORICAL_TOOL_COUNT: 65; baseline=v0.5.2 -->. Nine v0.5.0 tools add a read-only `lifecycle_status` probe, `save_set` / `quit_ableton` lifecycle mutations with scheduled GUI fallback, `live_fade` smoothstep/linear interpolation that distributes writes across `duration` seconds via `time.monotonic` and yields to `Song.update_display` between steps (no `time.sleep`, never blocks the Live main thread), `create_audio_track` mirroring `create_midi_track`, and a `ableton_mcp_server.analysis` package of four offline mix analysis tools (`analyze_audio`, `find_frequency_masking`, `analyze_mix`, `extract_single_cycle`) that are dependency-free of Live and the bridge.
 
 `lifecycle_status` is registered in `READ_COMMANDS` and therefore bypasses the mutation allowlist. The other three lifecycle tools (`save_set`, `quit_ableton`, `live_fade`) and `create_audio_track` are explicit `ALLOWED_MUTATIONS`. Mix analysis tools touch only the local filesystem and never touch the Set.
 
@@ -97,7 +97,7 @@ The public surface contains 65 tools. Nine v0.5.0 tools add a read-only `lifecyc
 
 ## v0.4.0 routing and capability boundaries
 
-The public surface contains 56 tools. Ten v0.4.0 tools add verified parameter writes, Session detail/overview, bounded Browser search, clip/scene mutations, verified properties, and Session clip automation.
+The historical v0.4.0 public surface contains 56 tools <!-- HISTORICAL_TOOL_COUNT: 56; baseline=v0.4.0 -->. Ten v0.4.0 tools add verified parameter writes, Session detail/overview, bounded Browser search, clip/scene mutations, verified properties, and Session clip automation.
 
 `search_browser` is a TCP read because the Remote Script already owns `application.browser`. Traversal state is per request and bounded by depth, children, visited objects, and result count. `get_session_overview` is local MCP composition of three existing reads and therefore has no remote contract row. `load_device_to_track` remains the existing WebSocket method; it is not duplicated on TCP.
 
@@ -200,7 +200,7 @@ tools = await mcp.list_tools()
 count = len(mcp.list_tools())
 ```
 
-Tests assert both counts match the cataloged public tools: 65 in the shipped v0.5.2 release, 88 on the current line (`set_track_color`, `set_clip_color`, `diagnose_clip_targets`, the five hierarchy tools, `live_find_device`, `live_find_clip`, `get_plugin_presets`, and `set_plugin_preset`).
+Tests assert both counts match the cataloged public tools: 65 in the shipped v0.5.2 release <!-- HISTORICAL_TOOL_COUNT: 65; baseline=v0.5.2 --> and 96 on the current line <!-- TOOL_COUNT: active_total -->, including retrieval, deterministic generation, comparison, and guarded groove apply.
 
 `tools/list` remains deterministic metadata discovery. `get_bridge_status` and the `ableton-mcp doctor` CLI perform an actual `get_session_info` round trip and report WSL-specific topology hints when unavailable.
 
@@ -219,7 +219,7 @@ The created Session clip remains intentionally; run only against a disposable Se
 The certified baseline surface freezes these contracts; Slice 2 will expand
 without breaking them:
 
-- 65 catalogued public tools; `tool_count` is the single source of truth.
+- 96 catalogued public tools <!-- TOOL_COUNT: active_total -->; `tool_count` is the single source of truth.
 - Two loopback transports, desktop-only: TCP `127.0.0.1:9888` for the Remote
   Script and WebSocket `127.0.0.1:9889` for the Extension. No LAN mode.
 - `load_device_to_track` takes a primary `device_name` argument;
@@ -245,3 +245,29 @@ without breaking them:
 - Node.js is required only for Extension development; the Python wheel
   installs and runs without it. Clean install probe:
   `scripts/verify_clean_install.ps1`.
+
+## Groove retrieval boundary (Phase 2)
+
+The groove runtime is an offline read-only adapter over the packaged curated
+SQLite seed (`mode=ro&immutable=1`) plus a host-selected local artifact store
+for derived values. `ABLETON_GROOVE_SEED_BUNDLE` remains an explicit override;
+the default seed is package-owned and loaded lazily. Its four MCP tools expose
+bounded cards, evidence, deterministic generation, and comparison only. They do not resolve a request-provided path,
+execute SQL, call the bridge, start a model runtime, or return note arrays and
+payload bytes. `ArtifactId` values use `ga1_`; seed bundles use the distinct
+`gsb1_` namespace. Generated lineage and capabilities are recomputed from the
+parent rights lattice, and Phase 3 owns any future Live apply path.
+
+## Optional provider boundary (Phase 4)
+
+The deterministic generator remains the installable default. `provider="neural"`
+is an opt-in laboratory boundary only: an existing allowlisted registry entry
+is launched with a fixed argument vector, no shell, a minimal environment, an
+isolated temporary directory, and host resource limits. The closed IPC
+contract accepts only bounded condition cards and returns a validated
+candidate; paths, SQL, raw MIDI, payload bytes, notes, credentials, and network
+access are not part of the boundary. Missing providers, crashes, timeouts,
+invalid output, resource failures, and failed promotion gates all fall back to
+the same seeded deterministic artifact. A signed `groove.provider-gate.v1`
+report is required before any provider can be enabled; no neural dependency is
+in the package.

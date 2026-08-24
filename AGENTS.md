@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`ableton-mcp-server` v0.5.2 exposes 65 MCP tools for inspecting and safely mutating an Ableton Live Set; the current line adds colour writes, clip-target diagnostics, five refusing hierarchy tools, and two live search tools, so the asserted count on `main` is 75. A Python FastMCP process coordinates a Live MIDI Remote Script over TCP and an Ableton Extension over WebSocket. The repository is MIT-licensed and targets Windows-hosted Ableton Live; WSL clients must launch the Windows-native executable.
+`ableton-mcp-server` v0.6.0 exposes 96 MCP tools for inspecting and safely mutating an Ableton Live Set. Thirteen are local/headless and 83 may require Ableton Live; the current routes are loopback TCP, loopback WebSocket, composed local calls, and local-only tools. A Python FastMCP process coordinates a Live MIDI Remote Script over TCP and an Ableton Extension over WebSocket. The repository is MIT-licensed and targets Windows-hosted Ableton Live; WSL clients must launch the Windows-native executable.
 
 ## Read order
 
@@ -47,7 +47,7 @@ Detailed boundaries and state ownership: `.agent-context/architecture.md`.
 
 | Path | Responsibility |
 |---|---|
-| `ableton_mcp_server/server.py` | Registers the 75 public MCP tools. |
+| `ableton_mcp_server/server.py` | Registers the 96 public MCP tools. |
 | `ableton_mcp_server/models.py` | Pydantic request models and batch validation. |
 | `ableton_mcp_server/client.py` | Routes commands to TCP or WebSocket clients. |
 | `AbletonMCPServer_RemoteScript/__init__.py` | Queues socket requests and touches Python LOM only on Live's UI thread. |
@@ -59,29 +59,31 @@ Detailed boundaries and state ownership: `.agent-context/architecture.md`.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1
-python -m pytest -q --tb=line
-python scripts\coverage_check.py
-python -m ruff check ableton_mcp_server AbletonMCPServer_RemoteScript scripts tests
-python -m mypy --strict ableton_mcp_server
-python -c "from ableton_mcp_server.server import mcp; print(len(mcp.list_tools()))"
+.\.venv-win\Scripts\python.exe -m pytest -q --tb=line
+.\.venv-win\Scripts\python.exe scripts\coverage_check.py
+.\.venv-win\Scripts\python.exe -m ruff check ableton_mcp_server AbletonMCPServer_RemoteScript scripts tests
+.\.venv-win\Scripts\python.exe -m mypy --strict ableton_mcp_server
+.\.venv-win\Scripts\python.exe -c "from ableton_mcp_server.server import mcp; print(len(mcp.list_tools()))"
 ```
 
 Extension:
 
 ```powershell
 cd AbletonMCPServer_Extension
-npm install
 npm run build
 ```
 
-Real Live connectivity is proven by `\.venv-win\Scripts\ableton-mcp.exe doctor --json`, not by local tool discovery. Run the guarded acceptance command only against a disposable Set with the exact project-name confirmation and an empty target MIDI clip slot.
+Use the existing Extension `node_modules`; do not run a normal `npm install` during
+verification.
+
+Real Live connectivity is proven by `.\.venv-win\Scripts\ableton-mcp.exe doctor --json`, not by local tool discovery. Run the guarded acceptance command only against a disposable Set with the exact project-name confirmation and an empty target MIDI clip slot.
 
 ## Coupled-change rules
 
 - Edit root `contracts.py`, then run `python scripts/vendor_contracts.py`; never hand-edit `_contracts.py`.
 - A public tool change normally requires synchronized changes in `server.py`, `models.py`, tests, `docs/TOOL_REFERENCE.md`, and the asserted tool count.
 - A routed command change must keep contracts, Python client, Remote Script or Extension handler, models, and tests aligned.
-- Keep `pyproject.toml`, root `manifest.json`, and `AbletonMCPServer_Extension/package.json` versions aligned for a release.
+- Keep `ableton_mcp_server/__init__.py`, `pyproject.toml`, root `manifest.json`, `AbletonMCPServer_Extension/package.json`, `AbletonMCPServer_Extension/package-lock.json`, and `AbletonMCPServer_Extension/manifest.json` versions aligned for a release.
 - Expected bridge errors must remain structured MCP errors; do not turn them into framework crashes.
 - `resolved` is the canonical identity sub-object on success results for `set_parameter_value`, `create_clip`, `set_tempo`, and `load_device_to_track`; future tools adopting resolved identity must use the same sub-object convention and omit unavailable name keys.
 - Never call Live Python LOM from the socket thread; defer through the request queue and `update_display()`.
@@ -94,7 +96,14 @@ Real Live connectivity is proven by `\.venv-win\Scripts\ableton-mcp.exe doctor -
 - Do not retry mutations after ambiguous network failure.
 - `run_batch` is grouped undo, not rollback: a successful prefix persists and `rolled_back` is `false`.
 - Path IDs are session-local index locators; re-list after structural edits.
-- Keep bridges local-only. See the unresolved WebSocket bind verification in `.agent-context/risks.md` before changing network behavior.
+- Keep bridges local-only. The WebSocket server is verified by source and
+  `tests/test_extension_loopback.py` to bind only `127.0.0.1:9889`.
+
+Version bumps must update all six release identity files:
+`ableton_mcp_server/__init__.py`, `pyproject.toml`, `manifest.json`,
+`AbletonMCPServer_Extension/package.json`,
+`AbletonMCPServer_Extension/package-lock.json`, and
+`AbletonMCPServer_Extension/manifest.json`.
 
 ## Persistent context
 

@@ -21,6 +21,7 @@ from ableton_mcp_server.acceptance import (
     run_live_acceptance,
 )
 from ableton_mcp_server.catalog import TOOL_CATALOG
+from ableton_mcp_server.certification import Verification
 from contracts import UNSUPPORTED_CAPABILITIES
 
 from ._offline_probe_fixture import fast_offline_probes
@@ -45,10 +46,10 @@ def _inject_fast_offline_probes(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(acceptance_module, "run_offline_probes", fast_offline_probes)
 
 
-def test_fake_runner_returns_77_certification_rows() -> None:
+def test_fake_runner_returns_one_row_per_catalog_tool() -> None:
     """Every catalogued tool must produce exactly one verification row."""
     expected = len(TOOL_CATALOG)
-    assert expected == 88
+    assert expected == len(TOOL_CATALOG)
 
     bridge = StrictFakeBridge()
     result = asyncio.run(
@@ -63,8 +64,8 @@ def test_fake_runner_returns_77_certification_rows() -> None:
         )
     )
     cert = result["certification"]
-    assert cert["tool_count"] == 88
-    assert len(cert["tools"]) == 88
+    assert cert["tool_count"] == len(TOOL_CATALOG)
+    assert len(cert["tools"]) == len(TOOL_CATALOG)
     catalog_names = {item.name for item in TOOL_CATALOG}
     assert {row["tool"] for row in cert["tools"]} == catalog_names
     # ``quit_ableton`` is explicitly ``manual_required`` in baseline.
@@ -112,6 +113,65 @@ def test_fake_runner_release_ready_true_when_baseline_complete() -> None:
         return
     assert cert["release_ready"] is True
     assert all(row["status"] != "failed" for row in cert["tools"])
+
+
+def test_fixture_dependent_reads_discover_valid_targets() -> None:
+    """Read probes must not reuse the deliberately empty mutation slot."""
+    bridge = StrictFakeBridge()
+    result = asyncio.run(
+        run_live_acceptance(
+            bridge,
+            confirm_project_name="TESTE_CODEX",
+            track_index=0,
+            clip_index=3,
+            audio_track_index=2,
+            audio_clip_index=0,
+            fire_clip=True,
+        )
+    )
+
+    statuses = {row["tool"]: row["status"] for row in result["certification"]["tools"]}
+    assert statuses["get_device_chains"] == "live_passed"
+    assert statuses["get_clip_automation"] == "live_passed"
+    assert statuses["fire_scene"] == "live_passed"
+
+    automation_call = next(
+        params for command, params in bridge.tcp_calls if command == "get_clip_automation"
+    )
+    assert automation_call == {
+        "track_index": 1,
+        "clip_index": 0,
+        "parameter_name": "volume",
+        "resolution": 1.0,
+    }
+
+
+def test_acceptance_artifact_inventory_excludes_dependency_trees() -> None:
+    """Evidence stays reviewable even when npm installs a large dependency tree."""
+
+    async def offline_fixture(report: Any, workdir: Any) -> None:
+        project = workdir / "scaffold" / "fixture"
+        dependency = project / "node_modules" / "dependency"
+        dependency.mkdir(parents=True)
+        (project / "package.json").write_text("{}", encoding="utf-8")
+        (dependency / "index.js").write_text("// generated", encoding="utf-8")
+        for tool in BASELINE_PROBE_GROUPS["offline"]:
+            report.record(Verification(tool, "offline_passed", "fixture"))
+
+    result = asyncio.run(
+        run_live_acceptance(
+            StrictFakeBridge(),
+            confirm_project_name="TESTE_CODEX",
+            track_index=0,
+            clip_index=3,
+            profiles=("offline",),
+            offline_probes=offline_fixture,
+        )
+    )
+
+    files = result["artifacts"]["files"]
+    assert any(path.endswith("package.json") for path in files)
+    assert all("node_modules" not in path for path in files)
 
 
 def test_fake_runner_release_ready_false_without_fire_clip() -> None:
@@ -165,7 +225,7 @@ def test_fake_runner_partial_profile_is_not_release_ready() -> None:
     for tool in BASELINE_PROBE_GROUPS["mutations"]:
         assert tool in statuses
     # The runner must NOT have skipped the missing tools entirely.
-    assert len(statuses) == 88
+    assert len(statuses) == len(TOOL_CATALOG)
 
 
 def test_fake_runner_release_ready_false_when_one_tool_fails() -> None:
@@ -351,7 +411,7 @@ def test_baseline_probe_coverage_matches_catalog() -> None:
     flat = {name for group in BASELINE_PROBE_GROUPS.values() for name in group}
     catalog_names = {item.name for item in TOOL_CATALOG}
     assert flat == catalog_names
-    assert len(flat) == 88
+    assert len(flat) == len(TOOL_CATALOG)
 
 
 def test_spy_proves_fast_offline_probes_is_called(

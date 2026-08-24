@@ -19,6 +19,15 @@ and the public API.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True, slots=True)
+class AcceptanceRowV1:
+    tool_name: str
+    group: str
+    certified: bool
+
 # Tools that may legitimately be classified ``environment_unavailable``
 # under specific, documented conditions. Everything else either runs,
 # raises ``BridgeError`` → ``failed``, or is missing-from-profile.
@@ -44,7 +53,7 @@ QUIT_ABLETON_MANUAL_REASON = (
 )
 
 # Slice 1 Task 9: baseline probe map. The flattened names must equal the
-# 66-name ``PUBLIC_TOOL_NAMES`` set, so each catalogued tool has a home in
+# catalog-derived ``PUBLIC_TOOL_NAMES`` set, so each catalogued tool has a home in
 # exactly one probe group. The runner never fabricates
 # ``environment_unavailable`` for a tool that is actually selected.
 BASELINE_PROBE_GROUPS: dict[str, tuple[str, ...]] = {
@@ -57,6 +66,14 @@ BASELINE_PROBE_GROUPS: dict[str, tuple[str, ...]] = {
         "find_frequency_masking",
         "analyze_mix",
         "extract_single_cycle",
+        "music_generate_drum_groove",
+        "music_generate_bass",
+        "music_plan_production",
+        "groove_search",
+        "groove_evidence",
+        "groove_generate",
+        "groove_compare",
+        "groove_apply",
     ),
     "composed": ("get_bridge_status", "get_session_overview"),
     "tcp_reads": (
@@ -147,6 +164,13 @@ BASELINE_PROBE_GROUPS: dict[str, tuple[str, ...]] = {
     ),
     "quit": ("quit_ableton",),
 }
+
+
+ACCEPTANCE_REGISTRY: tuple[AcceptanceRowV1, ...] = tuple(
+    AcceptanceRowV1(tool_name=name, group=group, certified=group in {"offline", "composed"})
+    for group, names in BASELINE_PROBE_GROUPS.items()
+    for name in names
+)
 
 
 def _baseline_probe_names() -> tuple[str, ...]:

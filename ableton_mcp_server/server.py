@@ -4,9 +4,9 @@ import json
 import os
 import shutil
 import subprocess
-from collections.abc import Awaitable, Callable, Generator, Sequence
+from collections.abc import Awaitable, Callable, Generator, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Annotated, Any, Literal, cast
 
 os.environ.setdefault("OTEL_SDK_DISABLED", "true")
 os.environ.setdefault("FASTMCP_TELEMETRY_DISABLED", "true")
@@ -15,6 +15,7 @@ os.environ.setdefault("MCP_TELEMETRY_DISABLED", "true")
 from fastmcp import FastMCP
 from fastmcp.tools import Tool, ToolResult
 from mcp.types import TextContent
+from pydantic import Field
 
 from contracts import DEFAULT_HOST, DEFAULT_PORT, DEFAULT_WS_PORT
 
@@ -36,6 +37,49 @@ from .client import Client
 from .diagnostics import bridge_status, find_ableton_log_path
 from .diff import diff_snapshots
 from .errors import BridgeError
+from .groove_intelligence.apply import apply_artifact
+from .groove_intelligence.artifacts import SeedBackedArtifactStore
+from .groove_intelligence.canonical import canonical_json
+from .groove_intelligence.evidence import compare as groove_compare_service
+from .groove_intelligence.evidence import evidence as groove_evidence_service
+from .groove_intelligence.fallback import generate_with_provider
+from .groove_intelligence.index import open_readonly_index
+from .groove_intelligence.mcp_models import (
+    ApplyRequestV1,
+    ArtifactId,
+    ArtifactIdList,
+    BpmRange,
+    CompareRequestV1,
+    Cursor,
+    EvidenceRequestV1,
+    FacetMap,
+    FeatureConstraints,
+    GenerateRequestV1,
+    GenerationBars,
+    GenerationSeed,
+    GrooveSourceV1,
+    MetricList,
+    ProjectionIds,
+    ProjectionSelection,
+    QueryHash,
+    QueryText,
+    ReferenceArtifactIdList,
+    SearchLimit,
+    SearchRequestV1,
+    SeedBundleId,
+    TransformMap,
+)
+from .groove_intelligence.runtime import (
+    GrooveResponseBudgetExceeded,
+    ResponseBudget,
+    serialize_tool_result,
+)
+from .groove_intelligence.search import search as groove_search_service
+from .music_brain import Generation as _Generation
+from .music_brain import Traits as _Traits
+from .music_brain import generate_bass as _generate_bass
+from .music_brain import generate_drum_groove as _generate_drum_groove
+from .music_brain import plan_production as _plan_production
 
 PUBLIC_TOOL_NAMES = tuple(spec.name for spec in TOOL_CATALOG)
 
@@ -72,6 +116,19 @@ class CountableFastMCP(FastMCP):
 
 mcp = CountableFastMCP("AbletonMCPServer")
 _client: Client | None = None
+DEFAULT_RESPONSE_BUDGET = ResponseBudget()
+DEFAULT_GROOVE_SEED_BUNDLE = (
+    Path(__file__).resolve().parent / "resources" / "groove_seed"
+)
+
+
+def resolve_groove_seed_bundle() -> Path:
+    """Resolve the packaged seed, with an explicit host override."""
+
+    configured = os.environ.get("ABLETON_GROOVE_SEED_BUNDLE")
+    if configured:
+        return Path(configured).expanduser().resolve(strict=True)
+    return DEFAULT_GROOVE_SEED_BUNDLE.resolve()
 
 
 def get_client() -> Client:
@@ -84,25 +141,84 @@ def get_client() -> Client:
     return _client
 
 
+def get_groove_runtime(*, client: Client | None = None) -> Any:
+    """Open the host-selected immutable seed and local derived store."""
+
+    from .groove_intelligence.runtime import GrooveRuntime
+
+    bundle = resolve_groove_seed_bundle()
+    index = open_readonly_index(bundle)
+    configured_store = os.environ.get("ABLETON_GROOVE_ARTIFACT_STORE")
+    if configured_store:
+        store_root = Path(configured_store).expanduser().resolve()
+    else:
+        local_appdata = Path(
+            os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
+        ).expanduser()
+        store_root = (local_appdata / "AbletonMCPServer" / "groove-artifacts-v1").resolve()
+    store = SeedBackedArtifactStore(index, store_root)
+    return GrooveRuntime(index=index, store=store, client=client)
+
+
+def truncate_response_value(
+    value: Mapping[str, object], *, max_items: int = 32
+) -> dict[str, object]:
+    bounded = dict(value)
+    for key in ("warnings", "limitations", "references"):
+        items = bounded.get(key)
+        if isinstance(items, list) and len(items) > max_items:
+            bounded[key] = items[:max_items]
+    return bounded
+
+
 def _explicit_json_result(
-    value: Any, *, is_error: bool = False, unwrap_result: bool = False
+    value: Mapping[str, object] | Any,
+    *,
+    is_error: bool = False,
+    unwrap_result: bool = False,
+    budget: ResponseBudget = DEFAULT_RESPONSE_BUDGET,
 ) -> ToolResult:
     """Keep JSON values visible without leaking domain errors into FastMCP."""
+    original = value
+    if isinstance(original, Mapping) and any(
+        isinstance(item, str) and len(item) >= budget.max_bytes for item in original.values()
+    ):
+        raise GrooveResponseBudgetExceeded("response item cannot fit response budget")
 
-    content = [
-        TextContent(
-            type="text",
-            text=json.dumps(value, ensure_ascii=False, separators=(",", ":")),
-        )
-    ]
-    structured = {"result": value} if unwrap_result else value
+    def compact(item: object, max_items: int) -> object:
+        if isinstance(item, Mapping):
+            return {str(key): compact(val, max_items) for key, val in item.items()}
+        if isinstance(item, list):
+            return [compact(val, max_items) for val in item[:max_items]]
+        if isinstance(item, tuple):
+            return [compact(val, max_items) for val in item[:max_items]]
+        if isinstance(item, str):
+            max_string_bytes = max(0, budget.max_bytes // 4)
+            encoded = item.encode("utf-8")
+            if len(encoded) <= max_string_bytes:
+                return item
+            return encoded[:max_string_bytes].decode("utf-8", errors="ignore")
+        return item
+
     meta = {"fastmcp": {"wrap_result": True}} if unwrap_result else None
-    return ToolResult(
-        content=content,
-        structured_content=structured,
-        meta=meta,
-        is_error=is_error,
-    )
+    for max_items in (32, 16, 8, 4, 1, 0):
+        if max_items == 0 and isinstance(original, Mapping) and any(
+            isinstance(item, list) and item for item in original.values()
+        ):
+            raise GrooveResponseBudgetExceeded("no response list item fits the budget")
+        compact_value = compact(original, max_items)
+        structured = {"result": compact_value} if unwrap_result else compact_value
+        text_value = compact_value if unwrap_result else structured
+        text = canonical_json(text_value).decode("utf-8")
+        result = ToolResult(
+            content=[TextContent(type="text", text=text)],
+            structured_content=structured,
+            meta=meta,
+            is_error=is_error,
+        )
+        if len(serialize_tool_result(result)) <= budget.max_bytes:
+            return result
+    raise GrooveResponseBudgetExceeded("response budget exceeded")
 
 
 def _remote(
@@ -110,11 +226,14 @@ def _remote(
     request: models.RequestModel,
     *,
     exclude_none: bool = False,
+    exclude_defaults: bool = False,
 ) -> Any:
     try:
         result = get_client().call(
             command,
-            request.model_dump(mode="json", exclude_none=exclude_none),
+            request.model_dump(
+                mode="json", exclude_none=exclude_none, exclude_defaults=exclude_defaults
+            ),
         )
     except BridgeError as error:
         return _explicit_json_result(error.to_envelope(), is_error=True)
@@ -698,7 +817,7 @@ def run_batch(commands: list[dict[str, Any]]) -> Any:
     Edge cases: execution aborts at the first error and nested batches are rejected.
     """
     request = models.RunBatchRequest.model_validate({"commands": commands})
-    return _remote("run_batch", request)
+    return _remote("run_batch", request, exclude_defaults=True)
 
 
 @mcp.tool()
@@ -2137,6 +2256,304 @@ def extract_single_cycle(path: str, frame_size: int = 2048) -> ToolResult:
     return _explicit_json_result(_extract_single_cycle(path=path, frame_size=frame_size))
 
 
+def _engine_traits(traits: models.MusicTraits | None) -> _Traits:
+    """Convert the validated request traits into the engine's plain vector."""
+    if traits is None:
+        return _Traits()
+    return _Traits(
+        groove=traits.groove,
+        electro=traits.electro,
+        weirdness=traits.weirdness,
+        space=traits.space,
+    )
+
+
+def _music_payload(
+    request: models.MusicGenerateDrumGrooveRequest,
+    generation: _Generation,
+) -> ToolResult | Any:
+    """Return the generated notes, writing them into Live only when asked.
+
+    The write is a single ``run_batch`` so the created clip and its notes
+    collapse into one undo step. ``create_clip`` already refuses a slot that is
+    not empty, so this path cannot overwrite existing material, and a failed
+    batch is never retried.
+    """
+    notes = generation.notes
+    payload: dict[str, Any] = {
+        "applied": request.apply,
+        "traits_applied": generation.traits_applied,
+        "notes": notes,
+    }
+    if not request.apply:
+        return _explicit_json_result(payload)
+
+    target = {"track_index": request.track_index, "clip_index": request.clip_index}
+    batch = models.RunBatchRequest.model_validate(
+        {
+            "commands": [
+                {
+                    "type": "create_clip",
+                    "params": {**target, "length_beats": float(request.bars) * 4.0},
+                },
+                {"type": "add_notes_to_clip", "params": {**target, "notes": notes}},
+            ]
+        }
+    )
+    result = _remote("run_batch", batch)
+    if isinstance(result, ToolResult):
+        # The bridge failed and _remote already built the error envelope.
+        return result
+    # A batch that aborted wrote nothing: create_clip refuses an occupied slot,
+    # so the notes never reached Live. Reporting applied at that point would
+    # claim a write the caller does not have.
+    if isinstance(result, dict) and result.get("aborted_at") is not None:
+        payload["applied"] = False
+    payload["bridge"] = result
+    return _explicit_json_result(payload)
+
+
+@mcp.tool()
+def music_generate_drum_groove(
+    bars: int = 4,
+    seed: int = 1,
+    traits: dict[str, float] | None = None,
+    apply: bool = False,
+    track_index: int | None = None,
+    clip_index: int | None = None,
+) -> ToolResult | Any:
+    """Generate a deterministic kick-and-hat groove, optionally into a clip.
+
+    Side effects: none unless ``apply`` is true, which creates one clip and its
+    notes in a single undo step.
+    Example: ``music_generate_drum_groove(bars=4, seed=7)`` returns the notes
+    without touching Live.
+    Edge cases: ``apply`` without ``track_index`` and ``clip_index`` is
+    rejected at the model. ``traits`` accepts groove, electro, weirdness and
+    space in 0..1, applied in that fixed order; the response names the axes
+    that actually changed the notes under ``traits_applied``.
+    """
+    request = models.MusicGenerateDrumGrooveRequest.model_validate(
+        {
+            "bars": bars,
+            "seed": seed,
+            "traits": traits,
+            "apply": apply,
+            "track_index": track_index,
+            "clip_index": clip_index,
+        }
+    )
+    generation = _generate_drum_groove(
+        bars=request.bars, seed=request.seed, traits=_engine_traits(request.traits)
+    )
+    return _music_payload(request, generation)
+
+
+@mcp.tool()
+def music_generate_bass(
+    bars: int = 4,
+    seed: int = 1,
+    root_midi: int = 36,
+    traits: dict[str, float] | None = None,
+    apply: bool = False,
+    track_index: int | None = None,
+    clip_index: int | None = None,
+) -> ToolResult | Any:
+    """Generate a deterministic root-only bass line, optionally into a clip.
+
+    Side effects: none unless ``apply`` is true, which creates one clip and its
+    notes in a single undo step.
+    Example: ``music_generate_bass(bars=4, seed=7, root_midi=40)`` returns an E
+    bass line without touching Live.
+    Edge cases: every note is ``root_midi`` in some octave, folded back into
+    the MIDI range, octave leaps from ``weirdness`` included. ``traits`` behaves
+    exactly as it does for the drum groove.
+    """
+    request = models.MusicGenerateBassRequest.model_validate(
+        {
+            "bars": bars,
+            "seed": seed,
+            "root_midi": root_midi,
+            "traits": traits,
+            "apply": apply,
+            "track_index": track_index,
+            "clip_index": clip_index,
+        }
+    )
+    generation = _generate_bass(
+        bars=request.bars,
+        seed=request.seed,
+        root_midi=request.root_midi,
+        traits=_engine_traits(request.traits),
+    )
+    return _music_payload(request, generation)
+
+
+@mcp.tool()
+def music_plan_production(
+    prompt: str, bars: int | None = None, bpm: float | None = None
+) -> ToolResult:
+    """Lay a conventional section grid over a prompt and report what is missing.
+
+    Side effects: none; this tool never reaches Live.
+    Example: ``music_plan_production(prompt="a track at 128 bpm", bars=64)``
+    returns six tiled sections plus the resolved tempo.
+    Edge cases: no language model backs this tool. It reads only what the
+    prompt states literally and lists everything else under ``unresolved``
+    instead of inventing it.
+    """
+    request = models.MusicPlanProductionRequest.model_validate(
+        {"prompt": prompt, "bars": bars, "bpm": bpm}
+    )
+    return _explicit_json_result(
+        _plan_production(prompt=request.prompt, bars=request.bars, bpm=request.bpm)
+    )
+
+
+def _groove_search_from_mapping(payload: Mapping[str, object]) -> ToolResult:
+    request = SearchRequestV1.model_validate(payload)
+    return _explicit_json_result(
+        groove_search_service(get_groove_runtime(), request).model_dump(
+            mode="json", exclude_none=True
+        )
+    )
+
+
+@mcp.tool()
+def groove_search(
+    schema_version: Literal["groove.search.request.v1"],
+    query: QueryText | None = None,
+    facets: FacetMap | None = None,
+    feature_constraints: FeatureConstraints | None = None,
+    bpm: BpmRange | None = None,
+    meter: Annotated[str, Field(min_length=1, max_length=32)] | None = None,
+    seed_bundle_id: SeedBundleId | None = None,
+    required_projection_ids: ProjectionIds | None = None,
+    projection_operator: Literal["all", "any"] = "all",
+    limit: SearchLimit = 20,
+    cursor: Cursor | None = None,
+) -> ToolResult:
+    """Search the configured immutable groove seed bundle.
+
+    Side effects: none; this is an offline deterministic read.
+    Example: ``groove_search(query="laid back", limit=5)``.
+    Edge cases: invalid cursors and missing criteria fail before runtime I/O.
+    """
+    return _groove_search_from_mapping(locals())
+
+
+def _groove_evidence_from_mapping(payload: Mapping[str, object]) -> ToolResult:
+    request = EvidenceRequestV1.model_validate(payload)
+    return _explicit_json_result(
+        groove_evidence_service(get_groove_runtime(), request).model_dump(
+            mode="json", exclude_none=True
+        )
+    )
+
+
+@mcp.tool()
+def groove_evidence(
+    schema_version: Literal["groove.evidence.request.v1"],
+    *,
+    artifact_id: ArtifactId,
+    query_hash: QueryHash | None = None,
+    include_projections: ProjectionSelection | None = None,
+) -> ToolResult:
+    """Return bounded provenance and projection evidence for one artifact.
+
+    Side effects: none; this is an offline deterministic read.
+    Example: ``groove_evidence(artifact_id="ga1_...")``.
+    Edge cases: raw notes, payloads, paths, and SQL are never returned.
+    """
+    return _groove_evidence_from_mapping(locals())
+
+
+def _groove_generate_from_mapping(payload: Mapping[str, object]) -> ToolResult:
+    request = GenerateRequestV1.model_validate(payload)
+    return _explicit_json_result(
+        generate_with_provider(get_groove_runtime(), request).model_dump(
+            mode="json", exclude_none=True
+        )
+    )
+
+
+@mcp.tool()
+def groove_generate(
+    schema_version: Literal["groove.generate.request.v1"],
+    *,
+    source: GrooveSourceV1,
+    transforms: TransformMap,
+    bars: GenerationBars,
+    seed: GenerationSeed,
+    provider: Literal["deterministic", "neural"] = "deterministic",
+    reference_artifact_ids: ReferenceArtifactIdList | None = None,
+) -> ToolResult:
+    """Create a deterministic derived artifact in the local content store.
+
+    Side effects: writes only a content-addressed local artifact; never calls Live.
+    Example: ``groove_generate(source={"artifact_id": "ga1_..."}, transforms={}, bars=4, seed=7)``.
+    Edge cases: rights, bounds, and unknown transform axes fail explicitly.
+    """
+    payload = dict(locals())
+    if payload["reference_artifact_ids"] is None:
+        payload["reference_artifact_ids"] = []
+    return _groove_generate_from_mapping(payload)
+
+
+def _groove_compare_from_mapping(payload: Mapping[str, object]) -> ToolResult:
+    request = CompareRequestV1.model_validate(payload)
+    return _explicit_json_result(
+        groove_compare_service(get_groove_runtime(), request).model_dump(
+            mode="json", exclude_none=True
+        )
+    )
+
+
+@mcp.tool()
+def groove_compare(
+    schema_version: Literal["groove.compare.request.v1"],
+    *,
+    artifact_ids: ArtifactIdList,
+    metrics: MetricList,
+    normalize: bool = True,
+) -> ToolResult:
+    """Compare bounded cards and projections without exposing event payloads.
+
+    Side effects: none; this is an offline deterministic read.
+    Example: ``groove_compare(artifact_ids=["ga1_...", "ga1_..."], metrics=["features"])``.
+    Edge cases: incompatible projection sets remain explicit in compatibility.
+    """
+    return _groove_compare_from_mapping(locals())
+
+
+@mcp.tool()
+def groove_apply(
+    schema_version: Literal["groove.apply.request.v1"],
+    *,
+    artifact_id: ArtifactId,
+    track_index: Annotated[int, Field(ge=0)],
+    clip_index: Annotated[int, Field(ge=0)],
+    kit_mapping_profile: Annotated[
+        str, Field(min_length=1, max_length=64, pattern=r"^[a-z0-9][a-z0-9-]*$")
+    ],
+    source_track_index: Annotated[int, Field(ge=0)] | None = None,
+    source_channel: Annotated[int, Field(ge=0, le=15)] | None = None,
+    mode: Literal["preview", "commit"] = "preview",
+    expected_empty_slot: bool = True,
+) -> ToolResult:
+    """Preview or explicitly commit one mapped groove to one empty clip slot.
+
+    Side effects: preview is offline; commit performs one guarded Live batch.
+    Example: ``groove_apply(..., mode="preview")`` returns a bounded receipt.
+    Edge cases: rights, mapping, capability, epoch, and slot races are explicit.
+    """
+
+    request = ApplyRequestV1.model_validate(locals())
+    runtime = get_groove_runtime(client=get_client() if request.mode == "commit" else None)
+    receipt = apply_artifact(runtime, request)
+    return _explicit_json_result(receipt.model_dump(mode="json", exclude_none=True))
+
+
 # Canonical ordered tuple of every public tool callable. Assembled after the
 # v0.5.0 offline mix analysis wrappers are defined so all names are in scope.
 PUBLIC_TOOL_FUNCTIONS = (
@@ -2146,6 +2563,15 @@ PUBLIC_TOOL_FUNCTIONS = (
     find_frequency_masking,
     analyze_mix,
     extract_single_cycle,
+    # v0.6.0 — offline music generation
+    music_generate_drum_groove,
+    music_generate_bass,
+    music_plan_production,
+    groove_search,
+    groove_evidence,
+    groove_generate,
+    groove_compare,
+    groove_apply,
 )
 
 

@@ -1,6 +1,6 @@
 # Tool Reference
 
-The FastMCP server exposes 88 snake_case tools, up from the certified 65-tool v0.5.2 baseline. Remote examples below show the JSONL command envelope after MCP/Pydantic validation. All error responses use `{"status":"error","code","message","hint?"}`.
+The v0.6.0 FastMCP server exposes 96 snake_case tools <!-- TOOL_COUNT: active_total -->, up from the certified 65-tool v0.5.2 baseline <!-- HISTORICAL_TOOL_COUNT: 65; baseline=v0.5.2 -->. Remote examples below show the JSONL command envelope after MCP/Pydantic validation. All error responses use `{"status":"error","code","message","hint?"}`.
 
 A machine-readable view of these tools (route, risk, acceptance mode, reversibility) is exposed at runtime via the `get_bridge_status` tool's `tools` list and `capability_counts` keys, derived from the canonical `TOOL_CATALOG`. A generated [API Capability Matrix](api_capability_matrix.md) is also available for quick reference.
 
@@ -159,6 +159,12 @@ agent has never touched.
 - Side effects: creates a new empty audio track; mirrors `create_midi_track`.
 - Edge cases / side effects: respects the 96-track safety limit; mutation gated by `ALLOWED_MUTATIONS`.
 
+### `rename_track(track_index: int, new_name: str)`
+
+- Renames one track in the Live Set and returns the verified new name.
+- Edge cases / side effects: one undo step; an out-of-range index returns
+  `INVALID_PARAMS`.
+
 ## v0.5.0 offline mix analysis
 
 ### `analyze_audio(path: str)`
@@ -225,6 +231,13 @@ agent has never touched.
 - Response: `{"status":"ok","result":{"id":"track:0","name":"Bass","color_index":3,"is_group_track":false,"devices":[],"clip_slots":[]}}`
 - Edge cases / side effects: pure read; invalid indexes return `INVALID_PARAMS`.
 
+### `get_composition_structure()`
+
+- Returns the complete track layout, scene count, and composition properties for
+  the connected Set.
+- Edge cases / side effects: pure read; large Sets produce correspondingly large
+  JSON results.
+
 ### `get_locators()`
 
 - Params: none.
@@ -248,6 +261,22 @@ agent has never touched.
 - Request: local MCP argument `{"lines":100}`; no Remote Script command.
 - Response: plain text containing log lines or an `Error:` diagnostic.
 - Edge cases / side effects: local filesystem read only; supports Windows, macOS, mounted Windows profiles under WSL, and the `ABLETON_MCP_LOG_PATH` override; missing logs are not protocol errors.
+
+### `scaffold_extension(name: str, author="ntworm", output_directory=".")`
+
+- Creates a template Ableton Extension project, including TypeScript sources,
+  manifests, build configuration, and local vendor tarballs.
+- Edge cases / side effects: writes files on disk without connecting to Live;
+  missing vendor tarballs or an unwritable output directory return a structured
+  error.
+
+### `build_extension(project_path: str)`
+
+- Runs the supplied Extension project's declared build and reports each step's
+  return code plus the generated entrypoint and `dist/` files.
+- Edge cases / side effects: runs the project's npm install/build subprocesses;
+  missing `package.json`, failed steps, or a missing entrypoint return a
+  structured error rather than raising.
 
 ### `get_control_surfaces()`
 
@@ -312,6 +341,13 @@ agent has never touched.
 - Request: `{"type":"get_clip_notes","params":{"track_index":0,"clip_index":0}}`
 - Response: `{"status":"ok","result":[{"pitch":60,"start_time":0.0,"duration":1.0,"velocity":100,"mute":false}]}`
 - Edge cases / side effects: pure read; empty slots return structured `[]` with a textual `[]` fallback, while audio clips return typed `WRONG_TYPE`.
+
+### `diagnose_midi_clip(track_index: int, clip_index: int, scale_root=None, scale_type=None)`
+
+- Scans a MIDI clip for overlapping notes, notes outside an optional scale, and
+  quantization issues.
+- Edge cases / side effects: pure read; audio clips return `WRONG_TYPE`, and
+  omitting the scale arguments skips pitch analysis.
 
 ### `get_device_list(track_index: int)`
 
@@ -531,6 +567,13 @@ agent has never touched.
 - Returns display name, URI when exposed, category, path, and `is_loadable`.
 - Edge cases / side effects: pure read; limit is 1..200 and traversal is capped at depth 5, 500 children per node, and 5000 visited nodes.
 
+### `load_device_to_track(track_index: int, device_name=None, device_uri=None)`
+
+- Loads a device onto a track through the Extension SDK browser API. `device_name`
+  is canonical; `device_uri` remains a deprecated query-URI alias.
+- Edge cases / side effects: mutates the track device chain through the
+  WebSocket bridge and requires the AbletonMCPServer Extension to be installed.
+
 ### `delete_clip(track_index, clip_index)`
 
 - Deletes one occupied Session clip and returns its prior clip path-id.
@@ -634,3 +677,157 @@ These five tools are registered, documented, and fully validated — and they **
 - `set_warp_state` accepts only `warping` and `warp_mode`. It rejects any
   `warp_markers` payload at the model layer (`VALIDATION_ERROR`) — marker
   writes were retired at v0.5.0 and must not reach the Extension bridge.
+
+## Offline music generation
+
+These three tools are deterministic: the same request returns the same result
+on every machine and every run. No language model backs any of them.
+
+### `music_generate_drum_groove(bars=4, seed=1, traits=None, apply=False, track_index=None, clip_index=None)`
+
+- Params: `bars` 1..64, any `seed`, optional `traits`, and an opt-in `apply`
+  that requires both `track_index` and `clip_index`.
+- Returns: `{"applied": bool, "traits_applied": false, "notes": [...]}`, plus
+  `"bridge"` when the notes were written.
+- Side effects: none unless `apply` is true, which creates the clip and its
+  notes in a single `run_batch` undo step.
+- Edge cases / side effects: `create_clip` refuses a slot that is not empty, so
+  this cannot overwrite existing material; a failed batch is never retried.
+
+Traits are four orthogonal axes in `0..1`, applied in this fixed order:
+
+| Trait | Verb | Effect |
+|---|---|---|
+| `electro` | builds | Grid subdivision (quarter, eighth, sixteenth) and hat palette: closed only, then open on the off-beat, then a closed/open/pedal rotation. On bass, the root pulse rate. |
+| `space` | subtracts | Survival probability `1 - space*0.6`, duration `× (1 + space*2)`. At full strength roughly 40% of events survive and last three times as long. Never returns an empty pattern. |
+| `weirdness` | deviates | Ghost notes at velocity 30–45 with probability `weirdness*0.3`, timing jitter of `± weirdness*0.05` beats, and on bass an octave leap with probability `weirdness*0.25`. Nothing leaves the requested bars, the MIDI range, or the root pitch class. |
+| `groove` | displaces | Off-beat events pushed late by up to `groove*0.167` beats — triplet swing at full strength — and `groove*20` added to backbeat velocity. Adds and removes nothing. |
+
+The order is part of the contract: build the grid, subtract, deviate, displace.
+Any other order yields different notes for the same request. Swing needs
+something off the grid to move, so at `electro` zero only the accent is
+audible. `traits_applied` lists the axes that actually changed the output — a
+value too small to cross `electro`'s grid threshold does not claim credit.
+
+### `music_generate_bass(bars=4, seed=1, root_midi=36, traits=None, apply=False, track_index=None, clip_index=None)`
+
+- Params: as above plus `root_midi` 0..127.
+- Returns: the same envelope as the drum groove.
+- Side effects: identical to `music_generate_drum_groove`.
+- Edge cases / side effects: every note is `root_midi` in some octave, folded
+  back into the MIDI range — the octave leaps from `weirdness` included — so
+  the line cannot imply a harmony the caller did not ask for.
+
+### `music_plan_production(prompt: str, bars=None, bpm=None)`
+
+- Params: a 3..4000 character `prompt`, optional `bars` 1..512 and `bpm`
+  40..300.
+- Returns: the resolved tempo, a six-part section grid that tiles `bars`
+  exactly, and an `unresolved` list.
+- Side effects: none; this tool never reaches Live.
+- Edge cases / side effects: it reads only what the prompt states literally.
+  An explicit `bpm` argument beats a tempo written in the prompt, and anything
+  it cannot resolve is named under `unresolved` rather than invented.
+
+### Groove Intelligence V2 (offline retrieval, generation, and guarded apply)
+
+Groove Intelligence opens the packaged immutable seed by default (or the
+explicit `ABLETON_GROOVE_SEED_BUNDLE` override). The seed is portable and does
+not depend on the private source library: no local path, SQL, BLOB, raw MIDI, or
+note array crosses the MCP card boundary. `groove_search`, `groove_evidence`,
+and `groove_compare` are deterministic offline reads. `groove_generate` writes
+only a bounded content-addressed derived artifact and does not contact Live.
+
+The public envelopes remain V1 while the musical semantics are V2. Projection
+IDs are `groove.hvo.v2`, `groove.features.v2`, and `groove.grammar.v2`.
+Artifact IDs, seed-bundle IDs, cursors, hashes, projection digests, and receipts
+are opaque; clients must pass them through unchanged. The detailed workflow and
+copy-safe JSON examples live in
+[the Drum Groove Intelligence skill reference](../.agents/skills/drum-groove-intelligence/references/workflow.md).
+
+#### Efficient workflow
+
+Use this bounded loop:
+
+1. Inspect the selected track and kit, including the target drum rack and any
+   source track/channel scope.
+2. `groove_search` by the narrowest useful combination of `genre`, `subgenre`,
+   `style`, `section`, free text, features, BPM/meter, and projection IDs.
+3. `groove_evidence` on promising results, then `groove_compare` on no more
+   than eight candidates.
+4. `groove_generate` from one primary source plus zero to seven references,
+   using a deterministic seed and the six transforms.
+5. `groove_apply(mode="preview")` to validate late kit mapping; after confirming
+   the explicit track and empty slot, `groove_apply(mode="commit")` once.
+6. Listen in context and compare the resulting artifact or clip as needed.
+
+Selection and mapping are separate. A valid artifact can still be rejected for
+an incompatible kit profile, source channel, rights level, or destination slot.
+
+#### `groove_search(schema_version, query?, facets?, feature_constraints?, bpm?, meter?, seed_bundle_id?, required_projection_ids?, projection_operator?, limit?, cursor?)`
+
+- Side effects: none; deterministic offline read.
+- Taxonomy: bounded normalized `collection`, `genre`, `subgenre`, `style`,
+  `section`, and `source_category` facets when supported by the seed. Aliases
+  such as `laid back` normalize deterministically to `laid_back`; unmatched
+  components remain source-category labels rather than invented genres.
+- Projection filters: use the three V2 IDs above with `projection_operator`
+  `all` or `any`. Search ranking and opaque cursors are tied to the immutable
+  seed, request, and ranker.
+- Limits: request `limit` is bounded to 1..50; the agent workflow intentionally
+  keeps no more than eight candidates for evidence/compare.
+
+#### `groove_evidence(schema_version, artifact_id, query_hash?, include_projections?)`
+
+- Side effects: none; deterministic offline read.
+- Returns: the bounded artifact card plus a V1 evidence card containing matched
+  facets, feature contributions, projection digests, provenance digest,
+  limitations, and confidence. It never returns raw events or source paths.
+- `include_projections` accepts only `groove.hvo.v2`, `groove.features.v2`, and
+  `groove.grammar.v2`.
+
+#### `groove_generate(schema_version, source, transforms, bars, seed, provider?, reference_artifact_ids?)`
+
+- Side effects: writes one local derived artifact; never mutates Live.
+- `source` selects one primary artifact ID or one inline search. Optional
+  `reference_artifact_ids` adds zero to seven distinct references, for at most
+  eight parents. All chosen parents are recorded in the lineage and remain
+  comparable artifacts.
+- `transforms` are bounded to `[-1, 1]` for exactly these supported axes:
+  `density`, `syncopation`, `swing`, `microtiming`, `energy`, and `complexity`.
+- Reproducibility: same immutable bundle, source/references, transforms, bars,
+  provider resolution, and seed produce the same bytes and reproducibility key.
+  Deterministic generation is always available; `provider="neural"` is optional
+  and bounded. Provider failure returns the deterministic artifact with a stable
+  fallback state/reason rather than changing the response contract.
+- Rejections: duplicate parents, incompatible PPQ or meter, blocked/insufficient
+  rights, unknown transform axes, and generation limits fail explicitly. No
+  reference is silently dropped and rights are never elevated.
+
+#### `groove_compare(schema_version, artifact_ids, metrics, normalize?)`
+
+- Side effects: none; deterministic offline read.
+- Inputs: 2..8 artifact IDs and one or more of `facets`, `features`, `hvo`, and
+  `grammar` metrics.
+- Returns: bounded V1 cards and a symmetric normalized distance matrix. HVO and
+  grammar compare content, not just projection presence. Compatibility states
+  (`compatible`, `incompatible`, `unavailable`) remain explicit for PPQ, meter,
+  and projection sets.
+
+#### `groove_apply(schema_version, artifact_id, track_index, clip_index, kit_mapping_profile, source_track_index?, source_channel?, mode?, expected_empty_slot?)`
+
+- `mode="preview"`: maps without a Live call and returns a
+  `groove.apply.receipt.v1` with selected/emitted/exact/fallback/unmapped counts
+  and warning/error codes.
+- `mode="commit"`: requires an explicit destination and
+  `expected_empty_slot=true`, a fresh bridge capability, and performs one
+  preconditioned `run_batch` containing clip creation and note insertion. The
+  kit mapping is intentionally late; current bounded profiles include
+  `gm-drums-v1` and `native-compatible`, and the selected kit must be checked
+  against the profile. For multi-track/multi-channel artifacts,
+  `source_track_index` and `source_channel` must be supplied together.
+- Receipts: `committed` means the batch completed; `rejected` means a precondition
+  or mapping gate refused it; `partial` or `unknown` means a mutation may have
+  happened. Inspect Live and recover deliberately in the latter cases—never
+  retry a possibly sent mutation. `run_batch` is one grouped undo step, not a
+  rollback guarantee.
