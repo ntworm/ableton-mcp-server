@@ -6,7 +6,23 @@ The canonical certification policy that governs the promotion decision
 (see `ableton-mcp acceptance --profile baseline` below) lives in
 [`docs/CERTIFICATION.md`](docs/CERTIFICATION.md).
 
-## [Unreleased] - 2026-08-12
+## [Unreleased]
+
+No unreleased changes.
+
+## [0.6.0] - 2026-08-24
+
+### Added — offline music and Groove Intelligence
+
+- The v0.6.0 release ships 96 tools: `music_generate_drum_groove`,
+  `music_generate_bass`, and `music_plan_production` provide three deterministic
+  offline music-generation tools.
+- `groove_search`, `groove_evidence`, `groove_generate`, `groove_compare`, and
+  `groove_apply` provide five Groove Intelligence tools. Retrieval, evidence,
+  generation, and comparison remain offline; only an explicit guarded
+  `groove_apply` request reaches Ableton Live.
+
+## [0.5.6] - 2026-08-18
 
 ### Added — plugin presets and the Configure gate
 
@@ -32,12 +48,13 @@ The canonical certification policy that governs the promotion decision
 - `live_find_device` and `live_find_clip` return fresh session-local locators from the connected Set.
 - `dry_run` for `set_tempo` and `create_clip` validates without writing or opening an undo step.
 - `ableton-mcp install-script --dry-run` and `setup_windows.ps1 -DryRun` preview Remote Script installation.
-- Generated API capability matrix covering all 77 public tools.
+- Generated API capability matrix covering all 88 published public tools.
 
 ### Fixed
 
 - Registered both live search commands in the canonical and vendored read-command contracts.
-- Aligned the 77-tool/62-command counts across runtime diagnostics, tests, and documentation.
+- Aligned the published 88-tool/73-remote-command counts across runtime diagnostics,
+  tests, and documentation.
 
 ## [0.5.3] - 2026-08-04
 

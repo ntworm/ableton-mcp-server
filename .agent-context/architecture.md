@@ -24,7 +24,7 @@ Primary evidence: `README.md`, `docs/ARCHITECTURE.md`, `ableton_mcp_server/clien
 
 ### MCP package
 
-- `server.py`: owns the FastMCP instance and 75-function public registry.
+- `server.py`: owns the FastMCP instance and 96-function public registry.
 - `models.py`: owns request validation for the current public tool catalog.
 - `client.py`: owns one TCP client plus a WebSocket client and selects the route from `WEBSOCKET_TARGET_COMMANDS`.
 - `protocol.py`, `errors.py`, `write_guard.py`, `ids.py`: framing, typed failures, allowlist enforcement, and path-ID validation.
@@ -47,9 +47,16 @@ The first two access `AudioClip`; device insertion calls `track.insertDevice()`.
 
 ## Routing and contracts
 
-`contracts.py` is canonical. The v0.5.3 line defines 29 read commands, 31 allowed mutations, five explicitly blocked commands, five capability-unavailable hierarchy commands, and three WebSocket targets. `scripts/vendor_contracts.py` renders the vendored Remote Script copy, and tests compare the result.
+`contracts.py` is canonical. The current line defines 35 read commands, 38 allowed
+mutations, five capability-unavailable hierarchy commands, and three WebSocket
+targets. `scripts/vendor_contracts.py` renders the vendored Remote Script copy,
+and tests compare the result.
 
-Python MCP-only tools such as diagnostics, snapshot diffing, and extension scaffolding/building do not all correspond one-for-one with remote command sets; therefore 75 public tools, 60 read/mutation commands, and five capability-unavailable routed commands are valid current counts.
+Python MCP-only tools such as diagnostics, snapshot diffing, and extension
+scaffolding/building do not all correspond one-for-one with remote command sets.
+The current surface is 96 public tools with 75 TCP routes, three WebSocket
+targets, five composed calls, and 13 local/headless tools; 83 tools may require
+Live at runtime.
 
 ## Protocols
 
@@ -73,4 +80,4 @@ Path IDs encode index paths such as `track:2/device:1`. They are re-resolved per
 
 - Hatchling packages `ableton_mcp_server`, force-including root `contracts.py` and the Remote Script under `ableton_mcp_server/_remote_script`.
 - The Extension uses TypeScript type checking plus `tsx build.ts`; esbuild bundles `src/extension.ts` to the manifest entry.
-- Root and Extension manifests currently share version `0.5.3`.
+- Root and Extension manifests share release version `0.6.0`.

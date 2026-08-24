@@ -30,6 +30,7 @@ from typing import Any, cast
 
 from ..certification import CertificationReport, Verification
 from ..errors import BridgeError
+from ..groove_intelligence.mcp_models import GrooveSourceV1
 from .baseline import BaselineSnapshot, _discover_baseline  # noqa: F401  (mypy-only)
 from .helpers import (
     LIVE_FADE_UNITY_VALUE,
@@ -67,7 +68,7 @@ from .safety import AcceptanceClient, AcceptanceSafetyError, _resolve_track_id
 
 
 async def run_offline_probes(report: CertificationReport, workdir: Path) -> None:
-    """Drive the four offline mix analysis probes plus 4 helpers.
+    """Drive the four offline mix analysis probes, 4 helpers and 3 music probes.
 
     Each helper calls the **real** implementation rather than returning a
     synthetic object, so an upstream regression cannot be hidden by a
@@ -103,6 +104,126 @@ async def run_offline_probes(report: CertificationReport, workdir: Path) -> None
     await _record_call(report, "find_frequency_masking", masking, passed="offline_passed")
     await _record_call(report, "analyze_mix", mix, passed="offline_passed")
     await _record_call(report, "extract_single_cycle", single_cycle, passed="offline_passed")
+
+    # The two generators are catalogued as COMPOSED because their opt-in
+    # ``apply`` writes through the bridge. Generation itself is pure, so it is
+    # probed here without Live; the write path is already covered by the
+    # ``create_clip`` and ``add_notes_to_clip`` mutation rows.
+    def drum_groove() -> list[dict[str, Any]]:
+        from ..music_brain import generate_drum_groove
+
+        return generate_drum_groove(bars=2, seed=1).notes
+
+    def bass() -> list[dict[str, Any]]:
+        from ..music_brain import generate_bass
+
+        return generate_bass(bars=2, seed=1, root_midi=36).notes
+
+    def production_plan() -> dict[str, Any]:
+        from ..music_brain import plan_production
+
+        return plan_production(prompt="offline certification probe", bars=8, bpm=120.0)
+
+    await _record_call(report, "music_generate_drum_groove", drum_groove, passed="offline_passed")
+    await _record_call(report, "music_generate_bass", bass, passed="offline_passed")
+    await _record_call(report, "music_plan_production", production_plan, passed="offline_passed")
+
+    # Phase 2 groove tools run only against the host-configured immutable pilot
+    # seed. They are local and never use the bridge client.
+    async def groove_phase2() -> None:
+        from ..groove_intelligence.deterministic import deterministic_generate
+        from ..groove_intelligence.evidence import compare, evidence
+        from ..groove_intelligence.mcp_models import (
+            CompareRequestV1,
+            EvidenceRequestV1,
+            GenerateRequestV1,
+            SearchRequestV1,
+        )
+        from ..groove_intelligence.search import search
+        from ..server import get_groove_runtime
+
+        try:
+            runtime = get_groove_runtime()
+        except Exception as error:  # noqa: BLE001 - preserve a complete report
+            failure = f"groove seed bundle is unavailable: {type(error).__name__}: {error}"
+
+            def unavailable() -> None:
+                raise RuntimeError(failure)
+
+            for name in (
+                "groove_search",
+                "groove_evidence",
+                "groove_generate",
+                "groove_compare",
+            ):
+                await _record_call(report, name, unavailable, passed="offline_passed")
+            return
+        first, second = (str(item) for item in runtime.index.manifest.artifact_ids[:2])
+        search_request = SearchRequestV1(
+            schema_version="groove.search.request.v1",
+            facets={"feel": ["straight"]},
+            limit=1,
+        )
+        evidence_request = EvidenceRequestV1(
+            schema_version="groove.evidence.request.v1",
+            artifact_id=first,
+            include_projections=None,
+        )
+        generate_request = GenerateRequestV1(
+            schema_version="groove.generate.request.v1",
+            source=GrooveSourceV1(artifact_id=first),
+            transforms={"density": 0.2},
+            bars=4,
+            seed=7,
+            provider="deterministic",
+        )
+        compare_request = CompareRequestV1(
+            schema_version="groove.compare.request.v1",
+            artifact_ids=[first, second],
+            metrics=["facets", "features", "hvo", "grammar"],
+            normalize=True,
+        )
+        await _record_call(
+            report,
+            "groove_search",
+            lambda: search(runtime, search_request),
+            passed="offline_passed",
+        )
+        await _record_call(
+            report,
+            "groove_evidence",
+            lambda: evidence(runtime, evidence_request),
+            passed="offline_passed",
+        )
+        await _record_call(
+            report,
+            "groove_generate",
+            lambda: deterministic_generate(runtime, generate_request),
+            passed="offline_passed",
+        )
+        await _record_call(
+            report,
+            "groove_compare",
+            lambda: compare(runtime, compare_request),
+            passed="offline_passed",
+        )
+
+    await groove_phase2()
+
+    # Phase 3 apply is certified offline through its preview/refusal contract;
+    # this probe never opens a Live connection or performs a commit.
+    from .probes.groove_apply import preview_probe
+
+    await _record_call(
+        report,
+        "groove_apply",
+        lambda: preview_probe(
+            confirm_project_name="TESTE_CODEX",
+            expected_empty_slot=True,
+            disposable=True,
+        ),
+        passed="offline_passed",
+    )
 
     def logs() -> str:
         """Real ``get_ableton_logs`` impl: read the tail of Log.txt."""
@@ -320,6 +441,9 @@ async def run_live_acceptance(
             scaffold_dir = offline_dir / "scaffold"
             if scaffold_dir.exists():
                 for path in scaffold_dir.rglob("*"):
+                    relative_parts = path.relative_to(scaffold_dir).parts
+                    if "node_modules" in relative_parts or ".git" in relative_parts:
+                        continue
                     if path.is_file():
                         artifacts["files"].append(str(path))
 
@@ -351,6 +475,48 @@ async def run_live_acceptance(
                         "acceptance requires a saved, clean project baseline."
                     )
                 baseline = _discover_baseline(client)
+
+                occupied_clip_target: tuple[int, int] | None = None
+                rack_device_target: tuple[int, int] | None = None
+                for candidate_track_index in sorted(baseline["track_names"]):
+                    try:
+                        candidate_slots = call(
+                            "get_clip_summary", {"track_index": candidate_track_index}
+                        )
+                        if occupied_clip_target is None and isinstance(candidate_slots, list):
+                            occupied_slot = next(
+                                (
+                                    item
+                                    for item in candidate_slots
+                                    if isinstance(item, dict) and bool(item.get("has_clip"))
+                                ),
+                                None,
+                            )
+                            if occupied_slot is not None:
+                                occupied_clip_target = (
+                                    candidate_track_index,
+                                    int(occupied_slot["index"]),
+                                )
+
+                        candidate_devices = call(
+                            "get_device_list", {"track_index": candidate_track_index}
+                        )
+                        if rack_device_target is None and isinstance(candidate_devices, list):
+                            for candidate_device_index, candidate_device in enumerate(
+                                candidate_devices
+                            ):
+                                if not isinstance(candidate_device, dict):
+                                    continue
+                                class_name = str(candidate_device.get("class_name", ""))
+                                device_name = str(candidate_device.get("name", ""))
+                                if class_name.endswith("GroupDevice") or "Rack" in device_name:
+                                    rack_device_target = (
+                                        candidate_track_index,
+                                        candidate_device_index,
+                                    )
+                                    break
+                    except Exception:
+                        continue
 
                 discovered_param_track_index = None
                 discovered_param_device_index = None
@@ -540,17 +706,33 @@ async def run_live_acceptance(
                         passed="live_passed",
                     )
 
-                    async def run_get_device_chains() -> str:
-                        payload = call(
-                            "get_device_chains", {"track_index": track_index, "device_index": 0}
+                    if rack_device_target is None:
+                        _record_unavailable(
+                            report,
+                            "get_device_chains",
+                            "no Rack device found in the disposable Set",
                         )
-                        if not isinstance(payload, dict) or "chains" not in payload:
-                            raise AssertionError("get_device_chains must return chains")
-                        return f"chains={payload.get('chain_count')}"
+                    else:
 
-                    await _record_call(
-                        report, "get_device_chains", run_get_device_chains, passed="live_passed"
-                    )
+                        async def run_get_device_chains() -> str:
+                            rack_track_index, rack_device_index = rack_device_target
+                            payload = call(
+                                "get_device_chains",
+                                {
+                                    "track_index": rack_track_index,
+                                    "device_index": rack_device_index,
+                                },
+                            )
+                            if not isinstance(payload, dict) or "chains" not in payload:
+                                raise AssertionError("get_device_chains must return chains")
+                            return f"chains={payload.get('chain_count')}"
+
+                        await _record_call(
+                            report,
+                            "get_device_chains",
+                            run_get_device_chains,
+                            passed="live_passed",
+                        )
 
                     async def run_get_midi_chain_report() -> str:
                         payload = call("get_midi_chain_report", {"track_index": track_index})
@@ -575,37 +757,40 @@ async def run_live_acceptance(
                         report, "describe_instrument", run_describe_instrument, passed="live_passed"
                     )
 
-                    # Reading an envelope needs a clip in the probed slot. A
-                    # disposable Set is not required to have one, so absence is
-                    # an environment gap, not a bridge failure.
-                    async def run_get_clip_automation() -> str:
-                        payload = call(
+                    # The mutation slot must start empty, so read an envelope
+                    # from a separate occupied clip discovered in the Set.
+                    if occupied_clip_target is None:
+                        _record_unavailable(
+                            report,
                             "get_clip_automation",
-                            {
-                                "track_index": track_index,
-                                "clip_index": clip_index,
-                                "parameter_name": "volume",
-                                "resolution": 1.0,
-                            },
+                            "no occupied session clip found in the disposable Set",
                         )
-                        if "has_envelope" not in payload:
-                            raise AssertionError("get_clip_automation must report has_envelope")
-                        return f"envelope={payload['has_envelope']}"
+                    else:
 
-                    try:
+                        async def run_get_clip_automation() -> str:
+                            automation_track_index, automation_clip_index = (
+                                occupied_clip_target
+                            )
+                            payload = call(
+                                "get_clip_automation",
+                                {
+                                    "track_index": automation_track_index,
+                                    "clip_index": automation_clip_index,
+                                    "parameter_name": "volume",
+                                    "resolution": 1.0,
+                                },
+                            )
+                            if "has_envelope" not in payload:
+                                raise AssertionError(
+                                    "get_clip_automation must report has_envelope"
+                                )
+                            return f"envelope={payload['has_envelope']}"
+
                         await _record_call(
                             report,
                             "get_clip_automation",
                             run_get_clip_automation,
                             passed="live_passed",
-                        )
-                    except Exception:  # noqa: BLE001 - recorded below as an environment gap
-                        report.record(
-                            Verification(
-                                "get_clip_automation",
-                                "environment_unavailable",
-                                "probe slot holds no clip to read an envelope from",
-                            )
                         )
 
                     await _record_call(
@@ -1425,7 +1610,7 @@ async def run_live_acceptance(
 
                         # ----- fire_scene -----
                         async def run_fire_scene() -> str:
-                            scene_resp = call("fire_scene", {"scene_index": 0})
+                            scene_resp = call("fire_scene", {"scene_index": clip_index})
                             if not isinstance(scene_resp, dict):
                                 raise AssertionError("fire_scene must return a dict")
                             if "scene_index" not in scene_resp:
@@ -1433,7 +1618,7 @@ async def run_live_acceptance(
                             scene_playing = call("get_session_info").get("is_playing", False)
                             if not bool(scene_playing):
                                 raise AssertionError("fire_scene left transport stopped")
-                            return "scene=0"
+                            return f"scene={clip_index}"
 
                         await _record_call(report, "fire_scene", run_fire_scene)
                         import contextlib
@@ -1664,9 +1849,7 @@ async def run_live_acceptance(
                                 )
                                 return "cell repeated twice"
 
-                            await _record_call(
-                                report, "add_notes_pattern", run_add_notes_pattern
-                            )
+                            await _record_call(report, "add_notes_pattern", run_add_notes_pattern)
 
                             async def run_create_clip_automation_curve() -> str:
                                 call(
@@ -1691,7 +1874,6 @@ async def run_live_acceptance(
                                 run_create_clip_automation_curve,
                             )
 
-
                             async def run_set_arrangement_clip_properties() -> str:
                                 placed = arrangement_clip_at(probe_beat)
                                 if placed is None:
@@ -1711,7 +1893,6 @@ async def run_live_acceptance(
                                 "set_arrangement_clip_properties",
                                 run_set_arrangement_clip_properties,
                             )
-
 
                             async def run_move_arrangement_clip() -> str:
                                 placed = arrangement_clip_at(probe_beat)
@@ -1957,9 +2138,7 @@ async def run_live_acceptance(
                                     f"preset={plugin_selected}"
                                 )
 
-                            await _record_call(
-                                report, "set_plugin_preset", run_set_plugin_preset
-                            )
+                            await _record_call(report, "set_plugin_preset", run_set_plugin_preset)
 
                         # ----- live_fade -----
                         async def run_live_fade() -> str:

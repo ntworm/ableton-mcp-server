@@ -11,7 +11,7 @@ The paths below are curated because their responsibilities and coupled-change re
 
 ## Public MCP surface
 
-- `ableton_mcp_server/server.py`: owns all 75 public tools and the registry asserted by `tests/test_server_tools.py`, `tests/test_tool_registry.py`, and `tests/test_models.py`.
+- `ableton_mcp_server/server.py`: owns all 96 public tools and the registry asserted by `tests/test_server_tools.py`, `tests/test_tool_registry.py`, and `tests/test_models.py`.
 - `docs/TOOL_REFERENCE.md`: user-facing tool contract; update with public surface changes.
 
 ## Live execution
@@ -23,7 +23,8 @@ The paths below are curated because their responsibilities and coupled-change re
 ## Packaging and release
 
 - `pyproject.toml`: package metadata, dependencies, entry points, force-includes, Ruff, and Mypy.
-- `manifest.json` and `AbletonMCPServer_Extension/package.json`: release identity must remain aligned with `pyproject.toml`.
+- `ableton_mcp_server/__init__.py`, `manifest.json`, and the Extension package,
+  lock, and manifest files: all six release identity values must remain aligned.
 - `scripts/setup_windows.ps1`: creates `.venv-win`, installs/copies the Remote Script, and verifies hashes; test installation changes on Windows.
 - `CHANGELOG.md`, `releases/`: release-facing history and artifacts.
 

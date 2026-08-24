@@ -25,6 +25,7 @@ from ableton_mcp_server.acceptance import (
 from ableton_mcp_server.acceptance import (
     run_offline_probes as real_run_offline_probes,
 )
+from ableton_mcp_server.acceptance.probes import BASELINE_PROBE_GROUPS
 
 from ._offline_probe_fixture import fast_offline_probes
 from ._strict_fake import StrictFakeBridge
@@ -224,16 +225,9 @@ def test_p0_1_run_offline_probes_records_build_extension_as_offline_passed(
         # will create a ``scaffold/`` subdir under it.
         workdir = tmp_path / "offline-workdir"
         workdir.mkdir()
-        all_offline_names = (
-            "get_ableton_logs",
-            "diff_snapshots_tool",
-            "scaffold_extension",
-            "build_extension",
-            "analyze_audio",
-            "find_frequency_masking",
-            "analyze_mix",
-            "extract_single_cycle",
-        )
+        # Derived from the canonical group so a new offline tool cannot make
+        # this end-to-end probe fail with "tool is not cataloged".
+        all_offline_names = BASELINE_PROBE_GROUPS["offline"]
         report = CertificationReport(tool_names=all_offline_names)
         await real_run_offline_probes(report, workdir)
 

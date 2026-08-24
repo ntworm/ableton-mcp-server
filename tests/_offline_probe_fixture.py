@@ -19,18 +19,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from ableton_mcp_server.acceptance.probes import BASELINE_PROBE_GROUPS
 from ableton_mcp_server.certification import CertificationReport, Verification
 
-_OFFLINE_TOOL_NAMES: tuple[str, ...] = (
-    "get_ableton_logs",
-    "diff_snapshots_tool",
-    "scaffold_extension",
-    "build_extension",
-    "analyze_audio",
-    "find_frequency_masking",
-    "analyze_mix",
-    "extract_single_cycle",
-)
+# Derived from the canonical group rather than restated, so adding an offline
+# tool cannot silently desynchronise this fixture from the real probe set.
+_OFFLINE_TOOL_NAMES: tuple[str, ...] = BASELINE_PROBE_GROUPS["offline"]
 
 
 async def fast_offline_probes(
@@ -39,7 +33,7 @@ async def fast_offline_probes(
 ) -> None:
     """Inject deterministic ``offline_passed`` rows for every offline tool.
 
-    The fixture records the same eight rows ``run_offline_probes`` would
+    The fixture records the same rows ``run_offline_probes`` would
     record in the green path, without running ``scaffold_extension``,
     ``build_extension``, or any of the audio analysis helpers. Tests
     that need to assert a *failure* path must not use this fixture;

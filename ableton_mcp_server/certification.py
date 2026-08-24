@@ -24,6 +24,8 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
+from .catalog import TOOL_CATALOG
+
 # Tools whose probe depends on a fixture the acceptance environment is not
 # required to provide: ``build_extension`` needs a Node toolchain, and the two
 # plugin tools need a third-party VST/VST3/AU in the Set. A disposable
@@ -105,8 +107,13 @@ class CertificationReport:
             has_failed or has_host_unavailable or has_invalid_env_unavail or has_invalid_manual
         )
 
+        from .tool_counts import build_tool_count_snapshot
+
+        catalog_names = {spec.name for spec in TOOL_CATALOG}
+        snapshot = build_tool_count_snapshot()
+        tool_count = snapshot.active_total if set(self._tool_names) == catalog_names else len(rows)
         return {
-            "tool_count": len(rows),
+            "tool_count": tool_count,
             "release_ready": release_ready,
             "tools": rows,
         }

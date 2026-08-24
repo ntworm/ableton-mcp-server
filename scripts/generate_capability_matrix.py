@@ -8,6 +8,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ableton_mcp_server.diagnostics import bridge_status  # noqa: E402
+from ableton_mcp_server.tool_counts import build_tool_count_snapshot  # noqa: E402
 
 CATEGORIES = {
     "Tempo & Transport": [
@@ -98,6 +99,13 @@ CATEGORIES = {
         "find_frequency_masking",
     ],
     "Search": ["live_find_track", "live_find_device", "live_find_clip"],
+    "Drum Groove Intelligence": [
+        "groove_search",
+        "groove_evidence",
+        "groove_generate",
+        "groove_compare",
+        "groove_apply",
+    ],
 }
 
 
@@ -112,7 +120,12 @@ class _OfflineClient:
 def generate_markdown(status: dict[str, Any] | None = None) -> str:
     capability_status = bridge_status(_OfflineClient()) if status is None else status
     tools_payload = capability_status["tools"]
-    counts = capability_status["capability_counts"]
+    snapshot = build_tool_count_snapshot()
+    counts = {
+        **capability_status["capability_counts"],
+        "public_tools": snapshot.active_total,
+        "live_required_tools": snapshot.live_required_total,
+    }
     public_tool_names = {str(tool["name"]) for tool in tools_payload}
     lines = [
         "# API Capability Matrix",
@@ -123,9 +136,15 @@ def generate_markdown(status: dict[str, Any] | None = None) -> str:
         "",
         "## Overview",
         "",
-        f"- **Total Public Tools**: {counts['public_tools']}",
-        f"- **Routed Remote Commands**: {counts['routed_commands']}",
-        f"- **WebSocket Targets**: {counts['websocket_targets']}",
+        f"- **Total Public Tools**: {counts['public_tools']} <!-- TOOL_COUNT: active_total -->",
+        (
+            f"- **Routed Remote Commands**: {counts['routed_commands']} "
+            "<!-- TOOL_COUNT: route=tcp -->"
+        ),
+        (
+            f"- **WebSocket Targets**: {counts['websocket_targets']} "
+            "<!-- TOOL_COUNT: route=websocket -->"
+        ),
         "",
         "## Categories",
         "",

@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from ableton_mcp_server.catalog import TOOL_CATALOG
+from ableton_mcp_server.catalog import TOOL_CATALOG, Risk, Route
 from ableton_mcp_server.diagnostics import bridge_status
 from ableton_mcp_server.server import PUBLIC_TOOL_NAMES
 from contracts import (
@@ -42,10 +42,10 @@ def _status() -> dict[str, Any]:
     return bridge_status(_HealthyClient(), tool_count=len(PUBLIC_TOOL_NAMES))
 
 
-def test_bridge_status_tools_length_is_88() -> None:
+def test_bridge_status_tools_length_is_catalog_derived() -> None:
     """§5 case 1: tools list length matches the public catalog."""
     result = _status()
-    assert len(result["tools"]) == 88
+    assert len(result["tools"]) == len(TOOL_CATALOG)
 
 
 def test_bridge_status_tool_dict_schema() -> None:
@@ -70,20 +70,22 @@ def test_bridge_status_tool_dict_schema() -> None:
 
 def test_capability_counts_match_invariants() -> None:
     """§5 case 3: the six documented counts are exactly the catalog/contracts
-    values. ``live_required_tools`` is ``88 - 8`` because every tool whose
-    route is LOCAL (six LOCAL_READS plus two LOCAL_WRITES) does not require
-    an Ableton Live process."""
+    values. ``live_required_tools`` is ``91 - 9`` because every tool whose
+    route is LOCAL (six LOCAL_READS, two LOCAL_WRITES and
+    ``music_plan_production``) does not require an Ableton Live process."""
     result = _status()
     counts = result["capability_counts"]
-    assert counts == {
-        "public_tools": 88,
-        "routed_commands": 73,
-        "websocket_targets": 3,
-        "read_only_blocked": 4,
-        "feature_flags": 5,
-        "live_required_tools": 80,
-        "capability_unavailable": 5,
-    }
+    assert counts["public_tools"] == len(TOOL_CATALOG)
+    assert counts["routed_commands"] == len(READ_COMMANDS | ALLOWED_MUTATIONS)
+    assert counts["websocket_targets"] == len(WEBSOCKET_TARGET_COMMANDS)
+    assert counts["read_only_blocked"] == len(READ_ONLY_COMMANDS)
+    assert counts["feature_flags"] == 5
+    assert counts["live_required_tools"] == len(TOOL_CATALOG) - sum(
+        spec.route is Route.LOCAL for spec in TOOL_CATALOG
+    )
+    assert counts["capability_unavailable"] == sum(
+        spec.risk is Risk.UNAVAILABLE for spec in TOOL_CATALOG
+    )
 
 
 def test_websocket_targets_match_catalog_route() -> None:
@@ -96,8 +98,7 @@ def test_websocket_targets_match_catalog_route() -> None:
 def test_routed_commands_cover_reads_and_mutations() -> None:
     """§5 case 5: routed_commands equals the union cardinality."""
     result = _status()
-    assert len(READ_COMMANDS) + len(ALLOWED_MUTATIONS) == 73
-    assert result["capability_counts"]["routed_commands"] == 73
+    assert result["capability_counts"]["routed_commands"] == len(READ_COMMANDS | ALLOWED_MUTATIONS)
 
 
 def test_read_only_blocked_are_disjoint_from_routed() -> None:
@@ -164,11 +165,11 @@ def test_bridge_status_survives_live_probe_failure() -> None:
         ) -> Any:
             raise ConnectionError("connection refused")
 
-    result = bridge_status(_BrokenClient(), tool_count=88)
+    result = bridge_status(_BrokenClient(), tool_count=0)
     assert result["status"] == "error"
     assert result["bridge_available"] is False
-    assert len(result["tools"]) == 88
-    assert result["capability_counts"]["public_tools"] == 88
+    assert len(result["tools"]) == len(TOOL_CATALOG)
+    assert result["capability_counts"]["public_tools"] == len(TOOL_CATALOG)
 
 
 def test_tools_match_public_catalog_in_order() -> None:

@@ -4,7 +4,7 @@ This document is canonical for how the acceptance runner classifies each
 catalogued tool, what ``release_ready`` means, and how destructive
 operations (``quit_ableton``, ``build_extension``) are gated.
 
-The runner drives 65 catalogued tools (see ``ableton_mcp_server/catalog.py``)
+The runner drives the catalogued public tools <!-- TOOL_COUNT: active_total --> (see ``ableton_mcp_server/catalog.py``)
 through a real Bridge / Live round-trip and records one row per tool
 into a ``CertificationReport``. Promotion is gated on the resulting row
 mix, never on a synthetic green-wash.
@@ -155,12 +155,12 @@ To ensure strict provenance:
 2. The subsequent candidate generation commit must modify exclusively files under ``releases/v<version>-rc<N>/``. No test files, implementation logic, or documentation may be bundled into candidate commits.
 3. Under ``release_ready`` policy, ``manual_required`` is permitted exclusively for ``quit_ableton`` and for ``save_set`` (when the host bridge reports ``api_available: false`` and the baseline snapshot was confirmed clean with ``is_dirty: false``). Any other tool with ``manual_required`` blocks release promotion.
 
-## Probe groups and the 65-tool catalog
+## Probe groups and the catalog <!-- TOOL_COUNT: active_total -->
 
 The catalog is the single source of truth for the FastMCP surface.
 The runner derives its probe groups from the catalog and refuses to
 finish until every catalogued tool has a recorded row. The current
-catalog carries 65 entries and ``tests/test_tool_registry.py`` enforces
+the catalog carries the runtime-derived active total and ``tests/test_tool_registry.py`` enforces
 the count assertion.
 
 ## How to read the runner output
@@ -183,7 +183,7 @@ This writes the full ``CertificationReport`` to stdout. The relevant fields:
 
 - ``release_ready`` — the promotion gate. ``true`` only on the
   conditions listed above.
-- ``tool_count`` — number of catalogued tools (must equal 65).
+- ``tool_count`` — number of catalogued tools <!-- TOOL_COUNT: active_total -->.
 - ``tools`` — list of ``{tool, status, evidence}`` rows, one per
   catalogued tool.
 

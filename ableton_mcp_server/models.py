@@ -13,6 +13,20 @@ from contracts import (
     TRACK_COLOR_RGB_MIN,
 )
 
+from .groove_intelligence.mcp_models import ApplyRequestV1
+from .groove_intelligence.mcp_models import (
+    CompareRequestV1 as GrooveCompareRequest,
+)
+from .groove_intelligence.mcp_models import (
+    EvidenceRequestV1 as GrooveEvidenceRequest,
+)
+from .groove_intelligence.mcp_models import (
+    GenerateRequestV1 as GrooveGenerateRequest,
+)
+from .groove_intelligence.mcp_models import (
+    SearchRequestV1 as GrooveSearchRequest,
+)
+
 NonNegativeInt = Annotated[int, Field(ge=0)]
 PaletteIndex = Annotated[int, Field(ge=TRACK_COLOR_INDEX_MIN, le=TRACK_COLOR_INDEX_MAX)]
 PackedRgb = Annotated[int, Field(ge=TRACK_COLOR_RGB_MIN, le=TRACK_COLOR_RGB_MAX)]
@@ -274,6 +288,7 @@ class CreateClipAutomationRequest(GetClipNotesRequest):
         if not value:
             raise ValueError("parameter_name must be non-empty")
         return value
+
     # Live nests the controls that matter. ``chain_index`` selects a rack chain;
     # add ``chain_device_index`` for a device inside it, or leave it out to
     # address the chain's own mixer (``volume`` / ``panning``).
@@ -297,6 +312,7 @@ class GetParameterValueRequest(RequestModel):
         if not value:
             raise ValueError("parameter_name must be non-empty")
         return value
+
     # Live nests the controls that matter. ``chain_index`` selects a rack chain;
     # add ``chain_device_index`` for a device inside it, or leave it out to
     # address the chain's own mixer (``volume`` / ``panning``).
@@ -313,6 +329,7 @@ class SetParameterValueRequest(GetParameterValueRequest):
         if not math.isfinite(value):
             raise ValueError("value must be finite")
         return value
+
     # Live nests the controls that matter. ``chain_index`` selects a rack chain;
     # add ``chain_device_index`` for a device inside it, or leave it out to
     # address the chain's own mixer (``volume`` / ``panning``).
@@ -501,8 +518,22 @@ class CommandSpec(RequestModel):
     params: dict[str, Any] = Field(default_factory=dict)
 
 
+class SlotEmptyParams(RequestModel):
+    track_index: NonNegativeInt
+    clip_index: NonNegativeInt
+
+
+class PreconditionSpec(RequestModel):
+    type: Literal["slot_empty"]
+    version: Literal["v1"]
+    params: SlotEmptyParams
+
+
 class RunBatchRequest(RequestModel):
     commands: Annotated[list[CommandSpec], Field(min_length=1, max_length=100)]
+    preconditions: Annotated[list[PreconditionSpec], Field(max_length=16)] = Field(
+        default_factory=list
+    )
 
     @model_validator(mode="after")
     def validate_commands(self) -> RunBatchRequest:
@@ -511,6 +542,12 @@ class RunBatchRequest(RequestModel):
                 raise ValueError("run_batch cannot contain run_batch")
             if command.type not in ALLOWED_MUTATIONS:
                 raise ValueError(f"{command.type!r} is not an allowed mutation")
+        keys = [
+            (item.type, item.version, item.params.track_index, item.params.clip_index)
+            for item in self.preconditions
+        ]
+        if len(keys) != len(set(keys)):
+            raise ValueError("preconditions must not contain duplicates")
         return self
 
 
@@ -952,6 +989,76 @@ class ExtractSingleCycleRequest(RequestModel):
     frame_size: Annotated[int, Field(ge=64, le=65536)] = 2048
 
 
+# ---------------------------------------------------------------------------
+# v0.6.0 — Offline music generation
+# ---------------------------------------------------------------------------
+
+
+class MusicTraits(RequestModel):
+    """Trait vector for generation: four axes, each owning exactly one verb.
+
+    ``electro`` builds the grid — it sets the subdivision and opens the hat
+    palette. ``space`` subtracts from it, dropping events and lengthening the
+    survivors. ``weirdness`` deviates what is left through ghost notes, timing
+    jitter and octave leaps, all bounded. ``groove`` displaces in time and
+    accents the backbeat without adding or removing a single note.
+
+    No axis does two jobs, which is what keeps a combination predictable. They
+    are applied in that fixed order, and the response names the axes that
+    actually changed the output under ``traits_applied``.
+    """
+
+    groove: Annotated[float, Field(ge=0, le=1)] = 0.0
+    electro: Annotated[float, Field(ge=0, le=1)] = 0.0
+    weirdness: Annotated[float, Field(ge=0, le=1)] = 0.0
+    space: Annotated[float, Field(ge=0, le=1)] = 0.0
+
+
+class MusicGenerateDrumGrooveRequest(RequestModel):
+    """Request payload for ``music_generate_drum_groove``.
+
+    Generation is pure and keyed on ``seed``: the same ``bars``/``seed`` pair
+    returns the same notes forever. ``apply`` is the only part that reaches
+    Live, and it requires an explicit empty Session slot.
+    """
+
+    bars: Annotated[int, Field(ge=1, le=64)] = 4
+    seed: int = 1
+    traits: MusicTraits | None = None
+    apply: bool = False
+    track_index: NonNegativeInt | None = None
+    clip_index: NonNegativeInt | None = None
+
+    @model_validator(mode="after")
+    def validate_apply_target(self) -> MusicGenerateDrumGrooveRequest:
+        if self.apply and (self.track_index is None or self.clip_index is None):
+            raise ValueError("track_index and clip_index are required when apply is True")
+        return self
+
+
+class MusicGenerateBassRequest(MusicGenerateDrumGrooveRequest):
+    """Request payload for ``music_generate_bass``.
+
+    Every generated note is ``root_midi`` in some octave, so the line cannot
+    imply a harmony the caller did not ask for.
+    """
+
+    root_midi: Annotated[int, Field(ge=0, le=127)] = 36
+
+
+class MusicPlanProductionRequest(RequestModel):
+    """Request payload for ``music_plan_production``.
+
+    There is no language model behind this tool. It reads what the prompt
+    states literally, lays a conventional section grid over ``bars``, and names
+    what it could not resolve.
+    """
+
+    prompt: Annotated[str, Field(min_length=3, max_length=4000)]
+    bars: Annotated[int, Field(ge=1, le=512)] | None = None
+    bpm: Annotated[float, Field(ge=40, le=300)] | None = None
+
+
 TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "get_session_info": GetSessionInfoRequest,
     "get_bridge_status": GetBridgeStatusRequest,
@@ -1044,4 +1151,18 @@ TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "find_frequency_masking": FindFrequencyMaskingRequest,
     "analyze_mix": AnalyzeMixRequest,
     "extract_single_cycle": ExtractSingleCycleRequest,
+    # v0.6.0 — offline music generation
+    "music_generate_drum_groove": MusicGenerateDrumGrooveRequest,
+    "music_generate_bass": MusicGenerateBassRequest,
+    "music_plan_production": MusicPlanProductionRequest,
 }
+
+TOOL_REQUEST_MODELS.update(
+    {
+        "groove_search": GrooveSearchRequest,  # type: ignore[dict-item]
+        "groove_evidence": GrooveEvidenceRequest,  # type: ignore[dict-item]
+        "groove_generate": GrooveGenerateRequest,  # type: ignore[dict-item]
+        "groove_compare": GrooveCompareRequest,  # type: ignore[dict-item]
+        "groove_apply": ApplyRequestV1,  # type: ignore[dict-item]
+    }
+)

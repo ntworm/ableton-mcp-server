@@ -10,13 +10,13 @@ These tests prove:
 - Manifest paths use forward slashes (``as_posix()``).
 - Manifest paths and SHA256SUMS reference the same files that exist on
   disk.
-- The wheel includes ``__version__ = "0.5.1"`` in METADATA, and the ZIP
+- The wheel includes the repository-derived version in METADATA, and the ZIP
   excludes ``__pycache__``/``.pyc``.
 - The manifest flags ``live_certified=false`` and
   ``promotion_ready=false`` until the Live checkpoint finishes.
 
 If any of these tests fail, the builder cannot prove the artifacts in
-``releases/v0.5.1-rc1/`` actually match what was just produced.
+the selected output directory actually match what was just produced.
 """
 
 from __future__ import annotations
@@ -30,11 +30,13 @@ from typing import Any
 import pytest
 
 from scripts.build_release_candidates import (
-    VERSION,
     _validate_source_commit,
     build_release,
     main,
 )
+
+FAKE_VERSION = "9.8.7"
+FAKE_COMMIT = "f2a1ff840d93592e085b6f8ad5af1fdb27bfd61b"
 
 # Capture the real ``build_release`` before any test fixture
 # replaces it; the CLI tests need to bypass their own monkeypatch
@@ -68,9 +70,11 @@ def fake_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     # Python package: a single module + version + pyproject marker.
     pkg = project / "ableton_mcp_server"
     pkg.mkdir()
-    (pkg / "__init__.py").write_text(f'__version__ = "{VERSION}"\n', encoding="utf-8")
+    (pkg / "__init__.py").write_text(
+        f'__version__ = "{FAKE_VERSION}"\n', encoding="utf-8"
+    )
     (project / "pyproject.toml").write_text(
-        "[project]\nname='ableton_mcp_server'\nversion='0.5.1'\n",
+        f"[project]\nname='ableton_mcp_server'\nversion='{FAKE_VERSION}'\n",
         encoding="utf-8",
     )
 
@@ -84,7 +88,7 @@ def fake_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         json.dumps(
             {
                 "name": "AbletonMCPServer",
-                "version": VERSION,
+                "version": FAKE_VERSION,
                 "host": "127.0.0.1",
             }
         ),
@@ -94,7 +98,7 @@ def fake_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         json.dumps(
             {
                 "name": "AbletonMCPServer",
-                "version": VERSION,
+                "version": FAKE_VERSION,
                 "scripts": {"package": "extensions-cli package"},
             }
         ),
@@ -108,14 +112,16 @@ def fake_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     )
     # Pre-existing stale artifact from a previous build — the builder
     # must remove it before choosing the fresh candidate.
-    (ext / f"AbletonMCPServer-Extension-{VERSION}.ablx").write_text("stale-ablx", encoding="utf-8")
+    (ext / f"AbletonMCPServer-Extension-{FAKE_VERSION}.ablx").write_text(
+        "stale-ablx", encoding="utf-8"
+    )
 
     # The builder also needs to run ``python -m build --wheel``. We
     # stub that out by replacing ``_build_python_wheel`` directly.
     from scripts import build_release_candidates as brc
 
     def fake_build_wheel(_root: Path, output_directory: Path) -> Path:
-        wheel_name = f"ableton_mcp_server-{VERSION}-py3-none-any.whl"
+        wheel_name = f"ableton_mcp_server-{FAKE_VERSION}-py3-none-any.whl"
         wheel = output_directory / wheel_name
         import zipfile as _zf
 
@@ -123,10 +129,13 @@ def fake_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
             wheel.unlink()
         with _zf.ZipFile(wheel, "w", _zf.ZIP_DEFLATED) as zf:
             zf.writestr(
-                "ableton_mcp_server-0.5.1.dist-info/METADATA",
-                f"Metadata-Version: 2.1\nName: ableton_mcp_server\nVersion: {VERSION}\n",
+                "ableton_mcp_server-9.8.7.dist-info/METADATA",
+                f"Metadata-Version: 2.1\nName: ableton_mcp_server\nVersion: {FAKE_VERSION}\n",
             )
-            zf.writestr("ableton_mcp_server/__init__.py", f'__version__ = "{VERSION}"\n')
+            zf.writestr(
+                "ableton_mcp_server/__init__.py",
+                f'__version__ = "{FAKE_VERSION}"\n',
+            )
         return wheel
 
     monkeypatch.setattr(brc, "_build_python_wheel", fake_build_wheel)
@@ -178,7 +187,7 @@ def fake_npm_runner(fake_project: Path, monkeypatch: pytest.MonkeyPatch) -> dict
 
     calls: list[dict[str, Any]] = []
     ext_dir = fake_project / "AbletonMCPServer_Extension"
-    fake_commit = "f2a1ff840d93592e085b6f8ad5af1fdb27bfd61b"
+    fake_commit = FAKE_COMMIT
 
     def runner(argv: list[str] | str, *args: Any, **kwargs: Any) -> Any:
         argv_list = list(argv) if isinstance(argv, (list, tuple)) else argv
@@ -205,7 +214,7 @@ def fake_npm_runner(fake_project: Path, monkeypatch: pytest.MonkeyPatch) -> dict
                 return _FakeCompletedProcess(returncode=0)
 
         # Default: behave like the npm runner and drop a fresh .ablx.
-        target = ext_dir / f"AbletonMCPServer-Extension-{VERSION}.ablx"
+        target = ext_dir / f"AbletonMCPServer-Extension-{FAKE_VERSION}.ablx"
         if target.exists():
             target.unlink()
         target.write_bytes(b"fresh-ablx-from-mock")
@@ -246,7 +255,7 @@ def test_builder_removes_stale_candidates(
     output_directory.mkdir()
     # Drop a stale ``.ablx`` into the **output** directory too — the
     # builder should clear stale entries before writing new ones.
-    stale_zip = output_directory / f"AbletonMCPServer-Extension-{VERSION}.ablx"
+    stale_zip = output_directory / f"AbletonMCPServer-Extension-{FAKE_VERSION}.ablx"
     stale_zip.write_bytes(b"definitely-stale")
 
     summary = build_release(
@@ -353,10 +362,10 @@ def test_wheel_metadata_and_version(fake_project: Path, tmp_path: Path) -> None:
     wheel_name = Path(summary["artifacts"]["wheel"]["path"]).name
     wheel_path = output_directory / wheel_name
     with zipfile.ZipFile(wheel_path) as zf:
-        metadata = zf.read("ableton_mcp_server-0.5.1.dist-info/METADATA").decode("utf-8")
+        metadata = zf.read("ableton_mcp_server-9.8.7.dist-info/METADATA").decode("utf-8")
         init_py = zf.read("ableton_mcp_server/__init__.py").decode("utf-8")
-    assert f"Version: {VERSION}" in metadata
-    assert f'__version__ = "{VERSION}"' in init_py
+    assert f"Version: {FAKE_VERSION}" in metadata
+    assert f'__version__ = "{FAKE_VERSION}"' in init_py
 
 
 def test_remote_script_zip_excludes_pycache(
@@ -398,13 +407,100 @@ def test_manifest_flags_promotion_blocked_until_live_certified(
     assert manifest["candidate"] == "rc1"
 
 
+def _write_acceptance_report(
+    path: Path,
+    *,
+    source_commit: str = FAKE_COMMIT,
+    release_ready: bool = True,
+    tool_count: int = 96,
+) -> Path:
+    payload = {
+        "source_commit": source_commit,
+        "tool_count": tool_count,
+        "certification": {"release_ready": release_ready},
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+def test_stable_builder_uses_project_version_and_certification(
+    fake_project: Path,
+    tmp_path: Path,
+) -> None:
+    output_directory = tmp_path / "stable-out"
+    report = _write_acceptance_report(tmp_path / "acceptance.json")
+
+    summary = build_release(
+        root=fake_project,
+        output_directory=output_directory,
+        source_commit=FAKE_COMMIT,
+        stable=True,
+        acceptance_report=report,
+    )
+
+    assert summary["version"] == FAKE_VERSION
+    assert summary["candidate"] is None
+    assert summary["live_certified"] is True
+    assert summary["promotion_ready"] is True
+    assert summary["artifacts"]["wheel"]["path"].startswith(
+        f"ableton_mcp_server-{FAKE_VERSION}"
+    )
+    assert summary["certification"]["report"] == report.name
+    assert len(summary["certification"]["sha256"]) == 64
+
+
+def test_stable_builder_requires_acceptance_report(
+    fake_project: Path,
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError, match="acceptance report"):
+        build_release(
+            root=fake_project,
+            output_directory=tmp_path / "stable-out",
+            source_commit=FAKE_COMMIT,
+            stable=True,
+        )
+
+
+@pytest.mark.parametrize(
+    ("release_ready", "tool_count", "source_commit", "message"),
+    [
+        (False, 96, FAKE_COMMIT, "release_ready"),
+        (True, 95, FAKE_COMMIT, "tool count"),
+        (True, 96, "1" * 40, "source commit"),
+    ],
+)
+def test_stable_builder_rejects_invalid_acceptance_evidence(
+    fake_project: Path,
+    tmp_path: Path,
+    release_ready: bool,
+    tool_count: int,
+    source_commit: str,
+    message: str,
+) -> None:
+    report = _write_acceptance_report(
+        tmp_path / "acceptance.json",
+        source_commit=source_commit,
+        release_ready=release_ready,
+        tool_count=tool_count,
+    )
+    with pytest.raises(ValueError, match=message):
+        build_release(
+            root=fake_project,
+            output_directory=tmp_path / "stable-out",
+            source_commit=FAKE_COMMIT,
+            stable=True,
+            acceptance_report=report,
+        )
+
+
 def test_summary_does_not_modify_real_release_dir(
     fake_project: Path,
     tmp_path: Path,
 ) -> None:
     """Calling the builder with an injected ``output_directory`` must not write
     to ``releases/v0.5.1-rc1/`` inside the project tree."""
-    real_release_dir = fake_project / "releases" / f"v{VERSION}-rc1"
+    real_release_dir = fake_project / "releases" / f"v{FAKE_VERSION}-rc1"
     output_directory = tmp_path / "rc-out"
     build_release(
         root=fake_project,

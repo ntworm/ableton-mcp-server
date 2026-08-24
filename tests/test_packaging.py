@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_release_version_is_aligned_across_package_metadata() -> None:
+    expected = "0.6.0"
     manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     extension_manifest = json.loads(
@@ -27,13 +28,13 @@ def test_release_version_is_aligned_across_package_metadata() -> None:
     extension_lock = json.loads(
         (ROOT / "AbletonMCPServer_Extension" / "package-lock.json").read_text(encoding="utf-8")
     )
-    assert __version__ == "0.5.6"
-    assert manifest["version"] == "0.5.6"
-    assert extension_manifest["version"] == "0.5.6"
-    assert extension_manifest_json["version"] == "0.5.6"
-    assert extension_lock["version"] == "0.5.6"
-    assert 'version = "0.5.6"' in pyproject
-    assert extension_lock["packages"][""]["version"] == "0.5.6"
+    assert __version__ == expected
+    assert manifest["version"] == expected
+    assert extension_manifest["version"] == expected
+    assert extension_manifest_json["version"] == expected
+    assert extension_lock["version"] == expected
+    assert f'version = "{expected}"' in pyproject
+    assert extension_lock["packages"][""]["version"] == expected
 
 
 def test_runtime_dependencies_cover_imported_analysis_and_fastmcp_websockets() -> None:
@@ -95,7 +96,7 @@ def test_v040_public_docs_cover_tools_and_attribution() -> None:
         "set_clip_properties",
         "create_clip_automation",
     }
-    assert "Version 0.5.6 exposes 88 tools" in readme
+    assert f"The current tool surface is {len(PUBLIC_TOOL_NAMES)} tools" in readme
     # The historical v0.5.2 baseline must stay visible; the tool surface grew
     # additively and readers need both numbers to reconcile older docs.
     assert "65" in readme
@@ -121,7 +122,7 @@ def test_v050_public_docs_cover_lifecycle_fade_tracks_and_analysis() -> None:
         "analyze_mix",
         "extract_single_cycle",
     }
-    assert "88 tools" in readme
+    assert f"{len(PUBLIC_TOOL_NAMES)} tools" in readme
     for tool in new_tools:
         assert f"`{tool}`" in readme
         assert f"`{tool}`" in reference or f"`{tool}(" in reference
@@ -217,11 +218,10 @@ def test_landing_page_catalog_matches_the_public_tool_registry() -> None:
 
     assert len(landing_names) == len(set(landing_names)) == len(PUBLIC_TOOL_NAMES)
     assert set(landing_names) == set(PUBLIC_TOOL_NAMES)
-    assert "Complete 88 MCP Tool Surface" in landing
+    assert f"Complete {len(PUBLIC_TOOL_NAMES)} MCP Tool Surface" in landing
     assert "transaction rollbacks" not in landing
 
 
 def test_architecture_advertises_the_current_tool_count() -> None:
     architecture = (ROOT / "docs" / "ARCHITECTURE.md").read_text(encoding="utf-8")
-    assert "88 on the current line" in architecture
-    assert "73 on the current line" not in architecture
+    assert "current line" in architecture

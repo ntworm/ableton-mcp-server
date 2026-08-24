@@ -35,7 +35,7 @@ Configuration: `AbletonMCPServer_Extension/package.json`, `tsconfig.json`, and `
 2. Add or update the request model and `TOOL_REQUEST_MODELS` entry.
 3. Register the MCP function in `server.py` and `PUBLIC_TOOL_FUNCTIONS` when public.
 4. Implement exactly one Live-side route: Remote Script for Python LOM or Extension for SDK-only behavior.
-5. Run `python scripts/vendor_contracts.py` whenever contracts change.
+5. Run `.\.venv-win\Scripts\python.exe scripts/vendor_contracts.py` whenever contracts change.
 6. Add model, registry, forwarding, handler, error, and vendoring tests as applicable.
 7. Update `docs/TOOL_REFERENCE.md`, architecture/quirk docs, and version metadata when public behavior changes.
 
@@ -54,11 +54,11 @@ Python LOM work must execute through the Remote Script request processor on `upd
 Canonical local checks:
 
 ```powershell
-python -m pytest -q --tb=line
-python scripts\coverage_check.py
-python -m ruff check ableton_mcp_server AbletonMCPServer_RemoteScript scripts tests
-python -m mypy --strict ableton_mcp_server
-python -c "from ableton_mcp_server.server import mcp; print(len(mcp.list_tools()))"
+.\.venv-win\Scripts\python.exe -m pytest -q --tb=line
+.\.venv-win\Scripts\python.exe scripts\coverage_check.py
+.\.venv-win\Scripts\python.exe -m ruff check ableton_mcp_server AbletonMCPServer_RemoteScript scripts tests
+.\.venv-win\Scripts\python.exe -m mypy --strict ableton_mcp_server
+.\.venv-win\Scripts\python.exe -c "from ableton_mcp_server.server import mcp; print(len(mcp.list_tools()))"
 ```
 
 Extension:
@@ -68,10 +68,14 @@ cd AbletonMCPServer_Extension
 npm run build
 ```
 
+Use the existing `node_modules`; normal `npm install` is not part of offline
+verification.
+
 `doctor` proves TCP round-trip to a running Live instance. The guarded acceptance runner is manual and must target a disposable Set.
 
 ## Git and release hygiene
 
 - Preserve unrelated dirty changes; inspect status before and after work.
 - Do not push, tag, publish, or rewrite history without explicit authorization.
-- Keep `pyproject.toml`, `manifest.json`, Extension package version, changelog, and release notes aligned.
+- Keep `ableton_mcp_server/__init__.py`, `pyproject.toml`, `manifest.json`, and
+  the Extension package, lock, and manifest files aligned for a version bump.
