@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -153,6 +155,59 @@ test('runtime loader rejects a version different from the extension manifest', (
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
 
   assert.throws(() => loadRuntime(root), /RUNTIME_VERSION_MISMATCH/);
+});
+
+test('health probe works when the Extension Host omits global AbortSignal', async (t) => {
+  const token = 'gate0-health-token';
+  let requestSeen: { method?: string; authorization?: string; origin?: string } | null = null;
+  const server = http.createServer((request, response) => {
+    requestSeen = {
+      method: request.method,
+      authorization: request.headers.authorization,
+      origin: request.headers.origin,
+    };
+    response.writeHead(200, { 'Content-Type': 'application/json' });
+    response.end('{"status":"ok","protocol":1}');
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, 'localhost', resolve);
+  });
+  t.after(() => new Promise<void>((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()));
+  }));
+
+  const address = server.address() as AddressInfo;
+  const session = Object.create(HelperSession.prototype) as HelperSession;
+  Object.assign(session as unknown as Record<string, unknown>, {
+    ready: {
+      type: 'ready',
+      protocol: 1,
+      host: '127.0.0.1',
+      port: address.port,
+      parent_pid: process.pid,
+    },
+    token,
+    extensionVersion: '0.1.1',
+  });
+
+  const originalAbortSignal = Object.getOwnPropertyDescriptor(globalThis, 'AbortSignal');
+  assert.ok(originalAbortSignal);
+  Object.defineProperty(globalThis, 'AbortSignal', {
+    ...originalAbortSignal,
+    value: undefined,
+  });
+  try {
+    await session.assertHealthy();
+  } finally {
+    Object.defineProperty(globalThis, 'AbortSignal', originalAbortSignal);
+  }
+
+  assert.deepEqual(requestSeen, {
+    method: 'POST',
+    authorization: `Bearer ${token}`,
+    origin: `http://localhost:${address.port}`,
+  });
 });
 
 test('two sessions use distinct endpoints, authenticate, and stop', {

@@ -273,15 +273,25 @@ export class HelperSession {
   }
 
   async assertHealthy(): Promise<void> {
-    const response = await fetch(`${this.origin}/api/health`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.token}`,
-        Origin: this.origin,
-      },
-      cache: 'no-store',
-      signal: AbortSignal.timeout(2_000),
-    });
+    let timer: NodeJS.Timeout | undefined;
+    let response: Response;
+    try {
+      response = await Promise.race([
+        fetch(`${this.origin}/api/health`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.token}`,
+            Origin: this.origin,
+          },
+          cache: 'no-store',
+        }),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error('HELPER_HEALTH_TIMEOUT')), 2_000);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
     if (!response.ok) throw new Error(`HELPER_HEALTH_${response.status}`);
     const body = (await response.json()) as { status?: string; protocol?: number };
     if (body.status !== 'ok' || body.protocol !== GATE0_PROTOCOL) {
