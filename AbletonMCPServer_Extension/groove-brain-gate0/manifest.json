@@ -1,0 +1,7 @@
+{
+  "name": "Groove Brain Gate 0",
+  "author": "ntworm",
+  "entry": "dist/extension.js",
+  "version": "0.1.0",
+  "minimumApiVersion": "1.0.0"
+}
