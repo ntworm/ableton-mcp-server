@@ -1,0 +1,4432 @@
+{
+  "Drums Groove MIDI/000011@SUPERIOR_DRUMMER_3": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/00001@N.Y - AVATAR": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/00002@N.Y_-_ALLAIRE": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/00003@N.Y_-_VOLUME_3": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/00003@THE_METAL_FOUNDRY": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/00004@CUSTOM#VINTAGE": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/00005@MUSIC_CITY_USA": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/00006@ROOTS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/00007@THE_ROCK_WAREHOUSE": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000081@METAL_MACHINERY": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000082@INDIEPENDENT": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000083@THE_PROGRESSIVE_FOUNDRY": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000084@THE_ROCK_FOUNDRY": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000085@ORCHESTRAL_PERCUSSION_I": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000086@ORCHESTRAL_PERCUSSION_II": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/00008701@DEATH_&_DARKNESS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/00008702@THE_ROOMS_OF_HANSA": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/00008703@LEGACY_OF_ROCK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/00008704@FIELDS_OF_ROCK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/00008705@HITMAKER": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/00008706@AREA_33": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/00008706@STOCKHOLM": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/00008707@STORIES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/00008708@AREA_33_-_ORIGIN": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/00008709@THE_JAZZ_SESSIONS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/00008710@STATE_OF_THE_ART": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000087@DECADES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000090@MONSTER_MIDI_PACK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000091@MONSTER_MIDI_PACK_2": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000100@MONSTER_MIDI_FILLS_PACK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000101@MONSTER_MIDI_FILLS_PACK_2": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000200@LIBRARY_OF_THE_EXTREME": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000210@LIBRARY_OF_THE_EXTREME_II": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000211@LIBRARY_OF_THE_EXTREME_III": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000300@SONGWRITERS_PACK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000301@SONGWRITERS_PACK_2": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000306@SONGWRITERS_PACK_3": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000306@SONGWRITERS_PACK_4": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000310@SONGWRITERS_FILLPACK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000311@SONGWRITERS_FILLPACK_2": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000320@ROCK_SONGS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000329@21ST_CENTURY_METAL": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000329@ACOUSTIC_SONGWRITER_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000329@ACTION_DRUMS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000329@ALT-ROCK_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000329@AMERICANA": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000329@AMERICAN_ROCK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000329@AOR_BALLAD_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000329@AOR_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000329@ARENA_ROCK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000330@BACKBEATS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000330@BALLADS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000330@BASIC_JAZZ": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000330@BASIC_ROCK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000330@BASIC_ROCK_2": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000330@BASIC_ROCK_FILLS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000330@BEATS_OF_BERLIN": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000330@BIG_BAND_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000330@BLACK_METAL": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000330@BLUES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000330@BRITISH_INVASION_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000331@CLASSIC_ROCK_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000331@CONTEMPORARY_R&B_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000331@COUNTRY_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000332@DARK_ROCK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000332@DEATHLIKE_FUSION": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000332@DEATH_METAL": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000332@DETROIT_SOUL_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000332@DISCO_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000332@DOOM#CORE": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000332@DOOM_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000332@DRUM_BEATS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000332@DRUM_RIFFS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000333@EDM_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000333@EIGHTIES_POP_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000333@ELECTRONIC_BEATS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000334@FOUNDATIONAL_FUSION": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000334@FUNK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000334@FUSION_FILLS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000334@FUSION_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000335@GOSPEL_FUSION": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000335@GOSPEL_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000336@HARDCORE": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000336@HARD_ROCK_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000336@HEAVY_METAL": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000336@HEAVY_ROCK_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000336@HIGH_ENERGY_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000336@HIP-HOP_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000336@HIP-HOP_OFFBEATS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000337@INDIE_FOLK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000340@JAZZ": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000341@LAID-BACK_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000341@LATIN_JAZZ_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000342@LATIN_RHYTHMS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000342@LINEAR_FUSION": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000343@MAJESTIC_METAL": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000343@METAL!": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000343@METALHEADS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000343@METAL_BEATS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000343@METAL_FUSION": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000343@METAL_MACHINE": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000343@MODERN_FUNK_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000343@MODERN_POP_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000343@MONUMENTAL": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000344@N.Y_-_VOLUME_1": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000344@N.Y_-_VOLUME_2": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000344@N.Y_-_VOLUME_3": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000346@POCKET_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000346@POP!": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000346@POP_PUNK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000346@POST-ROCK_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000346@POWER_METAL": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000346@PROGRESSIVE_FUSION": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000346@PROGRESSIVE_METAL": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000346@PROGRESSIVE_METAL_2": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000350@REGGAE_BEATS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000350@ROCK!": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000350@ROCK_SOLID": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000350@ROOTS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000350@RYTHME_SAUVAGE": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000351@SALSA_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000351@SESSION_DRUMS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000351@SESSION_ESSENTIALS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000351@SEVENTIES_PROG_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000351@SHUFFLED_BACKBEATS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000351@SINGER_SONGWRITER_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000351@SIXTIES_POP_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000351@SOUL_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000352@TECHNO_TEXTURES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000352@THE_BLUES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000352@THE_CLASSIC": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000352@THRASH_METAL": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000353@UK_DANCE": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000353@UK_POP_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000354@URBAN_JAZZ_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/000356@WEST_COAST_ROCK_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/002@EZPLAYER_PRO_MIDI": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/003@EZPLAYER_DOWNLOAD_MIDI": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/01@EZD_POP#ROCK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/02@EZD_DEMOS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/02_@EZDRUMMER_2_MODERN#VINTAGE": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/02_@EZDRUMMER_2_PERCUSSION": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/02_@EZDRUMMER_3": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/02_@EZDRUMMER_3_PERCUSSION": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/04@EZX_COCKTAIL": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/05@EZX_DRUMKIT_FROM_HELL": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/05@EZX_DRUMKIT_FROM_HELL_GUESTS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/06@EZX_VINTAGE_ROCK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/07@EZX_LATIN_PERCUSSION": {
+    "pitches": {},
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/08@EZX_NASHVILLE": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/09@EZX_CLAUSTROPHOBIC": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/10@EZX_TWISTED_KIT": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/11@EZX_FUNKMASTERS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/12@EZX_JAZZ": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/13@EZX_ELECTRONIC": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/14@EZX_METALHEADS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/15@EZX_THE_CLASSIC": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/16@EZX_NUMBER_1_HITS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/17@EZX_AMERICANA": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/18@EZX_METAL_MACHINE": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1901@EZX_POP!": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1902@EZX_ROCK_SOLID": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1903@EZX_THE_BLUES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1904@EZX_INDIE_FOLK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1905@EZX_ROCK!": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1906@EZX_METAL!": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1907@EZX_REGGAE": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1908@EZX_MADE_OF_METAL": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1909@EZX_HIP-HOP!": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1910@EZX_SOUTHERN_SOUL": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1911@EZX_POST-ROCK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1912@EZX_PROGRESSIVE": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1913@EZX_TRADITIONAL_COUNTRY": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1914@EZX_SEVENTIES_ROCK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1915@EZX_BIG_ROCK_DRUMS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1916@EZX_DREAM_POP": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1917@EZX_ALT-ROCK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1918@EZX_UK_POP": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1919@EZX_HARD_ROCK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1920@EZX_ACTION!": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1921@EZX_DRUMS_OF_DESTRUCTION": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1922@EZX_CUSTOM_SHOP": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1923@EZX_POP_PUNK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1924@EZX_BIG_BAND": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1925@EZX_DARK_MATTER": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1926@EZX_DEATH_METAL": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1927@EZX_KICKS_&_SNARES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1928@EZX_LATIN_CUBAN_DRUMS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1929@EZX_LATIN_CUBAN_PERCUSSION": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1930@EZX_CLASSIC_ROCK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1931@EZX_MODERN_METAL": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1932@EZX_ELECTRONIC_EDGE": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1933@EZX_GOSPEL": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1934@EZX_IN_THE_POCKET": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1935@EZX_SINGER-SONGWRITER": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1936@EZX_INTO_THE_DARK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1937@EZX_DUALITY_I": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1938@EZX_DUALITY_II": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1939@EZX_DANCE": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1940@EZX_BIG_STAGE": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1941@EZX_POST-METAL": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1942@EZX_SYNTHWAVE": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1943@EZX_SIGNATURE_-_PART_1": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1944@EZX_SIGNATURE_-_PART_2": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1945@EZX_DARK_INDUSTRIAL": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1946@EZX_ELEMENTS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1947@EZX_ALCHEMY_OF_POP": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1948@EZX_METAL_MANIA": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1949@EZX_UNDERGROUND": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1950@EZX_HEAVY_ROCK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1951@EZX_FUSION": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/1952@EZX_MODERN_RETRO": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/200210@EVIL_DRUMS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/200241@REAL_BLUES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/200242@REAL_COUNTRY": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/200243@REAL_JAZZ": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/200244@REAL_LATIN": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/200245@REAL_REGGAE": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/200250@STEVE_FERRONE_PACK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/200270@BROOKS_WACKERMAN_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/200280@MILITARY_CADENCE": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/200500@ZILDJIAN_ARTISTS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/200520@PLATINUM_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/200520@PLATINUM_SAMPLES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/200521@JACQUES MATHIAS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/205@STRAIGHT_4#4": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/210@GROOVE_MONKEE_BLUES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/210@GROOVE_MONKEE_COUNTRY": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/210@GROOVE_MONKEE_ELECTRONIC": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/210@GROOVE_MONKEE_FUNK_HIP_HOP_RB": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/210@GROOVE_MONKEE_FUSION": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/210@GROOVE_MONKEE_JAZZ": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/210@GROOVE_MONKEE_METAL": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/210@GROOVE_MONKEE_METAL_2": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/210@GROOVE_MONKEE_POWER_ROCK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/210@GROOVE_MONKEE_PROGRESSIVE": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/210@GROOVE_MONKEE_PUNK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/210@GROOVE_MONKEE_RB1": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/210@GROOVE_MONKEE_ROCK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/210@GROOVE_MONKEE_ROCK_2": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/210@GROOVE_MONKEE_ROCK_3": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/210@GROOVE_MONKEE_ROCK_ESSENTIAL_1": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/210@GROOVE_MONKEE_ROCK_ESSENTIAL_2": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/210@GROOVE_MONKEE_SOFT_ROCK": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/210@GROOVE_MONKEE_TWISTED": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/210@GROOVE_MONKEE_WORLDBEATS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/306@SWING_4#4": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/400410@GLEN_SOBEL_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/400420@JERRY_LYONS_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/400430@SSD_CLASSIC_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/400440@SSD_DELUXE_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/400440@STUART_HUDSON_GROOVES": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/406@SWING_4#4": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500110@BEATDOWN_HARDCORE_ESSENTIALS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500111@BLACK_METAL_ESSENTIALS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500112@CRUST_PUNK_ESSENTIALS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500113@DEATHCORE_ESSENTIALS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500114@DEATH_METAL_ANTHOLOGY": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500114@DEATH_METAL_ESSENTIALS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500115@DJENTASTIC_DRUM": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500116@DOOM_METAL_ESSENTIALS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500117@EMOCORE_ESSENTIALS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500118@FOLK_METAL_ESSENTIALS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500119@GRINDCORE_ESSENTIALS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500120@GRUNGE_ROCK_ESSENTIALS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500121@HARDCORE_ESSENTIALS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500122@HEARTLAND_ROCK_ESSENTIALS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500123@INDUSTRIAL_METAL_ESSENTIALS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500124@MELODEATH_ESSENTIALS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500125@MELODIC_METAL_ESSENTIALS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500126@METALCORE_ESSENTIALS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500127@NEW_WAVE_OF_BRITISH_HEAVY_METAL": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500128@NU_METAL_ESSENTIALS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500129@POST_METAL_ESSENTIALS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500130@POWER_METAL_ESSENTIALS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500131@PROGRESSIVE_DEATH_METAL": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500132@ROCK_ANTHOLOGY": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500133@SKATE_PUNK_ESSENTIALS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500134@SLAM_DEATH_METAL_ESSENTIALS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500135@STREET_PUNK_ESSENTIALS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500136@TRASH_METAL_ESSENTIALS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/500137@YOUTH_CREW_HARDCORE_ESSENTIALS": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/510@SWING_6#8": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/605@STRAIGHT_4#4": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Drums Groove MIDI/705@STRAIGHT_4#4": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Swing and Groove/Hip Hop": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Swing and Groove/Latin Percussion": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Swing and Groove/Logic": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Swing and Groove/MPC": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Swing and Groove/Notator": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Swing and Groove/Other": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Swing and Groove/Percussion": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Swing and Groove/Quantize": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Swing and Groove/Rock": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Swing and Groove/SP1200": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  },
+  "Swing and Groove/Swing": {
+    "pitches": {
+      "21": "hat_pedal",
+      "22": "hat_closed",
+      "24": "hat_open",
+      "25": "hat_open",
+      "26": "hat_open",
+      "60": "crash",
+      "61": "crash",
+      "62": "crash",
+      "63": "crash"
+    },
+    "confidence": "high",
+    "evidence": "Inferred from standard Toontrack mapping ranges. Pitches 21-26 are reserved for hi-hat articulations, and 60-63 are extra cymbal articulations. Latin percussion remains unmodified per instructions."
+  }
+}

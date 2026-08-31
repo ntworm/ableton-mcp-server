@@ -22,6 +22,7 @@ INDEX_SCHEMA_VERSION = "groove.index.v2"
 SQLITE_USER_VERSION = 2
 SQLITE_MIN_VERSION = "3.40"
 HVO_SCHEMA_VERSION = "groove.hvo.v2"
+HVO_SCHEMA_VERSION_V3 = "groove.hvo.v3"
 FEATURES_SCHEMA_VERSION = "groove.features.v2"
 GRAMMAR_SCHEMA_VERSION = "groove.grammar.v2"
 NORMALIZER_ID = "groove-normalizer-v2"

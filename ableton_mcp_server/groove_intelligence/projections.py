@@ -9,6 +9,7 @@ from statistics import mean, pstdev
 
 from .canonical import canonical_json
 from .drum_roles import GM_DRUM_ROLE_BY_PITCH, GM_DRUM_ROLES
+from .articulation import resolve_role
 from .midi_lossless import ParsedSmfV1
 from .schema import (
     FeaturesProjectionV1,
@@ -207,5 +208,30 @@ def derive_grammar(parsed: ParsedSmfV1, hvo: HvoProjectionV1) -> GrammarProjecti
     return GrammarProjectionV1(
         tokens=tokens,
         transitions=transitions,
+        source_events_digest=parsed.source_events_digest,
+    )
+
+def derive_hvo_v3(parsed: ParsedSmfV1, stratum: str) -> HvoProjectionV1:
+    grouped: dict[tuple[str, int, int], list[tuple[NoteEventV1, int]]] = defaultdict(list)
+    for note in parsed.note_events:
+        bar, step, offset = _grid_position(parsed, note.start_ticks)
+        grouped[(resolve_role(stratum, note.pitch), bar, step)].append((note, offset))
+    cells: list[HvoCellV1] = []
+    for (role, bar, step), values in sorted(grouped.items(), key=lambda item: item[0]):
+        cells.append(
+            HvoCellV1(
+                role=role,
+                bar=bar,
+                step=step,
+                hit=1,
+                velocity=round(mean(note.velocity / 127 for note, _offset in values), 9),
+                offset_ticks=round(mean(offset for _note, offset in values)),
+                event_ids=[note.event_id for note, _offset in values],
+            )
+        )
+    return HvoProjectionV1(
+        grid_ticks=GRID_TICKS,
+        roles=ROLES,
+        cells=cells,
         source_events_digest=parsed.source_events_digest,
     )
