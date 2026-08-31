@@ -1,0 +1,10 @@
+:root { color-scheme: dark; font: 15px/1.45 Inter, Segoe UI, sans-serif; background: #1d1d1d; color: #efefef; }
+body { margin: 0; }
+main { max-width: 760px; margin: 0 auto; padding: 48px; }
+.eyebrow { color: #ffb347; letter-spacing: .16em; font-size: 12px; }
+h1 { font-size: 34px; margin: 8px 0 24px; }
+section { display: grid; gap: 18px; padding: 24px; border: 1px solid #444; border-radius: 8px; }
+button { border: 0; border-radius: 5px; padding: 12px 18px; background: #ff9f1a; color: #111; font-weight: 700; }
+button:disabled { opacity: .4; }
+button.secondary { background: #3a3a3a; color: #eee; }
+#error { color: #ff7777; white-space: pre-wrap; }
