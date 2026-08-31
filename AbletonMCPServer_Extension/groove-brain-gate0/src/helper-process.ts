@@ -10,6 +10,7 @@ const HELPER_RELATIVE_PATH = 'windows-x64/groove-brain-gate0-helper.exe';
 export interface RuntimeManifest {
   protocol: 1;
   platform: 'win32-x64';
+  version: string;
   helper: typeof HELPER_RELATIVE_PATH;
   sha256: string;
 }
@@ -40,6 +41,8 @@ function parseRuntimeManifest(raw: string): RuntimeManifest {
   if (
     candidate.protocol !== GATE0_PROTOCOL
     || candidate.platform !== 'win32-x64'
+    || typeof candidate.version !== 'string'
+    || !/^\d+\.\d+\.\d+$/.test(candidate.version)
     || typeof candidate.helper !== 'string'
     || typeof candidate.sha256 !== 'string'
     || !/^[0-9a-f]{64}$/.test(candidate.sha256)
@@ -49,6 +52,23 @@ function parseRuntimeManifest(raw: string): RuntimeManifest {
   return candidate as unknown as RuntimeManifest;
 }
 
+function parseExtensionVersion(raw: string): string {
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    throw new Error('INVALID_EXTENSION_MANIFEST');
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('INVALID_EXTENSION_MANIFEST');
+  }
+  const version = (value as Record<string, unknown>).version;
+  if (typeof version !== 'string' || !/^\d+\.\d+\.\d+$/.test(version)) {
+    throw new Error('INVALID_EXTENSION_MANIFEST');
+  }
+  return version;
+}
+
 export function loadRuntime(
   resourceRoot: string,
 ): { executable: string; manifest: RuntimeManifest } {
@@ -56,6 +76,12 @@ export function loadRuntime(
     const runtimeRoot = path.resolve(resourceRoot, 'runtime');
     const manifestPath = path.join(runtimeRoot, 'manifest.json');
     const manifest = parseRuntimeManifest(fs.readFileSync(manifestPath, 'utf8'));
+    const extensionVersion = parseExtensionVersion(
+      fs.readFileSync(path.join(resourceRoot, 'manifest.json'), 'utf8'),
+    );
+    if (manifest.version !== extensionVersion) {
+      throw new Error('RUNTIME_VERSION_MISMATCH');
+    }
     if (manifest.helper !== HELPER_RELATIVE_PATH) {
       throw new Error('INVALID_HELPER_PATH');
     }
@@ -81,6 +107,8 @@ export function loadRuntime(
       error instanceof Error
       && [
         'INVALID_RUNTIME_MANIFEST',
+        'INVALID_EXTENSION_MANIFEST',
+        'RUNTIME_VERSION_MISMATCH',
         'INVALID_HELPER_PATH',
         'HELPER_HASH_MISMATCH',
       ].includes(error.message)
@@ -199,13 +227,14 @@ export class HelperSession {
     private readonly child: ChildProcessWithoutNullStreams,
     public readonly ready: HelperReady,
     private readonly token: string,
+    public readonly extensionVersion: string,
   ) {}
 
   static async start(resourceRoot: string, timeoutMs = 5_000): Promise<HelperSession> {
     if (process.platform !== 'win32' || process.arch !== 'x64') {
       throw new Error('UNSUPPORTED_GATE0_PLATFORM');
     }
-    const { executable } = loadRuntime(resourceRoot);
+    const { executable, manifest } = loadRuntime(resourceRoot);
     const token = randomBytes(32).toString('hex');
     const child = spawn(executable, [], {
       cwd: resourceRoot,
@@ -228,7 +257,7 @@ export class HelperSession {
         })}\n`,
       );
       const ready = await awaitingReady;
-      return new HelperSession(child, ready, token);
+      return new HelperSession(child, ready, token, manifest.version);
     } catch (error) {
       await terminateChild(child, 1_000);
       throw error;

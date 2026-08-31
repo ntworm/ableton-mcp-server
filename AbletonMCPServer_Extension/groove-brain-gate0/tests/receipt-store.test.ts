@@ -9,6 +9,7 @@ import type { ProbeReceipt } from '../src/session-clip-probe.js';
 
 const receipt: ProbeReceipt = {
   receiptId: '8a5130f9-6dd1-4a76-a98c-0b8e819b5961',
+  extensionVersion: '0.1.1',
   status: 'ok',
   code: 'READBACK_MATCH',
   startedAtEpochMs: 1000,

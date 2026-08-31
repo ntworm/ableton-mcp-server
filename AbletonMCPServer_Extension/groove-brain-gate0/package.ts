@@ -251,7 +251,13 @@ function main(): void {
   const helperSha256 = createHash('sha256').update(fs.readFileSync(helperTarget)).digest('hex');
   fs.writeFileSync(
     path.join(stage, 'runtime', 'manifest.json'),
-    JSON.stringify({ protocol: 1, platform: 'win32-x64', helper: `windows-x64/${helperName}`, sha256: helperSha256 }, null, 2) + '\n',
+    JSON.stringify({
+      protocol: 1,
+      platform: 'win32-x64',
+      version,
+      helper: `windows-x64/${helperName}`,
+      sha256: helperSha256,
+    }, null, 2) + '\n',
     'utf8',
   );
 

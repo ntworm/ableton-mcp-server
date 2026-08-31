@@ -21,6 +21,7 @@ export interface SlotPort {
 
 export interface ProbeReceipt {
   receiptId: string;
+  extensionVersion: string;
   status: 'ok' | 'blocked' | 'failed' | 'partial';
   code: string;
   startedAtEpochMs: number;
@@ -36,6 +37,7 @@ export interface ProbeReceipt {
 }
 
 export interface ProbeOptions {
+  extensionVersion: string;
   nowEpochMs: () => number;
   nowMonotonicMs: () => number;
   injectFailure?: 'after_create';
@@ -80,8 +82,12 @@ export async function runSessionClipProbe(
 ): Promise<ProbeReceipt> {
   const startedAtEpochMs = options.nowEpochMs();
   const startedMono = options.nowMonotonicMs();
+  if (!/^\d+\.\d+\.\d+$/u.test(options.extensionVersion)) {
+    throw new Error('INVALID_EXTENSION_VERSION');
+  }
   const base = {
     receiptId: randomUUID(),
+    extensionVersion: options.extensionVersion,
     startedAtEpochMs,
     slotHandle: slot.handleId,
     intendedCount: NOTES.length,
