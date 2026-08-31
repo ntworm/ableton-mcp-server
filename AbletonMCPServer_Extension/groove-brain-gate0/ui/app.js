@@ -4,6 +4,7 @@ const confirmNode = document.querySelector('#confirm');
 const runNode = document.querySelector('#run');
 const cancelNode = document.querySelector('#cancel');
 const errorNode = document.querySelector('#error');
+let submitted = false;
 
 function closeAndSend(payload) {
   const message = { method: 'close_and_send', params: [JSON.stringify(payload)] };
@@ -16,6 +17,28 @@ function closeAndSend(payload) {
     return;
   }
   throw new Error('ABLETON_MODAL_BRIDGE_UNAVAILABLE');
+}
+
+function showTerminalError(error) {
+  submitted = true;
+  runNode.disabled = true;
+  cancelNode.disabled = true;
+  controls.hidden = true;
+  statusNode.textContent = 'Falha no Gate 0.';
+  const message = error instanceof Error ? error.message : String(error);
+  errorNode.textContent = message.replace(/[0-9a-f]{64}/gi, '[redacted]');
+}
+
+function submit(payload) {
+  if (submitted) return;
+  submitted = true;
+  runNode.disabled = true;
+  cancelNode.disabled = true;
+  try {
+    closeAndSend(payload);
+  } catch (error) {
+    showTerminalError(error);
+  }
 }
 
 async function bootstrap() {
@@ -41,16 +64,14 @@ async function bootstrap() {
 }
 
 confirmNode.addEventListener('change', () => {
-  runNode.disabled = !confirmNode.checked;
+  runNode.disabled = submitted || !confirmNode.checked;
 });
 runNode.addEventListener('click', () => {
-  closeAndSend({ action: 'run_session_probe', confirmed: true, protocol: 1 });
+  if (!confirmNode.checked) return;
+  submit({ action: 'run_session_probe', confirmed: true, protocol: 1 });
 });
 cancelNode.addEventListener('click', () => {
-  closeAndSend({ action: 'cancel', confirmed: false, protocol: 1 });
+  submit({ action: 'cancel', confirmed: false, protocol: 1 });
 });
 
-bootstrap().catch((error) => {
-  statusNode.textContent = 'Falha no Gate 0.';
-  errorNode.textContent = error instanceof Error ? error.message : String(error);
-});
+bootstrap().catch(showTerminalError);

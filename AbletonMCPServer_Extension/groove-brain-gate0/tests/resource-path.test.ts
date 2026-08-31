@@ -8,3 +8,7 @@ test('resource root is the parent of installed dist and ignores cwd', () => {
   const entryDir = path.join(installedRoot, 'dist');
   assert.equal(resourceRootFromEntryDir(entryDir), installedRoot);
 });
+
+test('resource root rejects a relative entry directory', () => {
+  assert.throws(() => resourceRootFromEntryDir('dist'), /ENTRY_DIR_NOT_ABSOLUTE/);
+});
