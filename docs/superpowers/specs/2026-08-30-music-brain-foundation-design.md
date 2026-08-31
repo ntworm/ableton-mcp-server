@@ -1,6 +1,6 @@
 # Music Brain — arquitetura fundacional de modelo musical MIDI
 
-- **Status:** direção arquitetural aprovada em conversa; documento aguardando revisão do usuário; código e treinamento não autorizados
+- **Status:** visão geral preservada para referência; o escopo atual foi reduzido a bateria/ritmo e dados/treinamento de Groove Brain são regidos por [Groove Brain — dataset e treinamento neural](2026-08-31-groove-brain-dataset-training-design.md); código e treinamento não autorizados
 - **Data:** 2026-08-30
 - **Projeto:** `ableton-mcp-server`
 - **Horizonte:** protótipo de pesquisa com caminho comercial; nenhum lançamento nesta fase
@@ -22,9 +22,9 @@ O diretório local inspecionado também não é um corpus de canções completas
 - amostra aleatória: mediana de uma track, 33 notas e oito beats;
 - predominância de loops curtos de bateria, inclusive arquivos que usam canal MIDI 1 em vez do canal 10.
 
-Conclusão: esse material teria perfil útil para Groove Brain, não cobertura suficiente para Composer Brain multitrack. Porém existe bloqueio anterior a qualquer discussão técnica: a [EULA oficial da Toontrack](https://www.toontrack.com/end-user-license-agreement/) proíbe usar o produto ou componentes, incluindo MIDI, como fonte para desenvolver ou treinar IA. Compra e posse dos packs não concedem direito de ML.
+Conclusão: esse material tem perfil útil para Groove Brain, não cobertura suficiente para Composer Brain multitrack. O proprietário esclareceu depois desta pesquisa que os padrões foram gerados/exportados por processo próprio, pertencem a ele e estão autorizados para o projeto; nomes de produtos na hierarquia não identificam titularidade dos arquivos.
 
-**Decisão:** nenhum arquivo, segmento, embedding, tokenizer, índice, seed ou checkpoint derivado desse diretório entra em treinamento, validação, produto ou benchmark até existir autorização escrita específica da Toontrack. Artefatos locais já derivados ficam em quarentena; remoção física depende de decisão separada, pois há trabalho local não rastreado a preservar.
+**Decisão revisada:** o corpus é registrado como `source_kind=author`, `license_id=user-owned` e `redistribution=full`, com a declaração do proprietário como evidência raiz. Isso substitui a quarentena interna anterior, sem inventar certificação jurídica externa. Dataset neural ainda depende de near-dedupe, famílias, splits e gates da especificação canônica de 2026-08-31.
 
 ## 3. Problema de produto
 
@@ -154,7 +154,7 @@ Cada item precisa de `rights_record` com:
 - estado `allowed`, `research_only`, `quarantined` ou `rejected`;
 - data e responsável pela decisão.
 
-Pipeline falha fechado. Pasta “comprada”, “royalty-free” ou “user-owned” não vira `allowed` sem texto que cubra ML. A incerteza jurídica mais ampla sobre treinamento generativo também deve ser acompanhada; o [relatório do U.S. Copyright Office sobre treinamento de IA](https://www.copyright.gov/ai/Copyright-and-Artificial-Intelligence-Part-3-Generative-AI-Training-Report-Pre-Publication-Version.pdf) mostra que simples disponibilidade de conteúdo não resolve autorização comercial.
+Pipeline falha fechado. Pasta “comprada” ou “royalty-free” não vira `allowed` sem evidência que cubra o uso. Para material criado pelo próprio usuário, uma declaração autoral versionada e ligada aos hashes é a evidência de projeto exigida; fontes de terceiros continuam sujeitas à licença correspondente.
 
 ### 7.2 Fontes aceitáveis
 
@@ -301,7 +301,7 @@ Cada degrau pode parar o seguinte. Falha de dados não é corrigida aumentando m
 ### Gate A — direitos e lineage
 
 - 100% dos itens de treino possuem `rights_record=allowed`;
-- zero Toontrack ou derivado em dataset, tokenizer, retriever, checkpoint e benchmark;
+- zero item sem declaração autoral ou licença compatível em dataset, tokenizer, retriever, checkpoint e benchmark;
 - hashes e origem permitem reconstruir inclusão de cada item;
 - versões `research_only` nunca alimentam artefato comercial.
 
@@ -389,7 +389,7 @@ MCP Server continua útil como laboratório e interface agentic. Produto Groove 
 - `journeys.py` e registro local `plan_user_journey`: protótipo quebrado, fora do núcleo;
 - UDP realtime server: contradiz decisão anterior de transporte e não possui contrato seguro;
 - script de ingestão privado: caminho hardcoded e análise de microtiming incompleta;
-- groove seed derivado do diretório Toontrack: quarentena de direitos;
+- seed V2 promovido: preservar como baseline de retrieval, não confundir com dataset neural;
 - alterações locais de swing/polyrhythm: só entram se ganharem testes e papel claro no baseline.
 
 “Centralizar em main” não significa misturar tudo. Processo futuro: preservar snapshot, classificar cada diff como salvage/archive/discard, testar salvage, commitar unidades coerentes, e somente então remover branches/worktrees com autorização explícita. Nenhum protótipo quebrado entra em `main` para produzir aparência de limpeza.
@@ -398,12 +398,12 @@ MCP Server continua útil como laboratório e interface agentic. Produto Groove 
 
 Projeto é grande demais para um plano monolítico. Cada workstream recebe spec/plan e gate próprios.
 
-### Workstream 0 — estabilização e quarentena
+### Workstream 0 — estabilização e proveniência
 
 - mapear alterações locais e branches;
 - proteger ou arquivar trabalho recuperável;
 - remover registro quebrado sem perder fonte;
-- isolar derivados Toontrack;
+- registrar a declaração autoral e isolar somente artefatos sem provenance suficiente;
 - restaurar testes e inventário coerentes;
 - deixar `main` como fonte única sem publicar.
 
@@ -461,8 +461,8 @@ Ordem crítica: 0 → 1 → 2. Workstream 3 começa após dados de groove; Works
 Após aprovação desta spec, primeiro plano não treina modelo. Ele cobre Workstream 0 e início do 1:
 
 1. consolidar repositório sem perder trabalho;
-2. pôr Toontrack e derivados em quarentena lógica;
-3. definir `rights_record`, `SourceManifest` e políticas fail-closed;
+2. registrar a declaração autoral do corpus e preservar hashes/origem;
+3. definir `rights_record`, `SourceManifest` e políticas fail-closed para fontes futuras;
 4. criar fixtures sintéticas e próprias mínimas;
 5. provar ingestão, IR, dedupe e split com testes;
 6. gerar primeiro evidence packet rights-cleared.
@@ -471,7 +471,7 @@ Saída é pequena, testável e necessária para qualquer treino legítimo. Ao fi
 
 ## 17. Riscos e respostas
 
-1. **Corpus permitido pequeno:** começar por Groove Brain, contratar/opt-in, medir curva de escala; não compensar com scraping incerto.
+1. **Corpus autoral repetitivo:** começar por Groove Brain, medir famílias e curva de escala; não confundir contagem de arquivos com diversidade.
 2. **Dados multitrack fracos:** Composer Brain fica bloqueado; produto de groove/retrieval continua útil.
 3. **Memorização:** splits por obra, near-dedupe, canaries e verifier.
 4. **Custo de GPU:** estimar tokens/throughput local antes de alugar; usar escala progressiva.
@@ -502,7 +502,7 @@ Music Brain alcança primeira prova forte quando:
 - Composer Brain usa MIDI tokenizado, não ABC, como representação principal.
 - REMI+ é baseline de tokenização, sujeito a bake-off.
 - Treino principal é próprio; pesos não comerciais servem somente a pesquisa permitida.
-- Dados Toontrack estão bloqueados até autorização escrita específica.
+- O corpus atual é tratado como autoral conforme declaração explícita do proprietário; fontes futuras continuam fail-closed.
 - Planner começa estruturado/determinístico; LLM de texto é opcional e periférico.
 - Verifier e originalidade fazem parte do núcleo, não acabamento.
 - Integração Ableton nunca permite ao modelo escrever diretamente.
@@ -511,7 +511,6 @@ Music Brain alcança primeira prova forte quando:
 
 ## 20. Fontes principais
 
-- [Toontrack End User License Agreement](https://www.toontrack.com/end-user-license-agreement/)
 - [MIDI-GPT paper](https://arxiv.org/abs/2501.17011) e [repositório](https://github.com/Metacreation-Lab/MIDI-GPT)
 - [Anticipatory Music Transformer paper](https://arxiv.org/abs/2306.08620) e [repositório](https://github.com/jthickstun/anticipation)
 - [FIGARO paper](https://arxiv.org/html/2201.10936) e [repositório](https://github.com/dvruette/figaro)

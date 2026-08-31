@@ -1,6 +1,6 @@
 # Groove Brain Extension — especificação consolidada de produto e arquitetura
 
-- **Status:** arquitetura de produto preservada, mas qualquer uso do corpus Toontrack para ML está bloqueado pela revisão de direitos registrada na especificação Music Brain; nenhuma implementação ou treinamento é autorizado por este documento
+- **Status:** arquitetura de produto preservada; dados e treinamento são regidos pela especificação canônica [Groove Brain — dataset e treinamento neural](2026-08-31-groove-brain-dataset-training-design.md); nenhuma implementação ou treinamento é autorizado por este documento
 - **Data:** 2026-08-30
 - **Nome de trabalho:** Groove Brain
 - **Produto-alvo:** extensão local para Ableton Live, instalada por um único arquivo `.ablx`
@@ -14,13 +14,13 @@ Groove Brain será um gerador e navegador inteligente de bateria, totalmente loc
 
 O produto não será um chatbot musical, um serviço de nuvem nem um LLM genérico. O núcleo será um sistema especializado em ritmo com três motores locais:
 
-1. **Catálogo e busca:** organiza somente MIDIs com direitos de indexação e uso comprovados por item; o diretório Toontrack anteriormente analisado permanece em quarentena e não entra no catálogo do produto.
+1. **Catálogo e busca:** organiza MIDIs com proveniência e autorização registradas; o corpus local foi declarado pelo proprietário como material autoral e já possui seed portátil, enquanto caminhos e nomes privados não entram no produto.
 2. **Modelo neural de groove:** aprende hits, velocidades e microtiming para gerar, variar, completar e humanizar bateria.
 3. **Ponte Ableton:** recebe o contexto da ação contextual, resolve o mapeamento do instrumento e escreve MIDI com segurança no alvo capturado.
 
 A interface principal será um dashboard web local de longa duração **durante uma invocação contextual**. A versão atual do SDK não documenta painel global persistente, acompanhamento da seleção ou serviço de background: fechar o modal encerra a invocação e sua ponte. O texto livre, como “techno sombrio, 128 BPM”, poderá existir como atalho secundário, mas a experiência principal usará controles musicais explícitos, alvo capturado, instrumento, clipe de referência, estilo, densidade, complexidade, swing, novidade e lanes protegidas.
 
-O sistema deve funcionar sem internet depois da instalação. Nenhum MIDI, prompt, telemetria, sessão do Ableton ou inferência sai da máquina. O modelo treinado, o catálogo compacto, o índice de busca, os perfis de mapeamento, a interface e o runtime de inferência serão empacotados como recursos da extensão. A viabilidade física desse pacote permanece bloqueada pelo Gate 0; single-install é requisito, não fato já provado.
+O sistema deve funcionar sem internet depois da instalação. Nenhum MIDI, prompt, telemetria, sessão do Ableton ou inferência sai da máquina. O modelo treinado, o catálogo compacto, o índice de busca, os perfis de mapeamento, a interface e o runtime de inferência serão empacotados como recursos da extensão. Gate 0 já provou instalação, helper e write/readback no Live do autor; máquina limpa, crash, update, uninstall e observação de egress continuam gates antes de promoção.
 
 ## 3. Vocabulário e classificação de certeza
 
@@ -506,13 +506,13 @@ Perfis do usuário ficam no diretório de storage e sobrevivem a atualizações 
 
 ### 13.1 Fonte
 
-Uma inspeção local anterior encontrou aproximadamente 183.429 arquivos MIDI em um diretório de produto Toontrack, com cerca de 172.133 conteúdos exatos únicos após deduplicação por hash. Essa medição descreve volume e repetição; não concede direito de usar os arquivos para ML.
+O inventário completo encontrou 183.429 arquivos MIDI, dos quais 180.614 são válidos, 2.815 têm falhas explícitas de parser e 11.296 repetem um digest bruto. O seed V2 promovido contém 1.685 representantes. A hierarquia contém nomes de produtos usados como referência organizacional, mas o proprietário declarou que os padrões foram gerados/exportados por processo próprio, pertencem a ele e estão autorizados para este projeto.
 
-**Bloqueio de direitos:** a [EULA oficial da Toontrack](https://www.toontrack.com/end-user-license-agreement/) proíbe usar o produto ou seus componentes, incluindo arquivos MIDI, como fonte para desenvolver ou treinar IA. Portanto, esse diretório, seus derivados, índices e seeds ficam fora de treinamento, validação e distribuição até existir autorização escrita específica da Toontrack.
+Essa declaração é registrada como `source_kind=author`, `license_id=user-owned` e `redistribution=full`. Ela remove o bloqueio interno anterior baseado na suposição incorreta de que os arquivos eram componentes comprados da Toontrack; não constitui certificação jurídica externa.
 
 ### 13.2 Proveniência
 
-Posse de uma cópia licenciada não equivale a direito de treinamento. Cada fonte precisa de evidência por item que cubra, no mínimo, processamento para ML, treinamento, retenção de derivados, uso dos pesos e distribuição comercial planejada.
+Cada fonte precisa de evidência que cubra, no mínimo, origem, processamento para ML, treinamento, retenção de derivados, uso dos pesos e distribuição planejada. Para o corpus atual, a evidência raiz é a declaração autoral do proprietário, ligada por manifest aos hashes dos itens.
 
 Fontes admissíveis: material criado pelo usuário com cadeia autoral clara; material encomendado com cessão/licença explícita para ML; corpus opt-in com contrato compatível; e obras realmente em domínio público ou CC0 após auditoria individual. Fonte sem evidência suficiente falha fechada e permanece em quarentena.
 
@@ -994,7 +994,7 @@ Pode produzir um bom notebook e um produto impossível de empacotar. O Gate 0 de
 7. **Arrangement:** criar e revalidar alvos pode ser menos seguro que Session.
 8. **Portabilidade:** aceleração e assinatura variam por sistema.
 9. **Escopo:** catálogo, modelo, Ableton, mappings e embalagem são quatro produtos técnicos; os gates evitam construí-los todos antes de provar valor.
-10. **Direitos de ML:** o corpus Toontrack está bloqueado inclusive para protótipo de treinamento; declaração de posse não supera a EULA. Só autorização escrita específica ou substituição integral por dados permitidos remove o bloqueio.
+10. **Proveniência autoral:** o corpus está autorizado pela declaração do proprietário, mas lineage do gerador anterior pode estar incompleto; manifests, hashes e limitações precisam permanecer explícitos.
 11. **UX modal/contextual:** o SDK atual não prova painel dockado, seleção global observável ou serviço contínuo; a V1 termina ao fechar o modal.
 
 ## 25. Decisões finais desta especificação
@@ -1052,7 +1052,7 @@ Resoluções adotadas para as perguntas bloqueantes:
 2. Se nenhum runtime contido no `.ablx` passar Gate 0, o projeto para e a arquitetura volta ao design; não há instalador separado oculto.
 3. Session-only é fallback aceito da V1 até Arrangement passar sua suíte.
 4. SD3 começa apenas com presets auditados; seleção manual de perfil é aceitável e segura.
-5. O treino não pode usar os ~183 mil arquivos Toontrack sem autorização escrita específica; o pipeline começa com corpus próprio, opt-in, domínio público ou licenciado para ML, sempre com proveniência por item.
+5. O treino pode usar os ~183 mil arquivos declarados autorais pelo proprietário, mas somente depois de manifest, near-dedupe, famílias e splits congelados; fontes futuras continuam fail-closed.
 6. Lineage do gerador anterior é desconhecido até auditoria; sua ausência limita alegações de generalização.
 7. Repetibilidade significa mesma matriz de modelo/runtime/provider; portabilidade bit-a-bit não é prometida.
 
