@@ -100,6 +100,13 @@ fn next_io_timeout(shutdown: &AtomicBool, deadline: Instant) -> io::Result<Durat
     Ok(remaining.min(IO_POLL_INTERVAL))
 }
 
+fn is_retryable_io_error(error: &io::Error) -> bool {
+    matches!(
+        error.kind(),
+        io::ErrorKind::Interrupted | io::ErrorKind::WouldBlock
+    )
+}
+
 fn write_bounded(
     stream: &mut TcpStream,
     mut data: &[u8],
@@ -107,7 +114,7 @@ fn write_bounded(
     deadline: Instant,
 ) -> io::Result<()> {
     while !data.is_empty() {
-        stream.set_write_timeout(Some(next_io_timeout(shutdown, deadline)?))?;
+        let poll_interval = next_io_timeout(shutdown, deadline)?;
         match stream.write(data) {
             Ok(0) => {
                 return Err(io::Error::new(
@@ -116,13 +123,11 @@ fn write_bounded(
                 ));
             }
             Ok(written) => data = &data[written..],
-            Err(error)
-                if matches!(
-                    error.kind(),
-                    io::ErrorKind::Interrupted
-                        | io::ErrorKind::WouldBlock
-                        | io::ErrorKind::TimedOut
-                ) => {}
+            Err(error) if is_retryable_io_error(&error) => {
+                if error.kind() == io::ErrorKind::WouldBlock {
+                    thread::sleep(poll_interval);
+                }
+            }
             Err(error) => return Err(error),
         }
     }
@@ -137,7 +142,7 @@ fn read_headers(
     let mut data = Vec::with_capacity(1024);
     let mut byte = [0_u8; 1];
     while data.len() < MAX_HEADER_BYTES {
-        stream.set_read_timeout(Some(next_io_timeout(shutdown, deadline)?))?;
+        let poll_interval = next_io_timeout(shutdown, deadline)?;
         match stream.read(&mut byte) {
             Ok(0) => break,
             Ok(_) => {
@@ -148,13 +153,11 @@ fn read_headers(
                     });
                 }
             }
-            Err(error)
-                if matches!(
-                    error.kind(),
-                    io::ErrorKind::Interrupted
-                        | io::ErrorKind::WouldBlock
-                        | io::ErrorKind::TimedOut
-                ) => {}
+            Err(error) if is_retryable_io_error(&error) => {
+                if error.kind() == io::ErrorKind::WouldBlock {
+                    thread::sleep(poll_interval);
+                }
+            }
             Err(error) => return Err(error),
         }
     }
@@ -304,7 +307,7 @@ pub fn run(
     while !shutdown.load(Ordering::Acquire) {
         match listener.accept() {
             Ok((stream, address)) if address.ip().is_loopback() => {
-                stream.set_nonblocking(false)?;
+                stream.set_nonblocking(true)?;
                 let _ =
                     handle_connection(stream, &ui_dir, &token, &expected_host, shutdown.as_ref());
             }
@@ -433,36 +436,20 @@ mod tests {
         client
             .set_read_timeout(Some(Duration::from_millis(250)))
             .unwrap();
-        let mut connection_closed = false;
-        for _ in 0..7 {
-            if client.write_all(b"x").is_err() {
-                connection_closed = true;
-                break;
-            }
+        for _ in 0..5 {
+            client.write_all(b"x").unwrap();
             thread::sleep(Duration::from_millis(400));
         }
-        if !connection_closed {
-            let mut response_byte = [0_u8; 1];
-            connection_closed = match client.read(&mut response_byte) {
-                Ok(_) => true,
-                Err(error)
-                    if matches!(
-                        error.kind(),
-                        io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
-                    ) =>
-                {
-                    false
-                }
-                Err(_) => true,
-            };
-        }
+        thread::sleep(Duration::from_millis(300));
+        let mut response_byte = [0_u8; 1];
+        let read_result = client.read(&mut response_byte);
 
         shutdown.store(true, Ordering::Release);
         drop(client);
         server_thread.join().unwrap().unwrap();
         assert!(
-            connection_closed,
-            "periodic bytes kept the connection alive beyond its total deadline"
+            matches!(read_result, Ok(0)),
+            "expected EOF after total deadline, got {read_result:?}"
         );
     }
 
@@ -478,6 +465,28 @@ mod tests {
         }
         assert!(!is_transient_accept_error(&io::Error::from(
             io::ErrorKind::AddrNotAvailable,
+        )));
+        #[cfg(windows)]
+        for raw_os_error in [10053, 10054] {
+            assert!(is_transient_accept_error(&io::Error::from_raw_os_error(
+                raw_os_error,
+            )));
+        }
+    }
+
+    #[test]
+    fn retries_only_nonblocking_progress_errors() {
+        assert!(is_retryable_io_error(&io::Error::from(
+            io::ErrorKind::WouldBlock,
+        )));
+        assert!(is_retryable_io_error(&io::Error::from(
+            io::ErrorKind::Interrupted,
+        )));
+        assert!(!is_retryable_io_error(&io::Error::from(
+            io::ErrorKind::TimedOut,
+        )));
+        assert!(!is_retryable_io_error(&io::Error::from(
+            io::ErrorKind::ConnectionReset,
         )));
     }
 }
