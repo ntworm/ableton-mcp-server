@@ -27,6 +27,34 @@ test('extension diagnostics redact a bootstrap token', () => {
   );
 });
 
+test('probe clock returns a finite timestamp without global performance', async () => {
+  const extensionModule = await import('../src/extension.js');
+  const monotonicNow = (extensionModule as unknown as {
+    monotonicNow?: () => number;
+  }).monotonicNow;
+  const originalPerformance = Object.getOwnPropertyDescriptor(globalThis, 'performance');
+  assert.ok(originalPerformance);
+  Object.defineProperty(globalThis, 'performance', {
+    configurable: true,
+    enumerable: originalPerformance.enumerable,
+    writable: true,
+    value: undefined,
+  });
+
+  let timestamp: number | undefined;
+  try {
+    assert.doesNotThrow(() => {
+      timestamp = monotonicNow?.();
+    });
+  } finally {
+    Object.defineProperty(globalThis, 'performance', originalPerformance);
+  }
+
+  assert.ok(timestamp !== undefined);
+  assert.equal(Number.isFinite(timestamp), true);
+  assert.ok(timestamp >= 0);
+});
+
 test('receipt modal escapes receipt text and does not expose a storage path', () => {
   const receipt: ProbeReceipt = {
     receiptId: '8a5130f9-6dd1-4a76-a98c-0b8e819b5961',
