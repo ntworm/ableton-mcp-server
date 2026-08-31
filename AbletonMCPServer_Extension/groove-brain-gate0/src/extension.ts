@@ -1,4 +1,5 @@
 import { initialize, type ActivationContext } from '@ableton-extensions/sdk';
+import { performance as nodePerformance } from 'node:perf_hooks';
 import { openGate0Modal, shutdownGate0Modal } from './actions.js';
 import { storeReceipt } from './receipt-store.js';
 import { resourceRootFromEntryDir } from './resource-path.js';
@@ -15,6 +16,10 @@ interface Lifecycle {
 }
 
 let lifecycle: Lifecycle | null = null;
+
+export function monotonicNow(): number {
+  return nodePerformance.now();
+}
 
 export function sanitizeErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
@@ -67,7 +72,7 @@ function activate(activation: ActivationContext): void {
         const receipt = await runSessionClipProbe(slot, {
           extensionVersion: version,
           nowEpochMs: Date.now,
-          nowMonotonicMs: () => performance.now(),
+          nowMonotonicMs: monotonicNow,
           injectFailure,
         });
         storeReceipt(context, receipt);
