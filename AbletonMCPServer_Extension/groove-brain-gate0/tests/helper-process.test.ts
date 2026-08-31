@@ -9,7 +9,12 @@ import { parseHelperReady, parseModalResult } from '../src/protocol.js';
 
 const stage = path.resolve('build/groove-brain-gate0/staging/0.1.0');
 
-function writeRuntimeFixture(root: string, helperRelative = 'windows-x64/groove-brain-gate0-helper.exe') {
+function writeRuntimeFixture(
+  root: string,
+  helperRelative = 'windows-x64/groove-brain-gate0-helper.exe',
+  runtimeVersion = '0.1.0',
+  extensionVersion = '0.1.0',
+) {
   const runtimeRoot = path.join(root, 'runtime');
   const executable = path.join(runtimeRoot, helperRelative);
   fs.mkdirSync(path.dirname(executable), { recursive: true });
@@ -20,9 +25,15 @@ function writeRuntimeFixture(root: string, helperRelative = 'windows-x64/groove-
     `${JSON.stringify({
       protocol: 1,
       platform: 'win32-x64',
+      version: runtimeVersion,
       helper: helperRelative,
       sha256,
     }, null, 2)}\n`,
+    'utf8',
+  );
+  fs.writeFileSync(
+    path.join(root, 'manifest.json'),
+    `${JSON.stringify({ entry: 'dist/extension.js', version: extensionVersion }, null, 2)}\n`,
     'utf8',
   );
   return { executable, sha256 };
@@ -86,6 +97,7 @@ test('runtime loader verifies the exact bundled helper and hash', (t) => {
     manifest: {
       protocol: 1,
       platform: 'win32-x64',
+      version: '0.1.0',
       helper: 'windows-x64/groove-brain-gate0-helper.exe',
       sha256: fixture.sha256,
     },
@@ -103,6 +115,7 @@ test('runtime loader rejects traversal and hash mismatch', (t) => {
     JSON.stringify({
       protocol: 1,
       platform: 'win32-x64',
+      version: '0.1.0',
       helper: '../outside.exe',
       sha256: outsideHash,
     }),
@@ -117,12 +130,38 @@ test('runtime loader rejects traversal and hash mismatch', (t) => {
   assert.throws(() => loadRuntime(root), /HELPER_HASH_MISMATCH/);
 });
 
+test('runtime loader rejects an invalid package version', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gate0-runtime-'));
+  writeRuntimeFixture(root);
+  const manifestPath = path.join(root, 'runtime', 'manifest.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as Record<string, unknown>;
+  manifest.version = '../invalid';
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest), 'utf8');
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  assert.throws(() => loadRuntime(root), /INVALID_RUNTIME_MANIFEST/);
+});
+
+test('runtime loader rejects a version different from the extension manifest', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gate0-runtime-'));
+  writeRuntimeFixture(
+    root,
+    'windows-x64/groove-brain-gate0-helper.exe',
+    '0.1.1',
+    '0.1.0',
+  );
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  assert.throws(() => loadRuntime(root), /RUNTIME_VERSION_MISMATCH/);
+});
+
 test('two sessions use distinct endpoints, authenticate, and stop', {
   skip: fs.existsSync(stage) ? false : 'Gate 0 package stage is created in Task 5',
 }, async () => {
   const first = await HelperSession.start(stage);
   const second = await HelperSession.start(stage);
   try {
+    assert.equal(first.extensionVersion, '0.1.0');
     assert.notEqual(first.ready.port, second.ready.port);
     assert.notEqual(first.modalUrl, second.modalUrl);
     await Promise.all([first.assertHealthy(), second.assertHealthy()]);

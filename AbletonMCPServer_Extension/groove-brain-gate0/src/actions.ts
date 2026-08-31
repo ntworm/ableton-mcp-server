@@ -20,7 +20,7 @@ export async function openGate0Modal(
   context: ExtensionContext<'1.0.0'>,
   argument: unknown,
   resourceRoot: string,
-): Promise<{ handle: Handle; result: ModalResult }> {
+): Promise<{ handle: Handle; result: ModalResult; version: string }> {
   if (!isHandle(argument)) throw new Error('CLIP_SLOT_HANDLE_REQUIRED');
   if (activeInvocation) throw new Error('GATE0_INVOCATION_ALREADY_ACTIVE');
 
@@ -39,7 +39,11 @@ export async function openGate0Modal(
     if (invocation.cancelled) throw new Error('GATE0_INVOCATION_CANCELLED');
     const raw = await context.ui.showModalDialog(helper.modalUrl, 960, 680);
     if (invocation.cancelled) throw new Error('GATE0_INVOCATION_CANCELLED');
-    return { handle: argument, result: parseModalResult(raw) };
+    return {
+      handle: argument,
+      result: parseModalResult(raw),
+      version: helper.extensionVersion,
+    };
   } finally {
     try {
       const helper = invocation.helper ?? await invocation.start.catch(() => null);

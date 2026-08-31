@@ -26,6 +26,7 @@ function fakeSlot(initial: ClipPort | null = null): {
 }
 
 const clocks = {
+  extensionVersion: '0.1.1',
   nowEpochMs: () => 1000,
   nowMonotonicMs: () => 5,
 };
@@ -44,6 +45,26 @@ test('occupied slot is blocked before mutation', async () => {
   assert.equal(existing.name, 'Keep');
 });
 
+test('invalid extension version is rejected before slot inspection', async () => {
+  let inspected = false;
+  const slot: SlotPort = {
+    handleId: 'slot-7',
+    getClip: () => {
+      inspected = true;
+      return null;
+    },
+    createMidiClip: async () => {
+      throw new Error('UNREACHABLE');
+    },
+  };
+
+  await assert.rejects(
+    runSessionClipProbe(slot, { ...clocks, extensionVersion: '../invalid' }),
+    /INVALID_EXTENSION_VERSION/u,
+  );
+  assert.equal(inspected, false);
+});
+
 test('successful write creates four beats and is read back exactly', async () => {
   const { slot, clips, createLengths } = fakeSlot();
 
@@ -51,6 +72,7 @@ test('successful write creates four beats and is read back exactly', async () =>
 
   assert.equal(receipt.status, 'ok');
   assert.equal(receipt.code, 'READBACK_MATCH');
+  assert.equal(receipt.extensionVersion, '0.1.1');
   assert.equal(receipt.intendedCount, 4);
   assert.equal(receipt.readbackCount, 4);
   assert.equal(receipt.intendedHash, receipt.readbackHash);

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -23,6 +24,7 @@ ALLOWED_DIRECTORIES = {
     "runtime/windows-x64/",
 }
 EXPECTED_HELPER = "windows-x64/groove-brain-gate0-helper.exe"
+SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 MAX_COMPRESSED_BYTES = 50 * 1024 * 1024
 MAX_INSTALLED_BYTES = 100 * 1024 * 1024
 
@@ -94,10 +96,15 @@ def verify_ablx(path: Path) -> dict[str, Any]:
             manifest = _read_json(archive, "manifest.json")
             if manifest.get("entry") != "dist/extension.js":
                 raise ValueError("INVALID_EXTENSION_ENTRY")
+            extension_version = manifest.get("version")
+            if not isinstance(extension_version, str) or not SEMVER.fullmatch(extension_version):
+                raise ValueError("INVALID_EXTENSION_VERSION")
 
             runtime = _read_json(archive, "runtime/manifest.json")
             if runtime.get("protocol") != 1 or runtime.get("platform") != "win32-x64":
                 raise ValueError("INVALID_RUNTIME_CONTRACT")
+            if runtime.get("version") != extension_version:
+                raise ValueError("VERSION_MISMATCH")
             if runtime.get("helper") != EXPECTED_HELPER:
                 raise ValueError("INVALID_RUNTIME_HELPER")
             helper_path = f"runtime/{EXPECTED_HELPER}"
@@ -115,6 +122,7 @@ def verify_ablx(path: Path) -> dict[str, Any]:
         "installed_bytes": installed_bytes,
         "entry_count": len(file_infos),
         "entries": sorted(files),
+        "extension_version": extension_version,
         "helper_sha256": helper_hash,
         "helper_hash_match": True,
     }

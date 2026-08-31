@@ -57,7 +57,7 @@ function activate(activation: ActivationContext): void {
     if (!state.active || state.operation) return;
     const operation = (async (): Promise<void> => {
       try {
-        const { handle, result } = await openGate0Modal(context, argument, resourceRoot);
+        const { handle, result, version } = await openGate0Modal(context, argument, resourceRoot);
         if (result.action === 'cancel' || !state.active) return;
 
         const slot = adaptClipSlot(context, handle);
@@ -65,6 +65,7 @@ function activate(activation: ActivationContext): void {
           ? 'after_create' as const
           : undefined;
         const receipt = await runSessionClipProbe(slot, {
+          extensionVersion: version,
           nowEpochMs: Date.now,
           nowMonotonicMs: () => performance.now(),
           injectFailure,

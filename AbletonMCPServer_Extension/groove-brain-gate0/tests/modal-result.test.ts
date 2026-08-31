@@ -30,6 +30,7 @@ test('extension diagnostics redact a bootstrap token', () => {
 test('receipt modal escapes receipt text and does not expose a storage path', () => {
   const receipt: ProbeReceipt = {
     receiptId: '8a5130f9-6dd1-4a76-a98c-0b8e819b5961',
+    extensionVersion: '0.1.1',
     status: 'failed',
     code: '<script>&',
     startedAtEpochMs: 1000,
