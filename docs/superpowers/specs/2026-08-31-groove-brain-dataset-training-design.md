@@ -1,214 +1,324 @@
-# Groove Brain — design canônico de dataset e treinamento neural
+# Groove Brain — especificação canônica de dataset e treinamento neural
 
-- **Status:** revisada de forma adversarial em 2026-08-31 contra o commit-base `721e77b`. Bloqueada na pergunta O1 (seção 2.1). Planos 1, 2 e 3 da seção 18 podem ser escritos; do 4 em diante, não
-- **Data:** 2026-08-31
+- **Status:** reescrita em 2026-08-31 após auditoria adversarial do commit-base `721e77b`, com medição direta do corpus, do código e das fontes primárias.
+- **Execução autorizada por este documento:** planos 1, 2 e 3 da seção 21. Do plano 4 em diante depende da decisão O1.
 - **Projeto:** `ableton-mcp-server`
-- **Escopo:** bateria e ritmo MIDI; nenhum Composer Brain, lançamento ou publicação
-- **Origem do corpus:** declarada pelo proprietário como material próprio e autorizado; a evidência medida na seção 2.1 não sustenta essa leitura, e a pergunta bloqueante O1 está aberta
+- **Escopo:** bateria e ritmo MIDI. Nenhum Composer Brain, nenhum lançamento, nenhuma publicação.
 - **Documento de produto relacionado:** [Groove Brain Extension](2026-08-30-groove-brain-extension-design.md)
+
+## 0. Como ler este documento
+
+Toda afirmação relevante carrega uma classificação. Ela existe para impedir que uma hipótese vire premissa por repetição.
+
+| Marca | Significado |
+|---|---|
+| `[fato]` | verificado nesta máquina, no repositório ou em fonte primária, com o comando ou caminho registrado |
+| `[decisão]` | escolha de produto ou de engenharia, revogável, mas não sujeita a debate durante a execução |
+| `[hipótese]` | acreditamos que sim, ainda não medimos |
+| `[experimento]` | existe um teste desenhado que resolve isso |
+| `[risco]` | pode dar errado de um jeito que custa caro |
+
+Números sem marca são resultado de medição registrada na seção 4.
 
 ## 1. Decisão em uma frase
 
-Groove Brain será treinado como um sistema rítmico híbrido: o corpus privado passa por canonicalização lossless, deduplicação exata/canônica/próxima e splits por família; três modelos são comparados sob o mesmo orçamento; um Transformer HVO condicional e mascarado é o challenger principal, mas só avança se vencer retrieval, transformações determinísticas, GrooVAE e um decoder event-based em qualidade cega, originalidade e custo local; o vencedor é exportado para ONNX e executado offline por um helper isolado da Extension.
+Groove Brain é um gerador de bateria local e offline para o Ableton Live: um corpus privado de MIDI de bateria passa por canonicalização lossless, remapeamento de articulações, deduplicação em camadas e splits por família; três arquiteturas neurais competem sob orçamento idêntico contra um baseline determinístico que já funciona; o vencedor só existe se ganhar em escuta cega, originalidade e custo de CPU; e o modelo roda num helper nativo isolado, atrás da Extension, com escrita explícita e readback verificado.
 
-## 2. Correções e precedência
+O produto é útil mesmo se nenhum modelo vencer. Essa é a característica de projeto, não o plano B.
 
-Este documento é a fonte de verdade para **dados e treinamento neural do Groove Brain**. Ele substitui, somente nesse domínio:
+## 2. Decisões bloqueantes do proprietário
 
-- as seções 13.4–13.6, 14, 16 e 17 de `2026-08-30-groove-brain-extension-design.md` quando houver conflito, isto é, pipeline de preparação, labels, split, representação musical, modelo neural e anti-memorização. A seção 13.3 (corpus bruto fora do Git) e a seção 15 (busca e referência) continuam valendo como estão;
+Quatro perguntas não podem ser respondidas por análise. Elas estão aqui, no início, porque duas delas mudam o que o programa é.
+
+### O1 — origem e redistribuição do corpus `[bloqueia do plano 4 em diante]`
+
+A evidência da seção 4.4 é incompatível com a leitura "os arquivos são meus e podem ser redistribuídos". Escolha uma posição:
+
+- **(a) uso local.** O corpus é material licenciado de terceiros, usado só para treinar um modelo que fica nesta máquina. `redistribution` passa a `derived_only` ou `blocked`, o seed com payloads brutos sai do pacote público, e o model card diz que os pesos derivam de material de terceiros sob uso privado.
+- **(b) autorização documentável.** Existe permissão de redistribuição verificável, anexada como evidência por item, que substitui a constante de código.
+- **(c) subconjunto próprio.** O treino usa apenas material comprovadamente de autoria própria, medido e separado do resto.
+
+Sem resposta, os planos 1, 2 e 3 rodam; o plano 4 (dataset) não começa.
+
+### O2 — quem avalia no teste cego `[bloqueia o gate G6]`
+
+Um avaliador ou vários. Com um só, o intervalo de confiança é sobre tarefas, não sobre pessoas, e o model card não pode afirmar que outros músicos preferem o modelo. É uma escolha legítima; precisa ser declarada antes de coletar, não depois de ver o resultado.
+
+### O3 — teto de tamanho da `.ablx` `[bloqueia o plano 8]`
+
+Quantos MiB é aceitável instalar. O número precisa existir antes de escolher runtime ONNX e quantização, porque ele elimina opções. Referência medida: o `.ablx` do Gate 0 tem `154.852` bytes. O documento de produto sugere pacote core abaixo de 500 MiB.
+
+### O4 — os tarballs do Extensions SDK no repositório público `[bloqueia publicação nova]`
+
+`AbletonMCPServer_Extension/vendor/ableton-extensions-{sdk,cli}-1.0.0-beta.0.tgz` estão versionados num repositório público MIT. A licença do SDK proíbe distribuir o SDK ou partes dele fora da aplicação e trata material pré-lançamento como confidencial. Independe do treino, mas os planos 8 e 9 empacotam `.ablx`.
+
+## 3. Precedência entre documentos
+
+Esta especificação é a fonte de verdade para **dados e treinamento neural do Groove Brain**. Ela substitui, somente nesse domínio:
+
+- as seções 13.4–13.6, 14, 16 e 17 de `2026-08-30-groove-brain-extension-design.md`, isto é, pipeline de preparação, labels, split, representação musical, modelo neural e anti-memorização;
 - as decisões gerais de Music Brain sobre Composer Brain, REMI+ e composição multitrack.
 
-### 2.1 Declaração de origem e evidência medida
+Continuam valendo, sem alteração, duas seções desse mesmo documento de produto: a 13.3 (corpus bruto fora do Git) e a 15 (busca e referência). Referências a "seção N" fora deste parágrafo apontam para este documento.
 
-O proprietário declarou que os padrões MIDI foram gerados/exportados por processo próprio, pertencem a ele e estão autorizados para este trabalho. Essa declaração fica registrada como evidência de origem do projeto e não constitui certificação jurídica independente.
+Continuam válidas as decisões de produto `[decisão]`:
 
-A revisão de 2026-08-31 mediu o material real. O registro precisa conviver com estes fatos verificados:
-
-- a raiz do corpus é `C:\Users\Usuario\Desktop\AUDIO_PRODUCTION\AUDIO\Superior Drummer 3\Toontrack\Midi` (`scripts/ingest_private_corpus.py:18`);
-- as 280 `collection` do catálogo são nomes de produtos comerciais de terceiros. As maiores: `ezx_drumkit_from_hell` (19.756), `ezd_pop_rock` (8.550), `ezx_latin_percussion` (6.786), `real_blues` (4.657), `zildjian_artists` (4.270), `groove_monkee_progressive` (3.868), `ezdrummer_3` (2.879), `brooks_wackerman_grooves` (1.811) e `platinum_samples` (1.614);
-- os `payloads` do seed publicado guardam bytes idênticos aos arquivos de origem. O artefato `ga1_ecdd85c8…` descomprime para os 242 bytes de `.../1921@EZX_DRUMS_OF_DESTRUCTION/100-S0299@FILLS/Variation_05.mid`, com SHA-256 igual ao registrado no catálogo;
-- `license_id="user-owned"` e `redistribution="full"` não são derivados de evidência alguma: são constantes literais em `ableton_mcp_server/groove_intelligence/corpus.py:606-617`, aplicadas a 100% dos itens (facet `license=full` em 180.614 de 180.614).
-
-"Exportado por processo próprio a partir de bibliotecas licenciadas" e "os arquivos são meus e podem ser redistribuídos" são afirmações diferentes. A evidência acima é compatível com a primeira e não sustenta a segunda: os bytes coincidem com o conteúdo distribuído pelos pacotes, na hierarquia e na convenção de nomes desses pacotes. O repositório é público e MIT, e `ableton_mcp_server/resources/groove_seed/index.sqlite`, versionado desde `aa680c7`, já distribui esses bytes.
-
-**Pergunta bloqueante O1.** Antes de qualquer build de dataset, model card ou publicação, o proprietário precisa escolher uma posição:
-
-- **(a)** o corpus é material de terceiros usado apenas localmente. `redistribution` passa a `derived_only` ou `blocked`, e o seed com payloads brutos sai do pacote público;
-- **(b)** existe autorização de redistribuição documentável, que é anexada como evidência verificável por item e substitui a constante;
-- **(c)** o treino segue apenas com o subconjunto de origem comprovadamente própria, medido e separado.
-
-Enquanto O1 estiver aberta, o programa pode executar D0 (auditoria estatística sobre o catálogo existente) e E0 (probe de ambiente), e não pode executar D1 em diante.
-
-Continuam válidas as decisões de produto:
-
-- bateria/ritmo somente;
+- bateria e ritmo somente;
 - operação local e offline;
 - uma única instalação `.ablx` para o produto final;
 - UI web servida localmente;
 - Extension como única camada autorizada a tocar o Live;
 - candidatos antes de escrita;
 - aplicação explícita, revalidação e readback;
-- modelo e inferência fora da thread/host do Ableton.
+- modelo e inferência fora da thread e do host do Ableton.
 
-## 3. Estado real encontrado
+## 4. Estado verificado do corpus
 
-### 3.1 Corpus medido
+### 4.1 Inventário `[fato]`
 
-O inventário preservado em `%LOCALAPPDATA%\AbletonMCPServer\groove-build-v2\` (`ingestion-report.json` e `catalog_v2.sqlite`) registra:
+Fonte: `%LOCALAPPDATA%\AbletonMCPServer\groove-build-v2\ingestion-report.json` e `catalog_v2.sqlite`; `groove-build-v1/corpus-report.json`.
 
-- `183.429` arquivos descobertos e processados;
-- `180.614` MIDIs válidos;
-- `2.815` falhas de parser, todas com o mesmo reason code `groove_midi_error`;
-- `11.296` repetições por digest bruto, restando `169.318` arquivos únicos por bytes;
-- `99.933.371` bytes de MIDI bruto;
-- predominância de loops curtos de bateria;
-- rótulos úteis, porém fracos, na hierarquia de diretórios.
+| Medida | Valor |
+|---|---|
+| Arquivos descobertos e processados | `183.429` |
+| MIDIs válidos | `180.614` |
+| Falhas de parser | `2.815`, todas com o mesmo reason code `groove_midi_error` |
+| Repetições por digest bruto | `11.296` |
+| Arquivos únicos por bytes | `169.318` |
+| Bytes de MIDI | `99.933.371` |
+| Note events | `11.403.162` |
+| Eventos totais | `23.737.765` |
+| Coleções distintas | `280` |
 
-O seed de retrieval passou por duas gerações:
+O seed de retrieval teve duas gerações: V1 com `2.048` representantes, V2 no `HEAD` com `1.685`. Existe uma experiência local não commitada que troca o seed por `500` itens; ela não é baseline nem dataset. O baseline é o `HEAD`.
 
-- V1: `2.048` representantes (`groove-build-v1/corpus-report.json`);
-- V2 canônico no `HEAD`: `1.685` representantes em `groove.index.v2` após a mudança de representação/taxonomia.
+### 4.2 Auditoria medida
 
-Existe uma experiência local não commitada que substitui o seed por `500` itens (`manifest.json` da árvore de trabalho). Ela não é baseline, dataset de treino nem artefato promovido; o baseline é o `HEAD`.
+Números apurados sobre o catálogo completo e sobre amostras aleatórias de arquivos únicos por bytes, seed `20260831`. O plano 2 reproduz tudo isso como código versionado.
 
-### 3.1.1 Medições da auditoria D0 antecipada
-
-Números apurados sobre o catálogo completo e sobre amostras aleatórias de arquivos únicos por bytes, com seed `20260831`. Eles substituem estimativas e devem ser reproduzidos e versionados pelo plano D0.
+**Estrutura musical**
 
 | Medida | Valor | Escopo |
 |---|---|---|
-| Compasso 4/4 | `155.844` (86,3%) | catálogo completo |
-| Demais compassos | `24.770` (13,7%), sendo 6/8 `10.002`, 3/4 `5.995`, 7/8 `1.853`, 5/4 `1.646` | catálogo completo |
-| Arquivos com menos de 2 barras | `56.842` de `169.318` (33,6%) | únicos por bytes |
-| Janelas de 2 barras sem sobreposição | `354.749` | únicos por bytes |
-| `offset_std` mediano | `9,76` ticks canônicos (PPQ 480), ≈10,2 ms a 120 BPM | catálogo completo |
-| Arquivos com `offset_std` ≥ 10 ms a 120 BPM | 74,5% | catálogo completo |
-| Arquivos perfeitamente quantizados (`offset_std = 0`) | 1,3% | catálogo completo |
-| `velocity_std` mediano | `0,196` normalizado (≈25 unidades MIDI) | catálogo completo |
-| Notas fundidas por célula em grade de 16 avos | 3,51% das notas; 36,6% dos arquivos afetados | amostra de 4.000 |
-| Idem em grade de 32 avos | 1,38% das notas; 18,9% dos arquivos | amostra de 4.000 |
-| Idem em grade de 64 avos | 0,92% das notas; 13,0% dos arquivos | amostra de 4.000 |
-| Padrões de onset de 2 barras únicos | 82,4% (34.351 de 41.697 janelas) | amostra de 20.000 |
-| Janelas em padrão de onset repetido | 26,0% | amostra de 20.000 |
-| Padrões repetidos que cruzam `collection` | 9,9% (346 padrões); 1.030 esqueletos kick+snare | amostra de 20.000 |
-| Arquivos com tempo meta no SMF | 97,8% | amostra de 1.000 |
-| Cobertura de facet `style` | `103.265` (57,2%) | catálogo completo |
-| Cobertura de facet `section` | `151.678` (84,0%) | catálogo completo |
-| Facets `genre`, `subgenre` e `bpm` | não existem na taxonomia atual | catálogo completo |
-| Coleções eletrônicas/techno/hip-hop somadas | `8.167` (4,5%); estritamente eletrônicas ≈`3.174` (1,8%) | catálogo completo |
+| Compasso 4/4 | `155.844` (86,3%) | catálogo |
+| Outros compassos | `24.770` (13,7%): 6/8 `10.002`, 3/4 `5.995`, 7/8 `1.853`, 5/4 `1.646`, 2/4 `1.106`, 12/8 `1.095` | catálogo |
+| Comprimento | 1 barra `59.795`, 2 barras `52.671`, 8 barras `34.703`, 4 barras `27.604` | catálogo |
+| Arquivos com menos de 2 barras | `56.842` de `169.318` (33,6%) | únicos |
+| Janelas de 2 barras sem sobreposição | `354.749` | únicos |
+| Papéis presentes por arquivo | mediana `4`, p90 `7`, máximo `14` | catálogo |
+| Hits por barra | mediana `16`, p10 `9`, p90 `25`, máximo `129` | catálogo |
+| Tempo meta presente no SMF | 97,8% | amostra 1.000 |
 
-Leitura direta desses números:
+**Expressão**
 
-- o corpus tem microtiming e dinâmica reais, não é uma grade quantizada;
-- o corpus é diverso, mas 26% das janelas repetem um padrão de onset exato mesmo depois da deduplicação por bytes, e 9,9% desses padrões repetidos aparecem em coleções diferentes;
-- nenhuma grade densa de uma nota por célula representa o corpus sem perda;
-- techno, dark techno e gênero/subgênero em geral não têm cobertura suficiente para virar condição do modelo hoje.
+| Medida | Valor | Escopo |
+|---|---|---|
+| `offset_std` mediano | `9,76` ticks canônicos (PPQ 480) ≈ 10,2 ms a 120 BPM | catálogo |
+| `offset_std` p90 / p99 | `26,6` / `33,8` ticks | catálogo |
+| Arquivos com `offset_std` ≥ 10 ms a 120 BPM | 74,5% | catálogo |
+| Arquivos perfeitamente quantizados | 1,3% | catálogo |
+| `velocity_std` mediano | `0,196` normalizado (≈25 unidades MIDI) | catálogo |
+| `velocity_std` p10 / p90 | `0,074` / `0,289` | catálogo |
 
-### 3.2 Fundação já implementada
+**Perda por grade densa**
 
-O repositório já contém:
+| Grade | Notas fundidas | Arquivos afetados |
+|---|---|---|
+| 16 avos (32 passos / 2 barras) | 3,51% | 36,6% |
+| 32 avos (64 passos) | 1,38% | 18,9% |
+| 64 avos (128 passos) | 0,92% | 13,0% |
 
-- parser e serializer SMF com limites;
+Distribuição de células com múltiplas notas na grade de 16 avos: `2` notas em `6.853` células, `3` em `522`, `4` em `151`, `5` em `30`, e cauda até `8`.
+
+**Repetição e vazamento**
+
+| Medida | Valor | Escopo |
+|---|---|---|
+| Padrões de onset de 2 barras únicos | 82,4% (`34.351` de `41.697` janelas) | amostra 20.000 |
+| Janelas em padrão repetido | 26,0% | amostra 20.000 |
+| Padrões repetidos que aparecem em coleções diferentes | 9,9% (`346` padrões) | amostra 20.000 |
+| Esqueletos kick+snare cruzando coleções | `1.030` | amostra 20.000 |
+| Esqueletos kick+snare únicos | 63,0% | amostra 20.000 |
+
+**Cobertura de labels**
+
+| Eixo | Cobertura |
+|---|---|
+| `feel`, `density`, `microtiming`, `kit`, `collection`, `license` | 100% |
+| `section` | `151.678` (84,0%) — `variation` 101.372, `groove` 45.146, `fill` 39.956 |
+| `style` | `103.265` (57,2%) — `straight` 66.907, `swing` 26.269 |
+| `genre`, `subgenre`, `bpm` | **não existem** na taxonomia |
+| Coleções eletrônicas/hip-hop somadas | `8.167` (4,5%); estritamente eletrônicas ≈`3.174` (1,8%) |
+
+### 4.3 Mapeamento de articulações — o defeito que bloqueia a representação
+
+Este é o achado com maior efeito sobre o desenho, e não estava registrado em nenhum documento anterior.
+
+`[fato]` A ontologia atual mapeia apenas as alturas de percussão General MIDI, 35 a 81 (`groove_intelligence/drum_roles.py`). Tudo fora disso vira `other_percussion`. Medido em amostra de 6.000 arquivos únicos, `361.264` notas:
+
+| Papel | Massa de notas |
+|---|---|
+| `other_percussion` | **24,34%** |
+| `kick` | 24,15% |
+| `snare` | 23,88% |
+| `ride` | 8,83% |
+| `tom_low` | 3,35% |
+| `hat_closed` | **3,06%** |
+| `crash` | 2,77% |
+| `hat_pedal` | 2,07% |
+| `hat_open` | 0,85% |
+| demais 9 papéis | somados 6,9% |
+
+`63,6%` das notas em `other_percussion` estão **fora** da faixa GM 35–81. As alturas mais frequentes ali são `22`, `21`, `26`, `25`, `24` — a faixa que as bibliotecas Toontrack usam para articulações de chimbal — e `60`, `61`, `62`, `63`, que essas bibliotecas usam para articulações de pratos.
+
+A conclusão é direta: **o chimbal, que é a lane que carrega a subdivisão rítmica, está sendo jogado no balde genérico.** Somadas, as três lanes de chimbal recebem 5,98% da massa de notas, o que é implausível para loops de bateria. Realocando só as cinco alturas acima, o chimbal passaria a ≈17%, que é o valor esperado.
+
+A distorção não é uniforme. Por coleção, a fração de notas em `other_percussion`:
+
+| Coleção | Fração |
+|---|---|
+| `EZX_LATIN_PERCUSSION` | 80,4% |
+| `EZD_POP#ROCK` | 43,7% |
+| `WEST_COAST_ROCK_GROOVES` | 40,5% |
+| `SUPERIOR_DRUMMER_3` | 38,6% |
+| `THE_JAZZ_SESSIONS` | 36,8% |
+| `EZDRUMMER_3` | 36,0% |
+
+`[risco]` Treinar um HVO por lane sobre esse mapeamento ensina uma estrutura falsa: `other_percussion` vira a segunda lane mais densa e mistura chimbal, articulação de prato e percussão latina. Nenhum controle de densidade por lane, nenhuma lane bloqueada e nenhuma métrica de F1 por lane significa o que diz.
+
+`[decisão]` Um **mapa de articulações por coleção** é pré-requisito do dataset, não refinamento. Ele entra no plano 2 e produz:
+
+1. histograma de alturas por coleção, com massa de notas e coocorrência temporal;
+2. mapa `coleção → altura → papel canônico`, versionado e auditado à mão;
+3. métrica de cobertura: fração de massa de notas resolvida para um papel específico, por coleção;
+4. gate: uma coleção com mais de 10% da massa em `other_percussion` depois do remapeamento fica fora do treino da V1 e volta para o retrieval.
+
+O proprietário tem as bibliotecas instaladas e pode exportar os mapas MIDI oficiais de cada uma; isso torna a auditoria muito mais barata que inferir por estatística.
+
+`[decisão]` A ontologia V1 continua com os 18 papéis. Percussão latina não ganha lanes novas na V1: coleções dominadas por ela saem do treino em vez de inflar a ontologia.
+
+### 4.4 Origem e direitos
+
+`[fato]` O proprietário declarou que os padrões foram gerados ou exportados por processo próprio, pertencem a ele e estão autorizados para este trabalho. A declaração fica registrada como evidência de origem do projeto e não constitui certificação jurídica.
+
+`[fato]` A auditoria mediu o seguinte:
+
+- a raiz do corpus é `C:\Users\Usuario\Desktop\AUDIO_PRODUCTION\AUDIO\Superior Drummer 3\Toontrack\Midi` (`scripts/ingest_private_corpus.py:18`);
+- as `280` coleções são nomes de produtos comerciais de terceiros. As maiores: `ezx_drumkit_from_hell` (19.756), `ezd_pop_rock` (8.550), `ezx_latin_percussion` (6.786), `real_blues` (4.657), `zildjian_artists` (4.270), `groove_monkee_progressive` (3.868), `ezdrummer_3` (2.879), `brooks_wackerman_grooves` (1.811), `platinum_samples` (1.614);
+- a tabela `payloads` do seed publicado guarda MIDI bruto comprimido. O artefato `ga1_ecdd85c8…` descomprime para os 242 bytes exatos de `.../1921@EZX_DRUMS_OF_DESTRUCTION/100-S0299@FILLS/Variation_05.mid`, com SHA-256 igual ao do catálogo;
+- `license_id="user-owned"` e `redistribution="full"` não derivam de evidência: são constantes literais em `ableton_mcp_server/groove_intelligence/corpus.py:606-617`, aplicadas a `180.614` de `180.614` itens.
+
+"Exportei das minhas bibliotecas licenciadas" e "os arquivos são meus e podem ser redistribuídos" são afirmações diferentes. A evidência sustenta a primeira e não a segunda: os bytes coincidem com o conteúdo distribuído pelos pacotes, na hierarquia e na convenção de nomes desses pacotes. O repositório é público e MIT, e `ableton_mcp_server/resources/groove_seed/index.sqlite` está versionado desde `aa680c7`.
+
+Isso é a decisão **O1**. Nada além dos planos 1, 2 e 3 começa antes dela.
+
+## 5. Estado verificado do software
+
+### 5.1 O que existe e serve `[fato]`
+
+- parser e serializer SMF com limites explícitos;
 - envelope MIDI lossless;
 - ontologia de 18 papéis de bateria;
 - projeções `groove.hvo.v2`, `groove.features.v2` e `groove.grammar.v2`;
-- inventário reiniciável, hashes, proveniência, direitos e manifests;
-- taxonomia de collection, genre, subgenre, style, section e source category;
-- SQLite imutável para retrieval;
-- busca, evidence, comparação e similaridade;
+- inventário reiniciável, hashes, proveniência e manifests;
+- taxonomia de collection, style, section, feel, density, microtiming e kit;
+- SQLite imutável para retrieval, com busca, evidence, comparação e similaridade;
 - geração determinística, transformações e recombinação multi-parent;
 - mapping tardio e aplicação guardada no Live;
-- protocolo de provider neural, subprocesso isolado, limites, fallback e gates;
-- Gate 0 `.ablx` com helper local e write/readback observado no Ableton.
+- protocolo de provider neural, subprocesso isolado, limites de processo e fallback;
+- harness de gates de **runtime**: `gates.py` publica limiares, `lab.py` executa seis gates nomeados (`contract`, `fallback`, `reproducibility`, `quality`, `privacy_license`, `cost_latency`), `promotion.py` assina a decisão;
+- Gate 0 `.ablx` com helper nativo e write/readback observado no Ableton: `status=ok`, `code=READBACK_MATCH`, 4 notas intencionadas e 4 lidas de volta, hashes iguais, `durationMs=42,77`, receipt persistido, zero processo helper órfão.
 
-### 3.3 O que não existe
+### 5.2 O que existe e **não** serve para treino `[fato]`
 
-Não existe atualmente:
+- `groove.hvo.v2` funde eventos silenciosamente: `derive_hvo` agrupa por `(papel, barra, passo)` e grava `hit=1` com média de velocity e offset (`groove_intelligence/projections.py:85-108`). Serve retrieval, não serve como alvo de treino;
+- o mapeamento de papéis perde 24,3% da massa de notas em `other_percussion` (seção 4.3);
+- a marcação de direitos é constante literal, não derivação (seção 4.4);
+- o `NeuralSubprocessProvider` é uma fronteira de segurança, não uma IA treinada;
+- o código antigo de `music_brain` e o branch `wip/music-brain` são heurísticos e ficam só como baseline ou descarte seletivo.
 
-- dataset tensorial de treino;
-- cluster de near-duplicates e registro de splits;
-- loader de treino;
-- arquitetura PyTorch do modelo;
-- loss, optimizer, scheduler ou checkpoint;
-- harness de experimento de **treino** e comparação entre arquiteturas;
-- modelo treinado ou promovido;
-- export ONNX validado;
-- inferência neural dentro do helper `.ablx`;
-- dashboard final do Groove Brain.
+### 5.3 O que não existe
 
-Existe, porém, um harness de gates de **runtime** já implementado, que esta especificação não pode ignorar nem duplicar: `groove_intelligence/gates.py` publica limiares (`quality_hvo_f1_min=0.90`, `p95_latency_seconds_max=5.0`, `peak_memory_mib_max=512`, `response_bytes_max=262144`, `candidate_events_max=2048`), `lab.py` executa os seis gates `contract`, `fallback`, `reproducibility`, `quality`, `privacy_license` e `cost_latency`, e `promotion.py` assina a decisão. Os gates G7 e G8 da seção 17 devem ser expressos nesse vocabulário existente, não em um vocabulário paralelo.
+Dataset tensorial de treino; mapa de articulações por coleção; cluster de near-duplicates e registro de splits; loader de treino; arquitetura PyTorch; loss, optimizer, scheduler ou checkpoint; harness de comparação **entre arquiteturas**; modelo treinado; export ONNX validado; inferência neural dentro do `.ablx`; dashboard final.
 
-O `NeuralSubprocessProvider` atual é uma fronteira de segurança, não uma IA treinada. O código antigo de `music_brain` e o branch `wip/music-brain` são heurísticos e permanecem apenas como baselines ou material de descarte seletivo.
+## 6. O que torna esta extensão diferente
 
-## 4. Objetivo mensurável da V1 neural
+Não é tamanho de modelo. Um gerador de bateria com 5M de parâmetros não compete com serviço de nuvem em capacidade bruta, e não precisa. O que torna esta extensão única é um conjunto de garantias que quase nenhum gerador musical oferece, e todas elas já estão provadas no repositório ou são consequência direta do desenho.
+
+1. **Nada sai da máquina.** Sem conta, sem upload, sem telemetria. Os dois bridges são loopback e isso é verificado por teste (`tests/test_extension_loopback.py`). `[fato]`
+2. **Nunca sobrescreve nada em silêncio.** Candidato antes de escrita, aplicação explícita, revalidação e readback com hash. O Gate 0 já demonstrou o ciclo completo dentro do Live. `[fato]`
+3. **Lanes bloqueadas são respeitadas por construção.** A máscara é entrada do modelo, não filtro depois da geração. Um chimbal que você travou não é regenerado e depois descartado; ele nunca é predito. `[decisão]`
+4. **Toda saída tem procedência.** Cada candidato aponta para artefatos-pai com digest, e o `groove_evidence` mostra de onde veio. Nenhum resultado é uma caixa preta sem lastro. `[fato]`
+5. **O produto funciona sem o modelo.** Retrieval e transformações determinísticas são o caminho principal enquanto o neural não vencer, e continuam sendo o fallback depois. Falha do provider degrada, não quebra. `[fato]`
+6. **Nada de MIDI é perdido.** O envelope lossless preserva o arquivo original; a grade é uma projeção, não a verdade. Isso é o que permite prometer round-trip exato. `[decisão]`
+7. **Anti-cópia é gate, não relatório.** Um candidato que reproduz um item do treino é rejeitado e contabilizado, com limiar congelado antes do experimento. `[decisão]`
+8. **Instalação única.** Um `.ablx`, sem Python, sem CUDA, sem runtime externo para o usuário. `[decisão]`
+
+O critério de qualidade decorre disso: a extensão é boa quando um baterista programador abre o painel, pede um groove, entende de onde ele veio, trava o que gostou, regenera o resto, e o clipe no Live é exatamente o que a UI mostrou. Nenhuma dessas coisas depende de o modelo ser grande.
+
+## 7. Objetivo mensurável da V1 e não objetivos
 
 O primeiro modelo deve gerar e editar grooves curtos de bateria que:
 
-1. respeitem as condições que passarem no gate de cobertura da seção 10.2. O conjunto mínimo hoje sustentado por dados é BPM, compasso, seção/função, densidade, energia, swing, complexidade e lanes bloqueadas. Estilo, gênero e subgênero só entram depois que a taxonomia passar a produzi-los com cobertura medida;
+1. respeitem as condições aprovadas pelo gate de cobertura da seção 13: no mínimo BPM, compasso, seção e função, densidade global e por lane, energia, complexidade, swing e lanes bloqueadas;
 2. façam geração livre, variação, fill, infill temporal, infill de lanes e continuação curta;
-3. preservem velocity e microtiming quando o corpus realmente contiver expressão útil;
+3. preservem velocity e microtiming, que o corpus comprovadamente tem (seção 4.2);
 4. usem um clipe do Ableton como referência com força controlável;
 5. retornem vários candidatos reprodutíveis por seed;
-6. não copiem silenciosamente um item ou uma família do treino;
-7. executem localmente dentro do orçamento da `.ablx`;
-8. superem o melhor baseline em avaliação cega.
+6. não copiem um item nem uma família do treino;
+7. rodem dentro dos sete limites de processo da seção 19.4, com destaque para `cpu_seconds <= 2,0`;
+8. vençam o melhor baseline em avaliação cega.
 
-### 4.1 Não objetivos
+**Não objetivos:** melodia, baixo, harmonia, arranjo; áudio generativo; canções completas; LLM como gerador central; inferência online; treinamento na máquina do usuário final; substituir o Ableton como editor; escalar parâmetros antes de provar dados, controles e avaliação; lanes novas para percussão latina na V1.
 
-- melodia, baixo, harmonia ou arranjo;
-- áudio generativo ou síntese de sons;
-- canções completas;
-- LLM de linguagem como gerador central;
-- inferência online;
-- treinamento no computador do usuário final;
-- substituir o Ableton como editor;
-- escalar parâmetros antes de provar dados, controles e avaliação;
-- prometer humanização humana se o corpus não tiver performance humana suficiente.
+## 8. Abordagens comparadas
 
-## 5. Abordagens comparadas
+### 8.1 A — Transformer HVO condicional e mascarado `[challenger recomendado]`
 
-### 5.1 A — Transformer HVO condicional e mascarado — recomendado como challenger
+Entrada densa por tempo e papel; heads separados predizem hit, multiplicidade, velocity e offset. Máscaras representam exatamente locks, lanes e regiões. Decoding iterativo dá geração, infill e variação com o mesmo backbone.
 
-Entrada densa por tempo e papel de bateria; heads separados predizem hit, velocity e offset. Máscaras representam exatamente locks, lanes e regiões escolhidas. Decoding iterativo permite geração, infill e variação com o mesmo backbone.
+**Vantagens:** controles diretos; paralelização; alinhamento com o HVO existente; preservação explícita de lanes; export simples.
 
-**Vantagens:** controles diretos; paralelização; alinhamento natural com o HVO já implementado; preservação explícita de lanes; inferência curta; export relativamente simples.
+**Riscos:** células densas escondem rolls e flams — medido em 3,51% da massa de notas em 16 avos e 0,92% em 64 avos, o que torna o canal de multiplicidade obrigatório; cada passo de decoding consome do teto de `cpu_seconds <= 2,0`; probabilidades de hit podem colapsar para o padrão médio.
 
-**Riscos:** células densas escondem rolls/flams — medido em 3,51% das notas em 16 avos e 0,92% em 64 avos (seção 3.1.1), o que torna o canal `subhits` obrigatório em vez de opcional; geração totalmente mascarada exige decoding calibrado, e cada passo de decoding consome do teto de `cpu_seconds <= 2,0` da seção 16.4; probabilidades de hit podem colapsar para padrões médios.
+### 8.2 B — decoder autoregressivo event-based `[challenger obrigatório]`
 
-### 5.2 B — decoder autoregressivo event-based — challenger obrigatório
+Eventos carregam posição ou delta, lane, velocity, offset e duração. O modelo prediz a sequência sob condições e grammar mask.
 
-Eventos carregam posição/delta, lane, velocity, offset e duração. O modelo prediz a sequência seguinte sob condições e grammar mask.
+**Vantagens:** representa múltiplos hits, rolls e durações sem fundi-los; continuidade temporal natural.
 
-**Vantagens:** representa múltiplos hits, rolls e durações sem fundi-los; continuidade temporal é natural.
+**Riscos:** inferência sequencial mais cara, o que colide de frente com o orçamento de CPU; locks e infill exigem ordenação cuidadosa; invalidade estrutural pode crescer.
 
-**Riscos:** inferência sequencial mais lenta; locks e infill exigem atenção/ordenação cuidadosas; sequências e invalidade estrutural podem crescer.
+### 8.3 C — GrooVAE/HVO `[baseline neural obrigatório]`
 
-### 5.3 C — GrooVAE/HVO — baseline neural obrigatório
-
-Baseline baseado na família GrooVAE, separando score de expressão e reconstruindo hit/velocity/microtiming através de espaço latente.
+Baseline da família GrooVAE, separando score de expressão e reconstruindo hit, velocity e microtiming por espaço latente.
 
 **Vantagens:** referência reproduzível; interpolação e humanização bem estudadas; custo pequeno.
 
-**Riscos:** reconstrução e amostragem disputam o mesmo espaço; controle fino por região/lane é menos direto; stack Magenta histórico não deve virar runtime do produto.
+**Riscos:** reconstrução e amostragem disputam o mesmo espaço; controle fino por região e lane é menos direto.
 
-### 5.4 Decisão
+`[fato]` O repositório `magenta/magenta` está arquivado desde 2026-01-06 e é somente leitura. Serve como referência de arquitetura e configuração, nunca como dependência instalável. A reimplementação é em PyTorch.
 
-Não haverá votação por training loss. A mesma divisão de dados, tarefas, orçamento de passos, seeds e protocolo humano compara A, B e C. O Transformer HVO recebe prioridade de engenharia porque se encaixa melhor no produto, mas pode perder. Se nenhum neural vencer retrieval + transformações, o produto continua determinístico e o treino para.
+### 8.4 Regra de decisão `[decisão]`
 
-Diffusion e modelo de texto não entram no primeiro bake-off: ampliam complexidade sem resolver uma deficiência demonstrada pelos três candidatos.
+Não há votação por training loss. A mesma divisão de dados, as mesmas tarefas, o mesmo orçamento de passos, as mesmas seeds e o mesmo protocolo humano comparam A, B e C. O Transformer HVO recebe prioridade de engenharia porque encaixa melhor no produto, e pode perder.
 
-## 6. Arquitetura do programa
+Se nenhum neural vencer retrieval mais transformações determinísticas, o produto continua determinístico e o treino para. Isso não é fracasso: é o resultado que o desenho previu.
+
+Diffusion e modelo de texto ficam fora do primeiro bake-off. Ampliam complexidade sem resolver deficiência demonstrada pelos três candidatos.
+
+## 9. Arquitetura do programa
 
 ```text
 corpus MIDI privado (read-only)
             |
             v
- inventário + rights/source manifest
+ inventário + manifest de origem e direitos (derivado de O1)
             |
             v
- parser SMF -> IR lossless -> ontologia de lanes
+ parser SMF -> IR lossless -> mapa de articulações por coleção -> ontologia de lanes
             |
-            +--> fingerprints + exact/canonical/near dedupe
+            +--> fingerprints + dedupe exato / canônico / rítmico
             |                         |
             |                         v
             |                 clusters de família
@@ -216,7 +326,7 @@ corpus MIDI privado (read-only)
             v                         v
  janelas + condições --------> train / validation / blind test
             |
-            +--> HVO dense shards
+            +--> HVO dense shards (hit, subhits, velocity, offset, máscaras)
             +--> event shards
             +--> envelope lossless referenciado
                               |
@@ -229,7 +339,7 @@ corpus MIDI privado (read-only)
                          gate de promoção
                               |
                               v
-                   export ONNX + equivalência
+                   export ONNX + equivalência + orçamento de CPU
                               |
                               v
               provider local isolado -> candidates -> verifier
@@ -240,99 +350,85 @@ corpus MIDI privado (read-only)
                  Extension write + readback no Live
 ```
 
-Treinamento e produto têm dependências separadas. PyTorch, CUDA, notebooks e ferramentas de análise nunca entram no runtime do usuário.
+`[decisão]` Treinamento e produto têm dependências separadas. PyTorch, CUDA, notebooks e ferramentas de análise nunca entram no runtime do usuário.
 
-## 7. Contratos de dados
+## 10. Contratos de dados
 
-### 7.1 `SourceRecord`
+### 10.1 `SourceRecord`
 
-Cada arquivo recebe um registro imutável com:
+Registro imutável por arquivo:
 
-- `source_id` estável e não baseado em caminho público;
+- `source_id` estável, não derivado de caminho público;
 - hash bruto e tamanho;
-- caminho relativo somente no catálogo privado;
-- `source_kind` e `license_id` derivados da resposta a O1 (seção 2.1), **por item e a partir de evidência**, nunca de constante literal como hoje;
-- `redistribution` derivado da mesma resposta;
-- evidência da declaração de origem/autorização, com digest e data;
-- parser/normalizer/taxonomy versions;
+- caminho relativo apenas no catálogo privado;
+- `source_kind`, `license_id` e `redistribution` **derivados por item da resposta a O1 e de evidência com digest e data**, nunca de constante literal;
+- versões de parser, normalizer, mapa de articulações e taxonomia;
 - status e reason code;
-- lineage disponível do gerador anterior;
-- família de origem inferida e confiança.
+- coleção de origem e mapa de articulações aplicado;
+- família inferida e confiança.
 
-Nomes de marcas podem ser usados localmente para interpretar mapping/hierarquia, mas não aparecem em pesos, cards públicos ou nomes de produto quando forem desnecessários.
+Nomes de marca podem ser usados localmente para interpretar hierarquia e mapping, e não aparecem em pesos, cards públicos ou nomes de produto.
 
-### 7.2 `CanonicalGroove`
-
-O objeto canônico liga:
+### 10.2 `CanonicalGroove`
 
 - envelope MIDI lossless;
 - tempo, compasso, PPQ e comprimento musical;
-- eventos normalizados e papéis de bateria;
-- projeção HVO;
+- eventos normalizados, altura original preservada e papel canônico resolvido;
+- projeção HVO com multiplicidade;
 - sequência event-based;
-- features e taxonomy labels com confiança;
+- features e labels com confiança;
 - hashes bruto, canônico, rítmico e de expressão;
-- `family_cluster_id`;
-- `split_id`;
-- flags de qualidade, colisão, truncamento e expressão.
+- `family_cluster_id` e `split_id`;
+- flags de qualidade, colisão, truncamento, expressão e cobertura de mapeamento.
 
-Modelo nunca abre `.mid` diretamente. Ele consome uma projeção versionada do `CanonicalGroove`.
+`[decisão]` O modelo nunca abre `.mid` diretamente. Consome uma projeção versionada do `CanonicalGroove`.
 
-### 7.3 `DatasetManifest`
-
-O manifest de uma build registra:
+### 10.3 `DatasetManifest`
 
 - seleção exata de fontes e digests;
-- versões de parser, normalizer, ontology, fingerprint e tokenizer;
-- regras de janela, grid e subeventos;
-- algoritmo e thresholds de clustering;
+- versões de parser, normalizer, mapa de articulações, ontologia, fingerprint e tokenizer;
+- regras de janela, grade e subeventos;
+- **fração de massa de notas não representável pela grade escolhida**, comparada ao orçamento declarado;
+- **fração de massa de notas resolvida para papel específico**, por coleção;
+- algoritmo e thresholds de clustering, mais a distribuição de tamanho de componente;
 - seed e algoritmo do split;
-- contagens por split, gênero, seção, compasso, BPM, lane e família;
+- contagens por split, coleção, seção, compasso, BPM, lane e família;
 - descarte por reason code;
 - digests dos shards;
-- matriz de direitos;
+- matriz de direitos derivada;
 - data, ambiente e comando reproduzível.
 
-Dataset, shards e envelopes ficam fora do Git. O repositório recebe somente schemas, código, fixtures sintéticas e relatórios sanitizados.
+`[decisão]` Dataset, shards e envelopes ficam fora do Git. O repositório recebe schemas, código, fixtures sintéticas e relatórios sanitizados.
 
-A árvore atual não cumpre essa regra e o conflito precisa ficar registrado, não implícito: `ableton_mcp_server/resources/groove_seed/index.sqlite` é versionado desde `aa680c7` e sua tabela `payloads` guarda MIDI bruto comprimido, byte a byte igual aos arquivos de origem. O mesmo vale para a seção 13.3 do documento de produto, que afirma que MIDIs brutos permanecem fora do repositório. Resolver isso depende da resposta a O1 e é pré-requisito do plano 2, não trabalho posterior.
+`[fato]` A árvore atual não cumpre isso: `resources/groove_seed/index.sqlite` é versionado e sua tabela `payloads` guarda MIDI bruto. Resolver depende de O1 e é pré-requisito do plano 4.
 
-## 8. Canonicalização musical
+## 11. Canonicalização musical
 
-### 8.1 Ontologia
+### 11.1 Ontologia e articulações
 
-A V1 mantém os 18 papéis existentes: kick, snare, rim, clap, closed/open/pedal hat, low/mid/high tom, crash, splash, china, ride, ride bell, tambourine, cowbell e other percussion.
+Os 18 papéis: kick, snare, rim, clap, hat closed, hat open, hat pedal, tom low, tom mid, tom high, crash, splash, china, ride, ride bell, tambourine, cowbell, other percussion.
 
-Pitch de origem é preservado no envelope. Modelo aprende papel canônico; mapping para Drum Rack/SD3 acontece depois da geração.
+`[decisão]` A altura de origem é preservada no envelope. O modelo aprende papel canônico, resolvido pelo mapa de articulações da coleção (seção 4.3). O mapping para Drum Rack ou SD3 acontece depois da geração.
 
-### 8.2 Grade e microtiming
+### 11.2 Grade e microtiming
 
-O pipeline mede antes de escolher:
+`[fato]` Nenhuma grade densa de uma nota por célula representa o corpus sem perda. Fundindo por `(papel, barra, passo)`: 3,51% da massa de notas em 16 avos, 1,38% em 32 avos, 0,92% em 64 avos. Aumentar a grade reduz e não elimina, porque flams e rolls ficam sistematicamente abaixo de qualquer célula praticável.
 
-- colisões por lane/célula em grid de 16 avos;
-- cobertura adicional com 32 avos;
-- distribuição de offsets;
-- quantidade de rolls/flams e múltiplos eventos;
-- comprimento e compassos reais.
+`[decisão]` Consequências obrigatórias:
 
-Essas medidas já foram tomadas na auditoria antecipada (seção 3.1.1) e o resultado é decisivo: **nenhuma grade densa de uma nota por célula representa o corpus sem perda**. Fundindo por `(papel, barra, passo)`, perdem-se 3,51% das notas em 16 avos (36,6% dos arquivos afetados), 1,38% em 32 avos e 0,92% em 64 avos. Aumentar a grade reduz o problema e não o elimina, porque flams e rolls ficam sistematicamente abaixo de qualquer célula praticável.
+- o tensor HVO de treino carrega um canal explícito de multiplicidade: `subhits` inteiro por célula e `collision_flag` derivado, mais a referência ao envelope. O round-trip do alvo de treino é exato, e a perda é atribuída à política, nunca ao silêncio;
+- a política de versão do dataset declara por número quanto da massa de notas cada representação descarta, e o `DatasetManifest` publica esse número;
+- baseline: duas barras em 4/4, 32 passos de semicolcheia, offset contínuo, com canal de multiplicidade;
+- `[experimento]` challenger de 64 passos, com prior medido de queda de 3,51% para 1,38%.
 
-Consequências obrigatórias:
+`[decisão]` Outros compassos ficam preservados no IR e são avaliados separadamente. 4/4 cobre 86,3% do corpus; 6/8, com `10.002` arquivos, é o único candidato realista a segundo compasso na V1. O resto permanece no retrieval e é explicitamente fora de distribuição para geração neural.
 
-- a projeção atual `groove.hvo.v2` **funde silenciosamente**: `derive_hvo` agrupa por `(papel, barra, passo)` e grava `hit=1` com média de velocity e de offset (`groove_intelligence/projections.py:85-108`). Ela serve retrieval e não serve como alvo de treino;
-- o tensor HVO de treino precisa de um canal explícito de multiplicidade — no mínimo `subhits` inteiro por célula e um `collision_flag` — mais a referência ao envelope, de modo que o round-trip do alvo de treino seja exato e a perda seja atribuída à política, nunca ao silêncio;
-- a política de versão do dataset declara, por escrito e por número, quanto da massa de notas cada representação descarta, e o `DatasetManifest` publica esse número.
+### 11.3 Tensores
 
-Baseline inicial: duas barras em 4/4, 32 passos de semicolcheia, offset contínuo, com canal de multiplicidade. Challenger de 64 passos entra se reduzir perda relevante — a medição já indica queda de 3,51% para 1,38% da massa de notas. Subeventos continuam no envelope e alimentam o decoder event-based.
+Shards HVO, separados:
 
-Outros compassos são preservados no IR e avaliados separadamente. Eles só entram no modelo V1 se houver cobertura mínima por split; caso contrário permanecem no retrieval e são explicitamente fora de distribuição para geração neural. Hoje 4/4 cobre 86,3% do corpus e 6/8 é o segundo maior grupo, com `10.002` arquivos: é o único candidato realista a um segundo compasso na V1.
-
-### 8.3 Tensores
-
-Os shards HVO armazenam separadamente:
-
-- `hit`: booleano/uint8 `[example, time, lane]`;
-- `subhits`: uint8 `[example, time, lane]` com a contagem real de eventos na célula, e `collision_flag` derivado, para que a fusão deixe de ser silenciosa;
+- `hit`: uint8 `[example, time, lane]`;
+- `subhits`: uint8 `[example, time, lane]`, contagem real de eventos na célula;
 - `velocity`: float normalizado, com loss mask por hit;
 - `offset`: deslocamento normalizado pela célula, com loss mask por hit;
 - `observed_mask`: posições fornecidas ao modelo;
@@ -340,461 +436,418 @@ Os shards HVO armazenam separadamente:
 - condições categóricas e contínuas;
 - IDs opacos de exemplo, família e origem.
 
-Ordem de grandeza do formato denso, para dimensionar disco antes de construir: 32 passos × 18 lanes = 576 células por exemplo; em float32 para velocity/offset e uint8 para o resto são ≈6,2 KiB por exemplo. Com `354.749` janelas sem sobreposição isso dá ≈2,2 GB, e ≈4,4 GB com hop de uma barra. O dataset denso completo fica na casa das unidades de GB, não das centenas.
+Shards event-based guardam tokens e atributos equivalentes e apontam para o mesmo exemplo canônico.
 
-Shards event-based armazenam tokens/atributos equivalentes e apontam para o mesmo exemplo canônico. O formato físico é sharded e content-addressed, com arrays NumPy mmap-friendly e índice JSONL canônico; nenhum pickle é aceito.
+`[decisão]` Formato físico sharded e content-addressed, arrays NumPy mmap-friendly, índice JSONL canônico. Nenhum pickle é aceito.
 
-### 8.4 Janela
+Ordem de grandeza: 32 passos × 18 lanes = 576 células por exemplo; ≈6,2 KiB por exemplo com float32 para velocity e offset. Com `354.749` janelas sem sobreposição são ≈2,2 GB, e ≈4,4 GB com hop de uma barra.
 
-Unidade primária: duas barras. Arquivos maiores geram janelas com sobreposição somente depois de o split por família ser definido. Janelas do mesmo arquivo ou família nunca atravessam splits. Fills podem usar uma barra de contexto + região-alvo final; continuação curta usa contexto anterior explícito.
+### 11.4 Janela
 
-`33,6%` dos arquivos únicos têm menos de duas barras, o que a versão anterior deste documento não tratava. A política é explícita: um arquivo de uma barra vira uma janela de duas barras por repetição da barra, marcada com `looped=true`, ou é mantido como janela de uma barra com o resto em `observed_mask=0` e `target_mask=0`. A escolha entre as duas é uma ablação de D1, e o `DatasetManifest` registra qual foi usada e quantos exemplos ela produziu. Repetir a barra sem marcar a flag é proibido: cria periodicidade artificial de duas barras que o modelo aprenderia como estrutura.
+`[decisão]` Unidade primária: duas barras. Arquivos maiores geram janelas com sobreposição somente depois de o split por família estar definido. Janelas do mesmo arquivo ou família nunca atravessam splits. Fills usam uma barra de contexto mais região-alvo final; continuação curta usa contexto anterior explícito.
 
-## 9. Dedupe, famílias e splits
+`33,6%` dos arquivos únicos têm menos de duas barras. Política explícita: um arquivo de uma barra vira janela de duas barras por repetição, marcada com `looped=true`, ou fica como janela de uma barra com o resto em `observed_mask=0` e `target_mask=0`. `[experimento]` A escolha entre as duas é ablação do plano 4, e o manifest registra qual foi usada. Repetir a barra sem marcar a flag é proibido: cria periodicidade artificial de duas barras que o modelo aprenderia como estrutura.
 
-### 9.1 Camadas de deduplicação
+## 12. Dedupe, famílias e splits
+
+### 12.1 Camadas
 
 1. bytes idênticos;
 2. eventos equivalentes após remover metadados irrelevantes;
-3. equivalência rítmica por lanes, ignorando mapping de pitch;
-4. near-duplicate por distância HVO/grammar/features;
+3. equivalência rítmica por lanes, ignorando mapping de altura;
+4. near-duplicate por distância HVO, grammar e features;
 5. família por hierarquia, lineage do gerador anterior e assinaturas de geração.
 
-Thresholds de near-duplicate são calibrados com pares exatos, variações conhecidas e pares musicais diferentes. Eles são congelados antes de abrir o blind test.
+`[decisão]` `family_cluster_id` é o fecho transitivo sobre a união das arestas das camadas 1, 2, 3 e 5. A camada 4 **não** cria aresta de cluster por padrão: single-linkage sobre distância contínua colapsa em componente gigante e torna o split impossível. Ela entra como filtro de amostragem e métrica publicada.
 
-O `family_cluster_id` é o fecho transitivo sobre a união das arestas das camadas 1, 2, 3 e 5. A camada 4 (near-duplicate contínuo) **não** cria aresta de cluster por padrão, porque single-linkage sobre distância contínua colapsa em um componente gigante e torna o split 80/10/10 impossível. Ela entra como filtro de amostragem e como métrica publicada. Se o plano D1 quiser promovê-la a aresta, precisa antes publicar a distribuição de tamanho de componente e provar que o maior componente fica abaixo de 5% dos exemplos; acima disso, o clustering é rejeitado e o threshold é reduzido.
+`[experimento]` Se o plano 4 quiser promover a camada 4 a aresta, publica antes a distribuição de tamanho de componente e prova que o maior fica abaixo de 5% dos exemplos. Acima disso, o clustering é rejeitado e o threshold reduzido.
 
-A camada 5 (família por hierarquia) é insuficiente sozinha e não pode ser a única chave de agrupamento. Na amostra de 20.000 arquivos únicos por bytes, `346` padrões de onset de 2 barras repetidos (9,9% dos padrões repetidos) e `1.030` esqueletos de kick+snare aparecem em `collection` diferentes. Agrupar só por diretório deixaria essas cópias em lados opostos do split e o gate G2 passaria mesmo assim.
+`[fato]` A camada 5 sozinha vaza. Em amostra de 20.000, `346` padrões de onset de 2 barras repetidos (9,9% dos repetidos) e `1.030` esqueletos de kick e snare aparecem em coleções diferentes. Agrupar só por diretório deixaria essas cópias em lados opostos do split.
 
-### 9.2 Falta de lineage
+Thresholds de near-duplicate são calibrados com pares exatos, variações conhecidas e pares musicais diferentes, e congelados antes de abrir o blind test.
 
-Se prompt/template/batch/seed do gerador original existirem, são usados apenas no catálogo privado. Se não existirem, o sistema combina:
+### 12.2 Falta de lineage
 
-- origem/hierarquia;
-- canonical hash;
-- fingerprint de hits por lane;
-- assinatura de velocity/offset;
-- comprimento, BPM, seção e taxonomia;
-- clustering conservador por similaridade.
+Se prompt, template, batch ou seed do gerador original existirem, ficam apenas no catálogo privado. Se não existirem, o sistema combina origem e hierarquia, hash canônico, fingerprint de hits por lane, assinatura de velocity e offset, comprimento, BPM, seção, taxonomia e clustering conservador.
 
-A ausência de lineage não bloqueia experimento, mas reduz a força da alegação de generalização e aparece no model card.
+`[decisão]` A ausência de lineage não bloqueia experimento, reduz a força da alegação de generalização e aparece no model card.
 
-### 9.3 Split
+### 12.3 Split
 
 Ordem obrigatória:
 
 1. construir clusters sem olhar métricas do modelo;
-2. reservar blind test por cluster/família;
+2. reservar blind test por cluster e família;
 3. dividir o restante em train e validation;
-4. estratificar aproximadamente por estilo, seção, BPM, compasso e cobertura de lanes sem quebrar clusters;
+4. estratificar aproximadamente por coleção, seção, BPM, compasso e cobertura de lanes, sem quebrar clusters;
 5. congelar IDs e digests;
 6. treinar normalizadores, embeddings e qualquer vocabulário somente no train;
-7. impedir retrieval de consultar validation/test durante avaliação neural.
+7. impedir que o retriever consulte validation ou test durante avaliação neural.
 
-Alvo inicial: aproximadamente 80/10/10 por exemplos, subordinado a clusters inteiros. O relatório publica o desvio real e falha se qualquer hash exato, canônico ou cluster conhecido atravessar a fronteira.
+Alvo: aproximadamente 80/10/10 por exemplos, subordinado a clusters inteiros.
 
-Duas verificações são obrigatórias e não opcionais, porque a auditoria mostrou que a hierarquia sozinha vaza:
+Duas verificações obrigatórias:
 
-1. o relatório publica a distribuição de tamanho dos clusters, o maior componente em percentual de exemplos e o desvio real do 80/10/10 alcançável sob a restrição de clusters inteiros. Se o maior componente impedir o alvo, a resposta é reduzir threshold e reagrupar, nunca quebrar um cluster;
-2. um teste de vazamento por conteúdo, independente do clustering, compara os hashes exato, canônico e rítmico de todo o blind test contra todo o train e o validation. Qualquer coincidência é falha de build, não observação.
+1. o relatório publica a distribuição de tamanho de cluster, o maior componente em percentual de exemplos e o desvio real do alvo alcançável. Se o maior componente impedir o alvo, reduz-se o threshold e reagrupa; nunca se quebra um cluster;
+2. um teste de vazamento por conteúdo, independente do clustering, compara hashes exato, canônico e rítmico de todo o blind test contra todo o train e validation. Qualquer coincidência é falha de build.
 
-## 10. Labels e condições
+## 13. Labels e condições
 
-### 10.1 Weak labels
+### 13.1 Cobertura real
 
-Nomes de diretório fornecem sinais de style, section e feel, mas não verdade absoluta. Cada label carrega origem e confiança. Aliases passam pela taxonomia V2; categorias raras ou ambíguas viram `unknown`/hierarquia genérica em vez de rótulo inventado.
+Nomes de diretório dão sinal de style, section e feel, e não verdade absoluta. Cada label carrega origem e confiança. Aliases passam pela taxonomia; categoria rara ou ambígua vira `unknown` em vez de rótulo inventado.
 
-Cobertura real medida na taxonomia atual, que corrige o que a versão anterior deste documento supunha:
+`[fato]` Cobertura atual: `section` 84,0%, `style` 57,2%, `feel`/`density`/`microtiming`/`kit`/`collection` 100%, `genre` e `subgenre` inexistentes, `bpm` inexistente.
 
-- `section`: `151.678` de `180.614` (84,0%), dominada por `variation` (101.372), `groove` (45.146) e `fill` (39.956);
-- `style`: `103.265` (57,2%), dominada por `straight` (66.907) e `swing` (26.269);
-- `feel`, `density`, `microtiming`, `kit` e `collection`: 100%;
-- `genre` e `subgenre`: **não existem** como eixo da taxonomia;
-- `bpm`: **não existe** como eixo da taxonomia.
+`[decisão]` BPM vem do evento meta de tempo do SMF, presente em 97,8% dos arquivos, e não do nome do diretório. Extrair BPM do caminho é contaminado: o prefixo numérico de coleção (`210@GROOVE_MONKEE_*`, `200241@REAL_BLUES`) é indistinguível de um token de andamento e produz `210` como valor mais frequente.
 
-BPM não vem do nome do diretório. `97,8%` dos arquivos carregam evento meta de tempo no próprio SMF, que é a fonte exata e deve ser a usada. Extrair BPM do caminho é pior e é contaminado: o prefixo numérico de coleção (`210@GROOVE_MONKEE_*`, `200241@REAL_BLUES`) é indistinguível de um token de andamento e produz `210` como valor mais frequente.
+`[decisão]` Gênero e subgênero exigem um mapa explícito `collection → genre`, construído e auditado à mão sobre as 280 coleções, no plano 2. Enquanto ele não existir e não for medido, gênero e subgênero não são condição do modelo.
 
-Gênero e subgênero, se forem necessários, precisam de um mapa explícito `collection → genre` construído e auditado à mão sobre as 280 coleções. Enquanto esse mapa não existir e não for medido, gênero e subgênero não são condição do modelo.
+`[decisão]` Techno e dark techno saem da lista de prioridade de auditoria. As coleções eletrônicas somam `8.167` arquivos (4,5%), as estritamente eletrônicas ≈`3.174` (1,8%), e a interseção literal de techno com dark é da ordem de uma centena. O corpus é de bateria acústica de rock, metal, blues, jazz, latin e pop, e a extensão deve ser honesta sobre isso.
 
-Um conjunto auditado manualmente mede precisão dos labels mais importantes: `fill` contra `groove`/`variation`, as seções nomeadas e o `style`. Techno e dark techno **saem** dessa lista de prioridade: as coleções eletrônicas somam `8.167` arquivos (4,5%), as estritamente eletrônicas ≈`3.174` (1,8%), e a interseção literal de techno com dark é da ordem de uma centena de arquivos. O corpus é de bateria acústica de rock, metal, blues, jazz, latin e pop. O dashboard só oferece condição cujo train split possui cobertura e qualidade mínimas, e techno não tem.
+A auditoria manual mede a precisão do que importa: `fill` contra `groove` e `variation`, as seções nomeadas, o `style`, e a cobertura do mapa de articulações.
 
-### 10.2 Condições do modelo
+### 13.2 Condições do modelo
 
-- estilo; gênero/subgênero somente depois do mapa auditado da seção 10.1;
-- BPM normalizado, lido do evento meta de tempo do SMF;
+- estilo; gênero e subgênero somente depois do mapa auditado;
+- BPM normalizado, lido do SMF;
 - compasso;
 - beat, fill e seção;
 - densidade global e por lane;
 - energia;
 - complexidade;
-- swing/feel;
+- swing e feel;
 - comprimento;
-- lanes/regiões bloqueadas;
+- lanes e regiões bloqueadas;
 - força de mutação;
 - embedding opcional de referência.
 
-Condition dropout ensina modo parcialmente ou totalmente não condicionado. Controles contínuos são avaliados por resposta monotônica, não apenas classificação.
+`[decisão]` Condition dropout ensina modo parcial e totalmente não condicionado. Controles contínuos são avaliados por resposta monotônica, não apenas por classificação. O dashboard só oferece condição cujo train split tenha cobertura e qualidade mínimas.
 
-### 10.3 Texto livre
+### 13.3 Texto livre
 
-“Rock pesado 140 BPM com fill no fim” passa primeiro por parser local determinístico e produz uma `GrooveSpec` visível. Sinônimos multilíngues mapeiam para taxonomia e controles. Nenhum LLM é necessário. Modelo de linguagem local pequeno só poderá competir futuramente pela tradução de texto; nunca produz notas nem escreve no Live.
+"Rock pesado 140 BPM com fill no fim" passa por parser local determinístico e produz uma `GrooveSpec` visível. Sinônimos multilíngues mapeiam para taxonomia e controles. Nenhum LLM é necessário.
 
-O exemplo mudou de propósito. Um pedido como “techno sombrio 128 BPM” precisa falhar de forma visível e honesta — a `GrooveSpec` mostra o termo como não coberto e o sistema oferece o mais próximo com aviso — em vez de devolver silenciosamente um groove de rock rotulado como techno. Termo sem cobertura no train split é erro de cobertura, não pedido inválido.
+`[decisão]` Termo sem cobertura falha de forma visível. Um pedido de "techno sombrio" mostra o termo como não coberto e oferece o mais próximo com aviso, em vez de devolver um groove de rock rotulado como techno. Cobertura ausente é erro de cobertura, não pedido inválido.
 
-## 11. Tarefas de treinamento
+`[decisão]` Modelo de linguagem local pequeno só poderá competir futuramente pela tradução de texto. Nunca produz notas nem escreve no Live.
+
+## 14. Tarefas de treinamento
 
 Uma task sampler versionada cria exemplos sem mudar o split:
 
 1. **free generation:** todas as células-alvo mascaradas;
-2. **variation:** parte do groove observada e parte corrompida/mascarada;
+2. **variation:** parte observada, parte corrompida ou mascarada;
 3. **temporal infill:** região temporal contínua removida;
 4. **lane infill:** uma ou mais lanes removidas;
-5. **fill:** região final condicionada por seção/função;
+5. **fill:** região final condicionada por seção e função;
 6. **continuation:** bloco seguinte condicionado pelo anterior;
-7. **humanize:** hits quantizados/velocity simplificada para expressão original;
+7. **humanize:** hits quantizados e velocity simplificada para a expressão original;
 8. **reference:** padrão-alvo condicionado por embedding do clipe de referência e força de similaridade.
 
-`reference` só usa pares sustentados por família/style ou corrupção controlada; não cria pares aleatórios e chama isso de aprendizagem.
+`[decisão]` `reference` só usa pares sustentados por família ou style, ou corrupção controlada. Não cria pares aleatórios e chama isso de aprendizagem.
 
-`humanize` deixa de ser hipótese aberta: a medição da seção 3.1.1 mostra `offset_std` mediano de 9,76 ticks canônicos (≈10,2 ms a 120 BPM), 74,5% dos arquivos acima de 10 ms, apenas 1,3% perfeitamente quantizados e `velocity_std` mediano de 0,196 normalizado. Há expressão suficiente para a tarefa existir. Resta uma condição, e ela é obrigatória antes de promover a tarefa: `offset_std` agregado **confunde swing e feel sistemáticos com jitter de performance**. D0 precisa decompor o offset em viés médio por `(papel, posição na grade)` e resíduo, e `humanize` só é promovido se o resíduo — não o viés — tiver variedade útil. Sem essa decomposição, um corpus perfeitamente swingado e perfeitamente rígido passaria no teste.
+`[fato]` `humanize` tem base: `offset_std` mediano de 9,76 ticks canônicos (≈10,2 ms a 120 BPM), 74,5% dos arquivos acima de 10 ms, apenas 1,3% perfeitamente quantizados, `velocity_std` mediano de 0,196.
 
-O Groove MIDI Dataset (1.150 arquivos, 13,6 h, performance humana capturada, CC BY 4.0) serve como benchmark/auxiliar separado para calibrar essa decomposição; ele não é misturado silenciosamente ao corpus principal.
+`[decisão]` Condição obrigatória antes de promover a tarefa: `offset_std` agregado confunde swing e feel sistemáticos com jitter de performance. O plano 2 decompõe o offset em viés médio por `(papel, posição na grade)` e resíduo, e `humanize` só é promovido se o **resíduo** tiver variedade útil. Sem essa decomposição, um corpus perfeitamente swingado e perfeitamente rígido passaria no teste.
 
-Distribuição inicial de tarefas é hipótese registrada em config, nunca constante escondida. Ablations comparam task mix e removem tarefas que degradarem o núcleo.
+`[fato]` O Groove MIDI Dataset (1.150 arquivos, 13,6 h, performance humana capturada, CC BY 4.0) serve como benchmark auxiliar separado para calibrar essa decomposição. Não é misturado ao corpus principal.
 
-## 12. Modelos e orçamento
+`[hipótese]` A distribuição inicial de tarefas fica registrada em config, nunca como constante escondida. Ablations comparam task mix e removem tarefas que degradem o núcleo.
 
-### 12.1 Masked HVO
+## 15. Modelos e orçamento
 
-Arquitetura inicial:
+### 15.1 Masked HVO
 
 - embeddings de lane, posição, tarefa e condições;
 - Transformer encoder bidirecional;
-- heads de hit, velocity e offset;
+- heads de hit, multiplicidade, velocity e offset;
 - BCE ou focal loss para hit conforme desbalanceamento;
-- Smooth L1 para velocity/offset somente onde há hit;
-- regularização de densidade/controle somente se ablation provar benefício;
-- decoding iterativo de confiança com temperatura/threshold por lane.
+- Smooth L1 para velocity e offset somente onde há hit;
+- regularização de densidade e controle somente se ablation provar benefício;
+- decoding iterativo de confiança, com temperatura e threshold por lane.
 
-Escala:
+| Nível | Configuração | Parâmetros do encoder | Função |
+|---|---|---|---|
+| smoke | 2 camadas, `d_model=128`, 4 heads | ≈0,4M | provar pipeline e overfit |
+| small | 6 camadas, `d_model=256`, 8 heads, FFN 1024 | ≈4,7M | challenger principal inicial |
+| medium | 8–10 camadas, `d_model=512`, FFN 2048 | ≈25M–31M | somente se a curva de escala justificar |
 
-| Nível | Configuração indicativa | Função |
-|---|---|---|
-| smoke | 2 camadas, `d_model=128`, 4 heads | provar pipeline/overfit |
-| small | 6 camadas, `d_model=256`, 8 heads, FFN 1024 | challenger principal inicial |
-| medium | 8–10 camadas, `d_model=512`, FFN 2048 | somente se curva de escala justificar |
+O alvo antigo de 20–50M descreve a faixa medium e nem chega ao topo dela. A contagem real é calculada e registrada.
 
-Ordem de grandeza dos blocos do encoder, sem embeddings: small ≈`4,7M` parâmetros (6 × (4·256² + 2·256·1024)); medium ≈`25M` a `31M` (8 a 10 × (4·512² + 2·512·2048)). O alvo antigo de 20–50M portanto descreve a faixa medium e nem chega ao topo dela. Contagem real é calculada e registrada. Modelo maior não avança se small já saturar dados ou qualidade.
+`[risco]` `354.749` janelas × 576 células são ≈2,0·10⁸ células por época, das quais só ≈6% estão ocupadas — a mediana é 16 hits por barra. O sinal efetivo é da ordem de 1,1·10⁷ hits por época. Um modelo de 25M parâmetros sobre esse volume é candidato natural a memorizar, o que faz da seção 18.4 um gate e não um relatório.
 
-Escala versus dados: `354.749` janelas × 576 células são ≈2,0·10⁸ células por época, das quais a fração realmente ocupada é pequena — a mediana é de 16 hits por barra, ou seja, ≈6% das células. O sinal efetivo por época é da ordem de 1,1·10⁷ hits. Um modelo de 25M parâmetros sobre esse volume é candidato natural a memorizar, o que reforça a seção 15.4 como gate e não como relatório.
+`[decisão]` Modelo maior não avança se small já saturar dados ou qualidade.
 
-### 12.2 Event-based AR
+### 15.2 Event-based AR
 
-Decoder-only pequeno com embeddings fatorados de tempo, lane, velocity e offset; causal mask e grammar mask. Usa orçamento de parâmetros e passos comparável ao masked small. Avalia especialmente rolls, flams, continuidade e validade.
+Decoder-only pequeno, embeddings fatorados de tempo, lane, velocity e offset, causal mask e grammar mask. Mesmo orçamento de parâmetros e passos do masked small. Avalia especialmente rolls, flams, continuidade e validade.
 
-### 12.3 GrooVAE
+`[risco]` É o candidato com maior chance de ganhar em qualidade e perder no orçamento de CPU. O spike do plano 3 mede isso antes de treinar.
 
-Implementação reproduzível e moderna da tarefa de duas barras, sem copiar o stack legado para runtime. Config, conversão e métricas seguem a publicação original onde aplicável. Pesos publicados servem somente como referência; o comparativo principal treina no mesmo split permitido.
+### 15.3 GrooVAE
 
-O repositório `magenta/magenta` foi arquivado pelo dono em 2026-01-06 e é somente leitura. Ele serve como referência de arquitetura e de configuração, não como dependência instalável nem como stack de execução. Reimplementar em PyTorch é a única rota compatível com a seção 13.1.
+Implementação reproduzível em PyTorch da tarefa de duas barras. Config, conversão e métricas seguem a publicação original onde aplicável. Pesos publicados servem como referência; o comparativo principal treina no mesmo split permitido.
 
-## 13. Ambiente e reprodutibilidade
+## 16. Ambiente e reprodutibilidade
 
-### 13.1 Separação
+### 16.1 Separação `[decisão]`
 
-- preparação/inventário: Windows ou Linux, usando contratos existentes;
+- preparação e inventário: Windows ou Linux, usando os contratos existentes;
 - treinamento: ambiente Linux reproduzível;
 - produto: Windows x64, helper nativo e ONNX Runtime sem Python;
-- dados/checkpoints: workspace externo ao Git;
-- manifests/fixtures/relatórios sanitizados: repositório.
+- dados e checkpoints: workspace externo ao Git;
+- manifests, fixtures e relatórios sanitizados: repositório.
 
-### 13.2 GPU local
+### 16.2 GPU local
 
-Ambiente verificado em 2026-08-31 nesta máquina: `NVIDIA GeForce RTX 5070`, `12227 MiB` de VRAM, driver `610.74`, compute capability `12.0` (Blackwell), CUDA UMD `13.3`, com 64 GB de RAM e i9-12900KS. É suficiente para smoke, small, ablations e, para o porte de modelo desta especificação, para o treino completo com mixed precision, gradient accumulation e activation checkpointing. A restrição real não é VRAM: um modelo small de ≈4,7M parâmetros cabe com folga, e a faixa medium de ≈25M também.
+`[fato]` Verificado em 2026-08-31 nesta máquina: `NVIDIA GeForce RTX 5070`, `12227 MiB` de VRAM, driver `610.74`, compute capability `12.0` (Blackwell), CUDA UMD `13.3`, 64 GB de RAM, i9-12900KS.
 
-O documento anterior fixava PyTorch 2.7/CUDA 12.8. A linha oficial mudou: a partir do PyTorch 2.12 a wheel CUDA 12.8 está descontinuada, a wheel padrão é CUDA 13.0, CUDA 13.2 é experimental, e a orientação para GPUs Blackwell é usar wheels CUDA 13.0+, com driver mínimo `580.65.06` no Linux e `580.88` no Windows. O driver instalado (`610.74`) satisfaz o piso. A implementação não copia números deste texto cegamente; executa um environment probe, registra driver/GPU/compute capability, instala versões pinadas em lock e congela a matriz que passar smoke + checkpoint resume + determinismo declarado.
+Suficiente para smoke, small, ablations e, no porte de modelo desta especificação, para o treino completo com mixed precision, gradient accumulation e activation checkpointing. VRAM não é a restrição: small com ≈4,7M e medium com ≈25M cabem com folga.
 
-### 13.3 Determinismo
+`[fato]` A partir do PyTorch 2.12 a wheel CUDA 12.8 está descontinuada, a wheel padrão é CUDA 13.0, CUDA 13.2 é experimental, e a orientação para GPUs Blackwell é usar wheels CUDA 13.0+, com driver mínimo `580.65.06` no Linux e `580.88` no Windows. O driver instalado satisfaz o piso.
 
-Cada run registra:
+`[decisão]` A implementação não copia números deste texto. Executa um environment probe, registra driver, GPU e compute capability, instala versões pinadas em lock e congela a matriz que passar smoke, checkpoint resume e determinismo declarado.
 
-- commit e dirty-state digest;
-- dataset/split/config digests;
-- versões de Python, PyTorch, CUDA, cuDNN e drivers;
-- GPU, precision e kernels;
-- seed de Python/NumPy/PyTorch/data workers;
-- sampler state, optimizer e scheduler;
-- checkpoints e métricas.
+### 16.3 Determinismo
 
-Determinismo bit-a-bit entre GPUs não é prometido. Reprodutibilidade significa configuração e lineage completos, curvas compatíveis e output exato somente dentro da matriz declarada.
+Cada run registra commit e digest de dirty-state; digests de dataset, split e config; versões de Python, PyTorch, CUDA, cuDNN e drivers; GPU, precisão e kernels; seeds de Python, NumPy, PyTorch e data workers; estado de sampler, optimizer e scheduler; checkpoints e métricas.
 
-### 13.4 Disco e retenção
+`[decisão]` Determinismo bit a bit entre GPUs não é prometido. Reprodutibilidade significa configuração e lineage completos, curvas compatíveis e saída exata apenas dentro da matriz declarada.
 
-Antes do corpus completo, o pipeline mede o tamanho de 1% e projeta 10%/100%. Nenhum full build começa se dataset, caches, três runs e margem de rollback não couberem.
+### 16.4 Disco e retenção
 
-Estado de disco verificado em 2026-08-31: `C:` com `193 GB` livres de 1,9 TB (90% em uso), `D:` com `386 GB` livres de 5,5 TB, `F:` com `458 GB` livres de 1,9 TB. O corpus bruto ocupa `99.933.371` bytes de conteúdo. Pela estimativa da seção 8.3, o dataset denso completo fica na casa de 2 a 5 GB, e checkpoints de um modelo small ou medium com estados de optimizer ficam abaixo de 1 GB por checkpoint. **Disco não é o gargalo deste programa**; a projeção 1%/10%/100% continua obrigatória como prova de que o pipeline mede antes de escrever, não porque haja risco de estouro. O workspace de treino fica em `D:` ou `F:`, nunca em `C:`, que já está a 90%.
+`[fato]` Verificado em 2026-08-31: `C:` com `193 GB` livres de 1,9 TB (90% em uso), `D:` com `386 GB` livres de 5,5 TB, `F:` com `458 GB` livres de 1,9 TB.
 
-Política inicial:
+Pela estimativa da seção 11.3, o dataset denso completo fica entre 2 e 5 GB, e um checkpoint de small ou medium com estados de optimizer fica abaixo de 1 GB. **Disco não é o gargalo deste programa.**
 
-- manter raw read-only;
+`[decisão]` Política:
+
+- workspace de treino em `D:` ou `F:`, nunca em `C:`;
+- manter o raw read-only;
 - manter uma build de dataset promovida e uma candidata;
 - por run, manter `best`, `last` e checkpoints de marco;
-- apagar cache regenerável somente por comando explícito e path verificado;
-- nunca usar o repositório, home ou raiz como alvo de limpeza.
+- apagar cache regenerável somente por comando explícito com caminho verificado;
+- nunca usar o repositório, a home ou a raiz como alvo de limpeza;
+- a projeção 1%/10%/100% continua obrigatória como prova de que o pipeline mede antes de escrever.
 
-## 14. Escada de treinamento
+## 17. Escada de execução
 
-### 14.1 E0 — environment probe
+| Degrau | O que faz | Bloqueado por |
+|---|---|---|
+| **E0** environment probe | GPU, mixed precision, forward/backward, save e resume, DataLoader multiprocess, export de grafo mínimo | — |
+| **D0** auditoria de corpus | reproduz a seção 4.2 como código; constrói o mapa de articulações e o mapa `collection → genre`; decompõe swing e jitter; mede clusters e duplicação cruzada sobre o corpus inteiro | — |
+| **P0** spike de CPU e ONNX | exporta um modelo **não treinado** com a forma alvo e devolve o número máximo de passos de decoding dentro de `cpu_seconds <= 2,0` | E0 |
+| **D1** build de 1% | duas builds idênticas, digests, splits, round-trip exato, ausência de vazamento, disco e throughput | O1, D0 |
+| **M0** overfit controlado | smoke em 32–256 exemplos até memorizar de propósito. Incapacidade de overfit é bug, não falta de escala | D1 |
+| **M1** tiny 1% | deterministic/retrieval, GrooVAE, event AR e masked HVO sob orçamento curto. Geração válida, controle, ausência de colapso | M0, P0 |
+| **D2/M2** 10% e bake-off | congela representação, grades, thresholds e protocolo. No mínimo três seeds por candidato. Seleção por validation e avaliação humana, sem tocar no blind test | M1 |
+| **D3/M3** full run | dataset 100%, treino da configuração vencedora e de uma baseline forte. O blind test abre uma vez, para a decisão registrada | M2 |
+| **M4** controle e hard examples | ajusta task mix e controles com train e validation. Novo blind test só com nova geração formal de dataset e modelo | M3 |
+| **R0** runtime optimization | FP32/FP16 quando aplicável e INT8 dinâmico para CPU. Quantização só passa com equivalência musical e qualidade | M3, G7 |
 
-Provar GPU, mixed precision, forward/backward, save/resume, DataLoader multiprocess e export de um grafo mínimo. Falha bloqueia qualquer run longo.
+`[decisão]` R0 confirma, não descobre. O número que decide a arquitetura sai de P0, antes de M1. Se R0 contradisser P0, o erro está em P0 e a arquitetura é revista, não o limite.
 
-### 14.2 D0 — auditoria de dados
+## 18. Avaliação
 
-Executar estatísticas sobre 100% do catálogo já inventariado sem criar ainda o dataset final: expressão, colisões, lanes, barras, compassos, labels, famílias e duplicação próxima. Congelar políticas de inclusão.
-
-A seção 3.1.1 já traz a primeira passada dessas medições, feita na revisão. D0 as reproduz como código versionado e acrescenta o que a revisão não fez: decomposição de offset em viés sistemático por `(papel, posição)` e resíduo, mapa auditado `collection → genre`, distribuição de tamanho de cluster e taxa de duplicação cruzando `collection` sobre o corpus inteiro em vez de amostra. D0 é executável mesmo com O1 aberta.
-
-### 14.3 D1 — build de 1%
-
-Criar duas builds idênticas, provar digests, splits e round-trip; verificar ausência de vazamento e estimar disco/throughput.
-
-### 14.4 M0 — overfit controlado
-
-Treinar smoke em 32–256 exemplos até memorizar deliberadamente. Prova loss masks, task sampler, checkpoint e decoding. Incapacidade de overfit é bug, não falta de escala.
-
-### 14.5 M1 — tiny 1%
-
-Rodar deterministic/retrieval, GrooVAE, event AR e masked HVO sob orçamento curto. Verificar geração válida, controle e ausência de colapso.
-
-### 14.6 D2/M2 — dataset 10% e bake-off
-
-Congelar representação, grids, thresholds e protocolo. Executar pelo menos três seeds por candidato. Selecionar arquitetura por validation + avaliação humana sem tocar blind test.
-
-### 14.7 D3/M3 — full run
-
-Construir dataset 100% somente depois dos gates anteriores. Treinar a configuração vencedora e uma baseline forte. Blind test abre uma vez para a decisão registrada.
-
-### 14.8 M4 — controle e hard examples
-
-Se o modelo full vencer, ajustar task mix/controles usando train+validation; rodar novo blind test versionado apenas se houver uma nova geração formal de dataset/modelo.
-
-### 14.9 R0 — runtime optimization
-
-Exportar FP32/FP16 quando aplicável e INT8 dinâmico para CPU. Quantização só é aceita se equivalência musical e qualidade passarem. Medir CPU antes de adicionar aceleração GPU.
-
-R0 confirma, não descobre. O número que decide a arquitetura — quantos passos de decoding cabem em `cpu_seconds <= 2,0` — sai do spike do plano 3, com modelo não treinado, antes de M1. Se R0 contradisser o spike, o erro está no spike e a arquitetura é revista, não o limite.
-
-## 15. Avaliação
-
-### 15.1 Integridade
+### 18.1 Integridade
 
 - parse e serialize válidos;
-- 100% das saídas aceitas dentro de pitch/lane/time/length limits;
-- zero violação de lanes/regiões bloqueadas;
-- zero família/near-duplicate conhecida cruzando splits;
+- 100% das saídas dentro dos limites de altura, lane, tempo e comprimento;
+- zero violação de lanes e regiões bloqueadas;
+- zero família ou near-duplicate conhecida cruzando splits;
 - nenhuma consulta do retriever ao blind test;
-- zero evento perdido **sem registro**. A formulação anterior, “zero evento silenciosamente perdido”, era inatingível para qualquer grade densa: a medição mostra 3,51% das notas fundidas em 16 avos e ainda 0,92% em 64 avos. O critério verificável é duplo: (i) o round-trip `CanonicalGroove → tensor de treino → CanonicalGroove` é exato para 100% dos exemplos, com `subhits` e envelope, e (ii) a fração de notas não representável pela grade escolhida é medida, publicada no `DatasetManifest` e comparada com o orçamento declarado da versão. Perda acima do orçamento é falha de G3.
+- **zero evento perdido sem registro**, definido como critério duplo: o round-trip `CanonicalGroove → tensor de treino → CanonicalGroove` é exato para 100% dos exemplos, com `subhits` e envelope; e a fração de notas não representável pela grade é medida, publicada no manifest e menor ou igual ao orçamento declarado antes do build.
 
-### 15.2 Predição
+### 18.2 Predição
 
-- precision/recall/F1 de hit por lane;
-- velocity MAE/Smooth L1 condicionado a hit;
-- offset MAE condicionado a hit;
-- fill/infill por região e lane;
-- calibração de probabilidade de hit;
-- reconstruction e sampling medidos separadamente para VAE.
+Precision, recall e F1 de hit por lane; MAE ou Smooth L1 de velocity condicionado a hit; MAE de offset condicionado a hit; acerto de multiplicidade em células com colisão; fill e infill por região e lane; calibração da probabilidade de hit; reconstrução e amostragem medidas separadamente para o VAE.
 
-### 15.3 Musicalidade e controle
+`[decisão]` F1 por lane só é reportado sobre lanes cuja massa de notas foi resolvida pelo mapa de articulações. Reportar F1 de `other_percussion` como se fosse um instrumento é ruído.
 
-- aderência a densidade, energia, swing, complexidade e referência;
-- resposta monotônica de controles contínuos;
-- distribuição por lane e posição;
-- diversidade intra-lote e entre seeds;
-- silêncio, repetição e colapso;
-- validade de rolls/flams;
-- distância e cobertura em relação ao corpus.
+### 18.3 Musicalidade e controle
 
-### 15.4 Originalidade
+Aderência a densidade, energia, swing, complexidade e referência; resposta monotônica dos controles contínuos; distribuição por lane e posição; diversidade intra-lote e entre seeds; silêncio, repetição e colapso; validade de rolls e flams; distância e cobertura em relação ao corpus.
 
-Cada candidato é comparado ao train por:
+### 18.4 Originalidade
 
-- hash canônico;
-- fingerprint HVO com invariâncias declaradas;
-- grammar/features;
-- sequência event-based;
-- família e origem;
-- cópia de trechos contíguos.
+Cada candidato é comparado ao train por hash canônico, fingerprint HVO com invariâncias declaradas, grammar e features, sequência event-based, família e origem, e cópia de trechos contíguos.
 
-Limiar varia por tarefa: uma variação pode ser próxima da referência; free generation não pode reproduzir uma família inteira. Resultado acima do limiar é rejeitado/regenerado e contabilizado.
+`[decisão]` O limiar varia por tarefa: uma variação pode ser próxima da referência; free generation não pode reproduzir uma família inteira. Resultado acima do limiar é rejeitado, regenerado e contabilizado.
 
-Os limiares são congelados antes do primeiro run de bake-off e registrados com digest, junto com uma referência que impede leitura complacente: no próprio corpus, 26,0% das janelas de 2 barras repetem exatamente o padrão de onset de outra janela. Um gerador que produzisse cópias exatas nessa mesma taxa seria indistinguível do corpus por essa métrica. Portanto o gate de originalidade mede a taxa de coincidência exata **contra o train** e exige que ela fique abaixo da taxa de coincidência interna do próprio corpus, não apenas “baixa”.
+`[decisão]` Os limiares são congelados antes do primeiro bake-off e registrados com digest, com uma referência que impede leitura complacente: no próprio corpus, 26,0% das janelas de 2 barras repetem exatamente o padrão de onset de outra janela. Um gerador que copiasse nessa mesma taxa seria indistinguível do corpus por essa métrica. O gate exige que a taxa de coincidência exata **contra o train** fique abaixo da coincidência interna do corpus, não apenas "baixa".
 
-### 15.5 Teste humano
+### 18.5 Teste humano
 
 Protocolo pré-registrado:
 
 - pelo menos 30 tarefas representativas;
-- prompts/controles congelados;
-- candidatos anonimizados e volume/kit normalizados;
-- comparação neural contra melhor retrieval/transform determinístico;
+- prompts e controles congelados;
+- candidatos anonimizados, volume e kit normalizados;
+- comparação do neural contra o melhor retrieval ou transformação determinística;
 - avaliação de groove, utilidade, controle, novidade e vontade de usar;
 - ordem aleatória e identidade do sistema oculta;
-- número de avaliadores, unidade de análise e tratamento de empates declarados **antes** de coletar;
+- número de avaliadores (**O2**), unidade de análise e tratamento de empates declarados antes de coletar;
 - intervalo de confiança publicado.
 
-Promoção exige que o limite inferior do intervalo para preferência pelo challenger seja maior que 50%, além dos gates automáticos. Com 30 comparações pareadas e empates excluídos do denominador, isso significa concretamente **≥21 de 30** vitórias (limite inferior de Wilson a 95% ≈ 0,521; 20 de 30 dá ≈ 0,488 e falha). Esse número é registrado antes da coleta e não é renegociado depois.
+`[decisão]` Promoção exige limite inferior do intervalo acima de 50%. Com 30 comparações pareadas e empates fora do denominador, isso é **≥21 de 30** vitórias: o limite inferior de Wilson a 95% dá ≈0,521 para 21, e ≈0,488 para 20, que falha. O número é registrado antes da coleta e não é renegociado depois.
 
-Limitação declarada: se o avaliador for uma pessoa só, o intervalo é sobre tarefas, não sobre pessoas, e o resultado não generaliza para outros músicos. Isso é aceitável como gate de decisão do proprietário e precisa aparecer no model card com essas palavras. Se não ocorrer preferência, deterministic/retrieval permanece produto principal.
+`[decisão]` Limitação declarada: com um único avaliador o intervalo é sobre tarefas, não sobre pessoas, e o resultado não generaliza. É aceitável como decisão do proprietário e precisa aparecer no model card com essas palavras.
 
-## 16. Runtime e `.ablx`
+Se não houver preferência, deterministic e retrieval permanecem como produto principal.
 
-### 16.1 Export
+## 19. Runtime e `.ablx`
 
-PyTorch exporta um grafo ONNX com inputs/outputs e dynamic axes mínimos, pela rota `torch.export`/exportador baseado em Dynamo. TorchScript está descontinuado desde o PyTorch 2.10, então o exportador legado baseado em trace não é rota suportada e não deve ser assumido. Uma suíte dourada compara logits, decoding e groove canônico entre PyTorch e ONNX, com tolerância numérica declarada por saída. Diferença além da tolerância bloqueia o artefato.
+### 19.1 Export
 
-O decoding iterativo é parte do contrato de equivalência, não um detalhe do runtime: se o laço de decoding viver fora do grafo, a suíte dourada precisa comparar a sequência completa de passos, não só os logits do primeiro passo.
+`[decisão]` PyTorch exporta um grafo ONNX com inputs, outputs e dynamic axes mínimos, pela rota `torch.export` e exportador baseado em Dynamo. TorchScript está descontinuado desde o PyTorch 2.10; o exportador legado baseado em trace não é rota suportada.
 
-### 16.2 Provider
+Uma suíte dourada compara logits, decoding e groove canônico entre PyTorch e ONNX, com tolerância numérica declarada por saída. Diferença além da tolerância bloqueia o artefato.
 
-O helper recebe somente `ConditionCard`, referência canônica limitada, seed e limites. Ele não recebe caminho de corpus, comando, shell, token externo ou objeto do Live. Saída passa pelo parser, verifier, anti-copy e mapping antes de aparecer como candidato.
+`[decisão]` O decoding iterativo é parte do contrato de equivalência. Se o laço viver fora do grafo, a suíte compara a sequência completa de passos, não só os logits do primeiro.
 
-### 16.3 Execution providers
+### 19.2 Provider
 
-CPU é baseline universal. ONNX Runtime permite providers ordenados com fallback; aceleração GPU é opcional e só entra se estiver empacotada/compatível com single-install. CUDA no computador de desenvolvimento não vira requisito do usuário.
+O helper recebe somente `ConditionCard`, referência canônica limitada, seed e limites. Não recebe caminho de corpus, comando, shell, token externo nem objeto do Live. A saída passa por parser, verifier, anti-cópia e mapping antes de virar candidato.
 
-O repositório `microsoft/DirectML` declara explicitamente estado de manutenção, e a Microsoft direciona o desenvolvimento novo para Windows ML, que expõe as mesmas APIs do ONNX Runtime e seleciona o execution provider conforme o hardware. A página de execution providers do ONNX Runtime lista DirectML como provider de produção sem marca de depreciação e não menciona Windows ML, então as duas fontes precisam ser lidas juntas. Nenhuma das duas é selecionada sem spike de embalagem e equivalência.
+`[fato]` Os limites de processo são aplicados por Job Object no Windows e por process group no POSIX (`groove_intelligence/resource_limits.py`).
 
-Risco específico de Windows ML para este produto: ele resolve e provisiona execution providers pelo sistema operacional, o que conflita com as decisões de operação offline e instalação única em um `.ablx`. Se o spike mostrar que o provider precisa ser baixado sob demanda, Windows ML sai do caminho da V1 e o produto fica em CPU pura.
+### 19.3 Execution providers
 
-### 16.4 Orçamento preliminar
+CPU é o baseline universal. ONNX Runtime permite providers ordenados com fallback; aceleração GPU é opcional e só entra se estiver empacotada e compatível com instalação única. CUDA na máquina de desenvolvimento não vira requisito do usuário.
 
-Os limites atuais não são metas de P95: são tetos rígidos por chamada, declarados em `ProviderLimitsV1` (`groove_intelligence/provider.py:49-59`) com `le=` no schema, ou seja, não podem sequer ser elevados por configuração. A versão anterior desta seção listava três deles e omitia os que mais apertam o decoding iterativo:
+`[fato]` O repositório `microsoft/DirectML` declara estado de manutenção, e a Microsoft direciona desenvolvimento novo para Windows ML, que expõe as mesmas APIs do ONNX Runtime e seleciona o execution provider conforme o hardware. A página de execution providers do ONNX Runtime lista DirectML como provider de produção sem marca de depreciação e não menciona Windows ML; as duas fontes precisam ser lidas juntas.
+
+`[risco]` Windows ML resolve e provisiona execution providers pelo sistema operacional, o que conflita com operação offline e instalação única. `[experimento]` Se o spike mostrar que o provider precisa ser baixado sob demanda, Windows ML sai do caminho da V1 e o produto fica em CPU pura.
+
+### 19.4 Orçamento
+
+`[fato]` Os limites não são metas de P95: são tetos rígidos por chamada, declarados em `ProviderLimitsV1` (`groove_intelligence/provider.py:49-59`) com `le=` no schema, portanto não elevam por configuração.
 
 | Limite | Valor | Efeito no modelo |
 |---|---|---|
-| `generation_seconds` | `<=5,0` | teto de parede por chamada, não P95 |
+| `generation_seconds` | `<=5,0` | teto de parede por chamada |
 | `cpu_seconds` | `<=2,0` | **teto de tempo de CPU somado entre threads**; com 8 threads são 0,25 s de parede |
-| `startup_seconds` | `<=2,0` | carga de sessão ONNX e pesos precisa caber aqui |
+| `startup_seconds` | `<=2,0` | carga da sessão ONNX e dos pesos precisa caber aqui |
 | `shutdown_seconds` | `<=1,0` | encerramento limpo do helper |
 | `memory_mib` | `<=512` | modelo, runtime e arena de execução |
 | `max_response_bytes` | `<=262.144` | candidato serializado em JSON |
 | `max_events` | `<=2.048` | eventos por candidato |
 
-`cpu_seconds <= 2,0` é o limite que decide a viabilidade, e não aparecia no documento. Um decoding iterativo de N passos multiplica o custo por N; o plano do provider ONNX precisa orçar passos × threads dentro de 2 s de CPU, ou negociar formalmente uma alteração do contrato antes de projetar o decoding.
+`cpu_seconds <= 2,0` é o limite que decide a viabilidade. Um decoding iterativo de N passos multiplica o custo por N. O plano 3 orça passos × threads dentro de 2 s de CPU, ou o contrato é formalmente renegociado antes de projetar o decoding.
 
-Demais itens do orçamento:
+Demais itens:
 
-- alvo de produto: candidato warm aproximadamente `<=1 s` no hardware do autor;
-- baseline medido de pacote: o `.ablx` do Gate 0 tem `154.852` bytes, com helper Rust de `258.048` bytes descomprimido. Qualquer runtime ONNX e pesos entram **acima** desse piso, e o documento de produto já fixa preferência por pacote core abaixo de 500 MiB;
-- o plano do provider ONNX declara um teto numérico de tamanho da `.ablx` **antes** de escolher runtime e quantização, e não depois;
-- cold start, tamanho do modelo e tamanho total da `.ablx` são medidos antes da promoção;
+- alvo de produto: candidato warm em aproximadamente `<=1 s` no hardware do autor;
+- `[fato]` baseline medido de pacote: o `.ablx` do Gate 0 tem `154.852` bytes, com helper nativo de `258.048` bytes descomprimido. Runtime ONNX e pesos entram acima desse piso;
+- teto numérico de tamanho da `.ablx` declarado antes de escolher runtime e quantização (**O3**);
+- cold start, tamanho do modelo e tamanho total medidos antes da promoção;
 - nenhuma meta é relaxada depois de ver o blind test.
 
-## 17. Gates binários
+## 20. Gates binários
 
-Um gate só é binário se o critério puder ser avaliado por outra pessoa sem consultar a intenção do autor. Os critérios abaixo substituem as formulações subjetivas da primeira versão (“publicada e aceita”, “humano preliminar”, “passam”).
+Um gate só é binário se outra pessoa puder avaliá-lo sem consultar a intenção do autor.
 
 | Gate | Passa quando | Falha significa |
 |---|---|---|
-| G0 Ambiente | GPU/precision/save-resume/dataloader/export smoke passam, com driver e compute capability registrados | parar e corrigir matriz |
-| G1 Direitos/origem | a pergunta bloqueante O1 da seção 2.1 está respondida por escrito; `license_id` e `redistribution` de cada item derivam dessa resposta e de evidência verificável, **não** de constante de código; e o build falha se algum item ficar sem essa derivação | item fica fora; se O1 não estiver respondida, o programa para em D0 |
-| G2 Dataset | duas builds independentes produzem digests idênticos; round-trip exato em 100% dos exemplos; zero coincidência de hash exato, canônico ou rítmico entre blind test e train+validation; maior componente de cluster abaixo de 5% dos exemplos | não treinar |
-| G3 Representação | fração de notas não representável pela grade escolhida é medida, publicada no `DatasetManifest` e menor ou igual ao orçamento declarado antes do build; round-trip do alvo de treino exato | revisar grid/IR |
-| G4 Tiny | overfit deliberado atinge perda de treino abaixo do limiar declarado em 32–256 exemplos; tiny runs geram saída estruturalmente válida em 100% dos casos; entropia de saída entre seeds acima do piso declarado | corrigir pipeline/modelo |
-| G5 Bake-off | challenger vence o melhor baseline em pelo menos três seeds na métrica primária declarada de validation, com margem maior que o desvio entre seeds do próprio baseline | não escalar |
-| G6 Full | blind test com ≥21/30 pareado (seção 15.5); taxa de coincidência exata contra train abaixo da coincidência interna do corpus (seção 15.4); zero violação de lane bloqueada; resposta monotônica dos controles contínuos declarados | deterministic permanece |
-| G7 ONNX | suíte dourada dentro da tolerância declarada por saída, incluindo a sequência completa de decoding; e os sete limites da seção 16.4 respeitados em medição real, com destaque para `cpu_seconds <= 2,0` | não integrar modelo |
-| G8 Produto | os seis gates de runtime já implementados em `lab.py` (`contract`, `fallback`, `reproducibility`, `quality`, `privacy_license`, `cost_latency`) passam contra os limiares de `gates.py`; e o loop candidatos/locks/reference/falhas/readback passa no Live | não promover `.ablx` |
+| **G0** Ambiente | GPU, precisão, save e resume, dataloader e export smoke passam, com driver e compute capability registrados | parar e corrigir a matriz |
+| **G1** Direitos | O1 respondida por escrito; `license_id` e `redistribution` de cada item derivam dessa resposta e de evidência verificável, **não** de constante de código; o build falha se algum item ficar sem derivação | item fora; com O1 aberta, o programa para em D0 |
+| **G2** Mapeamento | massa de notas resolvida para papel específico publicada por coleção; nenhuma coleção acima de 10% em `other_percussion` entra no treino | remapear ou excluir a coleção |
+| **G3** Dataset | duas builds independentes dão digests idênticos; round-trip exato em 100% dos exemplos; zero coincidência de hash exato, canônico ou rítmico entre blind test e train+validation; maior componente de cluster abaixo de 5% dos exemplos | não treinar |
+| **G4** Representação | fração de notas não representável medida, publicada e menor ou igual ao orçamento declarado antes do build | revisar grade ou IR |
+| **G5** Tiny | overfit deliberado abaixo do limiar declarado em 32–256 exemplos; 100% de saída estruturalmente válida; entropia entre seeds acima do piso declarado | corrigir pipeline ou modelo |
+| **G6** Bake-off | challenger vence o melhor baseline em pelo menos três seeds na métrica primária declarada de validation, com margem maior que o desvio entre seeds do próprio baseline | não escalar |
+| **G7** Full | blind test com ≥21/30 pareado; coincidência exata contra o train abaixo da coincidência interna do corpus; zero violação de lane bloqueada; resposta monotônica dos controles declarados | deterministic permanece |
+| **G8** ONNX | suíte dourada dentro da tolerância por saída, incluindo a sequência completa de decoding; os sete limites da seção 19.4 respeitados em medição real | não integrar o modelo |
+| **G9** Produto | os seis gates de runtime de `lab.py` passam contra os limiares de `gates.py`; o loop candidatos, locks, reference, falhas e readback passa no Live; tamanho da `.ablx` dentro do teto de O3 | não promover a `.ablx` |
 
-Cada gate produz `stop`, `repeat`, `go limited` ou `go`. Nenhum gate autoriza automaticamente o seguinte; o proprietário aprova a próxima despesa. Os limiares numéricos que cada gate cita são congelados e versionados antes do run correspondente; alterar um limiar depois de ver o resultado invalida o gate e exige nova geração formal.
+`[decisão]` Cada gate produz `stop`, `repeat`, `go limited` ou `go`. Nenhum gate autoriza automaticamente o seguinte; o proprietário aprova a próxima despesa. Os limiares numéricos são congelados e versionados antes do run correspondente; alterar um limiar depois de ver o resultado invalida o gate e exige nova geração formal.
 
-## 18. Decomposição futura de implementação
+## 21. Planos de implementação
 
-Esta especificação é grande demais para um único plano executável. Depois da revisão do usuário, serão escritos planos separados, nesta ordem:
+1. **Training workspace e environment probe** — projeto PyTorch isolado, locks, diagnósticos, smoke e checkpoint resume. Fecha E0/G0.
+2. **Auditoria de corpus, articulações e direitos** — reproduz a seção 4.2 como código versionado; constrói o mapa de articulações por coleção e o mapa `collection → genre`; decompõe swing e jitter; mede clusters e duplicação cruzada no corpus inteiro; transforma a resposta a O1 em derivação verificável. Não constrói dataset. Fecha D0/G1/G2. **É o único plano de dados executável enquanto O1 estiver aberta.**
+3. **Spike de orçamento CPU e ONNX** — exporta um modelo não treinado com a forma alvo (small, 32×18, decoding iterativo de N passos), mede contra os sete limites e devolve o número máximo de passos viável. Barato, e define a arquitetura antes de ela ser treinada. Fecha P0.
+4. **Dataset foundation V3** — schema com `subhits`, canonical store, dedupe em camadas, cluster e split registry com guarda de componente gigante, shards e evidence packet. Fecha D1/G3/G4.
+5. **Baselines e avaliação** — benchmark de retrieval e determinístico, GrooVAE, event AR, métricas e protocolo humano pré-registrado.
+6. **Masked HVO Transformer** — tarefas, losses, decoding, tiny, 1% e 10%, bake-off. Fecha M0/M1/M2, G5 e G6.
+7. **Full training e model card** — build 100%, run vencedor, blind test, anti-cópia e decisão registrada. Fecha M3/G7.
+8. **ONNX provider** — export, equivalência, quantização, helper e orçamento, confirmando o spike do plano 3. Fecha R0/G8.
+9. **Groove Brain product loop** — dashboard, prompt parser, candidatos, locks, reference, mapping e readback no Live. Fecha G9.
 
-1. **Training workspace e environment probe** — projeto PyTorch isolado, locks, diagnósticos, smoke e checkpoint resume.
-2. **Auditoria de corpus e decisão de direitos** — reproduz e versiona as medições da seção 3.1.1, constrói o mapa auditado `collection → genre`, decompõe swing e jitter, e transforma a resposta a O1 em derivação verificável de `license_id`/`redistribution`. Não constrói dataset. É o único plano executável enquanto O1 estiver aberta.
-3. **Spike de orçamento CPU/ONNX** — exporta um modelo **não treinado** com a forma alvo (small, 32×18, decoding iterativo de N passos), mede contra os sete limites da seção 16.4 e devolve o número máximo de passos de decoding viável dentro de `cpu_seconds <= 2,0`. Barato, e define a arquitetura antes de ela ser treinada.
-4. **Dataset foundation V3** — schema de treino com `subhits`, canonical store, near-dedupe, cluster/split registry com guarda de componente gigante, shards e evidence packet.
-5. **Baselines e avaliação** — retrieval/deterministic benchmark, GrooVAE, event AR, métricas e protocolo humano pré-registrado.
-6. **Masked HVO Transformer** — tasks, losses, decoding, tiny/1%/10% bake-off.
-7. **Full training e model card** — build 100%, run vencedor, blind test, anti-copy e decisão.
-8. **ONNX provider** — export, equivalência, quantização, helper e orçamento, agora confirmando o spike do plano 3.
-9. **Groove Brain product loop** — dashboard, prompt parser, candidates, locks, reference, mapping e Live readback.
+`[decisão]` A ordem tem duas inversões deliberadas em relação a um plano ingênuo. A auditoria de dados está separada da construção do dataset, porque O1 bloqueia a segunda e não a primeira. E o orçamento de CPU vem antes do treino, porque descobrir depois que a arquitetura vencedora não cabe em `cpu_seconds <= 2,0` invalidaria dois planos inteiros.
 
-A ordem mudou em relação à primeira versão por dois motivos concretos. A auditoria de dados e a decisão de direitos foram separadas da construção do dataset, porque O1 bloqueia a segunda e não a primeira. E o orçamento de CPU/ONNX foi movido para antes do treino: descobrir no antigo plano 6 que a arquitetura vencedora não cabe em `cpu_seconds <= 2,0` invalidaria os dois planos de treino anteriores.
+Cada plano produz software testável e tem seu próprio stop condition. Nenhum plano de UI depende de modelo não promovido: o plano 9 usa baselines enquanto o treino evolui.
 
-Cada plano produz software testável e possui seu próprio stop condition. Nenhum plano de UI depende de um modelo ainda não promovido; usa baselines enquanto o treino evolui.
+## 22. Riscos e respostas
 
-## 19. Riscos e respostas
+1. **Origem do corpus não resolvida.** Maior severidade. Bloqueia do plano 4 em diante. Resposta: O1, e G1 escrito para não poder passar por construção.
+2. **Mapeamento de articulações errado.** 24,3% da massa de notas cai em `other_percussion` e o chimbal está escondido lá. Resposta: mapa por coleção no plano 2, gate G2, e exclusão de coleção que não resolver.
+3. **Grade densa perder rolls e flams por definição.** Medido em 3,51% / 1,38% / 0,92%. Resposta: canal `subhits` obrigatório e orçamento de perda declarado antes do build.
+4. **Clustering colapsar em componente gigante.** Resposta: near-duplicate contínuo fora do fecho transitivo, distribuição publicada, teto de 5%.
+5. **Vazamento por família baseada só em hierarquia.** Medido: `346` padrões e `1.030` esqueletos cruzam coleções. Resposta: teste de vazamento por conteúdo, independente do clustering.
+6. **Corpus grande mas repetitivo.** 26,0% das janelas repetem padrão de onset exato. Resposta: contar famílias, não arquivos; curva de escala; originalidade medida contra a coincidência interna do corpus.
+7. **Condições prometidas sem dados.** Gênero, subgênero e techno não existem na taxonomia. Resposta: só entram com mapa auditado e cobertura medida.
+8. **Microtiming confundido com swing.** Resposta: decomposição viés/resíduo antes de promover `humanize`.
+9. **Orçamento de CPU inviabilizar a arquitetura tarde demais.** `cpu_seconds <= 2,0` é teto de schema. Resposta: spike no plano 3.
+10. **AR melhor em rolls mas lento.** Resposta: arquitetura híbrida ou AR restrito a pós-processamento, e só se o bake-off justificar.
+11. **ONNX mudar o resultado.** Resposta: equivalência em logits, sequência de decoding, eventos e métricas antes de qualquer quantização.
+12. **Memorização.** Resposta: split por família, canaries, nearest-neighbor e blind test fechado; anti-cópia como gate.
+13. **Métrica boa e música ruim.** Resposta: escuta cega contra o melhor baseline é gate, não demonstração.
+14. **Dependências de treino contaminarem o produto.** Resposta: projetos e locks separados; o usuário recebe só runtime nativo.
+15. **`.ablx` crescer demais.** Resposta: CPU primeiro, modelo small, quantização depois da qualidade, teto de pacote antes da integração (O3).
+16. **Protótipos sujos confundirem baseline.** Resposta: baseline é `HEAD` mais digests promovidos; o seed local de 500 e scripts com caminho fixo ficam fora.
+17. **SDK e host em beta.** O produto depende de `@ableton-extensions/sdk` `1.0.0-beta.0` e de um build beta do Live; a API pode mudar e o Gate 0 só prova o host testado. Resposta: registrar build do Live e versão do host em cada evidência, e não escrever plano que assuma estabilidade de API.
+18. **Licença do SDK versus repositório público.** Resposta: O4, antes de qualquer publicação nova.
+19. **Pesquisa virar projeto infinito.** Resposta: cada degrau tem stop, e o produto determinístico continua útil se o neural falhar.
 
-1. **Corpus grande mas repetitivo:** near-dedupe, clusters e curva de escala; contar famílias, não arquivos.
-2. **Weak labels ruins:** confiança, auditoria humana e `unknown`; categorias sem cobertura não aparecem.
-3. **Microtiming artificial ou ausente:** auditar antes; não prometer humanize; GMD auxiliar separado.
-4. **Memorização de processo anterior:** split por família, canaries, nearest-neighbor e blind test fechado.
-5. **Transformer médio não caber/ganhar:** small primeiro; medium somente por curva de escala.
-6. **AR melhor em rolls mas lento:** permitir arquitetura híbrida ou limitar AR a pós-processamento somente se o bake-off justificar.
-7. **ONNX mudar resultado:** equivalência em logits, eventos e métricas antes de quantização.
-8. **Dependências de treino contaminarem produto:** projetos/locks separados; usuário recebe somente runtime nativo.
-9. **`.ablx` crescer demais:** CPU-first, modelo small, quantização após qualidade, budget de pacote antes de integração.
-10. **Dirty prototypes confundirem baseline:** baseline é `HEAD` + digests promovidos; seed local de 500 e scripts hardcoded ficam fora.
-11. **Métrica parecer boa e música ruim:** avaliação cega contra melhor baseline é gate, não demonstração opcional.
-12. **Pesquisa virar projeto infinito:** cada degrau tem stop; produto determinístico continua útil se neural falhar.
-13. **Origem do corpus não resolvida:** é o risco de maior severidade e bloqueia D1 em diante. A evidência da seção 2.1 contradiz a leitura de autoria original, e a marcação atual de direitos é uma constante de código, não uma derivação. Resposta: O1, e G1 reescrito para não poder passar por construção.
-14. **Clustering colapsar em componente gigante:** near-duplicate contínuo não cria aresta de cluster por padrão; distribuição de tamanho publicada; maior componente abaixo de 5%.
-15. **Grade densa perder rolls e flams por definição:** medido em 3,51% / 1,38% / 0,92% das notas em 16, 32 e 64 avos; canal `subhits` obrigatório e orçamento de perda declarado antes do build.
-16. **Condições prometidas sem dados:** gênero, subgênero e techno não existem na taxonomia atual; entram só com mapa auditado e cobertura medida, ou não entram.
-17. **Orçamento de CPU inviabilizar a arquitetura tarde demais:** `cpu_seconds <= 2,0` é teto de schema; spike de ONNX movido para antes do treino (plano 3).
-18. **Dependência de SDK e host em beta:** o produto depende de `@ableton-extensions/sdk` `1.0.0-beta.0` e de um build beta do Live. A API pode mudar e o Gate 0 só prova o comportamento do host testado. Resposta: registrar build do Live e versão do host em cada evidência, e não escrever plano de produto que assuma estabilidade de API.
-19. **Licença do Extensions SDK versus repositório público:** a licença do SDK proíbe distribuir o SDK ou partes dele fora da aplicação, e trata material pré-lançamento como confidencial. Os arquivos `AbletonMCPServer_Extension/vendor/ableton-extensions-{sdk,cli}-1.0.0-beta.0.tgz` estão versionados em um repositório público MIT. Isso é independente do treino e precisa de decisão do proprietário antes de qualquer publicação nova. Registrado aqui porque os planos 8 e 9 dependem de empacotar `.ablx`.
+## 23. Decisões finais
 
-## 20. Decisões finais
-
-- Groove Brain é bateria/ritmo, não Music Brain geral.
-- A declaração de origem do proprietário está registrada, e a evidência medida na seção 2.1 não a sustenta na forma “os arquivos são meus e podem ser redistribuídos”. A pergunta bloqueante O1 decide o tratamento; até lá o programa não passa de D0.
-- O seed V2 de 1.685 itens é baseline de retrieval; não é o dataset de treino completo.
-- O corpus completo precisa de near-dedupe, famílias e splits antes de qualquer treino sério.
-- HVO + envelope lossless é a representação principal; event-based é challenger e proteção contra perda de rolls/flams.
+- Groove Brain é bateria e ritmo, não Music Brain geral.
+- A declaração de origem do proprietário está registrada, e a evidência medida não a sustenta na forma "os arquivos são meus e podem ser redistribuídos". O1 decide o tratamento; até lá o programa não passa de D0 e P0.
+- O mapa de articulações por coleção é pré-requisito do dataset. Sem ele, um quarto da massa de notas está na lane errada.
+- O seed V2 de 1.685 itens é baseline de retrieval, não dataset de treino.
+- O corpus completo precisa de remapeamento, near-dedupe, famílias e splits antes de qualquer treino sério.
+- HVO com multiplicidade mais envelope lossless é a representação principal; event-based é challenger e proteção contra perda de rolls e flams.
 - Masked Transformer é challenger recomendado, não vencedor pré-declarado.
 - GrooVAE e event AR são baselines neurais obrigatórios.
-- Humanize só é aprendido se os dados provarem expressão útil.
-- PyTorch/CUDA são exclusivos do laboratório; produto usa ONNX/runtime nativo local.
-- CPU é caminho universal; aceleração é opcional.
-- Modelo precisa vencer retrieval/deterministic em avaliação cega e anti-copy.
+- `humanize` tem base medida e só é promovido depois da decomposição swing/resíduo.
+- PyTorch e CUDA são exclusivos do laboratório; o produto usa ONNX e runtime nativo local.
+- CPU é o caminho universal; aceleração é opcional.
+- O modelo precisa vencer retrieval e determinístico em avaliação cega e em anti-cópia.
+- O diferencial da extensão é garantia, não tamanho de modelo: local, sem sobrescrita silenciosa, locks por construção, procedência em toda saída, e útil mesmo sem o neural.
 - Nenhum treino full, integração neural, push, lançamento ou publicação é autorizado por esta especificação.
 
-## 21. Fontes primárias
+## 24. Fontes primárias
 
 - [GrooVAE — Learning to Groove with Inverse Sequence Transformations](https://proceedings.mlr.press/v97/gillick19a.html)
 - [Groove MIDI Dataset](https://magenta.tensorflow.org/datasets/groove)
-- [Magenta MusicVAE/GrooVAE training reference](https://github.com/magenta/magenta/tree/main/magenta/models/music_vae)
-- [GrooveTransformer source and HVO documentation](https://github.com/behzadhaki/GrooveTransformer)
-- [Transformer Groove Infilling project and source](https://transformergrooveinfilling.github.io/)
+- [Magenta MusicVAE/GrooVAE — referência de arquitetura (repositório arquivado)](https://github.com/magenta/magenta/tree/main/magenta/models/music_vae)
+- [GrooveTransformer — fonte e documentação de HVO](https://github.com/behzadhaki/GrooveTransformer)
+- [Transformer Groove Infilling](https://transformergrooveinfilling.github.io/)
 - [PocketVAE](https://arxiv.org/abs/2107.05009)
 - [Conditional Drums Generation using Compound Word Representations](https://arxiv.org/abs/2202.04464)
-- [PyTorch 2.12 release and Blackwell/CUDA matrix](https://pytorch.org/blog/pytorch-2-12-release-blog/)
-- [ONNX Runtime execution providers](https://onnxruntime.ai/docs/execution-providers/)
-- [ONNX Runtime model optimizations](https://onnxruntime.ai/docs/performance/model-optimizations/)
-- [ONNX Runtime quantization](https://onnxruntime.ai/docs/performance/model-optimizations/quantization.html)
+- [PyTorch 2.12 — release e matriz CUDA/Blackwell](https://pytorch.org/blog/pytorch-2-12-release-blog/)
+- [ONNX Runtime — execution providers](https://onnxruntime.ai/docs/execution-providers/)
+- [ONNX Runtime — model optimizations](https://onnxruntime.ai/docs/performance/model-optimizations/)
+- [ONNX Runtime — quantização](https://onnxruntime.ai/docs/performance/model-optimizations/quantization.html)
 - [microsoft/DirectML — aviso de manutenção](https://github.com/microsoft/DirectML)
-- [DirectML — introdução (Microsoft Learn)](https://learn.microsoft.com/en-us/windows/ai/directml/dml)
+- [DirectML — introdução, Microsoft Learn](https://learn.microsoft.com/en-us/windows/ai/directml/dml)
 
-Notas de verificação, feitas em 2026-08-31:
+Verificações feitas em 2026-08-31: todos os links foram abertos; título e autoria de GrooVAE, PocketVAE e Conditional Drums Generation conferem; `magenta/magenta` está arquivado desde 2026-01-06; a afirmação sobre manutenção do DirectML e sobre Windows ML não está na página de execution providers do ONNX Runtime, e a fonte primária correta é o repositório `microsoft/DirectML`.
 
-- os links acima foram abertos e conferidos; título e autoria de GrooVAE, PocketVAE e Conditional Drums Generation batem;
-- o repositório `magenta/magenta` está **arquivado** desde 2026-01-06 e é somente leitura;
-- a afirmação sobre estado de manutenção do DirectML e sobre Windows ML **não** está na página de execution providers do ONNX Runtime; a fonte primária é o repositório `microsoft/DirectML`. A citação foi corrigida.
+## 25. Critério de aprovação
 
-## 22. Critério de aprovação desta especificação
+Esta especificação vira planos executáveis quando o proprietário confirmar:
 
-O documento está pronto para virar planos de implementação quando o usuário confirmar:
-
-1. o escopo exclusivo de bateria/ritmo;
-2. **a resposta à pergunta bloqueante O1 da seção 2.1**, escolhendo entre (a), (b) e (c). Sem ela, apenas os planos 1, 2 e 3 podem ser escritos;
-3. a comparação A/B/C em vez de treinar um modelo grande diretamente;
-4. o dataset/split/anti-copy antes do full run;
-5. a promoção somente após avaliação cega, com o número `≥21/30` da seção 15.5 aceito antes da coleta;
-6. a separação laboratório PyTorch versus produto ONNX `.ablx`;
-7. a decomposição em nove planos independentes, com auditoria de corpus e spike de CPU/ONNX antes do dataset e do treino;
-8. quem avalia no teste cego e quantas pessoas são, já que isso limita o que o model card pode afirmar;
-9. o que fazer com os `.tgz` do Extensions SDK versionados no repositório público (risco 19), já que os planos 8 e 9 dependem de empacotar `.ablx`.
+1. o escopo exclusivo de bateria e ritmo;
+2. **a resposta a O1**, escolhendo entre (a), (b) e (c). Sem ela, só os planos 1, 2 e 3 podem ser escritos;
+3. **a resposta a O2**, o número de avaliadores do teste cego, aceitando o limiar `≥21/30` antes da coleta;
+4. **a resposta a O3**, o teto de tamanho da `.ablx`;
+5. **a resposta a O4**, o destino dos tarballs do Extensions SDK no repositório público;
+6. que o mapa de articulações por coleção é pré-requisito do dataset, e que exportar os mapas MIDI oficiais das bibliotecas instaladas é tarefa dele;
+7. a comparação A/B/C em vez de treinar um modelo grande direto;
+8. dataset, split e anti-cópia antes do full run;
+9. promoção somente após avaliação cega;
+10. a separação entre laboratório PyTorch e produto ONNX `.ablx`;
+11. a decomposição em nove planos, com auditoria de corpus e spike de CPU antes do dataset e do treino.
