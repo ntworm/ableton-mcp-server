@@ -1,0 +1,10 @@
+# CPU-only lab dependencies. Never installed into the product environment.
+# Install with:
+#   pip install -r lab/requirements.txt --index-url https://download.pytorch.org/whl/cpu \
+#       --extra-index-url https://pypi.org/simple
+torch==2.12.0
+onnx==1.18.0
+onnxruntime==1.23.2
+numpy==2.2.6
+psutil==7.0.0
+pytest==8.4.1
