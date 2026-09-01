@@ -17,14 +17,32 @@ STEPS = 32
 LANES = 18
 
 
+DEFAULT_TEMPERATURE = 1.0
+
+
 @torch.no_grad()
 def generate(
     model: nn.Module,
     conditions: np.ndarray,
     seed: int,
     decoding_steps: int,
+    temperature: float = DEFAULT_TEMPERATURE,
 ) -> dict[str, np.ndarray]:
+    """Decode one groove. ``temperature`` is what makes the seed mean anything.
+
+    Specification 12.1 asks for confidence decoding *with temperature*.  Without
+    it the loop is a pure argmax over deterministic logits, every seed returns
+    the identical grid, and any diversity metric reads exactly zero no matter how
+    good the model is.
+
+    Adding logistic noise scaled by the temperature to a logit and then
+    thresholding at zero is exactly a Bernoulli draw from
+    ``sigmoid(logit / temperature)``, so the same perturbed value can order the
+    confidence ranking and decide the hit.
+    """
+
     torch.manual_seed(seed)
+    rng = np.random.default_rng(seed)
     model.eval()
     state = DecodeState.masked(STEPS, LANES)
     task = torch.tensor([TASK_INDEX["free_generation"]], dtype=torch.long)
@@ -40,10 +58,13 @@ def generate(
             conditions=condition_tensor,
             task=task,
         )
+        logits = outputs["hit_logits"][0].numpy()
+        if temperature > 0.0:
+            logits = logits + rng.logistic(size=logits.shape) * temperature
         before = state.observed_mask.copy()
         commit_confident_cells(
             state,
-            outputs["hit_logits"][0].numpy(),
+            logits,
             outputs["velocity"][0].numpy(),
             outputs["offset"][0].numpy(),
             count=count,
