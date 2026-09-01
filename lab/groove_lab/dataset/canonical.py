@@ -93,10 +93,46 @@ def build_canonical(parsed: ParsedSmfV1, collection: str) -> CanonicalGroove:
 
 
 def note_mass_lost(parsed: ParsedSmfV1, groove: CanonicalGroove) -> float:
-    """Fraction of source notes the canonical form does not account for."""
+    """Fraction of source notes the canonical form does not account for.
+
+    With ``subhits`` this is zero by construction, and that is the point: no note
+    disappears.  It is not the whole story, which is why
+    :func:`expression_mass_averaged` exists.
+    """
 
     source = len(parsed.note_events)
     if source == 0:
         return 0.0
     kept = sum(cell.subhits for cell in groove.cells)
     return (source - kept) / source
+
+
+def notes_fused_share(parsed: ParsedSmfV1, groove: CanonicalGroove) -> float:
+    """Fraction of notes a one-hit-per-cell grid would have dropped.
+
+    This is ``notes - cells`` over notes, the same quantity the corpus audit
+    measured at 3.51% on a sixteenth grid, and it is what the representation
+    budget in :class:`~groove_lab.dataset.config.BuildConfig` was derived from.
+    Keeping the identical definition is the only way the budget means anything.
+    """
+
+    source = len(parsed.note_events)
+    if source == 0:
+        return 0.0
+    return (source - len(groove.cells)) / source
+
+
+def expression_mass_averaged(parsed: ParsedSmfV1, groove: CanonicalGroove) -> float:
+    """Fraction of notes whose own velocity and offset were averaged away.
+
+    Broader than :func:`notes_fused_share`: a cell holding two events fuses one
+    note but averages the expression of both.  ``subhits`` keeps the count so
+    nothing vanishes, and this is the honest cost that a comfortable zero on
+    ``note_mass_lost`` would otherwise hide.
+    """
+
+    source = len(parsed.note_events)
+    if source == 0:
+        return 0.0
+    averaged = sum(cell.subhits for cell in groove.cells if cell.subhits > 1)
+    return averaged / source

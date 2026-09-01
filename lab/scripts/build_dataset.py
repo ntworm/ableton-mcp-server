@@ -24,7 +24,10 @@ def main() -> None:
     config = BuildConfig(short_file_policy=arguments.short_file_policy)
     manifest = build_dataset(arguments.fraction, config, arguments.workspace)
     print("counts               ", manifest.counts)
-    print("representation loss  ", manifest.representation_loss)
+    print("notes unaccounted    ", manifest.representation_loss)
+    print("notes fused (budget) ", manifest.notes_fused_share,
+          "<=", manifest.config["representation_loss_budget"])
+    print("expression averaged  ", manifest.expression_mass_averaged)
     print("unresolved share     ", manifest.unresolved_note_share)
     print("largest cluster      ", manifest.cluster_sizes)
     print("excluded collections ", len(manifest.excluded_collections))
