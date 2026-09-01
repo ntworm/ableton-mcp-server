@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from pathlib import Path
 
 from ableton_mcp_server.groove_intelligence.articulation import (
@@ -13,7 +14,10 @@ from ableton_mcp_server.groove_intelligence.constants import (
     HVO_SCHEMA_VERSION,
     HVO_SCHEMA_VERSION_V3,
 )
-from ableton_mcp_server.groove_intelligence.drum_roles import GM_DRUM_ROLE_BY_PITCH
+from ableton_mcp_server.groove_intelligence.drum_roles import (
+    GM_DRUM_ROLE_BY_PITCH,
+    GM_DRUM_ROLES,
+)
 from ableton_mcp_server.groove_intelligence.midi_lossless import parse_smf
 from ableton_mcp_server.groove_intelligence.projections import derive_hvo, derive_hvo_v3
 from ableton_mcp_server.groove_intelligence.schema import HvoProjectionV1
@@ -65,29 +69,51 @@ def test_map_is_keyed_per_collection_with_real_evidence() -> None:
     assert confidences <= {"high", "medium", "low"}
     assert confidences != {"high"}, "a map that is high confidence everywhere states nothing"
 
-    evidence = {entry["evidence"] for entry in raw.values()}
-    assert len(evidence) == len(raw), "each entry must carry the evidence that justified it"
+    # Small collections can legitimately share wording when they carry the same
+    # single pitch with the same counts.  What must not happen is one boilerplate
+    # string standing in for evidence across the map.
+    evidence = Counter(entry["evidence"] for entry in raw.values())
+    most_common, repeats = evidence.most_common(1)[0]
+    assert repeats <= max(2, len(raw) // 20), (
+        f"one evidence string covers {repeats} of {len(raw)} entries: {most_common[:120]}"
+    )
+    assert len(evidence) >= len(raw) * 0.9, "evidence is not specific enough per collection"
 
 
-def test_map_only_ever_assigns_hi_hat_lanes() -> None:
+def test_map_only_assigns_canonical_roles() -> None:
     raw = json.loads(MAP_PATH.read_text(encoding="utf-8"))
     assigned = {role for entry in raw.values() for role in entry["pitches"].values()}
-    unexpected = assigned - HAT_ROLES
-    assert not unexpected, f"map assigns roles it has no evidence for: {unexpected}"
+    unexpected = assigned - set(GM_DRUM_ROLES)
+    assert not unexpected, f"map assigns roles outside the ontology: {unexpected}"
 
 
-def test_unjustified_pitches_stay_unresolved_everywhere() -> None:
-    # 60-63 were once mapped to crash.  In a latin library 60 and 61 are the
-    # General MIDI bongo pair, and no evidence supports one global reading, so
-    # they must fall through instead of being relabelled.
+def test_map_never_downgrades_a_resolved_general_midi_pitch() -> None:
+    # The vendor kit vocabulary is coarser than General MIDI in places: one Ride
+    # piece covers the bell, one Crash covers splash and china.  An override is
+    # only ever allowed where General MIDI leaves the pitch unresolved, so a
+    # coarser vendor answer can never replace a finer one.
+    raw = json.loads(MAP_PATH.read_text(encoding="utf-8"))
+    for collection, entry in raw.items():
+        for pitch, role in entry["pitches"].items():
+            gm_role = GM_DRUM_ROLE_BY_PITCH.get(int(pitch), "other_percussion")
+            assert gm_role == "other_percussion", (
+                f"{collection} pitch {pitch} overrides General MIDI {gm_role} with {role}"
+            )
+
+
+def test_the_same_pitch_resolves_differently_per_library() -> None:
+    # Pitch 60 is a hi-hat in Superior Drummer 3 and the General MIDI hi bongo in
+    # EZX Latin Percussion.  This is the whole reason the map is keyed by
+    # collection, and it is why 60-63 were never crashes.
+    assert resolve_role(MAPPED, 60) in HAT_ROLES
+    assert resolve_role(LATIN, 60) == "other_percussion"
+    assert resolve_role(MAPPED, 60) != resolve_role(LATIN, 60)
+
+
+def test_no_collection_maps_the_cymbal_band_to_crash() -> None:
     for collection in sorted(mapped_collections()):
         for pitch in (60, 61, 62, 63):
-            assert resolve_role(collection, pitch) == "other_percussion"
-
-
-def test_latin_collection_keeps_its_general_midi_percussion() -> None:
-    for pitch in (60, 61, 62, 63):
-        assert resolve_role(LATIN, pitch) == GM_DRUM_ROLE_BY_PITCH.get(pitch, "other_percussion")
+            assert resolve_role(collection, pitch) != "crash"
 
 
 def test_mapped_collection_resolves_the_band_to_hi_hat_lanes() -> None:
