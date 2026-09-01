@@ -184,6 +184,22 @@ O proprietário tem as bibliotecas instaladas e pode exportar os mapas MIDI ofic
 
 `[decisão]` A ontologia V1 continua com os 18 papéis. Percussão latina não ganha lanes novas na V1: coleções dominadas por ela saem do treino em vez de inflar a ontologia.
 
+#### Resultado do plano 2, executado em 2026-08-31
+
+`[fato]` A medição foi refeita sobre o catálogo inteiro — 278 coleções, `10.671.574` notas nos arquivos únicos por bytes — gravando, por coleção e por altura, um perfil rítmico: notas por arquivo, espaçamento entre onsets, fração em posições de colcheia e concentração no fim do compasso. Os papéis foram atribuídos comparando cada altura da banda com as lanes GM presentes no próprio corpus (42 fechado, 44 pedal, 46 aberto), não por intuição.
+
+O que a evidência sustentou e o que não sustentou:
+
+- **21 → `hat_pedal`**, estável: distância `0,061` do GM 44 contra `0,213` do segundo colocado, e 73% das 120 coleções que usam a altura chegam ao mesmo resultado sozinhas;
+- **22, 24, 25, 26, 27 → `hat_closed`**, com ressalva declarada: são inequivocamente da família chimbal — a coocorrência no mesmo tick entre elas é de `0,035%`, ou seja, articulações mutuamente exclusivas do mesmo instrumento — mas a articulação exata **não** é determinável, porque a concordância entre coleções fica em 20% a 50%. O colapso na lane de subdivisão é registrado como perda documentada e reversível;
+- **60–63 permanecem sem resolução.** Carregam 7,9% da massa do corpus, enquanto o crash GM 49 mede 3,0 notas por arquivo e gap mediano de 8 passos; e em `EZX_LATIN_PERCUSSION` só 60 e 61 existem, com 62 e 63 zerados, que é o par de bongô do GM. A mesma altura é instrumento diferente em bibliotecas diferentes, e nenhuma leitura global se sustenta.
+
+`[fato]` Efeito medido: chimbal sobe de `5,67%` para `16,51%` da massa de notas, dentro da faixa de 15% a 20% prevista; `other_percussion` cai de `24,34%` para `13,49%`; `crash` fica inalterado em `2,77%`. O mapa cobre 206 coleções com 44 tabelas de altura distintas, 144 delas de confiança alta.
+
+`[fato]` Gate G1 no estado atual: **144 de 278 coleções ficam fora do treino** por passarem de 10% de massa não resolvida. A causa dominante é 60–63. Exportar os mapas MIDI oficiais das bibliotecas resolveria a maior parte disso de uma vez.
+
+Artefatos: `scripts/measurement.py`, `scripts/build_articulation_map.py`, `scripts/report.py`, `scripts/measurement_output.json`, `scripts/measurement_report.md` e `ableton_mcp_server/groove_intelligence/articulation_map.json`. A projeção de treino é `groove.hvo.v3`; `groove.hvo.v2` fica intacta e continua alimentando o retrieval, com teste de regressão por digest.
+
 ### 4.4 Origem do corpus
 
 `[fato]` O corpus vem de `C:\Users\Usuario\Desktop\AUDIO_PRODUCTION\AUDIO\Superior Drummer 3\Toontrack\Midi` (`scripts/ingest_private_corpus.py:18`) e é composto por MIDI das bibliotecas de bateria que o proprietário tem instaladas. As `280` coleções carregam o nome do produto de origem. As maiores: `ezx_drumkit_from_hell` (19.756), `ezd_pop_rock` (8.550), `ezx_latin_percussion` (6.786), `real_blues` (4.657), `zildjian_artists` (4.270), `groove_monkee_progressive` (3.868), `ezdrummer_3` (2.879), `brooks_wackerman_grooves` (1.811), `platinum_samples` (1.614).

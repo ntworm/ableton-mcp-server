@@ -7,9 +7,10 @@ from collections import Counter, defaultdict
 from fractions import Fraction
 from statistics import mean, pstdev
 
-from .canonical import canonical_json
-from .drum_roles import GM_DRUM_ROLE_BY_PITCH, GM_DRUM_ROLES
 from .articulation import resolve_role
+from .canonical import canonical_json
+from .constants import HVO_SCHEMA_VERSION_V3
+from .drum_roles import GM_DRUM_ROLE_BY_PITCH, GM_DRUM_ROLES
 from .midi_lossless import ParsedSmfV1
 from .schema import (
     FeaturesProjectionV1,
@@ -211,11 +212,20 @@ def derive_grammar(parsed: ParsedSmfV1, hvo: HvoProjectionV1) -> GrammarProjecti
         source_events_digest=parsed.source_events_digest,
     )
 
-def derive_hvo_v3(parsed: ParsedSmfV1, stratum: str) -> HvoProjectionV1:
+
+def derive_hvo_v3(parsed: ParsedSmfV1, collection: str) -> HvoProjectionV1:
+    """Derive the training HVO projection using the per-collection articulation map.
+
+    Identical to :func:`derive_hvo` except that a pitch is resolved through
+    ``articulation.resolve_role`` instead of the General MIDI map alone, and the
+    result is stamped ``groove.hvo.v3`` so a consumer can tell which role map
+    produced it.  ``derive_hvo`` is untouched and keeps feeding retrieval.
+    """
+
     grouped: dict[tuple[str, int, int], list[tuple[NoteEventV1, int]]] = defaultdict(list)
     for note in parsed.note_events:
         bar, step, offset = _grid_position(parsed, note.start_ticks)
-        grouped[(resolve_role(stratum, note.pitch), bar, step)].append((note, offset))
+        grouped[(resolve_role(collection, note.pitch), bar, step)].append((note, offset))
     cells: list[HvoCellV1] = []
     for (role, bar, step), values in sorted(grouped.items(), key=lambda item: item[0]):
         cells.append(
@@ -230,6 +240,7 @@ def derive_hvo_v3(parsed: ParsedSmfV1, stratum: str) -> HvoProjectionV1:
             )
         )
     return HvoProjectionV1(
+        schema_version=HVO_SCHEMA_VERSION_V3,
         grid_ticks=GRID_TICKS,
         roles=ROLES,
         cells=cells,
