@@ -1,0 +1,495 @@
+{
+  "environment": {
+    "cuda_available": false,
+    "onnxruntime": "1.23.2",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 151 Stepping 2, GenuineIntel",
+    "providers": [
+      "AzureExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "python": "3.10.11",
+    "torch": "2.12.0+cpu"
+  },
+  "footprint": {
+    "gate0_ablx_bytes": 154852,
+    "onnxruntime_native_bytes": 35033736
+  },
+  "limits": {
+    "cpu_seconds": 2.0,
+    "generation_seconds": 5.0,
+    "max_events": 2048,
+    "max_response_bytes": 262144,
+    "memory_mib": 512,
+    "shutdown_seconds": 1.0,
+    "startup_seconds": 2.0
+  },
+  "variants": {
+    "cell_token": {
+      "exporter": "dynamo",
+      "max_decoding_steps": {
+        "1": 16,
+        "4": 16,
+        "8": 8
+      },
+      "onnx_bytes": 419850,
+      "parameters": 4758791,
+      "runs": [
+        {
+          "cpu_seconds_best": 0.0625,
+          "cpu_seconds_worst": 0.0625,
+          "decoding_steps": 1,
+          "limits_broken": [],
+          "peak_memory_mib": 433.0,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.1094,
+          "startup_seconds": 0.1086,
+          "threads": 1,
+          "wall_seconds_worst": 0.0648
+        },
+        {
+          "cpu_seconds_best": 0.125,
+          "cpu_seconds_worst": 0.125,
+          "decoding_steps": 2,
+          "limits_broken": [],
+          "peak_memory_mib": 433.0,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.1094,
+          "startup_seconds": 0.1086,
+          "threads": 1,
+          "wall_seconds_worst": 0.1289
+        },
+        {
+          "cpu_seconds_best": 0.2188,
+          "cpu_seconds_worst": 0.25,
+          "decoding_steps": 4,
+          "limits_broken": [],
+          "peak_memory_mib": 433.0,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.1094,
+          "startup_seconds": 0.1086,
+          "threads": 1,
+          "wall_seconds_worst": 0.2555
+        },
+        {
+          "cpu_seconds_best": 0.4688,
+          "cpu_seconds_worst": 0.5312,
+          "decoding_steps": 8,
+          "limits_broken": [],
+          "peak_memory_mib": 433.0,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.1094,
+          "startup_seconds": 0.1086,
+          "threads": 1,
+          "wall_seconds_worst": 0.5188
+        },
+        {
+          "cpu_seconds_best": 0.9375,
+          "cpu_seconds_worst": 1.0312,
+          "decoding_steps": 16,
+          "limits_broken": [],
+          "peak_memory_mib": 433.0,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.1094,
+          "startup_seconds": 0.1086,
+          "threads": 1,
+          "wall_seconds_worst": 1.0342
+        },
+        {
+          "cpu_seconds_best": 2.0,
+          "cpu_seconds_worst": 2.0156,
+          "decoding_steps": 32,
+          "limits_broken": [
+            "cpu_seconds"
+          ],
+          "peak_memory_mib": 433.1,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.1094,
+          "startup_seconds": 0.1086,
+          "threads": 1,
+          "wall_seconds_worst": 2.0564
+        },
+        {
+          "cpu_seconds_best": 0.0625,
+          "cpu_seconds_worst": 0.125,
+          "decoding_steps": 1,
+          "limits_broken": [],
+          "peak_memory_mib": 440.3,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.2344,
+          "startup_seconds": 0.0687,
+          "threads": 4,
+          "wall_seconds_worst": 0.0228
+        },
+        {
+          "cpu_seconds_best": 0.125,
+          "cpu_seconds_worst": 0.1875,
+          "decoding_steps": 2,
+          "limits_broken": [],
+          "peak_memory_mib": 440.3,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.2344,
+          "startup_seconds": 0.0687,
+          "threads": 4,
+          "wall_seconds_worst": 0.0488
+        },
+        {
+          "cpu_seconds_best": 0.3125,
+          "cpu_seconds_worst": 0.3594,
+          "decoding_steps": 4,
+          "limits_broken": [],
+          "peak_memory_mib": 440.3,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.2344,
+          "startup_seconds": 0.0687,
+          "threads": 4,
+          "wall_seconds_worst": 0.0857
+        },
+        {
+          "cpu_seconds_best": 0.6562,
+          "cpu_seconds_worst": 0.6719,
+          "decoding_steps": 8,
+          "limits_broken": [],
+          "peak_memory_mib": 440.3,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.2344,
+          "startup_seconds": 0.0687,
+          "threads": 4,
+          "wall_seconds_worst": 0.1747
+        },
+        {
+          "cpu_seconds_best": 1.2812,
+          "cpu_seconds_worst": 1.3594,
+          "decoding_steps": 16,
+          "limits_broken": [],
+          "peak_memory_mib": 440.3,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.2344,
+          "startup_seconds": 0.0687,
+          "threads": 4,
+          "wall_seconds_worst": 0.339
+        },
+        {
+          "cpu_seconds_best": 2.5781,
+          "cpu_seconds_worst": 2.6562,
+          "decoding_steps": 32,
+          "limits_broken": [
+            "cpu_seconds"
+          ],
+          "peak_memory_mib": 440.3,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.2344,
+          "startup_seconds": 0.0687,
+          "threads": 4,
+          "wall_seconds_worst": 0.6712
+        },
+        {
+          "cpu_seconds_best": 0.125,
+          "cpu_seconds_worst": 0.1719,
+          "decoding_steps": 1,
+          "limits_broken": [],
+          "peak_memory_mib": 443.1,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.75,
+          "startup_seconds": 0.0691,
+          "threads": 8,
+          "wall_seconds_worst": 0.0182
+        },
+        {
+          "cpu_seconds_best": 0.2344,
+          "cpu_seconds_worst": 0.25,
+          "decoding_steps": 2,
+          "limits_broken": [],
+          "peak_memory_mib": 443.1,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.75,
+          "startup_seconds": 0.0691,
+          "threads": 8,
+          "wall_seconds_worst": 0.0343
+        },
+        {
+          "cpu_seconds_best": 0.5,
+          "cpu_seconds_worst": 0.625,
+          "decoding_steps": 4,
+          "limits_broken": [],
+          "peak_memory_mib": 443.1,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.75,
+          "startup_seconds": 0.0691,
+          "threads": 8,
+          "wall_seconds_worst": 0.0759
+        },
+        {
+          "cpu_seconds_best": 0.9844,
+          "cpu_seconds_worst": 1.0938,
+          "decoding_steps": 8,
+          "limits_broken": [],
+          "peak_memory_mib": 443.1,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.75,
+          "startup_seconds": 0.0691,
+          "threads": 8,
+          "wall_seconds_worst": 0.1351
+        },
+        {
+          "cpu_seconds_best": 2.0625,
+          "cpu_seconds_worst": 2.25,
+          "decoding_steps": 16,
+          "limits_broken": [
+            "cpu_seconds"
+          ],
+          "peak_memory_mib": 443.1,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.75,
+          "startup_seconds": 0.0691,
+          "threads": 8,
+          "wall_seconds_worst": 0.2791
+        },
+        {
+          "cpu_seconds_best": 4.2188,
+          "cpu_seconds_worst": 4.4062,
+          "decoding_steps": 32,
+          "limits_broken": [
+            "cpu_seconds"
+          ],
+          "peak_memory_mib": 443.1,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.75,
+          "startup_seconds": 0.0691,
+          "threads": 8,
+          "wall_seconds_worst": 0.5647
+        }
+      ],
+      "sequence_length": 576
+    },
+    "step_token": {
+      "exporter": "dynamo",
+      "max_decoding_steps": {
+        "1": 32,
+        "4": 32,
+        "8": 32
+      },
+      "onnx_bytes": 415564,
+      "parameters": 4802174,
+      "runs": [
+        {
+          "cpu_seconds_best": 0.0,
+          "cpu_seconds_worst": 0.0,
+          "decoding_steps": 1,
+          "limits_broken": [],
+          "peak_memory_mib": 419.9,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.0312,
+          "startup_seconds": 0.034,
+          "threads": 1,
+          "wall_seconds_worst": 0.003
+        },
+        {
+          "cpu_seconds_best": 0.0,
+          "cpu_seconds_worst": 0.0156,
+          "decoding_steps": 2,
+          "limits_broken": [],
+          "peak_memory_mib": 419.9,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.0312,
+          "startup_seconds": 0.034,
+          "threads": 1,
+          "wall_seconds_worst": 0.0055
+        },
+        {
+          "cpu_seconds_best": 0.0,
+          "cpu_seconds_worst": 0.0156,
+          "decoding_steps": 4,
+          "limits_broken": [],
+          "peak_memory_mib": 419.9,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.0312,
+          "startup_seconds": 0.034,
+          "threads": 1,
+          "wall_seconds_worst": 0.0109
+        },
+        {
+          "cpu_seconds_best": 0.0156,
+          "cpu_seconds_worst": 0.0156,
+          "decoding_steps": 8,
+          "limits_broken": [],
+          "peak_memory_mib": 419.9,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.0312,
+          "startup_seconds": 0.034,
+          "threads": 1,
+          "wall_seconds_worst": 0.0224
+        },
+        {
+          "cpu_seconds_best": 0.0312,
+          "cpu_seconds_worst": 0.0469,
+          "decoding_steps": 16,
+          "limits_broken": [],
+          "peak_memory_mib": 419.9,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.0312,
+          "startup_seconds": 0.034,
+          "threads": 1,
+          "wall_seconds_worst": 0.0449
+        },
+        {
+          "cpu_seconds_best": 0.0625,
+          "cpu_seconds_worst": 0.0938,
+          "decoding_steps": 32,
+          "limits_broken": [],
+          "peak_memory_mib": 419.9,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.0312,
+          "startup_seconds": 0.034,
+          "threads": 1,
+          "wall_seconds_worst": 0.0889
+        },
+        {
+          "cpu_seconds_best": 0.0,
+          "cpu_seconds_worst": 0.0312,
+          "decoding_steps": 1,
+          "limits_broken": [],
+          "peak_memory_mib": 420.2,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.125,
+          "startup_seconds": 0.033,
+          "threads": 4,
+          "wall_seconds_worst": 0.0015
+        },
+        {
+          "cpu_seconds_best": 0.0,
+          "cpu_seconds_worst": 0.0,
+          "decoding_steps": 2,
+          "limits_broken": [],
+          "peak_memory_mib": 420.2,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.125,
+          "startup_seconds": 0.033,
+          "threads": 4,
+          "wall_seconds_worst": 0.003
+        },
+        {
+          "cpu_seconds_best": 0.0,
+          "cpu_seconds_worst": 0.0625,
+          "decoding_steps": 4,
+          "limits_broken": [],
+          "peak_memory_mib": 420.2,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.125,
+          "startup_seconds": 0.033,
+          "threads": 4,
+          "wall_seconds_worst": 0.006
+        },
+        {
+          "cpu_seconds_best": 0.0156,
+          "cpu_seconds_worst": 0.0625,
+          "decoding_steps": 8,
+          "limits_broken": [],
+          "peak_memory_mib": 420.2,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.125,
+          "startup_seconds": 0.033,
+          "threads": 4,
+          "wall_seconds_worst": 0.0111
+        },
+        {
+          "cpu_seconds_best": 0.0781,
+          "cpu_seconds_worst": 0.125,
+          "decoding_steps": 16,
+          "limits_broken": [],
+          "peak_memory_mib": 420.2,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.125,
+          "startup_seconds": 0.033,
+          "threads": 4,
+          "wall_seconds_worst": 0.024
+        },
+        {
+          "cpu_seconds_best": 0.125,
+          "cpu_seconds_worst": 0.1875,
+          "decoding_steps": 32,
+          "limits_broken": [],
+          "peak_memory_mib": 420.2,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.125,
+          "startup_seconds": 0.033,
+          "threads": 4,
+          "wall_seconds_worst": 0.0477
+        },
+        {
+          "cpu_seconds_best": 0.0,
+          "cpu_seconds_worst": 0.0,
+          "decoding_steps": 1,
+          "limits_broken": [],
+          "peak_memory_mib": 422.0,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.5156,
+          "startup_seconds": 0.0384,
+          "threads": 8,
+          "wall_seconds_worst": 0.0014
+        },
+        {
+          "cpu_seconds_best": 0.0,
+          "cpu_seconds_worst": 0.125,
+          "decoding_steps": 2,
+          "limits_broken": [],
+          "peak_memory_mib": 422.0,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.5156,
+          "startup_seconds": 0.0384,
+          "threads": 8,
+          "wall_seconds_worst": 0.0029
+        },
+        {
+          "cpu_seconds_best": 0.0,
+          "cpu_seconds_worst": 0.125,
+          "decoding_steps": 4,
+          "limits_broken": [],
+          "peak_memory_mib": 422.0,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.5156,
+          "startup_seconds": 0.0384,
+          "threads": 8,
+          "wall_seconds_worst": 0.0073
+        },
+        {
+          "cpu_seconds_best": 0.0,
+          "cpu_seconds_worst": 0.125,
+          "decoding_steps": 8,
+          "limits_broken": [],
+          "peak_memory_mib": 422.0,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.5156,
+          "startup_seconds": 0.0384,
+          "threads": 8,
+          "wall_seconds_worst": 0.0115
+        },
+        {
+          "cpu_seconds_best": 0.125,
+          "cpu_seconds_worst": 0.2188,
+          "decoding_steps": 16,
+          "limits_broken": [],
+          "peak_memory_mib": 422.0,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.5156,
+          "startup_seconds": 0.0384,
+          "threads": 8,
+          "wall_seconds_worst": 0.0233
+        },
+        {
+          "cpu_seconds_best": 0.25,
+          "cpu_seconds_worst": 0.375,
+          "decoding_steps": 32,
+          "limits_broken": [],
+          "peak_memory_mib": 422.0,
+          "repeats": 3,
+          "startup_cpu_seconds": 0.5156,
+          "startup_seconds": 0.0384,
+          "threads": 8,
+          "wall_seconds_worst": 0.0439
+        }
+      ],
+      "sequence_length": 32
+    }
+  }
+}

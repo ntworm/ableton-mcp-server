@@ -49,6 +49,13 @@ THREAD_COUNTS = (1, 4, 8)
 STEP_COUNTS = (1, 2, 4, 8, 16, 32)
 VARIANTS = {"cell_token": CellTokenHvo, "step_token": StepTokenHvo}
 
+# A single timing near the ceiling is not stable: the first sweep of this spike
+# put cell_token at 32 steps on one thread and the immediate rerun put it at 16,
+# because the machine was busier. Each configuration is therefore measured
+# REPEATS times and judged on its worst result, which is the only safe reading of
+# a hard ceiling.
+REPEATS = 3
+
 
 def _decode_once(
     session: ort.InferenceSession, mapping: dict[str, str], total_steps: int
@@ -116,31 +123,38 @@ def _sweep_variant(name: str, factory: type) -> dict[str, object]:
         best = 0
         for total_steps in STEP_COUNTS:
             _decode_once(session, mapping, total_steps)  # warm the caches
-            result = measure(
-                lambda steps=total_steps: _decode_once(session, mapping, steps)
-            )
+            attempts = [
+                measure(lambda steps=total_steps: _decode_once(session, mapping, steps))
+                for _ in range(REPEATS)
+            ]
+            worst = max(attempts, key=lambda item: item.cpu_seconds)
             values = {
-                "generation_seconds": result.wall_seconds,
-                "cpu_seconds": result.cpu_seconds,
+                "generation_seconds": max(a.wall_seconds for a in attempts),
+                "cpu_seconds": worst.cpu_seconds,
                 "startup_seconds": startup_seconds,
-                "memory_mib": result.peak_memory_mib,
+                "memory_mib": max(a.peak_memory_mib for a in attempts),
             }
             broken = verdict(values)
             runs.append(
                 {
                     "threads": threads,
                     "decoding_steps": total_steps,
-                    "wall_seconds": round(result.wall_seconds, 4),
-                    "cpu_seconds": round(result.cpu_seconds, 4),
+                    "repeats": REPEATS,
+                    "wall_seconds_worst": round(values["generation_seconds"], 4),
+                    "cpu_seconds_worst": round(worst.cpu_seconds, 4),
+                    "cpu_seconds_best": round(
+                        min(a.cpu_seconds for a in attempts), 4
+                    ),
                     "startup_seconds": round(startup_seconds, 4),
                     "startup_cpu_seconds": round(startup_cpu, 4),
-                    "peak_memory_mib": round(result.peak_memory_mib, 1),
+                    "peak_memory_mib": round(values["memory_mib"], 1),
                     "limits_broken": broken,
                 }
             )
             print(
                 f"  {name:11s} threads={threads} steps={total_steps:2d} "
-                f"wall={result.wall_seconds:6.3f}s cpu={result.cpu_seconds:6.3f}s "
+                f"wall={values['generation_seconds']:6.3f}s "
+                f"cpu={worst.cpu_seconds:6.3f}s (best {min(a.cpu_seconds for a in attempts):.3f}) "
                 f"{'OK' if not broken else 'BREAKS ' + ','.join(broken)}",
                 flush=True,
             )
@@ -148,6 +162,21 @@ def _sweep_variant(name: str, factory: type) -> dict[str, object]:
                 best = total_steps
         best_by_threads[str(threads)] = best
     return entry
+
+
+def _runtime_footprint() -> dict[str, int]:
+    """Bytes ONNX Runtime and the model would add on top of the Gate 0 package."""
+
+    runtime_root = Path(ort.__file__).resolve().parent
+    native = sum(
+        path.stat().st_size
+        for path in runtime_root.rglob("*")
+        if path.is_file() and path.suffix.lower() in {".dll", ".pyd", ".so"}
+    )
+    return {
+        "onnxruntime_native_bytes": native,
+        "gate0_ablx_bytes": 154852,
+    }
 
 
 def main() -> None:
@@ -168,6 +197,8 @@ def main() -> None:
         "variants": {},
     }
     variants: dict[str, object] = report["variants"]  # type: ignore[assignment]
+
+    report["footprint"] = _runtime_footprint()
 
     for name, factory in VARIANTS.items():
         variants[name] = _sweep_variant(name, factory)
@@ -216,18 +247,44 @@ def _write_result_document(report: dict) -> None:
         "",
         "## Every run",
         "",
-        "| Variant | Threads | Steps | Wall s | CPU s | Peak MiB | Limits broken |",
-        "|---|---|---|---|---|---|---|",
+        "Each configuration is measured three times and judged on its worst CPU",
+        "result, because a single timing near the ceiling is not stable.",
+        "",
+        "| Variant | Threads | Steps | Wall s | CPU s worst | CPU s best | Peak MiB | Limits broken |",
+        "|---|---|---|---|---|---|---|---|",
     ]
     for name, entry in report["variants"].items():
         for run in entry["runs"]:
             broken = ", ".join(run["limits_broken"]) or "none"
             lines.append(
                 f"| `{name}` | {run['threads']} | {run['decoding_steps']} | "
-                f"{run['wall_seconds']} | {run['cpu_seconds']} | "
-                f"{run['peak_memory_mib']} | {broken} |"
+                f"{run['wall_seconds_worst']} | {run['cpu_seconds_worst']} | "
+                f"{run['cpu_seconds_best']} | {run['peak_memory_mib']} | {broken} |"
             )
-    lines += ["", "Raw data: `lab/artifacts/budget.json`."]
+
+    footprint = report["footprint"]
+    native_mib = footprint["onnxruntime_native_bytes"] / (1024 * 1024)
+    lines += [
+        "",
+        "## Package footprint",
+        "",
+        f"- ONNX Runtime native libraries: {native_mib:.1f} MiB",
+        f"- Gate 0 `.ablx` baseline: {footprint['gate0_ablx_bytes']} bytes",
+        "- Model weights per variant are the `ONNX bytes` column above.",
+        "",
+        "This is the runtime and model half of the `.ablx` ceiling that decision O2",
+        "has to set. It does not include the helper, the UI or the catalog.",
+        "",
+        "## Reading the memory column",
+        "",
+        "Peak memory is the whole lab process, which has PyTorch loaded alongside",
+        "ONNX Runtime. The shipped helper is native and never loads PyTorch, so these",
+        "figures are an upper bound contaminated by the harness, not a reading of what",
+        "the provider would use. A dedicated measurement in a PyTorch-free process is",
+        "needed before anyone claims the 512 MiB ceiling is close.",
+        "",
+        "Raw data: `lab/artifacts/budget.json`.",
+    ]
     RESULT_DOC.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
