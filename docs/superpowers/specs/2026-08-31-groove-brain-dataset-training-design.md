@@ -194,11 +194,25 @@ O que a evidência sustentou e o que não sustentou:
 - **22, 24, 25, 26, 27 → `hat_closed`**, com ressalva declarada: são inequivocamente da família chimbal — a coocorrência no mesmo tick entre elas é de `0,035%`, ou seja, articulações mutuamente exclusivas do mesmo instrumento — mas a articulação exata **não** é determinável, porque a concordância entre coleções fica em 20% a 50%. O colapso na lane de subdivisão é registrado como perda documentada e reversível;
 - **60–63 permanecem sem resolução.** Carregam 7,9% da massa do corpus, enquanto o crash GM 49 mede 3,0 notas por arquivo e gap mediano de 8 passos; e em `EZX_LATIN_PERCUSSION` só 60 e 61 existem, com 62 e 63 zerados, que é o par de bongô do GM. A mesma altura é instrumento diferente em bibliotecas diferentes, e nenhuma leitura global se sustenta.
 
-`[fato]` Efeito medido: chimbal sobe de `5,67%` para `16,51%` da massa de notas, dentro da faixa de 15% a 20% prevista; `other_percussion` cai de `24,34%` para `13,49%`; `crash` fica inalterado em `2,77%`. O mapa cobre 206 coleções com 44 tabelas de altura distintas, 144 delas de confiança alta.
+#### Camada do fabricante, que substituiu a inferência onde existe
 
-`[fato]` Gate G1 no estado atual: **144 de 278 coleções ficam fora do treino** por passarem de 10% de massa não resolvida. A causa dominante é 60–63. Exportar os mapas MIDI oficiais das bibliotecas resolveria a maior parte disso de uma vez.
+`[fato]` O Superior Drummer 3 instala uma base SQLite por biblioteca em `%PROGRAMDATA%\Toontrack\Superior Drummer 3\Database\<coleção>\midiDB`. São **190 bases, 186 legíveis**. Cada uma traz, por arquivo de groove: as peças de bateria tocadas (`KITPIECES` + `REL_ENT_KITS`), o gênero (`GENRE`), tags de execução (`TAGS`), nome descritivo com andamento (`HEADER`), `Tempo`, compasso, resolução e intensidade.
 
-Artefatos: `scripts/measurement.py`, `scripts/build_articulation_map.py`, `scripts/report.py`, `scripts/measurement_output.json`, `scripts/measurement_report.md` e `ableton_mcp_server/groove_intelligence/articulation_map.json`. A projeção de treino é `groove.hvo.v3`; `groove.hvo.v2` fica intacta e continua alimentando o retrieval, com teste de regressão por digest.
+O join é exato: `LIBRARY.Name` é a coleção do corpus e o caminho é o mesmo trocando `_EZD2MIDI_` por `Drums Groove MIDI/`. **109.554 arquivos rotulados, 103.096 casados com o corpus.**
+
+`[decisão]` A altura recebe a peça que **100% dos arquivos que a contêm** declaram; entre as peças que valem para todos, vence a mais rara, porque é a afirmação mais específica que o dado sustenta. Peça que não nomeia um papel único — `Toms` cobre três lanes, `Special` e `Brushes` não nomeiam instrumento — não atribui nada.
+
+`[decisão]` O override só é aplicado onde o GM deixa a altura em `other_percussion`. Onde os dois discordam numa altura que o GM já resolve, o vocabulário do fabricante costuma ser o mais grosso — uma peça `Ride` cobrindo o sino, uma `Crash` cobrindo splash e china — e aplicar perderia detalhe. Esses casos ficam registrados em `scripts/vendor_labels_report.md` em vez de virarem mudança.
+
+`[fato]` 60–63 ficaram resolvidos, e cada biblioteca deu uma resposta diferente: no `SUPERIOR_DRUMMER_3` são chimbal (60 aberto, 61 e 62 fechado); no `EZX_LATIN_PERCUSSION`, 60 e 61 são o par de bongô. Nunca foram crash. Isso confirma na prática por que o mapa precisa ser por coleção.
+
+`[fato]` Efeito medido, com a camada do fabricante por cima da inferência rítmica: chimbal sobe de `5,67%` para **`21,95%`** da massa de notas; `other_percussion` cai de `24,34%` para **`6,48%`**; nenhum papel já resolvido pelo GM é rebaixado. O mapa cobre 229 coleções, 168 delas com entrada do fabricante e 1.000 overrides de altura.
+
+`[fato]` Gate G1 no estado atual: **66 de 278 coleções ficam fora do treino**, contra 144 antes da camada do fabricante.
+
+`[fato]` A base também entrega os eixos que a seção 13 registra como inexistentes na taxonomia: **gênero** (`Pop/Rock/Country` 57.670, `Metal` 21.672, `Latin` 10.014, `Jazz` 4.206, `Funk` 3.485, `Blues` 2.800, `Soul` 2.278, `Electronic` 2.036) e **andamento** por arquivo. O plano 4 consome esses rótulos em vez de inferir gênero por nome de pasta.
+
+Artefatos no repositório: `scripts/measurement.py`, `scripts/build_articulation_map.py`, `scripts/build_vendor_labels.py`, `scripts/report.py`, `scripts/measurement_output.json`, `scripts/measurement_report.md`, `scripts/vendor_labels_report.md` e `ableton_mcp_server/groove_intelligence/articulation_map.json`. Os rótulos por arquivo ficam fora do Git, em `%LOCALAPPDATA%\AbletonMCPServer\groove-vendor-labels\vendor_labels.jsonl`. A projeção de treino é `groove.hvo.v3`; `groove.hvo.v2` fica intacta e continua alimentando o retrieval, com teste de regressão por digest.
 
 ### 4.4 Origem do corpus
 
