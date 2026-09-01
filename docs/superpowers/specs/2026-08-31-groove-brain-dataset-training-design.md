@@ -644,7 +644,7 @@ Pela estimativa da seção 11.3, o dataset denso completo fica entre 2 e 5 GB, e
 |---|---|---|
 | **E0** environment probe | GPU, mixed precision, forward/backward, save e resume, DataLoader multiprocess, export de grafo mínimo | — |
 | **D0** auditoria de corpus | reproduz a seção 4.2 como código; constrói o mapa de articulações e o mapa `collection → genre`; decompõe swing e jitter; mede clusters e duplicação cruzada sobre o corpus inteiro | — |
-| **P0** spike de CPU e ONNX | exporta um modelo **não treinado** com a forma alvo e devolve o número máximo de passos de decoding dentro de `cpu_seconds <= 2,0` | E0 |
+| **P0** spike de CPU e ONNX | **feito em 2026-08-31.** Resultado: 32 passos de decoding com tokenização passo-por-token a `0,375` CPU-segundo, contra 16 passos com célula-por-token; `intra_op_num_threads=1` é obrigatório porque mais threads pioram o orçamento. Ver seção 19.4 | — |
 | **D1** build de 1% | duas builds idênticas, digests, splits, round-trip exato, ausência de vazamento, disco e throughput | D0 |
 | **M0** overfit controlado | smoke em 32–256 exemplos até memorizar de propósito. Incapacidade de overfit é bug, não falta de escala | D1 |
 | **M1** tiny 1% | deterministic/retrieval, GrooVAE, event AR e masked HVO sob orçamento curto. Geração válida, controle, ausência de colapso | M0, P0 |
@@ -742,6 +742,29 @@ CPU é o baseline universal. ONNX Runtime permite providers ordenados com fallba
 | `max_events` | `<=2.048` | eventos por candidato |
 
 `cpu_seconds <= 2,0` é o limite que decide a viabilidade. Um decoding iterativo de N passos multiplica o custo por N. O plano 3 orça passos × threads dentro de 2 s de CPU, ou o contrato é formalmente renegociado antes de projetar o decoding.
+
+#### Resultado do spike do plano 3, medido em 2026-08-31
+
+`[fato]` Dois modelos não treinados de tier small, exportados para ONNX pelo exportador Dynamo do PyTorch 2.12 e medidos sob ONNX Runtime 1.23.2 em CPU. Cada configuração rodou três vezes e é julgada pelo **pior** resultado de CPU, porque uma medição isolada perto do teto não é estável: a primeira varredura colocou `cell_token` em 32 passos e a rerodada imediata em 16.
+
+| Tokenização | Sequência | Parâmetros | ONNX | Passos máximos em 1 / 4 / 8 threads |
+|---|---|---|---|---|
+| célula por token | 576 | `4.758.791` | `419.850` B | **16 / 16 / 8** |
+| passo por token | 32 | `4.802.174` | `415.564` B | **32 / 32 / 32** |
+
+`[fato]` Custo por passe: `cell_token` gasta `0,061` CPU-segundo por passe em 1 thread, linear no número de passos. `step_token` gasta cerca de `0,003`, **20× menos**, e a 32 passos com 8 threads ainda fica em `0,375` CPU-segundo — cinco vezes abaixo do teto.
+
+`[fato]` Achado estrutural, não previsto: **mais threads pioram o orçamento**. Como `cpu_seconds` soma o tempo entre threads, `cell_token` a 32 passos custa `2,016` CPU-segundos em 1 thread e `4,406` em 8. O provider deve fixar `intra_op_num_threads=1`; paralelizar reduz o tempo de parede e estoura justamente o limite que vale.
+
+`[decisão]` A tokenização levada ao plano 6 é **passo por token**, com as lanes dobradas na dimensão de canal. Cabe com folga em qualquer configuração de thread, enquanto célula-por-token fica a um fator de 2 do teto e depende de o usuário não ter a CPU ocupada. O decoding do produto é orçado em **32 passos**, e esse número entra no plano 6 como restrição de arquitetura, não como meta.
+
+`[risco]` O que o spike **não** decidiu: se 32 tokens são musicalmente expressivos o bastante. Dobrar 18 lanes num único vetor por passo força a estrutura de lane pelo canal, e isso é pergunta do bake-off do plano 6, não de uma medição de custo. Se `step_token` perder em qualidade, `cell_token` continua viável a 16 passos com uma thread.
+
+`[risco]` A memória medida, 420 a 442 MiB contra o teto de 512, está contaminada: o processo de laboratório carrega PyTorch ao lado do ONNX Runtime, e o helper do produto é nativo e nunca carrega PyTorch. É limite superior de harness, não leitura do provider. Antes de afirmar que o teto de memória está apertado, é preciso medir num processo sem PyTorch.
+
+`[fato]` Footprint: as bibliotecas nativas do ONNX Runtime somam `33,4 MiB` e os pesos de qualquer variante ficam abaixo de `420 KB`. Somados ao piso de `154.852` bytes do Gate 0, runtime e modelo ocupam por volta de 34 MiB, bem abaixo dos 500 MiB sugeridos pelo documento de produto. Insumo direto para a decisão **O2**.
+
+Artefatos: `lab/` com ambiente CPU-only isolado em `.venv-lab`, `lab/scripts/run_spike.py`, `lab/artifacts/budget.json` e o relatório em `docs/superpowers/plans/2026-08-31-groove-brain-cpu-onnx-budget-spike-result.md`.
 
 Demais itens:
 

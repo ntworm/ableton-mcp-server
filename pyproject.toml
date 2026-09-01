@@ -57,3 +57,8 @@ follow_imports_for_stubs = true
 module = ["numpy", "numpy.*", "soundfile"]
 follow_imports = "skip"
 ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+# The product suite lives in tests/. lab/ holds the training experiments and runs
+# under its own CPU-only environment, which the product environment does not have.
+testpaths = ["tests"]
