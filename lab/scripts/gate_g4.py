@@ -26,6 +26,11 @@ OUTPUT = RUNS / "gate_g4.json"
 SEEDS = (0, 1, 2)
 SAMPLES = 64
 DECODING_STEPS = 32
+# The neutral value: sample from the model's own probabilities, unscaled. Fixed
+# before this gate ran, on the M0 checkpoint, and never tuned against an M1
+# result. Temperature 0 would make every seed identical and the diversity clause
+# vacuous.
+TEMPERATURE = 1.0
 
 # Declared in the plan before any run. Not to be moved afterwards.
 MAX_M0_TRAIN_LOSS = 0.05
@@ -62,6 +67,7 @@ def main() -> None:
                 conditions=np.zeros(16, dtype=np.float32),
                 seed=seed * 1000 + sample,
                 decoding_steps=DECODING_STEPS,
+                temperature=TEMPERATURE,
             )
             grids.append(grid)
             total += 1
@@ -118,6 +124,7 @@ def main() -> None:
         },
         "samples": total,
         "decoding_steps": DECODING_STEPS,
+        "temperature": TEMPERATURE,
     }
     results["gate_g4_pass"] = all(
         bool(entry["pass"]) for entry in results.values() if isinstance(entry, dict)

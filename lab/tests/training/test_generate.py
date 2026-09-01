@@ -46,3 +46,25 @@ def test_different_grids_have_positive_diversity() -> None:
     rng = np.random.default_rng(0)
     grids = [{"hit": (rng.random((32, 18)) > 0.5).astype(np.float32)} for _ in range(4)]
     assert diversity(grids) > 0.1
+
+
+def test_temperature_zero_is_deterministic_and_seeds_do_not_matter() -> None:
+    torch.manual_seed(0)
+    model = MaskedHvo().eval()
+    conditions = np.zeros(16, dtype=np.float32)
+    first = generate(model, conditions, seed=1, decoding_steps=8, temperature=0.0)
+    second = generate(model, conditions, seed=2, decoding_steps=8, temperature=0.0)
+    assert np.array_equal(first["hit"], second["hit"])
+
+
+def test_temperature_makes_the_seed_matter() -> None:
+    # Without this the diversity clause of gate G4 would read zero for every
+    # model, however good, because the decoder would be a pure argmax.
+    torch.manual_seed(0)
+    model = MaskedHvo().eval()
+    conditions = np.zeros(16, dtype=np.float32)
+    grids = [
+        generate(model, conditions, seed=seed, decoding_steps=8, temperature=1.0)
+        for seed in range(4)
+    ]
+    assert diversity(grids) > 0.0
