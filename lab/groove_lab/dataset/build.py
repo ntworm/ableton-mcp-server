@@ -21,7 +21,12 @@ from typing import Any
 from ableton_mcp_server.groove_intelligence.articulation import resolve_role
 from ableton_mcp_server.groove_intelligence.midi_lossless import parse_smf
 
-from .canonical import build_canonical, note_mass_lost
+from .canonical import (
+    build_canonical,
+    expression_mass_averaged,
+    note_mass_lost,
+    notes_fused_share,
+)
 from .clusters import build_clusters, component_sizes
 from .conditions import build_conditions
 from .config import BuildConfig
@@ -52,6 +57,8 @@ class DatasetManifest:
     counts: dict[str, int]
     cluster_sizes: dict[str, int]
     representation_loss: float
+    notes_fused_share: float
+    expression_mass_averaged: float
     unresolved_note_share: float
     excluded_collections: list[str]
     shard_digests: dict[str, str]
@@ -142,6 +149,8 @@ def build_dataset(
     grooves: dict[str, tuple[str, str, Any]] = {}
     records: list[dict[str, str]] = []
     lost_numerator = 0.0
+    fused_numerator = 0.0
+    averaged_numerator = 0.0
     lost_denominator = 0.0
     for relative, collection in selected:
         raw = (CORPUS_ROOT / relative).read_bytes()
@@ -160,6 +169,8 @@ def build_dataset(
         )
         notes = len(parsed.note_events)
         lost_numerator += note_mass_lost(parsed, groove) * notes
+        fused_numerator += notes_fused_share(parsed, groove) * notes
+        averaged_numerator += expression_mass_averaged(parsed, groove) * notes
         lost_denominator += notes
 
     clusters = build_clusters(records, max_share=config.max_cluster_share)
@@ -209,6 +220,12 @@ def build_dataset(
         },
         representation_loss=round(
             lost_numerator / lost_denominator if lost_denominator else 0.0, 6
+        ),
+        notes_fused_share=round(
+            fused_numerator / lost_denominator if lost_denominator else 0.0, 6
+        ),
+        expression_mass_averaged=round(
+            averaged_numerator / lost_denominator if lost_denominator else 0.0, 6
         ),
         unresolved_note_share=round(unresolved_share, 6),
         excluded_collections=sorted(excluded),
