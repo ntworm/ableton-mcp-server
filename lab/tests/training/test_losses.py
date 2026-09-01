@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import torch
 
-from groove_lab.training.losses import masked_losses
+from groove_lab.training.losses import HIT_POS_WEIGHT, masked_losses
 
 
 def _batch(batch: int = 2) -> dict[str, torch.Tensor]:
@@ -64,3 +64,29 @@ def test_the_total_is_differentiable() -> None:
     outputs = _outputs()
     masked_losses(outputs, _batch(), target)["total"].backward()
     assert outputs["hit_logits"].grad is not None
+
+
+def test_a_missed_hit_costs_far_more_than_a_false_hit() -> None:
+    # With 18 negatives per positive, plain BCE is minimised by predicting
+    # silence, and the first M1 run did exactly that. The positive weight is what
+    # stops the trivial solution from being the cheapest one.
+    assert 15.0 < HIT_POS_WEIGHT < 20.0
+
+    target = torch.ones(1, 32, 18)
+    confident_no = {
+        "hit_logits": torch.full((1, 32, 18), -5.0),
+        "subhits_logits": torch.zeros(1, 32, 18, 4),
+        "velocity": torch.zeros(1, 32, 18),
+        "offset": torch.zeros(1, 32, 18),
+    }
+    truth_silent = {
+        "hit": torch.zeros(1, 32, 18),
+        "subhits": torch.zeros(1, 32, 18, dtype=torch.long),
+        "velocity": torch.zeros(1, 32, 18),
+        "offset": torch.zeros(1, 32, 18),
+    }
+    truth_loud = dict(truth_silent, hit=torch.ones(1, 32, 18))
+
+    missed = float(masked_losses(confident_no, truth_loud, target)["hit"])
+    correct = float(masked_losses(confident_no, truth_silent, target)["hit"])
+    assert missed > correct * 100
