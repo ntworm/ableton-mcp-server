@@ -14,6 +14,16 @@ import torch.nn.functional as F
 
 WEIGHTS = {"hit": 1.0, "subhits": 0.2, "velocity": 0.5, "offset": 0.5}
 
+# Measured on the 1% train split: 5.51% of cells carry a hit, so there are 18.15
+# negatives for every positive. Specification 12.1 asks for "BCE or focal loss
+# for hit according to the imbalance"; plain BCE against that ratio is minimised
+# by predicting silence, and the first M1 run did exactly that — mean predicted
+# hit probability 0.65% against a 5.51% base rate, 0.67 hits per bar, gate G4
+# failed on density and on both diversity clauses. This is the remedy the
+# specification named.
+HIT_POSITIVE_RATE = 0.055094
+HIT_POS_WEIGHT = (1.0 - HIT_POSITIVE_RATE) / HIT_POSITIVE_RATE
+
 
 def _mean(values: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
     total = mask.sum()
@@ -29,7 +39,10 @@ def masked_losses(
 ) -> dict[str, torch.Tensor]:
     hit_loss = _mean(
         F.binary_cross_entropy_with_logits(
-            outputs["hit_logits"], truth["hit"], reduction="none"
+            outputs["hit_logits"],
+            truth["hit"],
+            reduction="none",
+            pos_weight=torch.tensor(HIT_POS_WEIGHT, device=outputs["hit_logits"].device),
         ),
         target,
     )
