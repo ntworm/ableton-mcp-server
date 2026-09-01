@@ -449,6 +449,28 @@ Shards event-based guardam tokens e atributos equivalentes e apontam para o mesm
 
 Ordem de grandeza: 32 passos × 18 lanes = 576 células por exemplo; ≈6,2 KiB por exemplo com float32 para velocity e offset. Com `354.749` janelas sem sobreposição são ≈2,2 GB, e ≈4,4 GB com hop de uma barra.
 
+#### Resultado do plano 4, medido em 2026-08-31
+
+`[decisão]` Os dtypes foram escolhidos para round-trip exato, não por conveniência: `offset_ticks` é inteiro em `[-60,+60]`, então `int8` é lossless; `subhits` é contagem crua em `uint8` **sem cap**, porque limitá-la às classes do head é decisão do modelo e o manifest reporta quanto um clamp custaria; `velocity` continua `float32` por ser média. Um `.npy` por campo, nunca `.npz`, que é zip e não aceita mmap. `allow_pickle` nunca é usado.
+
+`[fato]` Build de 1% executado duas vezes de forma independente: `2.747` janelas de `1.238` arquivos únicos por bytes, splits `2.269`/`226`/`252`. Os dois manifests e os três digests de shard saíram **idênticos**. Round-trip exato em `2.747` janelas e `85.619` células, reverificado a partir dos shards em disco, com zero divergências. Nenhum hash de conteúdo cruzou fronteira de split. Maior cluster: `2` de `2.747`, ou `0,073%`, contra o teto de 5%. `24 MB` em disco para 1%, projetando ≈`2,4 GB` para o corpus inteiro.
+
+`[decisão]` **Três perdas distintas, reportadas separadamente.** Colapsá-las num número só foi o primeiro erro deste build, e corrigi-lo obrigou a repetir a rodada:
+
+| Medida | Valor | Significado |
+|---|---|---|
+| notas não contabilizadas | `0,0%` | o canal `subhits` contabiliza toda nota de origem; nada desaparece |
+| notas fundidas | `2,85%` | notas que uma grade de um hit por célula teria descartado — é a definição de onde saiu o orçamento de 4% |
+| expressão promediada | `5,48%` | notas dividindo célula, logo uma velocity e um offset médios para vários eventos |
+
+Reportar só a primeira seria um zero confortável escondendo custo real. O orçamento é conferido contra a segunda porque foi essa a definição usada quando a auditoria mediu `3,51%` em grade de 16 avos.
+
+`[fato]` Os `2,85%` ficam **abaixo** dos `3,51%` do corpus, e a causa é o plano 2: o mapa de articulação tirou os chimbais de `other_percussion` e os distribuiu em três lanes próprias, então menos eventos caem na mesma célula. Consertar o mapa melhorou a representação de graça.
+
+`[fato]` `13,0%` das janelas foram repetidas a partir de arquivos com menos de duas barras e carregam `looped=true`.
+
+Artefatos: `lab/groove_lab/dataset/`, `lab/scripts/build_dataset.py`, e o relatório em `docs/superpowers/plans/2026-08-31-groove-brain-dataset-foundation-v3-result.md`. Os dados ficam em `F:\groove-brain\dataset\`, fora do Git.
+
 ### 11.4 Janela
 
 `[decisão]` Unidade primária: duas barras. Arquivos maiores geram janelas com sobreposição somente depois de o split por família estar definido. Janelas do mesmo arquivo ou família nunca atravessam splits. Fills usam uma barra de contexto mais região-alvo final; continuação curta usa contexto anterior explícito.
@@ -645,7 +667,7 @@ Pela estimativa da seção 11.3, o dataset denso completo fica entre 2 e 5 GB, e
 | **E0** environment probe | GPU, mixed precision, forward/backward, save e resume, DataLoader multiprocess, export de grafo mínimo | — |
 | **D0** auditoria de corpus | reproduz a seção 4.2 como código; constrói o mapa de articulações e o mapa `collection → genre`; decompõe swing e jitter; mede clusters e duplicação cruzada sobre o corpus inteiro | — |
 | **P0** spike de CPU e ONNX | **feito em 2026-08-31.** Resultado: 32 passos de decoding com tokenização passo-por-token a `0,375` CPU-segundo, contra 16 passos com célula-por-token; `intra_op_num_threads=1` é obrigatório porque mais threads pioram o orçamento. Ver seção 19.4 | — |
-| **D1** build de 1% | duas builds idênticas, digests, splits, round-trip exato, ausência de vazamento, disco e throughput | D0 |
+| **D1** build de 1% | **feito em 2026-08-31.** Dois builds com manifest e shard digests idênticos (`f2c3bc29…`); round-trip exato em 2.747 janelas; zero vazamento; maior cluster em 0,073% contra teto de 5%; notas fundidas em 2,85% contra orçamento de 4%; 24 MB para 1%, ≈2,4 GB projetados. Ver seção 11.3 | D0 |
 | **M0** overfit controlado | smoke em 32–256 exemplos até memorizar de propósito. Incapacidade de overfit é bug, não falta de escala | D1 |
 | **M1** tiny 1% | deterministic/retrieval, GrooVAE, event AR e masked HVO sob orçamento curto. Geração válida, controle, ausência de colapso | M0, P0 |
 | **D2/M2** 10% e bake-off | congela representação, grades, thresholds e protocolo. No mínimo três seeds por candidato. Seleção por validation e avaliação humana, sem tocar no blind test | M1 |
