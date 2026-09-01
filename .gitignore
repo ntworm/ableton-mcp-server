@@ -18,3 +18,5 @@ dist/
 # Isolated worktrees per using-git-worktrees skill.
 .worktrees/
 worktrees/
+lab/.venv-lab/
+lab/artifacts/
