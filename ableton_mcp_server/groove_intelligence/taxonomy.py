@@ -597,10 +597,15 @@ def classify_facets(
     if relative_path is not None:
         values.update(classify_path_facets(relative_path).values)
     if vendor_record:
+        # Union rather than replace. The path already yields a genre for most of
+        # the corpus, and its vocabulary is the finer of the two: a folder saying
+        # "rock" is more useful to a search than the vendor's "Pop/Rock/Country",
+        # which lumps three genres into one label. Overwriting would trade
+        # precision for provenance; keeping both gives a search either handle.
         genre = genre_facet(vendor_record)
         tempo = tempo_facet(vendor_record)
         if genre:
-            values["genre"] = genre
+            values["genre"] = tuple(sorted(set(values.get("genre", ())) | set(genre)))
         if tempo:
             values["bpm"] = tempo
     return FacetSetV1(values)
