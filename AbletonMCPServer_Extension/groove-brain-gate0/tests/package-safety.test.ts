@@ -195,20 +195,45 @@ test('prepareStage rejects a junction escape without deleting the external targe
 
 test('a packaged extension carries the exported seed and no database', async () => {
   // The export is what every search reads. A package built without it is
-  // byte-valid and answers every query with nothing.
+  // byte-valid and answers every query with nothing, so this reads the archive
+  // rather than the staging directory: the CLI takes an allow-list of
+  // directories, and a staged one it is not told about is silently dropped.
   const { execFileSync } = await import('node:child_process');
   const zip = path.resolve('build/groove-brain-gate0/Groove-Brain-Gate-0-0.2.0.ablx');
   if (!fs.existsSync(zip)) {
     // The package is built by `npm run gate0:package`, not by the test suite.
     return;
   }
-  const listing = execFileSync('tar', ['-tf', zip], { encoding: 'utf8' });
+
+  // .NET rather than tar: the tar on PATH here is GNU tar, which does not read
+  // zip archives, and an absolute Windows path makes it treat "C:" as a host.
+  const listing = execFileSync(
+    'powershell',
+    [
+      '-NoProfile',
+      '-Command',
+      `Add-Type -AssemblyName System.IO.Compression.FileSystem; `
+      + `$z=[System.IO.Compression.ZipFile]::OpenRead('${zip}'); `
+      + `$z.Entries | ForEach-Object { $_.FullName }; $z.Dispose()`,
+    ],
+    { encoding: 'utf8' },
+  );
   assert.match(listing, /data\/grooves\.json/u);
   assert.doesNotMatch(listing, /\.sqlite/u);
 
-  const staged = execFileSync('tar', ['-xOf', zip, 'data/grooves.json'], {
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  assert.equal(JSON.parse(staged).schema, 'groove.export.v1');
+  const schema = execFileSync(
+    'powershell',
+    [
+      '-NoProfile',
+      '-Command',
+      `Add-Type -AssemblyName System.IO.Compression.FileSystem; `
+      + `$z=[System.IO.Compression.ZipFile]::OpenRead('${zip}'); `
+      + `$e=$z.GetEntry('data/grooves.json'); `
+      + `$r=New-Object System.IO.StreamReader($e.Open()); `
+      + `$buffer=New-Object char[] 40; $count=$r.Read($buffer,0,40); `
+      + `Write-Output (-join $buffer[0..($count-1)]); $r.Dispose(); $z.Dispose()`,
+    ],
+    { encoding: 'utf8' },
+  );
+  assert.match(schema, /"schema":"groove\.export\.v1"/u);
 });

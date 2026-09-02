@@ -289,7 +289,9 @@ function main(): void {
   try {
     const packaged = spawnSync(
       process.execPath,
-      [cli, 'package', stage, '-i', 'ui', '-i', 'runtime', '-o', temporaryOutput],
+      // -i is an allow-list, not a hint: a staged directory the CLI is not told
+      // about is silently dropped from the archive.
+      [cli, 'package', stage, '-i', 'ui', '-i', 'runtime', '-i', 'data', '-o', temporaryOutput],
       { stdio: 'inherit', shell: false },
     );
     assertSpawnSucceeded(packaged, 'ABLx_PACKAGE', process.version, `stage=${stage}`);
