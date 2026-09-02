@@ -20,3 +20,6 @@ dist/
 worktrees/
 lab/.venv-lab/
 lab/artifacts/
+
+# Generated at build time by scripts/export_groove_index.py
+AbletonMCPServer_Extension/groove-brain-gate0/data/
