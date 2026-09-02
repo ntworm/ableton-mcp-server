@@ -20,6 +20,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    // Loaded before the port is bound: a helper that answers health but has no
+    // catalog would report every search as an empty seed rather than a failed
+    // launch.
+    let catalog = catalog::Catalog::load(&bootstrap.export_path).map_err(|code| code.to_owned())?;
+    if catalog.is_empty() {
+        return Err("EXPORT_EMPTY".into());
+    }
+    let catalog = Arc::new(catalog);
+
     let listener = server::bind_loopback()?;
     let port = listener.local_addr()?.port();
     let ready = ReadyMessage {
@@ -51,6 +60,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    server::run(listener, bootstrap.ui_dir, bootstrap.token, shutdown)?;
+    server::run(listener, bootstrap.ui_dir, bootstrap.token, shutdown, catalog)?;
     Ok(())
 }

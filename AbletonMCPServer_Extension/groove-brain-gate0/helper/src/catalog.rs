@@ -90,10 +90,8 @@ impl Catalog {
         self.by_id.get(id).map(|index| &self.grooves[*index])
     }
 
-    pub fn len(&self) -> usize {
-        self.grooves.len()
-    }
-
+    /// Used at startup: an export that parses but holds nothing is a broken
+    /// package, not a seed with no grooves in it.
     pub fn is_empty(&self) -> bool {
         self.grooves.is_empty()
     }
