@@ -4,6 +4,7 @@ import { openGate0Modal, shutdownGate0Modal } from './actions.js';
 import { storeReceipt } from './receipt-store.js';
 import { resourceRootFromEntryDir } from './resource-path.js';
 import { adaptClipSlot } from './sdk-slot-adapter.js';
+import { clipLengthBeats, toClipNotes } from './groove-writer.js';
 import { runSessionClipProbe, type ProbeReceipt } from './session-clip-probe.js';
 
 const COMMAND_ID = 'groove-brain.gate0.open';
@@ -62,8 +63,13 @@ function activate(activation: ActivationContext): void {
     if (!state.active || state.operation) return;
     const operation = (async (): Promise<void> => {
       try {
-        const { handle, result, version } = await openGate0Modal(context, argument, resourceRoot);
+        const { handle, result, version, groove } = await openGate0Modal(
+          context,
+          argument,
+          resourceRoot,
+        );
         if (result.action === 'cancel' || !state.active) return;
+        if (!groove) throw new Error('GROOVE_MISSING_FOR_INSERT');
 
         const slot = adaptClipSlot(context, handle);
         const injectFailure = process.env.GROOVE_BRAIN_GATE0_INJECT === 'after_create'
@@ -74,6 +80,11 @@ function activate(activation: ActivationContext): void {
           nowEpochMs: Date.now,
           nowMonotonicMs: monotonicNow,
           injectFailure,
+          notes: toClipNotes(groove),
+          lengthBeats: clipLengthBeats(groove),
+          // The id, not a path or a digest: enough to find the groove again
+          // through search, and nothing about where it came from.
+          clipName: `Groove Brain ${groove.id}`,
         });
         storeReceipt(context, receipt);
         if (state.active) {

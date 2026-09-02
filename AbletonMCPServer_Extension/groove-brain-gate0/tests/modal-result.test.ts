@@ -4,17 +4,40 @@ import { receiptModalDataUrl, sanitizeErrorMessage } from '../src/extension.js';
 import { parseModalResult } from '../src/protocol.js';
 import type { ProbeReceipt } from '../src/session-clip-probe.js';
 
-test('modal parser accepts only explicit cancel or confirmed probe', () => {
+test('cancel still needs no groove', () => {
   assert.deepEqual(
     parseModalResult('{"action":"cancel","confirmed":false,"protocol":1}'),
     { action: 'cancel', confirmed: false, protocol: 1 },
   );
+});
+
+test('an insert result carries the groove the user picked', () => {
   assert.deepEqual(
-    parseModalResult('{"action":"run_session_probe","confirmed":true,"protocol":1}'),
-    { action: 'run_session_probe', confirmed: true, protocol: 1 },
+    parseModalResult(
+      '{"action":"insert_groove","confirmed":true,"protocol":1,"groove_id":"a1b2c3d4e5f60718"}',
+    ),
+    { action: 'insert_groove', confirmed: true, protocol: 1, grooveId: 'a1b2c3d4e5f60718' },
+  );
+});
+
+test('an insert without a groove id is refused', () => {
+  // Confirming without a selection would write whatever happened to be first.
+  assert.throws(
+    () => parseModalResult('{"action":"insert_groove","confirmed":true,"protocol":1}'),
+    /INVALID_MODAL_RESULT/,
   );
   assert.throws(
-    () => parseModalResult('{"action":"run_session_probe","confirmed":false,"protocol":1}'),
+    () => parseModalResult('{"action":"insert_groove","confirmed":true,"protocol":1,"groove_id":""}'),
+    /INVALID_MODAL_RESULT/,
+  );
+});
+
+test('an unconfirmed insert is refused', () => {
+  assert.throws(
+    () =>
+      parseModalResult(
+        '{"action":"insert_groove","confirmed":false,"protocol":1,"groove_id":"a1"}',
+      ),
     /INVALID_MODAL_RESULT/,
   );
 });

@@ -1,5 +1,7 @@
 import type { ExtensionContext, Handle } from '@ableton-extensions/sdk';
 import { HelperSession } from './helper-process.js';
+import { parseGrooveResponse } from './groove-client.js';
+import type { ExportedGroove } from './groove-writer.js';
 import { parseModalResult, type ModalResult } from './protocol.js';
 
 interface ActiveInvocation {
@@ -20,7 +22,7 @@ export async function openGate0Modal(
   context: ExtensionContext<'1.0.0'>,
   argument: unknown,
   resourceRoot: string,
-): Promise<{ handle: Handle; result: ModalResult; version: string }> {
+): Promise<{ handle: Handle; result: ModalResult; version: string; groove: ExportedGroove | null }> {
   if (!isHandle(argument)) throw new Error('CLIP_SLOT_HANDLE_REQUIRED');
   if (activeInvocation) throw new Error('GATE0_INVOCATION_ALREADY_ACTIVE');
 
@@ -39,10 +41,17 @@ export async function openGate0Modal(
     if (invocation.cancelled) throw new Error('GATE0_INVOCATION_CANCELLED');
     const raw = await context.ui.showModalDialog(helper.modalUrl, 960, 680);
     if (invocation.cancelled) throw new Error('GATE0_INVOCATION_CANCELLED');
+    const result = parseModalResult(raw);
+    // Fetched here rather than by the caller: the finally below stops the
+    // helper, so this is the last point at which its catalog is reachable.
+    const groove = result.action === 'insert_groove'
+      ? parseGrooveResponse(await helper.fetchGroove(result.grooveId))
+      : null;
     return {
       handle: argument,
-      result: parseModalResult(raw),
+      result,
       version: helper.extensionVersion,
+      groove,
     };
   } finally {
     try {

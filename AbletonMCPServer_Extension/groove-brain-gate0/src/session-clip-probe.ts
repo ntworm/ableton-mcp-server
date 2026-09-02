@@ -41,6 +41,12 @@ export interface ProbeOptions {
   nowEpochMs: () => number;
   nowMonotonicMs: () => number;
   injectFailure?: 'after_create';
+  /** The groove to write. Defaults to the Gate 0 fixed probe. */
+  notes?: Gate0Note[];
+  /** Clip length in beats. Defaults to the Gate 0 four. */
+  lengthBeats?: number;
+  /** Shown as the clip name, so the slot says which groove landed in it. */
+  clipName?: string;
 }
 
 const NOTES: Gate0Note[] = [0, 1, 2, 3].map((startTime) => ({
@@ -85,13 +91,17 @@ export async function runSessionClipProbe(
   if (!/^\d+\.\d+\.\d+$/u.test(options.extensionVersion)) {
     throw new Error('INVALID_EXTENSION_VERSION');
   }
+  // The probe still verifies whatever it wrote by reading it back and
+  // comparing hashes; only the notes it writes are now the caller's.
+  const notes = options.notes ?? NOTES;
+  const lengthBeats = options.lengthBeats ?? 4;
   const base = {
     receiptId: randomUUID(),
     extensionVersion: options.extensionVersion,
     startedAtEpochMs,
     slotHandle: slot.handleId,
-    intendedCount: NOTES.length,
-    intendedHash: hashNotes(NOTES),
+    intendedCount: notes.length,
+    intendedHash: hashNotes(notes),
     retryAttempted: false as const,
     rollbackClaimed: false as const,
   };
@@ -122,11 +132,11 @@ export async function runSessionClipProbe(
 
   let clip: ClipPort | null = null;
   try {
-    clip = await slot.createMidiClip(4);
+    clip = await slot.createMidiClip(lengthBeats);
     if (options.injectFailure === 'after_create') throw new Error('INJECTED_AFTER_CREATE');
 
-    clip.name = 'Groove Brain Gate 0 Probe';
-    clip.notes = NOTES.map((note) => ({ ...note }));
+    clip.name = options.clipName ?? 'Groove Brain Gate 0 Probe';
+    clip.notes = notes.map((note) => ({ ...note }));
 
     const readback = canonical(clip.notes);
     const readbackHash = hashNotes(readback);
