@@ -261,6 +261,17 @@ function main(): void {
     'utf8',
   );
 
+  // The exported seed. Named rather than copied wholesale so a stray file in
+  // data/ cannot ride along into the package.
+  const exportSource = path.join(sourceRoot, 'data', 'grooves.json');
+  if (!lstatIfPresent(exportSource)?.isFile()) {
+    // Packaging without it produces an extension whose every search returns
+    // nothing, which reads as an empty seed rather than a broken build.
+    throw new Error('EXPORT_MISSING: run scripts/export_groove_index.py first');
+  }
+  fs.mkdirSync(path.join(stage, 'data'), { recursive: true });
+  fs.copyFileSync(exportSource, path.join(stage, 'data', 'grooves.json'));
+
   fs.cpSync(path.join(sourceRoot, 'ui'), path.join(stage, 'ui'), { recursive: true });
   fs.copyFileSync(path.join(sourceRoot, 'dist', 'extension.js'), path.join(stage, 'dist', 'extension.js'));
   const manifest = JSON.parse(fs.readFileSync(path.join(sourceRoot, 'manifest.json'), 'utf8')) as Record<string, unknown>;

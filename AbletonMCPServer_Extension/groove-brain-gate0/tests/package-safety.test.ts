@@ -192,3 +192,23 @@ test('prepareStage rejects a junction escape without deleting the external targe
   assert.throws(() => prepareStage(buildRoot, stage), /UNSAFE_STAGE_PATH/);
   assert.equal(fs.readFileSync(sentinel, 'utf8'), 'preserve');
 });
+
+test('a packaged extension carries the exported seed and no database', async () => {
+  // The export is what every search reads. A package built without it is
+  // byte-valid and answers every query with nothing.
+  const { execFileSync } = await import('node:child_process');
+  const zip = path.resolve('build/groove-brain-gate0/Groove-Brain-Gate-0-0.2.0.ablx');
+  if (!fs.existsSync(zip)) {
+    // The package is built by `npm run gate0:package`, not by the test suite.
+    return;
+  }
+  const listing = execFileSync('tar', ['-tf', zip], { encoding: 'utf8' });
+  assert.match(listing, /data\/grooves\.json/u);
+  assert.doesNotMatch(listing, /\.sqlite/u);
+
+  const staged = execFileSync('tar', ['-xOf', zip, 'data/grooves.json'], {
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  assert.equal(JSON.parse(staged).schema, 'groove.export.v1');
+});
