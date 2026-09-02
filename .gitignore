@@ -23,3 +23,6 @@ lab/artifacts/
 
 # Generated at build time by scripts/export_groove_index.py
 AbletonMCPServer_Extension/groove-brain-gate0/data/
+
+# Cargo build output for the Gate 0/1 helper
+AbletonMCPServer_Extension/groove-brain-gate0/helper/target/
