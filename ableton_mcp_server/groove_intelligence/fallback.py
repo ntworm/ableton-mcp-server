@@ -11,11 +11,16 @@ from typing import Any
 from . import GrooveBlobRejected, GrooveMidiError
 from .canonical import canonical_json, reproducibility_key
 from .cards import GenerationCardV1, artifact_card_from_artifact
-from .constants import FEATURES_SCHEMA_VERSION, GRAMMAR_SCHEMA_VERSION, HVO_SCHEMA_VERSION
+from .constants import (
+    FEATURES_SCHEMA_VERSION,
+    GRAMMAR_SCHEMA_VERSION,
+    HVO_SCHEMA_VERSION,
+    HVO_SCHEMA_VERSION_V3,
+)
 from .deterministic import _parent_ids, deterministic_generate
 from .mcp_models import GenerateRequestV1, GenerationResponseV1
 from .midi_lossless import decompress_bounded, parse_smf
-from .projections import derive_features, derive_grammar, derive_hvo
+from .projections import derive_features, derive_grammar, derive_hvo, derive_hvo_v3
 from .provider import (
     GrooveProvider,
     ProviderArtifactCandidate,
@@ -339,10 +344,16 @@ def validate_provider_candidate(
         ):
             raise _invalid("provider lineage does not match identity")
     hvo_projection = derive_hvo(parsed)
+    # A generated groove belongs to no vendor library, so its v3 projection
+    # resolves through General MIDI.  It still has to be present: every artifact
+    # in the index carries the same projection set, and a missing one reads as a
+    # corrupt row rather than as an absent collection.
+    hvo_v3_projection = derive_hvo_v3(parsed, "")
     features_projection = derive_features(parsed, hvo_projection)
     grammar_projection = derive_grammar(parsed, hvo_projection)
     expected_projections = {
         "hvo": (HVO_SCHEMA_VERSION, hvo_projection),
+        "hvo_v3": (HVO_SCHEMA_VERSION_V3, hvo_v3_projection),
         "features": (FEATURES_SCHEMA_VERSION, features_projection),
         "grammar": (GRAMMAR_SCHEMA_VERSION, grammar_projection),
     }

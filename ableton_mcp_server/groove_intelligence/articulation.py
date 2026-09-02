@@ -17,7 +17,7 @@ the shipped retrieval seed do not use it and are unaffected.
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .drum_roles import GM_DRUM_ROLE_BY_PITCH, GM_DRUM_ROLES
@@ -83,8 +83,24 @@ def resolve_role(collection: str, pitch: int) -> str:
     return GM_DRUM_ROLE_BY_PITCH.get(pitch, "other_percussion")
 
 
+def collection_of(relative_path: str) -> str:
+    """The articulation map key for a corpus path, or ``""`` when there is none.
+
+    A vendor library occupies the first two path components, so those two are the
+    collection: ``Drums Groove MIDI/000011@SUPERIOR_DRUMMER_3``.  A shallower path
+    is a loose clip rather than a library and resolves through General MIDI, which
+    is why the empty string is a valid answer and not a failure.
+    """
+
+    parts = PurePosixPath(relative_path).parts
+    if len(parts) >= 2:
+        return "/".join(parts[:2])
+    return ""
+
+
 __all__ = [
     "collection_confidence",
+    "collection_of",
     "mapped_collections",
     "resolve_role",
 ]

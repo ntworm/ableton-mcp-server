@@ -20,6 +20,7 @@ from .constants import (
     FEATURES_SCHEMA_VERSION,
     GRAMMAR_SCHEMA_VERSION,
     HVO_SCHEMA_VERSION,
+    HVO_SCHEMA_VERSION_V3,
     INDEX_SCHEMA_VERSION,
     MAX_COMPRESSED_BLOB,
     MAX_RAW_BLOB,
@@ -462,9 +463,11 @@ class ReadonlyGrooveIndex:
     def _projection_identity(projection_id: str) -> tuple[str, str]:
         names = {
             HVO_SCHEMA_VERSION: ("hvo", HVO_SCHEMA_VERSION),
+            HVO_SCHEMA_VERSION_V3: ("hvo_v3", HVO_SCHEMA_VERSION_V3),
             FEATURES_SCHEMA_VERSION: ("features", FEATURES_SCHEMA_VERSION),
             GRAMMAR_SCHEMA_VERSION: ("grammar", GRAMMAR_SCHEMA_VERSION),
             "hvo": ("hvo", HVO_SCHEMA_VERSION),
+            "hvo_v3": ("hvo_v3", HVO_SCHEMA_VERSION_V3),
             "features": ("features", FEATURES_SCHEMA_VERSION),
             "grammar": ("grammar", GRAMMAR_SCHEMA_VERSION),
         }
@@ -511,7 +514,7 @@ class ReadonlyGrooveIndex:
             if not isinstance(value, dict):
                 raise ValueError("projection is not an object")
             projection: ProjectionModelV2
-            if version == HVO_SCHEMA_VERSION:
+            if version in (HVO_SCHEMA_VERSION, HVO_SCHEMA_VERSION_V3):
                 projection = HvoProjectionV1.model_validate(value)
             elif version == FEATURES_SCHEMA_VERSION:
                 projection = FeaturesProjectionV1.model_validate(value)
@@ -587,6 +590,7 @@ class ReadonlyGrooveIndex:
             projection_version = str(version)
             expected_version = {
                 "hvo": HVO_SCHEMA_VERSION,
+                "hvo_v3": HVO_SCHEMA_VERSION_V3,
                 "features": FEATURES_SCHEMA_VERSION,
                 "grammar": GRAMMAR_SCHEMA_VERSION,
             }.get(projection_name)
@@ -806,6 +810,7 @@ def open_readonly_index(bundle_dir: Path) -> ReadonlyGrooveIndex:
                 "features": FEATURES_SCHEMA_VERSION,
                 "grammar": GRAMMAR_SCHEMA_VERSION,
                 "hvo": HVO_SCHEMA_VERSION,
+                "hvo_v3": HVO_SCHEMA_VERSION_V3,
                 "taxonomy": TAXONOMY_VERSION,
             }
             or meta["projection_versions"]
@@ -814,6 +819,7 @@ def open_readonly_index(bundle_dir: Path) -> ReadonlyGrooveIndex:
                     "features": FEATURES_SCHEMA_VERSION,
                     "grammar": GRAMMAR_SCHEMA_VERSION,
                     "hvo": HVO_SCHEMA_VERSION,
+                    "hvo_v3": HVO_SCHEMA_VERSION_V3,
                     "taxonomy": TAXONOMY_VERSION,
                 }
             ).decode("utf-8")

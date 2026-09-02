@@ -11,6 +11,7 @@ from .constants import (
     FEATURES_SCHEMA_VERSION,
     GRAMMAR_SCHEMA_VERSION,
     HVO_SCHEMA_VERSION,
+    HVO_SCHEMA_VERSION_V3,
     INDEX_SCHEMA_VERSION,
     NORMALIZER_ID,
     PARSER_ID,
@@ -123,6 +124,7 @@ class BuildManifestV1(GrooveModel):
     projection_versions: dict[str, str] = Field(
         default_factory=lambda: {
             "hvo": HVO_SCHEMA_VERSION,
+            "hvo_v3": HVO_SCHEMA_VERSION_V3,
             "features": FEATURES_SCHEMA_VERSION,
             "grammar": GRAMMAR_SCHEMA_VERSION,
         }

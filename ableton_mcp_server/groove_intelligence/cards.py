@@ -236,6 +236,9 @@ class GenerationCardV1(GrooveModel):
         return _sanitize_public_mapping(value, allowed_keys=_PUBLIC_LINEAGE_KEYS)
 
 
+PUBLIC_PROJECTION_NAMES = frozenset({"hvo", "features", "grammar"})
+
+
 def artifact_card_from_artifact(artifact: MidiArtifactV1) -> ArtifactCardV1:
     """Validate a bounded public card before a derived artifact is persisted."""
 
@@ -271,7 +274,16 @@ def artifact_card_from_artifact(artifact: MidiArtifactV1) -> ArtifactCardV1:
         rights_level = max(0, min(2, int(raw_rights_level)))
     except (TypeError, ValueError):
         rights_level = {"blocked": 0, "derived_only": 1, "full": 2}[rights]
-    projection_map = {reference.name: reference.version for reference in artifact.projections[:3]}
+    # The card is the public surface and exposes only the v2 projections the MCP
+    # contract names.  ``hvo_v3`` is stored on the artifact and drives the facets,
+    # but no client can request it, so listing it here would advertise a
+    # projection that no tool call can load.  Selected by name rather than by
+    # slicing the first three references, which silently depended on their order.
+    projection_map = {
+        reference.name: reference.version
+        for reference in artifact.projections
+        if reference.name in PUBLIC_PROJECTION_NAMES
+    }
     public_provenance: dict[str, Any] = {}
     for key in ("corpus_id", "build_id", "license_id", "license_ids", "provenance_digest"):
         if key not in metadata:
