@@ -46,7 +46,9 @@ def generate(
     model.eval()
     state = DecodeState.masked(STEPS, LANES)
     task = torch.tensor([TASK_INDEX["free_generation"]], dtype=torch.long)
-    condition_tensor = torch.from_numpy(conditions).unsqueeze(0)
+    # np.ascontiguousarray copies: conditions can arrive backed by a read-only
+    # mmap, and torch.from_numpy on one of those is undefined behaviour to write.
+    condition_tensor = torch.from_numpy(np.ascontiguousarray(conditions)).unsqueeze(0)
 
     subhits = np.zeros((STEPS, LANES), dtype=np.int64)
     for count in schedule(STEPS * LANES, decoding_steps):
