@@ -1,7 +1,7 @@
 # Groove Brain — especificação canônica de dataset e treinamento neural
 
-- **Status:** reescrita em 2026-08-31 após auditoria adversarial do commit-base `721e77b`, com medição direta do corpus, do código e das fontes primárias.
-- **Execução autorizada por este documento:** os nove planos da seção 21.
+- **Status:** **encerrada em 2026-09-01.** O programa neural correu até o gate G5 e reprovou: o Transformer HVO mascarado empatou com o retrieval e perdeu em plausibilidade de lane. Conforme a seção 23, o produto determinístico permanece. O documento fica como registro do que foi medido e por quê.
+- **Execução autorizada por este documento:** nenhuma nova. Os planos 1 a 6 foram executados; os planos 7, 8 e 10 não prosseguem; o plano 9, o loop de produto, deixa de depender deste documento e passa a ser trabalho de produto.
 - **Natureza do trabalho:** experimento pessoal do proprietário. O corpus, o dataset, os modelos e os artefatos ficam nesta máquina. Nada é vendido, publicado ou distribuído.
 - **Projeto:** `ableton-mcp-server`
 - **Escopo:** bateria e ritmo MIDI. Nenhum Composer Brain, nenhum lançamento, nenhuma publicação.
@@ -23,9 +23,11 @@ Números sem marca são resultado de medição registrada na seção 4.
 
 ## 1. Decisão em uma frase
 
-Groove Brain é um gerador de bateria local e offline para o Ableton Live: um corpus privado de MIDI de bateria passa por canonicalização lossless, remapeamento de articulações, deduplicação em camadas e splits por família; três arquiteturas neurais competem sob orçamento idêntico contra um baseline determinístico que já funciona; o vencedor só existe se ganhar em escuta cega, originalidade e custo de CPU; e o modelo roda num helper nativo isolado, atrás da Extension, com escrita explícita e readback verificado.
+Groove Brain é um gerador de bateria local e offline para o Ableton Live: um corpus privado de MIDI de bateria passa por canonicalização lossless, remapeamento de articulações, deduplicação em camadas e splits por família; arquiteturas neurais competem sob orçamento idêntico contra um baseline determinístico que já funciona; o vencedor só existe se ganhar em escuta cega, originalidade e custo de CPU.
 
 O produto é útil mesmo se nenhum modelo vencer. Essa é a característica de projeto, não o plano B.
+
+`[fato]` **Nenhum venceu.** Em 2026-09-01 o G5 reprovou o masked HVO: `0,5045` de F1 contra `0,5005` do retrieval, margem 22× menor que o ruído, empate confirmado por teste pareado, e distância de lane `1,204` contra `0,041` de um amostrador trivial. O produto determinístico permanece, que é exatamente o desfecho para o qual o programa foi desenhado.
 
 ## 2. Decisões abertas do proprietário
 
@@ -828,10 +830,10 @@ Um gate só é binário se outra pessoa puder avaliá-lo sem consultar a intenç
 4. **Dataset foundation V3** — schema com `subhits`, canonical store, dedupe em camadas, cluster e split registry com guarda de componente gigante, shards e evidence packet. Fecha D1/G2/G3.
 5. **Baselines e avaliação** — **feito em 2026-09-01.** Métricas de predição, musicalidade e originalidade; retrieval como incumbente e amostrador marginal como piso; protocolo de escuta pré-registrado e conjunto cego gerado. GrooVAE e event AR saíram para o plano 10.
 6. **Masked HVO Transformer** — **M0, M1 e G4 feitos em 2026-08-31**; G5 medido pelo plano 5 e reprovado. M2 depende de GPU (plano 1) e dos baselines restantes.
-7. **Full training e model card** — build 100%, run vencedor, blind test, anti-cópia e decisão registrada. Fecha M3/G6.
-8. **ONNX provider** — export, equivalência, quantização, helper e orçamento, confirmando o spike do plano 3. Fecha R0/G7.
-9. **Groove Brain product loop** — dashboard, prompt parser, candidatos, locks, reference, mapping e readback no Live. Fecha G8.
-10. **GrooVAE e event AR** — os dois baselines neurais restantes, necessários para escolher arquitetura em M2 e G6, não para decidir se um neural vence o incumbente.
+7. ~~**Full training e model card**~~ — **não prossegue.** Não há run vencedor para levar ao build de 100%.
+8. ~~**ONNX provider**~~ — **não prossegue.** Não há modelo promovido para exportar. O spike do plano 3 fica como medição válida de orçamento para qualquer tentativa futura.
+9. **Groove Brain product loop** — dashboard, prompt parser, candidatos, locks, reference, mapping e readback no Live, **sobre retrieval e transformações determinísticas**. É o trabalho que continua, e não depende mais deste documento.
+10. ~~**GrooVAE e event AR**~~ — **não prossegue.** Serviriam para escolher entre arquiteturas neurais; com o incumbente vencendo, não há escolha a fazer.
 
 `[decisão]` A ordem tem duas inversões deliberadas em relação a um plano ingênuo. A auditoria de corpus vem antes da construção do dataset, porque o mapa de articulações muda a estrutura de lanes e refazer shards depois custa caro. E o orçamento de CPU vem antes do treino, porque descobrir depois que a arquitetura vencedora não cabe em `cpu_seconds <= 2,0` invalidaria dois planos inteiros.
 
@@ -859,6 +861,7 @@ Cada plano produz software testável e tem seu próprio stop condition. Nenhum p
 
 ## 23. Decisões finais
 
+- **Veredito, 2026-09-01: o neural não venceu e o produto determinístico permanece.** Retrieval mais transformações determinísticas continuam sendo Groove Brain. Nada é promovido, nada é integrado, e o esforço neural para aqui.
 - Groove Brain é bateria e ritmo, não Music Brain geral.
 - Este é um experimento pessoal e local. Nada é vendido, publicado ou distribuído, e o programa não carrega gate de direitos. A proveniência é registrada porque dedupe, famílias e splits dependem dela.
 - O mapa de articulações por coleção é pré-requisito do dataset. Sem ele, um quarto da massa de notas está na lane errada.
