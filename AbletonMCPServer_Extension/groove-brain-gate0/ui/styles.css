@@ -1,18 +1,34 @@
 :root { color-scheme: dark; font: 15px/1.45 Inter, Segoe UI, sans-serif; background: #1d1d1d; color: #efefef; }
 body { margin: 0; }
 main { max-width: 760px; margin: 0 auto; padding: 48px; }
-.eyebrow { color: #ffb347; letter-spacing: .16em; font-size: 12px; }
+.eyebrow { color: #ffb347; letter-spacing: .16em; font-size: 12px; margin: 0 0 8px; }
 h1 { font-size: 34px; margin: 8px 0 24px; }
 section { display: grid; gap: 18px; padding: 24px; border: 1px solid #444; border-radius: 8px; }
 button { border: 0; border-radius: 5px; padding: 12px 18px; background: #ff9f1a; color: #111; font-weight: 700; }
 button:disabled { opacity: .4; }
 button.secondary { background: #3a3a3a; color: #eee; }
 #error { color: #ff7777; white-space: pre-wrap; }
+
+/* The handoff page shown inside Live: nothing here is interactive except the
+   two buttons, because the panel itself lives on the phone. */
+.handoff .qr { background: #fff; padding: 12px; border-radius: 8px; width: 260px; justify-self: center; }
+.handoff .qr svg { display: block; width: 100%; height: auto; }
+.handoff .url { color: #999; font-size: 13px; text-align: center; margin: 0; }
+.handoff .url code { color: #ffb347; font-size: 14px; word-break: break-all; }
+.handoff .note { color: #999; font-size: 13px; margin: 0; }
+
 .filters { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
-.filters label { display: grid; gap: 6px; font-size: 13px; color: #bbb; }
-.filters input, .filters select { padding: 10px; border: 1px solid #555; border-radius: 5px; background: #262626; color: #efefef; }
+.filters label { display: grid; gap: 6px; font-size: 13px; color: #bbb; flex: 1 1 140px; }
+.filters input, .filters select { padding: 12px; border: 1px solid #555; border-radius: 5px; background: #262626; color: #efefef; font-size: 16px; }
 .count { color: #999; font-size: 13px; margin: 0; }
-.note { color: #999; font-size: 13px; margin: 0; }
-#results { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow-y: auto; display: grid; gap: 4px; }
-#results li { padding: 10px 12px; border: 1px solid #3a3a3a; border-radius: 5px; cursor: pointer; font-size: 13px; }
-#results li.selected { border-color: #ff9f1a; background: #2a2317; }
+.sent { color: #7ddc7d; font-size: 14px; margin: 0; }
+#results { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+#results li { padding: 14px 12px; border: 1px solid #3a3a3a; border-radius: 5px; font-size: 14px; }
+#results li:active { border-color: #ff9f1a; background: #2a2317; }
+
+/* A phone holds the panel one-handed: bigger targets, no wasted margin, and a
+   result list that scrolls the page rather than a box inside it. */
+.picker main { padding: 20px 16px 48px; }
+.picker h1 { font-size: 24px; }
+.picker section { padding: 16px; }
+.picker #results li { padding: 16px 14px; }

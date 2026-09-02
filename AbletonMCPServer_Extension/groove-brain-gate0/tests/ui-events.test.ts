@@ -10,6 +10,7 @@ class FakeNode {
   className = '';
   disabled = false;
   hidden = false;
+  innerHTML = '';
   textContent = '';
   value = '';
   children: FakeNode[] = [];
@@ -43,54 +44,44 @@ const SEARCH_PAYLOAD = {
   ],
 };
 
-interface UiHarness {
-  bpm: FakeNode;
-  cancel: FakeNode;
-  controls: FakeNode;
-  count: FakeNode;
-  error: FakeNode;
-  genre: FakeNode;
-  insert: FakeNode;
+const PANEL_PAYLOAD = {
+  url: 'http://192.168.1.40:45123/picker.html#' + 'a'.repeat(64),
+  qr: '<svg role="img"></svg>',
+};
+
+interface Harness {
+  nodes: Record<string, FakeNode>;
   messages: unknown[];
   requests: { path: string; body: unknown }[];
-  results: FakeNode;
-  search: FakeNode;
-  status: FakeNode;
 }
 
-async function createHarness(
+async function runPage(
+  file: string,
+  selectors: string[],
   options: { bridgeThrows?: boolean; searchStatus?: number } = {},
-): Promise<UiHarness> {
-  const nodesByName: Record<string, FakeNode> = {
-    status: new FakeNode(),
-    controls: new FakeNode(),
-    error: new FakeNode(),
-    genre: new FakeNode(),
-    bpm: new FakeNode(),
-    search: new FakeNode(),
-    results: new FakeNode(),
-    count: new FakeNode(),
-    insert: new FakeNode(),
-    cancel: new FakeNode(),
-  };
-  nodesByName.controls.hidden = true;
-  nodesByName.insert.disabled = true;
-  const nodes = new Map<string, FakeNode>(
-    Object.entries(nodesByName).map(([name, node]) => [`#${name}`, node]),
-  );
+): Promise<Harness> {
+  const nodes: Record<string, FakeNode> = {};
+  const bySelector = new Map<string, FakeNode>();
+  for (const name of selectors) {
+    const node = new FakeNode();
+    nodes[name] = node;
+    bySelector.set(`#${name}`, node);
+  }
+  nodes.controls.hidden = true;
 
   const messages: unknown[] = [];
   const requests: { path: string; body: unknown }[] = [];
   const token = 'a'.repeat(64);
-  const source = fs.readFileSync(path.resolve('groove-brain-gate0/ui/app.js'), 'utf8');
+  const source = fs.readFileSync(path.resolve(`groove-brain-gate0/ui/${file}`), 'utf8');
   const context = vm.createContext({
     AbortSignal,
     Error,
     JSON,
     String,
+    setTimeout,
     document: {
       querySelector(selector: string) {
-        const node = nodes.get(selector);
+        const node = bySelector.get(selector);
         if (!node) throw new Error(`UNKNOWN_SELECTOR:${selector}`);
         return node;
       },
@@ -103,12 +94,14 @@ async function createHarness(
       if (target === '/api/health') {
         return { ok: true, status: 200, async json() { return { status: 'ok', protocol: 1 }; } };
       }
+      if (target === '/api/panel') {
+        return { ok: true, status: 200, async json() { return PANEL_PAYLOAD; } };
+      }
+      if (target === '/api/select') {
+        return { ok: true, status: 200, async json() { return { status: 'selected' }; } };
+      }
       const status = options.searchStatus ?? 200;
-      return {
-        ok: status === 200,
-        status,
-        async json() { return SEARCH_PAYLOAD; },
-      };
+      return { ok: status === 200, status, async json() { return SEARCH_PAYLOAD; } };
     },
     history: { replaceState() {} },
     window: {
@@ -123,112 +116,90 @@ async function createHarness(
       location: { hash: `#${token}`, pathname: '/' },
     },
   });
-  vm.runInContext(source, context, { filename: 'app.js' });
-  await new Promise((resolve) => setImmediate(resolve));
-  return { ...nodesByName, messages, requests } as UiHarness;
+  vm.runInContext(source, context, { filename: file });
+  await settle();
+  return { nodes, messages, requests };
 }
 
 async function settle(): Promise<void> {
-  await new Promise((resolve) => setImmediate(resolve));
-  await new Promise((resolve) => setImmediate(resolve));
+  for (let index = 0; index < 4; index += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
 }
 
-test('the panel is usable only after the helper authenticates', async () => {
-  const ui = await createHarness();
-  assert.equal(ui.controls.hidden, false);
-  assert.equal(ui.insert.disabled, true);
+const HANDOFF_NODES = ['status', 'controls', 'error', 'qr', 'url', 'done', 'cancel'];
+const PICKER_NODES = [
+  'status', 'controls', 'error', 'genre', 'bpm', 'search', 'results', 'count', 'sent',
+];
+
+test('the handoff page shows the QR and the URL for the phone', async () => {
+  const { nodes } = await runPage('app.js', HANDOFF_NODES);
+  assert.equal(nodes.controls.hidden, false);
+  assert.match(nodes.qr.innerHTML, /<svg/u);
+  assert.equal(nodes.url.textContent, PANEL_PAYLOAD.url);
+});
+
+test('closing the handoff frees Live without carrying a groove', async () => {
+  // The whole point of the change: the modal closes so the user can keep
+  // working, and the choice arrives later from the phone.
+  const { nodes, messages } = await runPage('app.js', HANDOFF_NODES);
+  nodes.done.dispatch('click');
+  nodes.done.dispatch('click');
+
+  assert.equal(messages.length, 1);
+  const payload = JSON.parse((messages[0] as { params: string[] }).params[0]);
+  assert.deepEqual(payload, { action: 'handoff', confirmed: true, protocol: 1 });
+});
+
+test('cancelling the handoff sends a cancel', async () => {
+  const { nodes, messages } = await runPage('app.js', HANDOFF_NODES);
+  nodes.cancel.dispatch('click');
+  const payload = JSON.parse((messages[0] as { params: string[] }).params[0]);
+  assert.deepEqual(payload, { action: 'cancel', confirmed: false, protocol: 1 });
+});
+
+test('a bridge failure on the handoff page is visible and terminal', async () => {
+  const { nodes } = await runPage('app.js', HANDOFF_NODES, { bridgeThrows: true });
+  nodes.cancel.dispatch('click');
+  assert.equal(nodes.status.textContent, 'Falha no Groove Brain.');
+  assert.equal(nodes.error.textContent, 'BRIDGE_FAILED');
+  assert.equal(nodes.controls.hidden, true);
+});
+
+test('the picker searches as soon as it connects', async () => {
+  const { nodes, requests } = await runPage('picker.js', PICKER_NODES);
+  assert.equal(nodes.controls.hidden, false);
+  assert.ok(requests.some((entry) => entry.path === '/api/search'));
+  assert.equal(nodes.results.children.length, 2);
+  assert.match(nodes.count.textContent, /103 encontrados/u);
 });
 
 test('a search sends only the filters that were filled in', async () => {
-  const ui = await createHarness();
-  ui.genre.value = '  metal  ';
-  ui.search.dispatch('click');
+  const { nodes, requests } = await runPage('picker.js', PICKER_NODES);
+  nodes.genre.value = '  metal  ';
+  nodes.search.dispatch('click');
   await settle();
 
-  const search = ui.requests.find((entry) => entry.path === '/api/search');
-  assert.deepEqual(search?.body, { genre: 'metal' });
+  const searches = requests.filter((entry) => entry.path === '/api/search');
+  assert.deepEqual(searches.at(-1)?.body, { genre: 'metal' });
 });
 
-test('results render and picking one enables insert', async () => {
-  const ui = await createHarness();
-  ui.search.dispatch('click');
+test('tapping a result sends it to Live and the panel stays open', async () => {
+  // The panel does not close itself: picking a second groove for the next slot
+  // should not mean scanning the code again.
+  const { nodes, requests } = await runPage('picker.js', PICKER_NODES);
+  nodes.results.children[1].dispatch('click');
   await settle();
 
-  assert.equal(ui.results.children.length, 2);
-  assert.match(ui.count.textContent, /103 encontrados/u);
-  assert.equal(ui.insert.disabled, true);
-
-  ui.results.children[1].dispatch('click');
-  assert.equal(ui.insert.disabled, false);
-  assert.equal(ui.results.children[1].className, 'selected');
-  assert.equal(ui.results.children[0].className, '');
+  const select = requests.find((entry) => entry.path === '/api/select');
+  assert.deepEqual(select?.body, { id: 'b2' });
+  assert.equal(nodes.controls.hidden, false);
+  assert.equal(nodes.sent.hidden, false);
 });
 
-test('insert sends the picked groove and latches after the first click', async () => {
-  const ui = await createHarness();
-  ui.search.dispatch('click');
-  await settle();
-  ui.results.children[0].dispatch('click');
-
-  ui.insert.dispatch('click');
-  ui.insert.dispatch('click');
-
-  assert.equal(ui.messages.length, 1);
-  const payload = JSON.parse(
-    (ui.messages[0] as { params: string[] }).params[0],
-  );
-  assert.deepEqual(payload, {
-    action: 'insert_groove',
-    confirmed: true,
-    protocol: 1,
-    groove_id: 'a1',
-  });
-  assert.equal(ui.insert.disabled, true);
-  assert.equal(ui.cancel.disabled, true);
-});
-
-test('insert does nothing while nothing is picked', async () => {
-  const ui = await createHarness();
-  ui.search.dispatch('click');
-  await settle();
-
-  ui.insert.dispatch('click');
-  assert.equal(ui.messages.length, 0);
-});
-
-test('a new search drops the previous pick', async () => {
-  // Leaving it selected would insert a groove that is no longer on screen.
-  const ui = await createHarness();
-  ui.search.dispatch('click');
-  await settle();
-  ui.results.children[0].dispatch('click');
-  assert.equal(ui.insert.disabled, false);
-
-  ui.search.dispatch('click');
-  await settle();
-  assert.equal(ui.insert.disabled, true);
-
-  ui.insert.dispatch('click');
-  assert.equal(ui.messages.length, 0);
-});
-
-test('a failing search becomes a terminal visible error', async () => {
-  const ui = await createHarness({ searchStatus: 500 });
-  ui.search.dispatch('click');
-  await settle();
-
-  assert.equal(ui.status.textContent, 'Falha no Groove Brain.');
-  assert.equal(ui.error.textContent, 'HELPER_SEARCH_500');
-  assert.equal(ui.controls.hidden, true);
-});
-
-test('bridge failure becomes a terminal visible UI error', async () => {
-  const ui = await createHarness({ bridgeThrows: true });
-
-  assert.doesNotThrow(() => ui.cancel.dispatch('click'));
-  assert.equal(ui.status.textContent, 'Falha no Groove Brain.');
-  assert.equal(ui.error.textContent, 'BRIDGE_FAILED');
-  assert.equal(ui.controls.hidden, true);
-  assert.equal(ui.insert.disabled, true);
-  assert.equal(ui.cancel.disabled, true);
+test('a failing search on the picker is visible and terminal', async () => {
+  const { nodes } = await runPage('picker.js', PICKER_NODES, { searchStatus: 500 });
+  assert.equal(nodes.status.textContent, 'Falha no Groove Brain.');
+  assert.equal(nodes.error.textContent, 'HELPER_SEARCH_500');
+  assert.equal(nodes.controls.hidden, true);
 });

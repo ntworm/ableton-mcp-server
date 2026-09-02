@@ -11,6 +11,8 @@ use std::time::{Duration, Instant};
 use subtle::ConstantTimeEq;
 
 use crate::catalog::{Catalog, Query};
+use crate::net::is_allowed_peer;
+use std::sync::Mutex;
 
 const MAX_HEADER_BYTES: usize = 16 * 1024;
 const CSP: &str = "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
@@ -61,7 +63,37 @@ pub fn parse_request(raw: &str) -> Result<ParsedRequest, &'static str> {
 }
 
 pub fn is_api_route(path: &str) -> bool {
-    matches!(path, "/api/health" | "/api/search" | "/api/groove")
+    matches!(
+        path,
+        "/api/health"
+            | "/api/panel"
+            | "/api/search"
+            | "/api/groove"
+            | "/api/select"
+            | "/api/selection"
+    )
+}
+
+/// What the browser picked, waiting for the extension to collect it.
+///
+/// The panel no longer returns the choice through the modal, because the modal
+/// closes before the user has picked anything. The browser posts here and the
+/// extension polls, which is what lets Live stay usable in between.
+#[derive(Default)]
+pub struct Selection {
+    chosen: Mutex<Option<String>>,
+}
+
+impl Selection {
+    pub fn set(&self, id: String) {
+        // Last write wins: changing your mind on the phone should change what
+        // lands in the slot, not queue a second clip.
+        *self.chosen.lock().expect("selection mutex") = Some(id);
+    }
+
+    pub fn take(&self) -> Option<String> {
+        self.chosen.lock().expect("selection mutex").take()
+    }
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -137,6 +169,15 @@ pub fn search_response(catalog: &Catalog, body: &SearchBody) -> String {
     serde_json::json!({"total": total, "returned": items.len(), "items": items}).to_string()
 }
 
+#[derive(Debug, serde::Deserialize)]
+pub struct SelectBody {
+    pub id: String,
+}
+
+pub fn parse_select_body(raw: &str) -> Result<SelectBody, &'static str> {
+    serde_json::from_str(raw).map_err(|_| "INVALID_SELECT_BODY")
+}
+
 pub fn groove_response(catalog: &Catalog, id: &str) -> Option<String> {
     catalog.groove(id).map(|groove| {
         serde_json::json!({
@@ -155,11 +196,23 @@ pub fn token_matches(authorization: &str, token: &str) -> bool {
     authorization.as_bytes().ct_eq(expected.as_bytes()).into()
 }
 
+/// True when a Host header names this helper's port, whatever address it used.
+pub fn host_has_port(host: &str, port: u16) -> bool {
+    // Split from the right: an IPv6 literal host is bracketed and full of
+    // colons, so the last one is the port separator.
+    match host.rsplit_once(':') {
+        Some((_address, given)) => given.parse::<u16>() == Ok(port),
+        None => false,
+    }
+}
+
 pub fn asset_name(path: &str) -> Option<(&'static str, &'static str)> {
     match path {
         "/" => Some(("index.html", "text/html; charset=utf-8")),
         "/app.js" => Some(("app.js", "text/javascript; charset=utf-8")),
         "/styles.css" => Some(("styles.css", "text/css; charset=utf-8")),
+        "/picker.html" => Some(("picker.html", "text/html; charset=utf-8")),
+        "/picker.js" => Some(("picker.js", "text/javascript; charset=utf-8")),
         _ => None,
     }
 }
@@ -301,9 +354,10 @@ fn handle_connection(
     mut stream: TcpStream,
     ui_dir: &Path,
     token: &str,
-    expected_host: &str,
+    port: u16,
     shutdown: &AtomicBool,
     catalog: &Catalog,
+    selection: &Selection,
 ) -> io::Result<()> {
     let deadline = Instant::now() + CONNECTION_TIMEOUT;
     let raw = match read_headers(&mut stream, shutdown, deadline) {
@@ -333,7 +387,11 @@ fn handle_connection(
         }
     };
 
-    if request.header("host") != Some(expected_host) {
+    // The port is what identifies this helper; the address depends on which
+    // interface the client came in on, and both localhost and the LAN address
+    // are legitimate. The peer check has already bounded who may ask.
+    let host = request.header("host").unwrap_or_default();
+    if !host_has_port(host, port) {
         return write_response(
             &mut stream,
             "403 Forbidden",
@@ -345,7 +403,9 @@ fn handle_connection(
     }
 
     if is_api_route(&request.path) {
-        let expected_origin = format!("http://{expected_host}");
+        // Same-origin, whatever origin the client used to get here: the page
+        // that may call these routes is the one this helper served.
+        let expected_origin = format!("http://{host}");
         if request.method != "POST" || request.header("origin") != Some(expected_origin.as_str()) {
             return write_response(
                 &mut stream,
@@ -356,30 +416,9 @@ fn handle_connection(
                 deadline,
             );
         }
-        let authorized = request
-            .header("authorization")
-            .is_some_and(|value| token_matches(value, token));
-        if !authorized {
-            return write_response(
-                &mut stream,
-                "401 Unauthorized",
-                "application/json",
-                br#"{"status":"unauthorized"}"#,
-                shutdown,
-                deadline,
-            );
-        }
-        if request.path == "/api/health" {
-            return write_response(
-                &mut stream,
-                "200 OK",
-                "application/json",
-                br#"{"status":"ok","protocol":1}"#,
-                shutdown,
-                deadline,
-            );
-        }
-
+        // Drained before anything is written, including a refusal. Replying and
+        // closing with unread bytes still in the socket makes Windows send an
+        // RST, and the client sees a reset connection instead of the response.
         let length = request
             .header("content-length")
             .and_then(|value| value.parse::<usize>().ok())
@@ -398,8 +437,51 @@ fn handle_connection(
                 );
             }
         };
+        let authorized = request
+            .header("authorization")
+            .is_some_and(|value| token_matches(value, token));
+        if !authorized {
+            return write_response(
+                &mut stream,
+                "401 Unauthorized",
+                "application/json",
+                br#"{"status":"unauthorized"}"#,
+                shutdown,
+                deadline,
+            );
+        }
 
-        let payload = if request.path == "/api/search" {
+        let payload = if request.path == "/api/health" {
+            Ok(r#"{"status":"ok","protocol":1}"#.to_owned())
+        } else if request.path == "/api/select" {
+            parse_select_body(&raw_body)
+                .map_err(|_| "400 Bad Request")
+                // Refusing an id the catalog does not hold keeps a typo in the
+                // browser from parking a selection the extension waits on.
+                .and_then(|body| match catalog.groove(&body.id) {
+                    Some(_) => {
+                        selection.set(body.id);
+                        Ok(r#"{"status":"selected"}"#.to_owned())
+                    }
+                    None => Err("404 Not Found"),
+                })
+        } else if request.path == "/api/panel" {
+            // The URL and its QR, so the page inside Live can hand the panel
+            // over to a phone without knowing the machine's own address.
+            let url = crate::net::panel_url(port, token, "picker.html");
+            Ok(match crate::qr::svg(&url) {
+                Ok(image) => serde_json::json!({"url": url, "qr": image}).to_string(),
+                // A URL too long to encode is still a URL someone can type.
+                Err(_) => serde_json::json!({"url": url, "qr": null}).to_string(),
+            })
+        } else if request.path == "/api/selection" {
+            // Taken, not read: the extension collects a pick once, and a second
+            // poll after a write must not queue the same groove again.
+            Ok(match selection.take() {
+                Some(id) => serde_json::json!({"id": id}).to_string(),
+                None => r#"{"id":null}"#.to_owned(),
+            })
+        } else if request.path == "/api/search" {
             parse_search_body(&raw_body)
                 .map(|body| search_response(catalog, &body))
                 .map_err(|_| "400 Bad Request")
@@ -462,8 +544,13 @@ fn handle_connection(
     )
 }
 
-pub fn bind_loopback() -> io::Result<TcpListener> {
-    let listener = TcpListener::bind("127.0.0.1:0")?;
+/// Listen on every interface so a phone on the same Wi-Fi can reach the panel.
+///
+/// The accept loop refuses any peer that is not on a private network, so this
+/// is wider than loopback but not open: what it adds is the LAN, not the
+/// internet.
+pub fn bind_lan() -> io::Result<TcpListener> {
+    let listener = TcpListener::bind("0.0.0.0:0")?;
     listener.set_nonblocking(true)?;
     Ok(listener)
 }
@@ -484,21 +571,23 @@ pub fn run(
     token: String,
     shutdown: Arc<AtomicBool>,
     catalog: Arc<Catalog>,
+    selection: Arc<Selection>,
 ) -> io::Result<()> {
     let port = listener.local_addr()?.port();
-    let expected_host = format!("localhost:{port}");
+
 
     while !shutdown.load(Ordering::Acquire) {
         match listener.accept() {
-            Ok((stream, address)) if address.ip().is_loopback() => {
+            Ok((stream, address)) if is_allowed_peer(address.ip()) => {
                 stream.set_nonblocking(true)?;
                 let _ = handle_connection(
                     stream,
                     &ui_dir,
                     &token,
-                    &expected_host,
+                    port,
                     shutdown.as_ref(),
                     catalog.as_ref(),
+                    selection.as_ref(),
                 );
             }
             Ok(_) => {}
@@ -523,6 +612,54 @@ mod tests {
              "bars":4,"meter":"4/4","ppq":480,"notes":[[36,0,120,100]]}
         ]
     }"#;
+
+    #[test]
+    fn a_host_is_accepted_by_its_port_whatever_address_it_names() {
+        // A phone reaches the helper at the LAN address and the same machine
+        // reaches it at localhost. Both are legitimate; the port is what
+        // identifies this helper, and the peer check bounds who may ask.
+        assert!(host_has_port("localhost:45123", 45123));
+        assert!(host_has_port("192.168.1.40:45123", 45123));
+        assert!(host_has_port("[fd00::1]:45123", 45123));
+        assert!(!host_has_port("localhost:45124", 45123));
+        assert!(!host_has_port("localhost", 45123));
+        assert!(!host_has_port("", 45123));
+    }
+
+    #[test]
+    fn a_selection_is_collected_once() {
+        // The extension polls until something arrives. Reading without taking
+        // would make a second poll after the write queue the same groove again.
+        let selection = Selection::default();
+        assert_eq!(selection.take(), None);
+        selection.set("a1".to_owned());
+        assert_eq!(selection.take(), Some("a1".to_owned()));
+        assert_eq!(selection.take(), None);
+    }
+
+    #[test]
+    fn changing_your_mind_replaces_the_pick_rather_than_queueing_one() {
+        let selection = Selection::default();
+        selection.set("a1".to_owned());
+        selection.set("b2".to_owned());
+        assert_eq!(selection.take(), Some("b2".to_owned()));
+        assert_eq!(selection.take(), None);
+    }
+
+    #[test]
+    fn a_select_body_needs_an_id() {
+        assert_eq!(parse_select_body(r#"{"id":"a1"}"#).unwrap().id, "a1");
+        assert!(parse_select_body("{}").is_err());
+        assert!(parse_select_body("not json").is_err());
+    }
+
+    #[test]
+    fn the_picker_pages_are_servable_and_nothing_else_is() {
+        assert!(asset_name("/picker.html").is_some());
+        assert!(asset_name("/picker.js").is_some());
+        assert_eq!(asset_name("/../secret"), None);
+        assert_eq!(asset_name("/data/grooves.json"), None);
+    }
 
     #[test]
     fn every_api_route_is_recognised_and_nothing_else_is() {
@@ -608,7 +745,7 @@ mod tests {
 
     #[test]
     fn serves_request_fragmented_after_accept() {
-        let listener = bind_loopback().unwrap();
+        let listener = bind_lan().unwrap();
         let port = listener.local_addr().unwrap().port();
         let shutdown = Arc::new(AtomicBool::new(false));
         let server_shutdown = Arc::clone(&shutdown);
@@ -619,6 +756,7 @@ mod tests {
                     "abc".to_owned(),
                     server_shutdown,
                     Arc::new(Catalog::from_str(SAMPLE).unwrap()),
+                    Arc::new(Selection::default()),
                 ));
 
         let mut client = TcpStream::connect(("127.0.0.1", port)).unwrap();
@@ -652,7 +790,7 @@ mod tests {
 
     #[test]
     fn shutdown_interrupts_partial_request_promptly() {
-        let listener = bind_loopback().unwrap();
+        let listener = bind_lan().unwrap();
         let port = listener.local_addr().unwrap().port();
         let shutdown = Arc::new(AtomicBool::new(false));
         let server_shutdown = Arc::clone(&shutdown);
@@ -663,6 +801,7 @@ mod tests {
                     "abc".to_owned(),
                     server_shutdown,
                     Arc::new(Catalog::from_str(SAMPLE).unwrap()),
+                    Arc::new(Selection::default()),
                 ));
 
         let mut client = TcpStream::connect(("127.0.0.1", port)).unwrap();
@@ -689,7 +828,7 @@ mod tests {
 
     #[test]
     fn slow_fragments_cannot_extend_connection_deadline() {
-        let listener = bind_loopback().unwrap();
+        let listener = bind_lan().unwrap();
         let port = listener.local_addr().unwrap().port();
         let shutdown = Arc::new(AtomicBool::new(false));
         let server_shutdown = Arc::clone(&shutdown);
@@ -700,6 +839,7 @@ mod tests {
                     "abc".to_owned(),
                     server_shutdown,
                     Arc::new(Catalog::from_str(SAMPLE).unwrap()),
+                    Arc::new(Selection::default()),
                 ));
 
         let mut client = TcpStream::connect(("127.0.0.1", port)).unwrap();

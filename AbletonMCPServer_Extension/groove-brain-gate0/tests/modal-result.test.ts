@@ -11,32 +11,27 @@ test('cancel still needs no groove', () => {
   );
 });
 
-test('an insert result carries the groove the user picked', () => {
+test('a handoff closes the modal without carrying a groove', () => {
+  // The choice arrives later, from the phone, through the helper. The modal's
+  // only job now is to free Live.
   assert.deepEqual(
-    parseModalResult(
-      '{"action":"insert_groove","confirmed":true,"protocol":1,"groove_id":"a1b2c3d4e5f60718"}',
-    ),
-    { action: 'insert_groove', confirmed: true, protocol: 1, grooveId: 'a1b2c3d4e5f60718' },
+    parseModalResult('{"action":"handoff","confirmed":true,"protocol":1}'),
+    { action: 'handoff', confirmed: true, protocol: 1 },
   );
 });
 
-test('an insert without a groove id is refused', () => {
-  // Confirming without a selection would write whatever happened to be first.
+test('an unconfirmed handoff is refused', () => {
   assert.throws(
-    () => parseModalResult('{"action":"insert_groove","confirmed":true,"protocol":1}'),
-    /INVALID_MODAL_RESULT/,
-  );
-  assert.throws(
-    () => parseModalResult('{"action":"insert_groove","confirmed":true,"protocol":1,"groove_id":""}'),
+    () => parseModalResult('{"action":"handoff","confirmed":false,"protocol":1}'),
     /INVALID_MODAL_RESULT/,
   );
 });
 
-test('an unconfirmed insert is refused', () => {
+test('the old insert action is no longer accepted', () => {
   assert.throws(
     () =>
       parseModalResult(
-        '{"action":"insert_groove","confirmed":false,"protocol":1,"groove_id":"a1"}',
+        '{"action":"insert_groove","confirmed":true,"protocol":1,"groove_id":"a1"}',
       ),
     /INVALID_MODAL_RESULT/,
   );

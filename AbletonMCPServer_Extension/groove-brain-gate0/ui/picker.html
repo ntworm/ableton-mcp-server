@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Groove Brain</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body class="picker">
+    <main>
+      <p class="eyebrow">GROOVE BRAIN</p>
+      <p id="status">Conectando…</p>
+      <section id="controls" hidden>
+        <div class="filters">
+          <label>Gênero
+            <input id="genre" placeholder="metal" autocomplete="off"
+                   autocapitalize="none" spellcheck="false" enterkeyhint="search">
+          </label>
+          <label>BPM
+            <select id="bpm">
+              <option value="">qualquer</option>
+              <option value="bpm_60_79">60–79</option>
+              <option value="bpm_80_99">80–99</option>
+              <option value="bpm_100_119">100–119</option>
+              <option value="bpm_120_139">120–139</option>
+              <option value="bpm_140_159">140–159</option>
+              <option value="bpm_160_179">160–179</option>
+              <option value="bpm_180_plus">180+</option>
+            </select>
+          </label>
+          <button id="search">Buscar</button>
+        </div>
+        <p id="count" class="count"></p>
+        <ul id="results"></ul>
+        <p id="sent" class="sent" hidden>Enviado para o Live.</p>
+      </section>
+      <pre id="error" role="alert"></pre>
+    </main>
+    <script src="/picker.js" defer></script>
+  </body>
+</html>

@@ -75,16 +75,11 @@ test('modal parser accepts only the two protocol-one outcomes', () => {
     { action: 'cancel', confirmed: false, protocol: 1 },
   );
   assert.deepEqual(
-    parseModalResult(
-      '{"action":"insert_groove","confirmed":true,"protocol":1,"groove_id":"a1"}',
-    ),
-    { action: 'insert_groove', confirmed: true, protocol: 1, grooveId: 'a1' },
+    parseModalResult('{"action":"handoff","confirmed":true,"protocol":1}'),
+    { action: 'handoff', confirmed: true, protocol: 1 },
   );
   assert.throws(
-    () =>
-      parseModalResult(
-        '{"action":"insert_groove","confirmed":false,"protocol":1,"groove_id":"a1"}',
-      ),
+    () => parseModalResult('{"action":"handoff","confirmed":false,"protocol":1}'),
     /INVALID_MODAL_RESULT/,
   );
   assert.throws(

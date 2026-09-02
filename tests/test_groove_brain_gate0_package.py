@@ -76,16 +76,30 @@ def test_verifier_rejects_runtime_and_extension_version_mismatch(tmp_path: Path)
         verify_ablx(artifact)
 
 
-def test_gate0_source_is_isolated_and_loopback_only() -> None:
+def test_gate0_source_is_isolated_and_reachable_only_from_a_private_network() -> None:
+    """The listener is no longer loopback-only, and that is deliberate.
+
+    A modal dialog blocks Live while it is open, so the panel moved to a browser
+    on the user's phone and the helper has to be reachable from it. What replaces
+    the loopback bind is not nothing: the accept loop refuses any peer that is
+    not on a private network, so the change adds the LAN and not the internet.
+    """
+
     package = json.loads(
         (ROOT / "AbletonMCPServer_Extension" / "package.json").read_text(encoding="utf-8")
     )
     manifest = json.loads((GATE0 / "manifest.json").read_text(encoding="utf-8"))
     server = (GATE0 / "helper" / "src" / "server.rs").read_text(encoding="utf-8")
+    net = (GATE0 / "helper" / "src" / "net.rs").read_text(encoding="utf-8")
     extension = (GATE0 / "src" / "extension.ts").read_text(encoding="utf-8")
 
     assert manifest["entry"] == "dist/extension.js"
     assert "gate0:package" in package["scripts"]
-    assert 'TcpListener::bind("127.0.0.1:0")' in server
     assert "registerContextMenuAction('ClipSlot'" in extension
     assert "Arrangement" not in extension
+
+    # Binding wide is only safe because the peer check is the real gate, so the
+    # two are asserted together: neither may be removed without the other.
+    assert 'TcpListener::bind("0.0.0.0:0")' in server
+    assert "is_allowed_peer(address.ip())" in server
+    assert "v4.is_loopback() || v4.is_private() || v4.is_link_local()" in net
