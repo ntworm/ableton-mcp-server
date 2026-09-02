@@ -1,5 +1,7 @@
 mod catalog;
+mod net;
 mod protocol;
+mod qr;
 mod server;
 
 use protocol::{PROTOCOL_VERSION, ReadyMessage, is_shutdown, parse_bootstrap};

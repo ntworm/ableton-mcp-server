@@ -5,6 +5,10 @@ edition = "2024"
 license = "MIT"
 
 [dependencies]
+# The reference Nayuki implementation: pure Rust, no transitive
+# dependencies. A hand-rolled QR encoder is a source of subtle,
+# scanner-specific bugs that only show up on someone else's phone.
+qrcodegen = "=1.8.0"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 subtle = "=2.6.1"
