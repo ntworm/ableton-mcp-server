@@ -8,3 +8,11 @@ button { border: 0; border-radius: 5px; padding: 12px 18px; background: #ff9f1a;
 button:disabled { opacity: .4; }
 button.secondary { background: #3a3a3a; color: #eee; }
 #error { color: #ff7777; white-space: pre-wrap; }
+.filters { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
+.filters label { display: grid; gap: 6px; font-size: 13px; color: #bbb; }
+.filters input, .filters select { padding: 10px; border: 1px solid #555; border-radius: 5px; background: #262626; color: #efefef; }
+.count { color: #999; font-size: 13px; margin: 0; }
+.note { color: #999; font-size: 13px; margin: 0; }
+#results { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow-y: auto; display: grid; gap: 4px; }
+#results li { padding: 10px 12px; border: 1px solid #3a3a3a; border-radius: 5px; cursor: pointer; font-size: 13px; }
+#results li.selected { border-color: #ff9f1a; background: #2a2317; }

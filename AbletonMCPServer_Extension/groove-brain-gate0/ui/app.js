@@ -1,10 +1,19 @@
 const statusNode = document.querySelector('#status');
 const controls = document.querySelector('#controls');
-const confirmNode = document.querySelector('#confirm');
-const runNode = document.querySelector('#run');
-const cancelNode = document.querySelector('#cancel');
 const errorNode = document.querySelector('#error');
+const genreNode = document.querySelector('#genre');
+const bpmNode = document.querySelector('#bpm');
+const searchNode = document.querySelector('#search');
+const resultsNode = document.querySelector('#results');
+const countNode = document.querySelector('#count');
+const insertNode = document.querySelector('#insert');
+const cancelNode = document.querySelector('#cancel');
+
 let submitted = false;
+// Hoisted out of bootstrap(): the search calls need it too, and the URL it
+// arrived in is erased on the first line of the handshake.
+let bearer = null;
+let selectedId = null;
 
 function closeAndSend(payload) {
   const message = { method: 'close_and_send', params: [JSON.stringify(payload)] };
@@ -21,10 +30,11 @@ function closeAndSend(payload) {
 
 function showTerminalError(error) {
   submitted = true;
-  runNode.disabled = true;
+  searchNode.disabled = true;
+  insertNode.disabled = true;
   cancelNode.disabled = true;
   controls.hidden = true;
-  statusNode.textContent = 'Falha no Gate 0.';
+  statusNode.textContent = 'Falha no Groove Brain.';
   const message = error instanceof Error ? error.message : String(error);
   errorNode.textContent = message.replace(/[0-9a-f]{64}/gi, '[redacted]');
 }
@@ -32,7 +42,8 @@ function showTerminalError(error) {
 function submit(payload) {
   if (submitted) return;
   submitted = true;
-  runNode.disabled = true;
+  searchNode.disabled = true;
+  insertNode.disabled = true;
   cancelNode.disabled = true;
   try {
     closeAndSend(payload);
@@ -41,15 +52,51 @@ function submit(payload) {
   }
 }
 
+async function api(path, body) {
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${bearer}`, 'Content-Type': 'application/json' },
+    cache: 'no-store',
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(`HELPER_${path.slice(5).toUpperCase()}_${response.status}`);
+  }
+  return response.json();
+}
+
+function select(id, node) {
+  selectedId = id;
+  for (const child of resultsNode.children) {
+    child.className = child === node ? 'selected' : '';
+  }
+  insertNode.disabled = submitted;
+}
+
+function render(payload) {
+  // A new search invalidates the old pick. Leaving it selected would insert a
+  // groove that is no longer on screen.
+  selectedId = null;
+  insertNode.disabled = true;
+  resultsNode.replaceChildren();
+  countNode.textContent = `${payload.total} encontrados, mostrando ${payload.items.length}`;
+  for (const item of payload.items) {
+    const entry = document.createElement('li');
+    entry.textContent = `${item.bars} compassos ${item.meter} · ${item.note_count} notas · ${item.kit.join(' ')}`;
+    entry.addEventListener('click', () => select(item.id, entry));
+    resultsNode.append(entry);
+  }
+}
+
 async function bootstrap() {
-  const token = window.location.hash.slice(1);
+  bearer = window.location.hash.slice(1);
   history.replaceState(null, '', window.location.pathname);
-  if (!/^[0-9a-f]{64}$/i.test(token)) {
+  if (!/^[0-9a-f]{64}$/i.test(bearer)) {
     throw new Error('INVALID_BOOTSTRAP_TOKEN');
   }
   const response = await fetch('/api/health', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${bearer}` },
     cache: 'no-store',
   });
   if (!response.ok) {
@@ -63,13 +110,20 @@ async function bootstrap() {
   controls.hidden = false;
 }
 
-confirmNode.addEventListener('change', () => {
-  runNode.disabled = submitted || !confirmNode.checked;
+searchNode.addEventListener('click', () => {
+  if (submitted) return;
+  const body = {};
+  const genre = genreNode.value.trim();
+  if (genre) body.genre = genre;
+  if (bpmNode.value) body.bpm = bpmNode.value;
+  api('/api/search', body).then(render).catch(showTerminalError);
 });
-runNode.addEventListener('click', () => {
-  if (!confirmNode.checked) return;
-  submit({ action: 'run_session_probe', confirmed: true, protocol: 1 });
+
+insertNode.addEventListener('click', () => {
+  if (!selectedId) return;
+  submit({ action: 'insert_groove', confirmed: true, protocol: 1, groove_id: selectedId });
 });
+
 cancelNode.addEventListener('click', () => {
   submit({ action: 'cancel', confirmed: false, protocol: 1 });
 });
