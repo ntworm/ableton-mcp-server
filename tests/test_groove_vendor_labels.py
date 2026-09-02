@@ -41,3 +41,28 @@ def test_tempo_becomes_a_coarse_bucket_not_a_raw_number() -> None:
     assert tempo_facet({"tempo": 140}) == ("bpm_140_159",)
     assert tempo_facet({}) == ()
     assert tempo_facet({"tempo": 0}) == ()
+
+
+def test_the_sidecar_is_parsed_once_per_path(tmp_path) -> None:
+    # A build reads it once, but a suite builds dozens of bundles. Re-parsing a
+    # hundred thousand lines per build churned enough short-lived objects to
+    # crash the interpreter during collection. Nothing writes to the result, so
+    # handing every caller the same instance is correct.
+    path = _write(tmp_path, [{"path": "a/b.mid", "genre": "Metal", "tempo": 140}])
+    assert VendorLabels.load(path) is VendorLabels.load(path)
+
+
+def test_a_sidecar_written_after_a_miss_needs_the_cache_cleared(tmp_path) -> None:
+    # The flip side of caching: an absent sidecar is remembered as absent. The
+    # file is build-time input and does not change mid-run, so this is stated
+    # rather than worked around.
+    path = str(tmp_path / "late.jsonl")
+    assert VendorLabels.load(path).by_path == {}
+    _write(tmp_path, [{"path": "a/b.mid", "genre": "Metal"}])
+    (tmp_path / "vendor_labels.jsonl").replace(tmp_path / "late.jsonl")
+    assert VendorLabels.load(path).by_path == {}
+
+    from ableton_mcp_server.groove_intelligence.vendor_labels import _load_cached
+
+    _load_cached.cache_clear()
+    assert "a/b.mid" in VendorLabels.load(path).by_path

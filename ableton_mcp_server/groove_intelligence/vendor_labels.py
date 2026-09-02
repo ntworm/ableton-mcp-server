@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -41,20 +42,33 @@ class VendorLabels:
 
     @classmethod
     def load(cls, path: str | Path = DEFAULT_SIDECAR) -> VendorLabels:
-        source = Path(path)
-        if not source.exists():
-            return cls(by_path={})
-        records: dict[str, dict[str, Any]] = {}
-        with source.open(encoding="utf-8") as handle:
-            for line in handle:
-                record = json.loads(line)
-                key = record.get("path")
-                if isinstance(key, str):
-                    records[key] = record
-        return cls(by_path=records)
+        """Return the labels for ``path``, parsed once per process.
+
+        The sidecar is a hundred thousand lines. A build reads it once, but a
+        test suite builds dozens of bundles, and re-parsing per build churns
+        enough short-lived objects to crash the interpreter during collection.
+        Nothing writes to the result, so one shared instance is correct.
+        """
+
+        return _load_cached(str(path))
 
     def for_path(self, relative_path: str) -> dict[str, Any]:
         return self.by_path.get(relative_path, {})
+
+
+@lru_cache(maxsize=4)
+def _load_cached(path: str) -> VendorLabels:
+    source = Path(path)
+    if not source.exists():
+        return VendorLabels(by_path={})
+    records: dict[str, dict[str, Any]] = {}
+    with source.open(encoding="utf-8") as handle:
+        for line in handle:
+            record = json.loads(line)
+            key = record.get("path")
+            if isinstance(key, str):
+                records[key] = record
+    return VendorLabels(by_path=records)
 
 
 def genre_facet(record: Mapping[str, Any]) -> tuple[str, ...]:
