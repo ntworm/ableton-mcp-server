@@ -163,6 +163,7 @@ class GenerateRequestV1(GrooveModel):
             "microtiming",
             "energy",
             "complexity",
+            "polyrhythm",
         }
         if unknown:
             raise ValueError("unknown transform axis")

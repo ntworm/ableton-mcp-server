@@ -372,3 +372,66 @@ def test_negative_timing_transforms_move_directionally_with_clamp(
         [note], {axis: -1.0}, seed=1, ppq=480, meter=(4, 2), length_ticks=3840
     )
     assert generated[0].start_ticks <= start_ticks
+
+
+def _accents(count: int = 24) -> list[_MusicalNote]:
+    """Notes loud enough to count as accents, one per sixteenth."""
+
+    return [_MusicalNote(1, 9, 36, 100, index * 120, 60, index) for index in range(count)]
+
+
+def test_polyrhythm_moves_accents_onto_the_triplet_grid() -> None:
+    notes = _accents()
+    moved = _transform_notes(
+        notes, {"polyrhythm": 1.0}, seed=1, ppq=480, meter=(4, 2), length_ticks=3840
+    )
+    shifts = {
+        after.start_ticks - before.start_ticks
+        for before, after in zip(notes, moved, strict=True)
+    }
+    # Either a note held its place or it moved by exactly one triplet. A shift of
+    # any other size would mean the two grids never line up again.
+    assert shifts <= {0, 160}
+    assert shifts != {0}
+
+
+def test_polyrhythm_leaves_quiet_notes_where_they_are() -> None:
+    # The straight grid has to stay audible under the shifted one, so only
+    # accents move. A groove of ghost notes is unchanged at any intensity.
+    ghosts = [_MusicalNote(1, 9, 36, 40, index * 120, 60, index) for index in range(24)]
+    moved = _transform_notes(
+        ghosts, {"polyrhythm": 1.0}, seed=1, ppq=480, meter=(4, 2), length_ticks=3840
+    )
+    assert [note.start_ticks for note in moved] == [note.start_ticks for note in ghosts]
+
+
+def test_negative_polyrhythm_pulls_earlier_and_clamps_at_zero() -> None:
+    moved = _transform_notes(
+        _accents(), {"polyrhythm": -1.0}, seed=1, ppq=480, meter=(4, 2), length_ticks=3840
+    )
+    assert all(note.start_ticks >= 0 for note in moved)
+    assert any(note.start_ticks < index * 120 for index, note in enumerate(moved))
+
+
+def test_polyrhythm_does_not_disturb_what_other_axes_do() -> None:
+    # The axis draws from its own stream. Sharing the seeded rng would make
+    # enabling polyrhythm silently change which notes a negative density drops.
+    notes = _accents()
+    without = _transform_notes(
+        notes, {"density": -0.5}, seed=7, ppq=480, meter=(4, 2), length_ticks=3840
+    )
+    with_poly = _transform_notes(
+        notes, {"density": -0.5, "polyrhythm": 1.0}, seed=7, ppq=480, meter=(4, 2),
+        length_ticks=3840,
+    )
+    assert [note.source_order for note in without] == [note.source_order for note in with_poly]
+
+
+def test_polyrhythm_is_reproducible_for_one_seed() -> None:
+    first, second = (
+        _transform_notes(
+            _accents(), {"polyrhythm": 0.5}, seed=3, ppq=480, meter=(4, 2), length_ticks=3840
+        )
+        for _ in range(2)
+    )
+    assert [note.start_ticks for note in first] == [note.start_ticks for note in second]

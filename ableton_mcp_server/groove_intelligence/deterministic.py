@@ -292,6 +292,12 @@ def _initial_notes(
     return notes
 
 
+# Above this, a note reads as an accent rather than a ghost or a filler hit.
+# The polyrhythm axis moves accents only, so the straight grid stays audible
+# underneath the shifted one.
+_ACCENT_VELOCITY = 80
+
+
 def _replace(note: _MusicalNote, **updates: int) -> _MusicalNote:
     values = {
         "track_index": note.track_index,
@@ -423,6 +429,26 @@ def _transform_notes(
                 note,
                 start_ticks=note.start_ticks
                 + (amount * direction if note.start_ticks % bar_ticks == 0 else 0),
+            )
+            for note in result
+        ]
+
+    polyrhythm = float(transforms.get("polyrhythm", 0.0))
+    if polyrhythm:
+        # A 3-over-4 feel: the accented notes move onto the triplet grid while
+        # the rest hold the straight one, which is what makes the two grids
+        # audible at once. ``round(ppq / 3)`` is the triplet; the intensity
+        # decides how many accents move, not how far.
+        poly_shift = max(1, round(ppq / 3)) * (1 if polyrhythm > 0 else -1)
+        # A dedicated stream. Drawing from the shared rng would make enabling
+        # this axis silently change what a negative density transform selects.
+        poly_rng = random.Random(seed ^ 0x504F4C59)
+        result = [
+            _replace(
+                note,
+                start_ticks=max(0, note.start_ticks + poly_shift)
+                if note.velocity > _ACCENT_VELOCITY and poly_rng.random() < abs(polyrhythm)
+                else note.start_ticks,
             )
             for note in result
         ]
