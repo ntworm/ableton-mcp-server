@@ -769,7 +769,7 @@ Use this bounded loop:
 3. `groove_evidence` on promising results, then `groove_compare` on no more
    than eight candidates.
 4. `groove_generate` from one primary source plus zero to seven references,
-   using a deterministic seed and the six transforms.
+   using a deterministic seed and the seven transforms.
 5. `groove_apply(mode="preview")` to validate late kit mapping; after confirming
    the explicit track and empty slot, `groove_apply(mode="commit")` once.
 6. Listen in context and compare the resulting artifact or clip as needed.
@@ -825,7 +825,14 @@ an incompatible kit profile, source channel, rights level, or destination slot.
   eight parents. All chosen parents are recorded in the lineage and remain
   comparable artifacts.
 - `transforms` are bounded to `[-1, 1]` for exactly these supported axes:
-  `density`, `syncopation`, `swing`, `microtiming`, `energy`, and `complexity`.
+  `density`, `syncopation`, `swing`, `microtiming`, `energy`, `complexity`, and
+  `polyrhythm`.
+- `polyrhythm` moves accented notes — velocity above 80 — by exactly one triplet
+  (`ppq / 3`), positive later and negative earlier, clamped at tick zero. Quieter
+  notes never move, so the straight grid stays audible under the shifted one and
+  the two are heard at once. The magnitude decides how many accents move, not how
+  far any one of them travels. It draws from its own seeded stream, so enabling
+  it does not change what the other axes do for the same seed.
 - Reproducibility: same immutable bundle, source/references, transforms, bars,
   provider resolution, and seed produce the same bytes and reproducibility key.
   Deterministic generation is always available; `provider="neural"` is optional
