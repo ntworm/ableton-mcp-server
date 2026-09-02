@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from . import GrooveBuildError
+from .articulation import collection_of
 from .canonical import artifact_id_from_identity, canonical_json, sha256_hex
 from .constants import (
     FEATURES_SCHEMA_VERSION,
     GRAMMAR_SCHEMA_VERSION,
     HVO_SCHEMA_VERSION,
+    HVO_SCHEMA_VERSION_V3,
     MAX_INPUT_BYTES,
     NORMALIZER_ID,
     PARSER_ID,
@@ -19,7 +22,7 @@ from .constants import (
     RANKER_MANIFEST_DIGEST,
 )
 from .midi_lossless import compress_bounded, parse_smf
-from .projections import derive_features, derive_grammar, derive_hvo
+from .projections import derive_features, derive_grammar, derive_hvo, derive_hvo_v3
 from .schema import (
     BuildInput,
     BuildManifestInputV1,
@@ -29,6 +32,7 @@ from .schema import (
     ProjectionRefV1,
 )
 from .taxonomy import TAXONOMY_VERSION, classify_facets, classify_path_facets
+from .vendor_labels import VendorLabels
 
 
 @dataclass(frozen=True)
@@ -113,6 +117,7 @@ def compile_parsed_artifact(
     *,
     build_id: str,
     relative_path: str | None = None,
+    vendor_record: Mapping[str, object] | None = None,
 ) -> CompiledGrooveArtifactV1:
     if not build_input.license_id:
         raise GrooveBuildError("license is required")
@@ -120,13 +125,18 @@ def compile_parsed_artifact(
     if rights_level == 0:
         raise GrooveBuildError("license does not permit publication")
     hvo = derive_hvo(parsed)
+    # The v2 projection is the shipped retrieval contract and stays byte-identical.
+    # The v3 projection resolves the same notes through the collection's own
+    # articulation map, which is what stops a vendor hi-hat reading as junk.
+    hvo_v3 = derive_hvo_v3(parsed, collection_of(relative_path or ""))
     features = derive_features(parsed, hvo)
     grammar = derive_grammar(parsed, hvo)
     facet_set = classify_facets(
         features,
-        hvo,
+        hvo_v3,
         relative_path=relative_path,
         redistribution=build_input.redistribution,
+        vendor_record=vendor_record,
     )
     payload = compress_bounded(parsed.raw_bytes, "zlib-raw-midi-v1")
     provenance = {
@@ -142,6 +152,7 @@ def compile_parsed_artifact(
     lineage: dict[str, object] = {"parent_artifact_ids": [], "relations": [], "ordinals": []}
     lineage_digest = sha256_hex(canonical_json(lineage))
     hvo_ref, hvo_row = _projection_row("hvo", HVO_SCHEMA_VERSION, hvo)
+    hvo_v3_ref, hvo_v3_row = _projection_row("hvo_v3", HVO_SCHEMA_VERSION_V3, hvo_v3)
     features_ref, features_row = _projection_row("features", FEATURES_SCHEMA_VERSION, features)
     grammar_ref, grammar_row = _projection_row("grammar", GRAMMAR_SCHEMA_VERSION, grammar)
     identity = {
@@ -158,6 +169,11 @@ def compile_parsed_artifact(
         "events_digest": parsed.source_events_digest,
         "projection_digests": {
             "hvo": hvo_ref.digest,
+            # In the identity by design.  The articulation map is a data file that
+            # can be rebuilt, and a rebuild moves roles.  An identity blind to the
+            # v3 digest would hand two materially different artifacts the same id,
+            # so an index could not tell that its stored content had gone stale.
+            "hvo_v3": hvo_v3_ref.digest,
             "features": features_ref.digest,
             "grammar": grammar_ref.digest,
         },
@@ -174,7 +190,7 @@ def compile_parsed_artifact(
         events_digest=parsed.source_events_digest,
         provenance=provenance,
         lineage=lineage,
-        projections=(hvo_ref, features_ref, grammar_ref),
+        projections=(hvo_ref, hvo_v3_ref, features_ref, grammar_ref),
     )
     feature_rows = tuple(
         {
@@ -199,7 +215,7 @@ def compile_parsed_artifact(
     summary = {
         "bars": features.values["bars"].value,
         "meter": features.values["meter"].value,
-        "roles": sorted({cell.role for cell in hvo.cells}),
+        "roles": sorted({cell.role for cell in hvo_v3.cells}),
         "taxonomy_version": facet_set.version,
     }
     return CompiledGrooveArtifactV1(
@@ -218,7 +234,7 @@ def compile_parsed_artifact(
         summary=summary,
         facets=facet_rows,
         features=feature_rows,
-        projections=(hvo_row, features_row, grammar_row),
+        projections=(hvo_row, hvo_v3_row, features_row, grammar_row),
         lineage_rows=(),
         provenance_digest=provenance_digest,
     )
@@ -229,6 +245,7 @@ def compile_one(
     *,
     build_id: str,
     authorized_source: AuthorizedSource,
+    vendor_record: Mapping[str, object] | None = None,
 ) -> CompiledGrooveArtifactV1:
     if not isinstance(authorized_source, AuthorizedSource):
         raise GrooveBuildError("authorized root token is required")
@@ -254,6 +271,7 @@ def compile_one(
         parsed,
         build_id=build_id,
         relative_path=relative_path,
+        vendor_record=vendor_record,
     )
 
 
@@ -343,9 +361,17 @@ def build_seed_bundle(
     corpus_id = "gc1_" + sha256_hex(
         canonical_json({"source_digests": [token.source_digest for _input, token in deduped]})
     )
+    vendor_labels = VendorLabels.load()
     artifacts = [
         merge_taxonomy_facets(
-            compile_one(build_input, build_id=build_id, authorized_source=token),
+            compile_one(
+                build_input,
+                build_id=build_id,
+                authorized_source=token,
+                vendor_record=vendor_labels.for_path(
+                    token.path.relative_to(root).as_posix()
+                ),
+            ),
             duplicate_paths[token.source_digest],
         )
         for build_input, token in deduped
@@ -373,6 +399,7 @@ def build_seed_bundle(
         normalizer_id=NORMALIZER_ID,
         projection_versions={
             "hvo": HVO_SCHEMA_VERSION,
+            "hvo_v3": HVO_SCHEMA_VERSION_V3,
             "features": FEATURES_SCHEMA_VERSION,
             "grammar": GRAMMAR_SCHEMA_VERSION,
             "taxonomy": TAXONOMY_VERSION,

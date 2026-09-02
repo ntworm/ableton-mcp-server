@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import GrooveMidiError
+from .articulation import collection_of
 from .build import build_seed_bundle
 from .canonical import canonical_json, sha256_hex
 from .constants import (
@@ -22,14 +23,16 @@ from .constants import (
     FEATURES_SCHEMA_VERSION,
     GRAMMAR_SCHEMA_VERSION,
     HVO_SCHEMA_VERSION,
+    HVO_SCHEMA_VERSION_V3,
     MAX_INPUT_BYTES,
     NORMALIZER_ID,
     PARSER_ID,
 )
 from .midi_lossless import parse_smf
-from .projections import derive_features, derive_grammar, derive_hvo
+from .projections import derive_features, derive_grammar, derive_hvo, derive_hvo_v3
 from .schema import BuildInput
 from .taxonomy import TAXONOMY_VERSION, classify_facets
+from .vendor_labels import VendorLabels
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS meta (
@@ -104,9 +107,12 @@ class CuratedBuildResult:
 
 
 def _stratum(relative_path: str) -> str:
+    # One rule, shared with the articulation map, so a stratum and a collection
+    # can never drift apart and silently map a library through the wrong kit.
+    collection = collection_of(relative_path)
+    if collection:
+        return collection
     parts = Path(relative_path).parts
-    if len(parts) >= 2:
-        return "/".join(parts[:2])
     return parts[0] if parts else "(root)"
 
 
@@ -140,6 +146,7 @@ def _catalog_derivation_values() -> dict[str, str]:
         "features": FEATURES_SCHEMA_VERSION,
         "grammar": GRAMMAR_SCHEMA_VERSION,
         "hvo": HVO_SCHEMA_VERSION,
+        "hvo_v3": HVO_SCHEMA_VERSION_V3,
         "taxonomy": TAXONOMY_VERSION,
     }
     identity = {
@@ -171,6 +178,9 @@ class CorpusCatalog:
             raise ValueError("authorized corpus root is not a directory")
         self.db_path = db_path.resolve()
         self.input_root = root
+        # Loaded once per catalog rather than per file: the sidecar is a single
+        # pass over 103,096 lines, and a scan touches every one of them.
+        self._vendor_labels = VendorLabels.load()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._connection = sqlite3.connect(self.db_path)
         self._connection.execute("PRAGMA journal_mode=WAL")
@@ -310,9 +320,15 @@ class CorpusCatalog:
         parsed: object,
     ) -> None:
         hvo = derive_hvo(parsed)  # type: ignore[arg-type]
+        hvo_v3 = derive_hvo_v3(parsed, collection_of(relative_path))  # type: ignore[arg-type]
         features = derive_features(parsed, hvo)  # type: ignore[arg-type]
         grammar = derive_grammar(parsed, hvo)  # type: ignore[arg-type]
-        facets = classify_facets(features, hvo, relative_path=relative_path)
+        facets = classify_facets(
+            features,
+            hvo_v3,
+            relative_path=relative_path,
+            vendor_record=self._vendor_labels.for_path(relative_path),
+        )
         feature_json = features.model_dump(mode="json")
         facets_json = facets.model_dump(mode="json")
         hvo_json = hvo.model_dump(mode="json")

@@ -11,7 +11,12 @@ from typing import Any
 from . import GrooveMidiError
 from .canonical import artifact_id_from_identity, canonical_json, reproducibility_key, sha256_hex
 from .cards import GenerationCardV1, artifact_card_from_artifact
-from .constants import FEATURES_SCHEMA_VERSION, GRAMMAR_SCHEMA_VERSION, HVO_SCHEMA_VERSION
+from .constants import (
+    FEATURES_SCHEMA_VERSION,
+    GRAMMAR_SCHEMA_VERSION,
+    HVO_SCHEMA_VERSION,
+    HVO_SCHEMA_VERSION_V3,
+)
 from .drum_roles import GM_DRUM_ROLE_BY_PITCH, GM_DRUM_ROLES
 from .mcp_models import GenerateRequestV1, GenerationResponseV1
 from .midi_lossless import (
@@ -21,7 +26,13 @@ from .midi_lossless import (
     parse_smf,
     serialize_note_smf,
 )
-from .projections import CANONICAL_PPQ, derive_features, derive_grammar, derive_hvo
+from .projections import (
+    CANONICAL_PPQ,
+    derive_features,
+    derive_grammar,
+    derive_hvo,
+    derive_hvo_v3,
+)
 from .runtime import GrooveRuntime
 from .schema import ArtifactId, MidiArtifactV1, NoteEventV1, ProjectionRefV1
 
@@ -448,10 +459,15 @@ def _projection_values(
     dict[str, float | int | str | None],
 ]:
     hvo = derive_hvo(parsed)
+    # No vendor library stands behind a generated groove, so v3 resolves through
+    # General MIDI here.  It is emitted anyway so a generated artifact carries the
+    # same projection set as a corpus one.
+    hvo_v3 = derive_hvo_v3(parsed, "")
     features = derive_features(parsed, hvo)
     grammar = derive_grammar(parsed, hvo)
     values = {
         HVO_SCHEMA_VERSION: hvo.model_dump(mode="json"),
+        HVO_SCHEMA_VERSION_V3: hvo_v3.model_dump(mode="json"),
         FEATURES_SCHEMA_VERSION: features.model_dump(mode="json"),
         GRAMMAR_SCHEMA_VERSION: grammar.model_dump(mode="json"),
     }
@@ -463,6 +479,7 @@ def _projection_values(
         )
         for name, version in (
             ("hvo", HVO_SCHEMA_VERSION),
+            ("hvo_v3", HVO_SCHEMA_VERSION_V3),
             ("features", FEATURES_SCHEMA_VERSION),
             ("grammar", GRAMMAR_SCHEMA_VERSION),
         )

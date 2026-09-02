@@ -11,6 +11,7 @@ from mcp.types import TextContent
 from . import GrooveIndexInvalid
 from .canonical import canonical_json
 from .cards import (
+    PUBLIC_PROJECTION_NAMES,
     ArtifactCardV1,
     CapabilitiesV1,
     CapabilityV1,
@@ -19,12 +20,18 @@ from .cards import (
     EvidenceCardV1,
     GenerationCardV1,
 )
-from .constants import FEATURES_SCHEMA_VERSION, GRAMMAR_SCHEMA_VERSION, HVO_SCHEMA_VERSION
+from .constants import (
+    FEATURES_SCHEMA_VERSION,
+    GRAMMAR_SCHEMA_VERSION,
+    HVO_SCHEMA_VERSION,
+    HVO_SCHEMA_VERSION_V3,
+)
 from .provider import GrooveProvider
 from .schema import ArtifactId, MidiArtifactV1
 
 _PROJECTION_VERSIONS = {
     "hvo": HVO_SCHEMA_VERSION,
+    "hvo_v3": HVO_SCHEMA_VERSION_V3,
     "features": FEATURES_SCHEMA_VERSION,
     "grammar": GRAMMAR_SCHEMA_VERSION,
 }
@@ -114,11 +121,22 @@ class GrooveRuntime:
         projection_values = metadata.get("_projection_values", {})
         if not isinstance(projection_values, Mapping):
             projection_values = {}
-        for reference in artifact.projections[:3]:
+        # Every stored reference is validated, so a corrupt one is caught, but only
+        # the publicly named projections reach the card: ``hvo_v3`` drives the
+        # facets and has no MCP identifier a client could ask for.  The bound is
+        # the size of the contract rather than a literal, which is what silently
+        # dropped the grammar reference when a fourth projection was added.
+        for reference in artifact.projections[: len(_PROJECTION_VERSIONS)]:
             expected_version = _PROJECTION_VERSIONS.get(reference.name)
             if expected_version is None or reference.version != expected_version:
                 raise GrooveIndexInvalid("artifact contains an unsupported projection reference")
             projection_id = reference.version
+            if reference.name not in PUBLIC_PROJECTION_NAMES:
+                # Nothing on the card reads it, and search builds a card per
+                # candidate row, so decompressing the training projection here
+                # would be paid on the hot path for a value no caller sees.  Its
+                # integrity is already checked when the index is opened.
+                continue
             projection_map[reference.name] = projection_id
             # Materialize bounded validated projections through the adapter.
             if projection_id not in projection_values:

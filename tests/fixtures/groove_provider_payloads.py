@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+from functools import cache
 from pathlib import Path
+from tempfile import mkdtemp
 from typing import Literal
 
 from ableton_mcp_server.groove_intelligence.cards import ArtifactCardV1, ConditionCardV1
@@ -25,7 +27,18 @@ from ableton_mcp_server.groove_intelligence.provider_registry import (
 from ableton_mcp_server.groove_intelligence.runtime import GrooveRuntime
 from tests.fixtures.groove_runtime import make_pilot_runtime
 
-_PILOT_ARTIFACT_ID = "ga1_d0c40714f38991e35f37b87826e9f5a0ec18c216cf5f0123cc38ceccfdac6cbb"
+
+@cache
+def _pilot_artifact_id() -> str:
+    """Derived rather than pinned.
+
+    The pilot bundle is deterministic, so its artifact id is whatever the current
+    identity contract produces.  A literal here has to be re-copied by hand every
+    time a projection joins the identity, and reads as a broken fixture when it
+    is not.
+    """
+
+    return str(make_pilot_runtime(Path(mkdtemp())).index.manifest.artifact_ids[0])
 
 
 class _FixtureProvider:
@@ -127,9 +140,15 @@ def make_candidate(
 ) -> ProviderArtifactCandidate:
     runtime = make_pilot_runtime(tmp_path)
     artifact_id = str(runtime.index.manifest.artifact_ids[0])
-    # The first pilot row is a derived-only no-payload artifact; provider
-    # candidates must carry a bounded raw MIDI payload for validation.
-    candidate_artifact_id = str(runtime.index.manifest.artifact_ids[1])
+    # Provider candidates must carry a bounded raw MIDI payload for validation,
+    # and one pilot row is derived-only with no payload.  Chosen by that property
+    # rather than by position: the manifest is ordered by artifact id, so any
+    # change to the identity contract reshuffles the rows.
+    candidate_artifact_id = next(
+        str(candidate)
+        for candidate in runtime.index.manifest.artifact_ids
+        if runtime.store.get(str(candidate)).payload.blob
+    )
     identity = (
         ProviderIdentityV1(
             model_digest="sha256:" + "b" * 64,
@@ -173,7 +192,7 @@ def make_provider_runtime(
         sampling_config={"temperature": 0.0},
         provider_version="fixture-v1",
         seed=7,
-        parent_artifact_ids=(_PILOT_ARTIFACT_ID,),
+        parent_artifact_ids=(_pilot_artifact_id(),),
     )
     runtime.provider = _FixtureProvider(
         failure=failure,
@@ -189,7 +208,7 @@ def make_deterministic_request(
 ) -> GenerateRequestV1:
     return GenerateRequestV1(
         schema_version="groove.generate.request.v1",
-        source={"artifact_id": _PILOT_ARTIFACT_ID},
+        source={"artifact_id": _pilot_artifact_id()},
         transforms={"density": 0.2},
         bars=4,
         seed=seed,
