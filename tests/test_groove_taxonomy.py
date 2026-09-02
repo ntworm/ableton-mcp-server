@@ -233,3 +233,59 @@ def _request(**values: object):
     from ableton_mcp_server.groove_intelligence.mcp_models import SearchRequestV1
 
     return SearchRequestV1(schema_version="groove.search.request.v1", limit=20, **values)
+
+
+def test_kit_follows_whichever_hvo_it_is_given() -> None:
+    from ableton_mcp_server.groove_intelligence.midi_lossless import parse_smf
+    from ableton_mcp_server.groove_intelligence.projections import (
+        derive_features,
+        derive_hvo,
+        derive_hvo_v3,
+    )
+    from ableton_mcp_server.groove_intelligence.taxonomy import classify_facets
+    from tests.test_groove_seed_v3 import BAND_SMF, SUPERIOR
+
+    parsed = parse_smf(BAND_SMF)
+    v2 = derive_hvo(parsed)
+    v3 = derive_hvo_v3(parsed, SUPERIOR)
+
+    v2_kit = classify_facets(derive_features(parsed, v2), v2).values["kit"]
+    v3_kit = classify_facets(derive_features(parsed, v3), v3).values["kit"]
+    assert "other_percussion" in v2_kit
+    assert "other_percussion" not in v3_kit
+
+
+def test_vendor_labels_populate_genre_and_bpm() -> None:
+    from ableton_mcp_server.groove_intelligence.midi_lossless import parse_smf
+    from ableton_mcp_server.groove_intelligence.projections import (
+        derive_features,
+        derive_hvo,
+    )
+    from ableton_mcp_server.groove_intelligence.taxonomy import classify_facets
+    from tests.test_groove_seed_v3 import BAND_SMF
+
+    parsed = parse_smf(BAND_SMF)
+    hvo = derive_hvo(parsed)
+    facets = classify_facets(
+        derive_features(parsed, hvo),
+        hvo,
+        vendor_record={"genre": "Metal", "tempo": 140},
+    )
+    assert facets.values["genre"] == ("metal",)
+    assert facets.values["bpm"] == ("bpm_140_159",)
+
+
+def test_no_vendor_record_leaves_the_axes_absent() -> None:
+    from ableton_mcp_server.groove_intelligence.midi_lossless import parse_smf
+    from ableton_mcp_server.groove_intelligence.projections import (
+        derive_features,
+        derive_hvo,
+    )
+    from ableton_mcp_server.groove_intelligence.taxonomy import classify_facets
+    from tests.test_groove_seed_v3 import BAND_SMF
+
+    parsed = parse_smf(BAND_SMF)
+    hvo = derive_hvo(parsed)
+    facets = classify_facets(derive_features(parsed, hvo), hvo)
+    assert "genre" not in facets.values
+    assert "bpm" not in facets.values
