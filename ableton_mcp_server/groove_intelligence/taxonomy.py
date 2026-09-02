@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Mapping
 from contextlib import suppress
 from os import PathLike, fspath
 from pathlib import PurePosixPath
@@ -22,6 +23,7 @@ from .constants import (
 )
 from .projections import ROLES
 from .schema import FeaturesProjectionV1, FeatureValueV1, HvoProjectionV1, Redistribution
+from .vendor_labels import genre_facet, tempo_facet
 
 TAXONOMY_VERSION = _TAXONOMY_VERSION
 MAX_TAXONOMY_COMPONENTS = 16
@@ -31,7 +33,14 @@ MAX_TAXONOMY_LABEL_LENGTH = 48
 _SAFE_LABEL = re.compile(r"[^a-z0-9]+")
 _TOKEN_RE = re.compile(r"[^a-z0-9]+")
 _TAXONOMY_AXES = ("collection", "genre", "subgenre", "style", "section", "source_category")
-_ALLOWED_AXES = _TAXONOMY_AXES + ("feel", "density", "microtiming", "kit", "license")
+_ALLOWED_AXES = _TAXONOMY_AXES + (
+    "feel",
+    "density",
+    "microtiming",
+    "kit",
+    "license",
+    "bpm",
+)
 
 # Explicit aliases observed in the authorized catalogue, plus common music
 # abbreviations used by the same naming conventions.
@@ -562,8 +571,14 @@ def classify_facets(
     *,
     relative_path: str | None = None,
     redistribution: Redistribution = "full",
+    vendor_record: Mapping[str, object] | None = None,
 ) -> FacetSetV1:
-    """Combine rhythmic facets with optional taxonomy from an authorized relative path."""
+    """Combine rhythmic facets with optional taxonomy and vendor labels.
+
+    ``kit`` follows whichever HVO projection the caller passes, which is how the
+    articulation map reaches the index: hand it ``derive_hvo_v3`` and the hi-hats
+    stop being ``other_percussion``.
+    """
 
     hits_per_bar = _value(features, "hits_per_bar") or 0.0
     offset_mean = _value(features, "offset_mean") or 0.0
@@ -581,6 +596,13 @@ def classify_facets(
     }
     if relative_path is not None:
         values.update(classify_path_facets(relative_path).values)
+    if vendor_record:
+        genre = genre_facet(vendor_record)
+        tempo = tempo_facet(vendor_record)
+        if genre:
+            values["genre"] = genre
+        if tempo:
+            values["bpm"] = tempo
     return FacetSetV1(values)
 
 
