@@ -768,9 +768,27 @@ an incompatible kit profile, source channel, rights level, or destination slot.
 
 - Side effects: none; deterministic offline read.
 - Taxonomy: bounded normalized `collection`, `genre`, `subgenre`, `style`,
-  `section`, and `source_category` facets when supported by the seed. Aliases
-  such as `laid back` normalize deterministically to `laid_back`; unmatched
-  components remain source-category labels rather than invented genres.
+  `section`, `kit`, `bpm`, and `source_category` facets when supported by the
+  seed. Aliases such as `laid back` normalize deterministically to `laid_back`;
+  unmatched components remain source-category labels rather than invented
+  genres.
+- `genre` carries two vocabularies at once. The folder names yield the finer of
+  the two (`rock`, `metal`, `pop`, `fusion`, `jazz`, ...) but only for the paths
+  whose hierarchy happens to name a genre. The vendor MIDI databases yield the
+  coarser one (`pop_rock_country`, `metal`, `latin`, `jazz`, ... — 15 values in
+  all) for every path they cover. The two are unioned rather than replaced, so an
+  artifact can answer to both `rock` and `pop_rock_country`, and a search may use
+  either handle.
+- `bpm` comes only from the vendor databases and is a coarse bucket, not a
+  number: `bpm_60_79`, `bpm_80_99`, `bpm_100_119`, `bpm_120_139`, `bpm_140_159`,
+  `bpm_160_179`, `bpm_180_plus`. The exact tempo stays in the features
+  projection; the facet is what a user can browse by. A seed built without the
+  vendor sidecar carries no `bpm` axis and keeps only the path-derived `genre`.
+- `kit` is derived from the per-collection articulation map rather than from
+  General MIDI alone. A pitch outside the General MIDI percussion range is a
+  real articulation in the vendor libraries, and the same pitch means different
+  instruments in different libraries, so the same number resolves differently
+  depending on which collection the groove came from.
 - Projection filters: use the three V2 IDs above with `projection_operator`
   `all` or `any`. Search ranking and opaque cursors are tied to the immutable
   seed, request, and ranker.

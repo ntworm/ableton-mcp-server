@@ -542,13 +542,34 @@ Fontes admissíveis: material criado pelo usuário com cadeia autoral clara; mat
 
 ### 13.5 Labels
 
-A hierarquia existente já contém sinal útil de BPM, gênero, subgênero, feel e seção. O inventário anterior encontrou muitos caminhos com BPM e centenas de exemplos rotulados como techno e dark, mas a interseção literal das duas palavras é pequena. Portanto:
+**Corrigido em 2026-09-02.** Esta seção afirmava que a hierarquia carrega BPM.
+Medido, ela não carrega: o seed promovido tem `genre` em 982 dos seus 1.685
+artefatos (58,3%), vindo dos nomes de pasta, e **zero** linhas no eixo de
+andamento. O gênero de pasta existe; o BPM de pasta nunca chegou ao índice.
 
-- nomes de pasta são weak labels, não verdade absoluta;
+O andamento veio dos bancos `midiDB` das próprias bibliotecas Toontrack, junto
+com um segundo gênero. O sidecar extraído deles cobre 109.554 caminhos, todos com
+gênero e todos com andamento, em 15 gêneros distintos — `Pop/Rock/Country`
+responde por 57.670 arquivos e `Metal` por 21.672. Isso é rótulo do fornecedor,
+não inferência: não precisa de classificador nem de validação humana.
+
+Os dois vocabulários de gênero convivem em vez de um substituir o outro. O da
+pasta é o mais fino (`rock`, `metal`, `pop`, `fusion`) e cobre só parte do
+corpus; o do fornecedor é o mais grosso (`pop_rock_country` junta três gêneros)
+e cobre tudo que ele conhece. Trocar um pelo outro perderia precisão de busca,
+então o build une os dois no mesmo eixo.
+
+O que continua valendo da formulação original:
+
+- nomes de pasta são weak labels para feel e seção, não verdade absoluta;
 - uma taxonomia normalizada liga aliases e hierarquias;
 - “dark techno” não pode depender apenas da interseção textual exata;
 - um classificador/cluster e inspeção humana validam rótulos escassos;
 - o painel mostra apenas categorias com cobertura e qualidade mínimas.
+
+O que deixa de valer: tratar a hierarquia como fonte de BPM. O build lê o
+sidecar do fornecedor para isso, e um build sem ele não publica o eixo `bpm` e
+mantém apenas o `genre` derivado do caminho.
 
 ### 13.6 Divisão sem vazamento
 
