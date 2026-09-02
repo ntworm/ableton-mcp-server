@@ -276,6 +276,30 @@ def test_vendor_labels_populate_genre_and_bpm() -> None:
     assert facets.values["bpm"] == ("bpm_140_159",)
 
 
+def test_the_vendor_genre_joins_the_path_genre_instead_of_replacing_it() -> None:
+    # The path vocabulary is the finer of the two. A folder saying "rock" is more
+    # useful to a search than the vendor's "Pop/Rock/Country", which lumps three
+    # genres into one label, so the coarse label must not overwrite the fine one.
+    from ableton_mcp_server.groove_intelligence.midi_lossless import parse_smf
+    from ableton_mcp_server.groove_intelligence.projections import (
+        derive_features,
+        derive_hvo,
+    )
+    from ableton_mcp_server.groove_intelligence.taxonomy import classify_facets
+    from tests.test_groove_seed_v3 import BAND_SMF
+
+    parsed = parse_smf(BAND_SMF)
+    hvo = derive_hvo(parsed)
+    facets = classify_facets(
+        derive_features(parsed, hvo),
+        hvo,
+        relative_path="Drums Groove MIDI/Rock/groove.mid",
+        vendor_record={"genre": "Pop/Rock/Country", "tempo": 92},
+    )
+    assert set(facets.values["genre"]) == {"rock", "pop_rock_country"}
+    assert facets.values["bpm"] == ("bpm_80_99",)
+
+
 def test_no_vendor_record_leaves_the_axes_absent() -> None:
     from ableton_mcp_server.groove_intelligence.midi_lossless import parse_smf
     from ableton_mcp_server.groove_intelligence.projections import (
