@@ -1,6 +1,6 @@
 # Tool Reference
 
-The v0.6.0 FastMCP server exposes 96 snake_case tools <!-- TOOL_COUNT: active_total -->, up from the certified 65-tool v0.5.2 baseline <!-- HISTORICAL_TOOL_COUNT: 65; baseline=v0.5.2 -->. Remote examples below show the JSONL command envelope after MCP/Pydantic validation. All error responses use `{"status":"error","code","message","hint?"}`.
+The v0.6.0 FastMCP server exposes 97 snake_case tools <!-- TOOL_COUNT: active_total -->, up from the certified 65-tool v0.5.2 baseline <!-- HISTORICAL_TOOL_COUNT: 65; baseline=v0.5.2 -->. Remote examples below show the JSONL command envelope after MCP/Pydantic validation. All error responses use `{"status":"error","code","message","hint?"}`.
 
 A machine-readable view of these tools (route, risk, acceptance mode, reversibility) is exposed at runtime via the `get_bridge_status` tool's `tools` list and `capability_counts` keys, derived from the canonical `TOOL_CATALOG`. A generated [API Capability Matrix](api_capability_matrix.md) is also available for quick reference.
 
@@ -728,6 +728,19 @@ value too small to cross `electro`'s grid threshold does not claim credit.
 - Edge cases / side effects: it reads only what the prompt states literally.
   An explicit `bpm` argument beats a tempo written in the prompt, and anything
   it cannot resolve is named under `unresolved` rather than invented.
+
+### `plan_user_journey(journey_type: str, traits: str)`
+
+- Params: `journey_type` is one of `sequence_drums`, `compose_melody`,
+  `compose_harmony`, `design_sound`; `traits` is free text up to 2000
+  characters.
+- Returns: four planned stages — discover, await confirmation, apply, verify —
+  naming the tool each stage would use.
+- Side effects: none. The plan names tools; it calls none of them, and it never
+  reaches Live.
+- Edge cases: traits naming an artist or asking for an exact copy return
+  `intent-clarification-required` with the matched terms, not a plan. An
+  unknown `journey_type` is rejected by the schema before the tool runs.
 
 ### Groove Intelligence V2 (offline retrieval, generation, and guarded apply)
 

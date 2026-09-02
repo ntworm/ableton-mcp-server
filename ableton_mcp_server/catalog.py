@@ -265,4 +265,7 @@ TOOL_CATALOG = (
     ToolSpec(
         "groove_apply", "groove", Route.COMPOSED, Risk.REVERSIBLE, AcceptanceMode.GUARDED, True
     ),
+    ToolSpec(
+        "plan_user_journey", "music", Route.LOCAL, Risk.READ, AcceptanceMode.OFFLINE, True
+    ),
 )

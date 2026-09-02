@@ -5,7 +5,7 @@
 
 ## Overview
 
-- **Total Public Tools**: 96 <!-- TOOL_COUNT: active_total -->
+- **Total Public Tools**: 97 <!-- TOOL_COUNT: active_total -->
 - **Routed Remote Commands**: 73 <!-- TOOL_COUNT: route=tcp -->
 - **WebSocket Targets**: 3 <!-- TOOL_COUNT: route=websocket -->
 
@@ -184,5 +184,6 @@
 | `music_generate_bass` | Write | No | Yes |
 | `music_generate_drum_groove` | Write | No | Yes |
 | `music_plan_production` | Read-only | No | No |
+| `plan_user_journey` | Read-only | No | No |
 | `set_arrangement_clip_properties` | Write | No | Yes |
 | `set_plugin_preset` | Write | No | Yes |

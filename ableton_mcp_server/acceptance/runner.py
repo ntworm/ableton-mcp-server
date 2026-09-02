@@ -126,7 +126,13 @@ async def run_offline_probes(report: CertificationReport, workdir: Path) -> None
 
     await _record_call(report, "music_generate_drum_groove", drum_groove, passed="offline_passed")
     await _record_call(report, "music_generate_bass", bass, passed="offline_passed")
+    def user_journey() -> dict[str, Any]:
+        from ..journeys import plan_user_journey
+
+        return plan_user_journey("sequence_drums", "offline certification probe")
+
     await _record_call(report, "music_plan_production", production_plan, passed="offline_passed")
+    await _record_call(report, "plan_user_journey", user_journey, passed="offline_passed")
 
     # Phase 2 groove tools run only against the host-configured immutable pilot
     # seed. They are local and never use the bridge client.

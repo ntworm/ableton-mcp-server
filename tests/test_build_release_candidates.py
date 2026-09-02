@@ -29,6 +29,7 @@ from typing import Any
 
 import pytest
 
+from ableton_mcp_server.catalog import TOOL_CATALOG
 from scripts.build_release_candidates import (
     _validate_source_commit,
     build_release,
@@ -407,12 +408,18 @@ def test_manifest_flags_promotion_blocked_until_live_certified(
     assert manifest["candidate"] == "rc1"
 
 
+# Read from the catalog rather than pinned. The builder's whole job here is to
+# reject evidence whose count disagrees with the catalog, so a literal turns
+# every new tool into a false failure of a test that is working correctly.
+CATALOG_TOOL_COUNT = len(TOOL_CATALOG)
+
+
 def _write_acceptance_report(
     path: Path,
     *,
     source_commit: str = FAKE_COMMIT,
     release_ready: bool = True,
-    tool_count: int = 96,
+    tool_count: int = CATALOG_TOOL_COUNT,
 ) -> Path:
     payload = {
         "source_commit": source_commit,
@@ -465,9 +472,9 @@ def test_stable_builder_requires_acceptance_report(
 @pytest.mark.parametrize(
     ("release_ready", "tool_count", "source_commit", "message"),
     [
-        (False, 96, FAKE_COMMIT, "release_ready"),
-        (True, 95, FAKE_COMMIT, "tool count"),
-        (True, 96, "1" * 40, "source commit"),
+        (False, CATALOG_TOOL_COUNT, FAKE_COMMIT, "release_ready"),
+        (True, CATALOG_TOOL_COUNT - 1, FAKE_COMMIT, "tool count"),
+        (True, CATALOG_TOOL_COUNT, "1" * 40, "source commit"),
     ],
 )
 def test_stable_builder_rejects_invalid_acceptance_evidence(

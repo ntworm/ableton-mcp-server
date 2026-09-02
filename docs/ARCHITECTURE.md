@@ -200,7 +200,7 @@ tools = await mcp.list_tools()
 count = len(mcp.list_tools())
 ```
 
-Tests assert both counts match the cataloged public tools: 65 in the shipped v0.5.2 release <!-- HISTORICAL_TOOL_COUNT: 65; baseline=v0.5.2 --> and 96 on the current line <!-- TOOL_COUNT: active_total -->, including retrieval, deterministic generation, comparison, and guarded groove apply.
+Tests assert both counts match the cataloged public tools: 65 in the shipped v0.5.2 release <!-- HISTORICAL_TOOL_COUNT: 65; baseline=v0.5.2 --> and 97 on the current line <!-- TOOL_COUNT: active_total -->, including retrieval, deterministic generation, comparison, and guarded groove apply.
 
 `tools/list` remains deterministic metadata discovery. `get_bridge_status` and the `ableton-mcp doctor` CLI perform an actual `get_session_info` round trip and report WSL-specific topology hints when unavailable.
 
@@ -219,7 +219,7 @@ The created Session clip remains intentionally; run only against a disposable Se
 The certified baseline surface freezes these contracts; Slice 2 will expand
 without breaking them:
 
-- 96 catalogued public tools <!-- TOOL_COUNT: active_total -->; `tool_count` is the single source of truth.
+- 97 catalogued public tools <!-- TOOL_COUNT: active_total -->; `tool_count` is the single source of truth.
 - Two loopback transports, desktop-only: TCP `127.0.0.1:9888` for the Remote
   Script and WebSocket `127.0.0.1:9889` for the Extension. No LAN mode.
 - `load_device_to_track` takes a primary `device_name` argument;
