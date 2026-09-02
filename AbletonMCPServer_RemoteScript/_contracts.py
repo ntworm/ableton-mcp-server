@@ -7,6 +7,10 @@
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 9888
 DEFAULT_WS_PORT = 9889
+# Realtime control moves arrive here over UDP. Separate from DEFAULT_PORT
+# because the JSONL loop is request/response and must not be blocked by a
+# stream of control changes that only the newest value of matters.
+REALTIME_UDP_PORT = 9890
 
 REQUEST_TYPE_FIELD = "type"
 REQUEST_PARAMS_FIELD = "params"

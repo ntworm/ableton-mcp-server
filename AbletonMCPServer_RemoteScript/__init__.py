@@ -57,10 +57,12 @@ from ._contracts import (
     PLUGIN_NOT_CONFIGURED,
     PLUGIN_NOT_CONFIGURED_HINT,
     READ_ONLY_COMMANDS,
+    REALTIME_UDP_PORT,
     UNSUPPORTED_CAPABILITIES,
     is_plugin_device_class,
     request_timeout_seconds,
 )
+from .realtime_server import RealtimeUDPServer
 
 # v0.5.0 — runtime identity tag surfaced in `get_bridge_status`.
 # The base upstream did not ship one; v0.5.0 establishes the convention.
@@ -4513,17 +4515,41 @@ class AbletonMCPServer(ControlSurface):
         song = self.song() if callable(self.song) else self.song
         undo_target = _resolve_undo_target(c_instance, self, application, song)
         self._processor = RequestProcessor(song, application, undo_target, self)
+
+        self._song = song
+        self._realtime_queue = []
+        self._realtime_server = RealtimeUDPServer(REALTIME_UDP_PORT, self._realtime_queue)
+        self._realtime_server.start()
         self._socket_server = JsonlSocketServer(self._processor)
         self._socket_server.start()
-        _dbg("startup endpoint=127.0.0.1:9888")
-        self.show_message("AbletonMCPServer: Active on 127.0.0.1:9888")
+        _dbg("startup endpoint=127.0.0.1:9888 realtime=%d" % REALTIME_UDP_PORT)
+        self.show_message(
+            "AbletonMCPServer: Active on 127.0.0.1:9888 / UDP:%d" % REALTIME_UDP_PORT
+        )
 
     def update_display(self) -> None:
         super().update_display()
         self._processor.process_pending()
+        self._drain_realtime_queue()
+
+    def _drain_realtime_queue(self) -> None:
+        """Apply queued realtime moves. Only ever called on Live's own thread."""
+
+        while self._realtime_queue:
+            command = self._realtime_queue.pop(0)
+            if command[0] == "parameter.set":
+                # Not yet applied: the arming handshake that would say which
+                # parameter a ref names is not built, so nothing can resolve it.
+                _dbg("Realtime write: %s -> %s" % (command[1], command[2]))
+            elif command[0] == "emergency-stop":
+                _dbg("Realtime emergency stop")
+                stop_playing = getattr(self._song, "stop_playing", None)
+                if callable(stop_playing):
+                    stop_playing()
 
     def disconnect(self) -> None:
         self._socket_server.stop()
+        self._realtime_server.stop()
         super().disconnect()
 
 
