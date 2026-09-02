@@ -29,6 +29,8 @@ from ableton_mcp_server.groove_intelligence.constants import (
     FEATURES_SCHEMA_VERSION,
     GRAMMAR_SCHEMA_VERSION,
     HVO_SCHEMA_VERSION,
+    INDEX_SCHEMA_VERSION,
+    SQLITE_USER_VERSION,
 )
 from ableton_mcp_server.groove_intelligence.index import (
     logical_index_digest,
@@ -207,11 +209,11 @@ def _build_nondefault_ppq_bundle(tmp_path: Path) -> Path:
     return tmp_path / "bundle"
 
 
-def test_index_uses_immutable_query_only_connection_and_schema_v2(tmp_path: Path) -> None:
+def test_index_uses_immutable_query_only_connection_and_current_schema(tmp_path: Path) -> None:
     bundle = build_pilot_bundle(tmp_path)
     index = open_readonly_index(bundle)
-    assert index.user_version == 2
-    assert index.meta["schema_version"] == "groove.index.v2"
+    assert index.user_version == SQLITE_USER_VERSION
+    assert index.meta["schema_version"] == INDEX_SCHEMA_VERSION
     with pytest.raises(GrooveIndexReadOnlyError):
         index.connection.execute("CREATE TABLE forbidden(name TEXT)")
     with pytest.raises(GrooveIndexReadOnlyError):
@@ -324,12 +326,12 @@ def test_load_artifact_round_trips_real_format_timing_and_tracks(tmp_path: Path)
         index.close()
 
 
-def test_open_readonly_index_accepts_packaged_v2_seed() -> None:
+def test_open_readonly_index_accepts_the_packaged_seed() -> None:
     packaged = Path(__file__).resolve().parents[1] / "ableton_mcp_server/resources/groove_seed"
     index = open_readonly_index(packaged)
     try:
-        assert index.user_version == 2
-        assert index.meta["schema_version"] == "groove.index.v2"
+        assert index.user_version == SQLITE_USER_VERSION
+        assert index.meta["schema_version"] == INDEX_SCHEMA_VERSION
     finally:
         index.close()
 

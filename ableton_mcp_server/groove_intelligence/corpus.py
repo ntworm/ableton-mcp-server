@@ -24,6 +24,7 @@ from .constants import (
     GRAMMAR_SCHEMA_VERSION,
     HVO_SCHEMA_VERSION,
     HVO_SCHEMA_VERSION_V3,
+    MAX_CURATED_REPRESENTATIVES,
     MAX_INPUT_BYTES,
     NORMALIZER_ID,
     PARSER_ID,
@@ -535,7 +536,7 @@ class CorpusCatalog:
 def curate_representatives(
     catalog: CorpusCatalog,
     *,
-    max_files: int = 2048,
+    max_files: int = MAX_CURATED_REPRESENTATIVES,
     max_source_bytes: int = 24 * 1024 * 1024,
 ) -> tuple[InventoryRow, ...]:
     """Round-robin deterministic strata while respecting a conservative byte cap."""
@@ -588,13 +589,16 @@ def build_curated_bundle(
     catalog: CorpusCatalog,
     output_dir: Path,
     *,
-    max_files: int = 2048,
+    max_files: int = MAX_CURATED_REPRESENTATIVES,
     max_bundle_bytes: int = 32 * 1024 * 1024,
 ) -> CuratedBuildResult:
     """Build two identical portable bundles, shrinking selection if required."""
 
-    if max_files < 1 or max_files > 2048:
-        raise ValueError("curated selection cap must be between one and 2048")
+    if max_files < 1 or max_files > MAX_CURATED_REPRESENTATIVES:
+        raise ValueError(
+            "curated selection cap must be between one and "
+            f"{MAX_CURATED_REPRESENTATIVES}"
+        )
     if max_bundle_bytes < 1024:
         raise ValueError("curated bundle cap is too small")
     try:

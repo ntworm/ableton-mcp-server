@@ -17,9 +17,14 @@ PARSER_ID = "smf-parser-v1"
 SERIALIZER_ID = "smf-serializer-v1"
 RAW_BLOB_CODECS = frozenset({"zlib-raw-midi-v1", "zlib-raw-json-v1"})
 PROJECTION_CODEC = "zlib-raw-json-v1"
-SEED_SCHEMA_VERSION = "groove.seed.v2"
-INDEX_SCHEMA_VERSION = "groove.index.v2"
-SQLITE_USER_VERSION = 2
+# Upper bound on how many representatives a curated seed may carry.  Not a
+# size limit — the bundle has its own byte cap — but a bound on how large the
+# retrieval set can grow before the round-robin over strata stops being a
+# curation and becomes a copy of the corpus.
+MAX_CURATED_REPRESENTATIVES = 4096
+SEED_SCHEMA_VERSION = "groove.seed.v3"
+INDEX_SCHEMA_VERSION = "groove.index.v3"
+SQLITE_USER_VERSION = 3
 SQLITE_MIN_VERSION = "3.40"
 HVO_SCHEMA_VERSION = "groove.hvo.v2"
 HVO_SCHEMA_VERSION_V3 = "groove.hvo.v3"
@@ -27,7 +32,7 @@ FEATURES_SCHEMA_VERSION = "groove.features.v2"
 GRAMMAR_SCHEMA_VERSION = "groove.grammar.v2"
 NORMALIZER_ID = "groove-normalizer-v2"
 CORPUS_SCHEMA_VERSION = "groove.corpus.v2"
-TAXONOMY_VERSION = "groove-taxonomy-v2"
+TAXONOMY_VERSION = "groove-taxonomy-v3"
 TAXONOMY_TOKENIZER_VERSION = "groove-taxonomy-tokenizer-v2"
 RANKER_ID = "groove-ranker-v2"
 RANKER_SCHEMA = "groove.search.ranker.v2"

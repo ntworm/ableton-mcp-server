@@ -12,6 +12,7 @@ from ableton_mcp_server.groove_intelligence.build import (
 from ableton_mcp_server.groove_intelligence.constants import (
     RANKER_MANIFEST,
     RANKER_MANIFEST_DIGEST,
+    TAXONOMY_VERSION,
 )
 from ableton_mcp_server.groove_intelligence.index import write_index
 from ableton_mcp_server.groove_intelligence.midi_lossless import parse_smf
@@ -29,7 +30,7 @@ def test_relative_path_taxonomy_is_versioned_bounded_and_does_not_guess_unknown_
         "Collection One/Hip-Hop/Boom Bap/Loose Feel/Verse/kit.mid"
     )
 
-    assert facets.version == "groove-taxonomy-v2"
+    assert facets.version == TAXONOMY_VERSION
     assert facets.values["collection"] == ("collection_one",)
     assert facets.values["genre"] == ("hip_hop",)
     assert facets.values["subgenre"] == ("boom_bap",)
@@ -102,7 +103,7 @@ def test_taxonomy_uses_token_boundaries_for_musical_labels() -> None:
 
 
 def test_ranker_manifest_digest_covers_taxonomy_contract() -> None:
-    assert RANKER_MANIFEST["taxonomy"]["version"] == "groove-taxonomy-v2"
+    assert RANKER_MANIFEST["taxonomy"]["version"] == TAXONOMY_VERSION
     assert RANKER_MANIFEST["taxonomy"]["aliases"]
     assert RANKER_MANIFEST["taxonomy"]["tokenizer"]
     expected = hashlib.sha256(

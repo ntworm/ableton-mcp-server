@@ -85,9 +85,12 @@ _ADAPTER_SQL: dict[str, str] = {
         provenance_digest, lineage_digest FROM artifacts ORDER BY artifact_id""",
 }
 
-_DDL = """
+# The user_version is interpolated from the constant rather than written as a
+# literal.  A literal here is invisible to any search for the identifier, and
+# a bundle stamped with a stale one is rejected by its own reader.
+_DDL = f"""
 PRAGMA foreign_keys = ON;
-PRAGMA user_version = 2;
+PRAGMA user_version = {SQLITE_USER_VERSION};
 CREATE TABLE index_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE artifacts (
   artifact_id TEXT PRIMARY KEY,
