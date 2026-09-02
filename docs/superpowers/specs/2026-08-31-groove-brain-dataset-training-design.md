@@ -698,6 +698,8 @@ Precision, recall e F1 de hit por lane; MAE ou Smooth L1 de velocity condicionad
 
 Aderência a densidade, energia, swing, complexidade e referência; resposta monotônica dos controles contínuos; distribuição por lane e posição; diversidade intra-lote e entre seeds; silêncio, repetição e colapso; validade de rolls e flams; distância e cobertura em relação ao corpus.
 
+`[fato]` Distribuição por lane medida em 2026-09-01, 64 gerações livres por seed, distância L1 entre perfis normalizados contra o corpus, menor é melhor: amostrador marginal `0,041`, masked HVO `1,204`. **Um amostrador que só conhece a taxa de hit por célula fica 29× mais perto do perfil do corpus que o modelo treinado.** É por isso que esta métrica existe: o modelo passou em todas as cláusulas estruturais do G4 e ainda põe as notas nas lanes erradas.
+
 ### 18.4 Originalidade
 
 Cada candidato é comparado ao train por hash canônico, fingerprint HVO com invariâncias declaradas, grammar e features, sequência event-based, família e origem, e cópia de trechos contíguos.
@@ -807,7 +809,7 @@ Um gate só é binário se outra pessoa puder avaliá-lo sem consultar a intenç
 | **G2** Dataset | duas builds independentes dão digests idênticos; round-trip exato em 100% dos exemplos; zero coincidência de hash exato, canônico ou rítmico entre blind test e train+validation; maior componente de cluster abaixo de 5% dos exemplos | não treinar |
 | **G3** Representação | fração de notas não representável medida, publicada e menor ou igual ao orçamento declarado antes do build | revisar grade ou IR |
 | **G4** Tiny | **passou em 2026-08-31, na segunda tentativa.** Overfit `0,0463` < `0,05`; validade estrutural 100% em 192 amostras; diversidade `0,114` entre seeds e `0,073` dentro do seed contra piso de `0,05`; densidade `24,2` hits/barra dentro da faixa 8–32. A primeira tentativa reprovou por colapso no silêncio — ver a nota abaixo da tabela | corrigir pipeline ou modelo |
-| **G5** Bake-off | challenger vence o melhor baseline em pelo menos três seeds na métrica primária declarada de validation, com margem maior que o desvio entre seeds do próprio baseline | não escalar |
+| **G5** Bake-off | **reprovou em 2026-09-01.** Métrica primária declarada: F1 de hit em células mascaradas, família de infill, validação. Masked HVO `0,5045` contra retrieval `0,5005` — margem de `0,0040` contra dispersão de `0,0874` do próprio baseline, e o retrieval vence no seed 2. Teste pareado caso a caso confirma o empate: 51,1% / 56,0% / 49,5% dos casos decididos. GrooVAE e event AR não entraram e são planos próprios. Ver seção 18.3 | não escalar |
 | **G6** Full | blind test com ≥21/30 pareado; coincidência exata contra o train abaixo da coincidência interna do corpus; zero violação de lane bloqueada; resposta monotônica dos controles declarados | deterministic permanece |
 | **G7** ONNX | suíte dourada dentro da tolerância por saída, incluindo a sequência completa de decoding; os sete limites da seção 19.4 respeitados em medição real | não integrar o modelo |
 | **G8** Produto | os seis gates de runtime de `lab.py` passam contra os limiares de `gates.py`; o loop candidatos, locks, reference, falhas e readback passa no Live; tamanho da `.ablx` dentro do teto de O2 | não promover a `.ablx` |
@@ -824,11 +826,12 @@ Um gate só é binário se outra pessoa puder avaliá-lo sem consultar a intenç
 2. **Auditoria de corpus e mapa de articulações** — reproduz a seção 4.2 como código versionado; constrói o mapa de articulações por coleção e o mapa `collection → genre`; decompõe swing e jitter; mede clusters e duplicação cruzada no corpus inteiro. Não constrói dataset. Fecha D0/G1.
 3. **Spike de orçamento CPU e ONNX** — exporta um modelo não treinado com a forma alvo (small, 32×18, decoding iterativo de N passos), mede contra os sete limites e devolve o número máximo de passos viável. Barato, e define a arquitetura antes de ela ser treinada. Fecha P0.
 4. **Dataset foundation V3** — schema com `subhits`, canonical store, dedupe em camadas, cluster e split registry com guarda de componente gigante, shards e evidence packet. Fecha D1/G2/G3.
-5. **Baselines e avaliação** — benchmark de retrieval e determinístico, GrooVAE, event AR, métricas e protocolo humano pré-registrado.
-6. **Masked HVO Transformer** — tarefas, losses, decoding, tiny, 1% e 10%, bake-off. Fecha M0/M1/M2, G4 e G5.
+5. **Baselines e avaliação** — **feito em 2026-09-01.** Métricas de predição, musicalidade e originalidade; retrieval como incumbente e amostrador marginal como piso; protocolo de escuta pré-registrado e conjunto cego gerado. GrooVAE e event AR saíram para o plano 10.
+6. **Masked HVO Transformer** — **M0, M1 e G4 feitos em 2026-08-31**; G5 medido pelo plano 5 e reprovado. M2 depende de GPU (plano 1) e dos baselines restantes.
 7. **Full training e model card** — build 100%, run vencedor, blind test, anti-cópia e decisão registrada. Fecha M3/G6.
 8. **ONNX provider** — export, equivalência, quantização, helper e orçamento, confirmando o spike do plano 3. Fecha R0/G7.
 9. **Groove Brain product loop** — dashboard, prompt parser, candidatos, locks, reference, mapping e readback no Live. Fecha G8.
+10. **GrooVAE e event AR** — os dois baselines neurais restantes, necessários para escolher arquitetura em M2 e G6, não para decidir se um neural vence o incumbente.
 
 `[decisão]` A ordem tem duas inversões deliberadas em relação a um plano ingênuo. A auditoria de corpus vem antes da construção do dataset, porque o mapa de articulações muda a estrutura de lanes e refazer shards depois custa caro. E o orçamento de CPU vem antes do treino, porque descobrir depois que a arquitetura vencedora não cabe em `cpu_seconds <= 2,0` invalidaria dois planos inteiros.
 
