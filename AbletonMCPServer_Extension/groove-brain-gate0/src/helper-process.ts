@@ -6,6 +6,7 @@ import readline from 'node:readline';
 import { GATE0_PROTOCOL, parseHelperReady, type HelperReady } from './protocol.js';
 
 const HELPER_RELATIVE_PATH = 'windows-x64/groove-brain-gate0-helper.exe';
+const EXPORT_RELATIVE_PATH = 'data/grooves.json';
 
 export interface RuntimeManifest {
   protocol: 1;
@@ -253,6 +254,9 @@ export class HelperSession {
           protocol: GATE0_PROTOCOL,
           token,
           ui_dir: path.join(resourceRoot, 'ui'),
+          // Data, not code, so it is joined like ui_dir rather than hashed like
+          // the helper binary. The helper refuses to start if it cannot read it.
+          export_path: path.join(resourceRoot, ...EXPORT_RELATIVE_PATH.split('/')),
           parent_pid: process.pid,
         })}\n`,
       );

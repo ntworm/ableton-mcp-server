@@ -10,10 +10,17 @@ use std::time::{Duration, Instant};
 
 use subtle::ConstantTimeEq;
 
+use crate::catalog::{Catalog, Query};
+
 const MAX_HEADER_BYTES: usize = 16 * 1024;
 const CSP: &str = "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(2);
 const IO_POLL_INTERVAL: Duration = Duration::from_millis(50);
+// A search filter is three short strings. Anything larger is not a filter.
+const MAX_BODY_BYTES: usize = 4 * 1024;
+/// A picker shows a page, not a corpus. Above this the filter is too broad, and
+/// a narrower filter is the answer rather than a longer response.
+pub const MAX_SEARCH_RESULTS: usize = 100;
 
 #[derive(Debug)]
 pub struct ParsedRequest {
@@ -50,6 +57,96 @@ pub fn parse_request(raw: &str) -> Result<ParsedRequest, &'static str> {
         method,
         path,
         headers,
+    })
+}
+
+pub fn is_api_route(path: &str) -> bool {
+    matches!(path, "/api/health" | "/api/search" | "/api/groove")
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct SearchBody {
+    #[serde(default)]
+    pub genre: Option<String>,
+    #[serde(default)]
+    pub bpm: Option<String>,
+    #[serde(default)]
+    pub kit: Option<String>,
+    #[serde(default = "default_limit")]
+    pub limit: usize,
+}
+
+fn default_limit() -> usize {
+    MAX_SEARCH_RESULTS
+}
+
+impl SearchBody {
+    pub fn query(&self) -> Query {
+        Query {
+            genre: self.genre.clone(),
+            bpm: self.bpm.clone(),
+            kit: self.kit.clone(),
+        }
+    }
+}
+
+pub fn parse_search_body(raw: &str) -> Result<SearchBody, &'static str> {
+    let mut body: SearchBody = serde_json::from_str(raw).map_err(|_| "INVALID_SEARCH_BODY")?;
+    body.limit = body.limit.min(MAX_SEARCH_RESULTS);
+    Ok(body)
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct GrooveBody {
+    pub id: String,
+}
+
+pub fn parse_groove_body(raw: &str) -> Result<GrooveBody, &'static str> {
+    serde_json::from_str(raw).map_err(|_| "INVALID_GROOVE_BODY")
+}
+
+#[derive(serde::Serialize)]
+struct SearchHit<'a> {
+    id: &'a str,
+    genre: &'a [String],
+    bpm: &'a [String],
+    kit: &'a [String],
+    bars: u32,
+    meter: &'a str,
+    note_count: usize,
+}
+
+/// Search results carry no notes. A filter matching a thousand grooves would
+/// otherwise return megabytes to render a list nobody has picked from yet.
+pub fn search_response(catalog: &Catalog, body: &SearchBody) -> String {
+    let hits = catalog.search(&body.query());
+    let total = hits.len();
+    let items: Vec<SearchHit> = hits
+        .into_iter()
+        .take(body.limit)
+        .map(|groove| SearchHit {
+            id: &groove.id,
+            genre: &groove.genre,
+            bpm: &groove.bpm,
+            kit: &groove.kit,
+            bars: groove.bars,
+            meter: &groove.meter,
+            note_count: groove.notes.len(),
+        })
+        .collect();
+    serde_json::json!({"total": total, "returned": items.len(), "items": items}).to_string()
+}
+
+pub fn groove_response(catalog: &Catalog, id: &str) -> Option<String> {
+    catalog.groove(id).map(|groove| {
+        serde_json::json!({
+            "id": groove.id,
+            "bars": groove.bars,
+            "meter": groove.meter,
+            "ppq": groove.ppq,
+            "notes": groove.notes,
+        })
+        .to_string()
     })
 }
 
@@ -167,12 +264,46 @@ fn read_headers(
     ))
 }
 
+/// Read exactly Content-Length bytes, under the same deadline and shutdown
+/// discipline the headers use. A body shorter than it claims must not hold the
+/// connection open until the deadline on a helper that has to shut down fast.
+fn read_body(
+    stream: &mut TcpStream,
+    length: usize,
+    shutdown: &AtomicBool,
+    deadline: Instant,
+) -> io::Result<String> {
+    if length > MAX_BODY_BYTES {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "body too large"));
+    }
+    let mut data = vec![0_u8; 0];
+    let mut byte = [0_u8; 1];
+    while data.len() < length {
+        let poll_interval = next_io_timeout(shutdown, deadline)?;
+        match stream.read(&mut byte) {
+            Ok(0) => break,
+            Ok(_) => data.push(byte[0]),
+            Err(error) if is_retryable_io_error(&error) => {
+                if error.kind() == io::ErrorKind::WouldBlock {
+                    thread::sleep(poll_interval);
+                }
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    if data.len() != length {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "short body"));
+    }
+    String::from_utf8(data).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "non-utf8 body"))
+}
+
 fn handle_connection(
     mut stream: TcpStream,
     ui_dir: &Path,
     token: &str,
     expected_host: &str,
     shutdown: &AtomicBool,
+    catalog: &Catalog,
 ) -> io::Result<()> {
     let deadline = Instant::now() + CONNECTION_TIMEOUT;
     let raw = match read_headers(&mut stream, shutdown, deadline) {
@@ -213,7 +344,7 @@ fn handle_connection(
         );
     }
 
-    if request.path == "/api/health" {
+    if is_api_route(&request.path) {
         let expected_origin = format!("http://{expected_host}");
         if request.method != "POST" || request.header("origin") != Some(expected_origin.as_str()) {
             return write_response(
@@ -238,14 +369,66 @@ fn handle_connection(
                 deadline,
             );
         }
-        return write_response(
-            &mut stream,
-            "200 OK",
-            "application/json",
-            br#"{"status":"ok","protocol":1}"#,
-            shutdown,
-            deadline,
-        );
+        if request.path == "/api/health" {
+            return write_response(
+                &mut stream,
+                "200 OK",
+                "application/json",
+                br#"{"status":"ok","protocol":1}"#,
+                shutdown,
+                deadline,
+            );
+        }
+
+        let length = request
+            .header("content-length")
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(0);
+        let raw_body = match read_body(&mut stream, length, shutdown, deadline) {
+            Ok(body) if body.is_empty() => "{}".to_owned(),
+            Ok(body) => body,
+            Err(_) => {
+                return write_response(
+                    &mut stream,
+                    "400 Bad Request",
+                    "text/plain",
+                    b"bad request",
+                    shutdown,
+                    deadline,
+                );
+            }
+        };
+
+        let payload = if request.path == "/api/search" {
+            parse_search_body(&raw_body)
+                .map(|body| search_response(catalog, &body))
+                .map_err(|_| "400 Bad Request")
+        } else {
+            parse_groove_body(&raw_body)
+                .map_err(|_| "400 Bad Request")
+                // An unknown id is 404: the caller asked for one specific
+                // groove, and an empty object would read as one with no notes.
+                .and_then(|body| groove_response(catalog, &body.id).ok_or("404 Not Found"))
+        };
+
+        return match payload {
+            Ok(json) => write_response(
+                &mut stream,
+                "200 OK",
+                "application/json",
+                json.as_bytes(),
+                shutdown,
+                deadline,
+            ),
+            Err(status) => write_response(
+                &mut stream,
+                status,
+                "text/plain",
+                status.as_bytes(),
+                shutdown,
+                deadline,
+            ),
+        };
     }
 
     if request.method != "GET" {
@@ -300,6 +483,7 @@ pub fn run(
     ui_dir: PathBuf,
     token: String,
     shutdown: Arc<AtomicBool>,
+    catalog: Arc<Catalog>,
 ) -> io::Result<()> {
     let port = listener.local_addr()?.port();
     let expected_host = format!("localhost:{port}");
@@ -308,8 +492,14 @@ pub fn run(
         match listener.accept() {
             Ok((stream, address)) if address.ip().is_loopback() => {
                 stream.set_nonblocking(true)?;
-                let _ =
-                    handle_connection(stream, &ui_dir, &token, &expected_host, shutdown.as_ref());
+                let _ = handle_connection(
+                    stream,
+                    &ui_dir,
+                    &token,
+                    &expected_host,
+                    shutdown.as_ref(),
+                    catalog.as_ref(),
+                );
             }
             Ok(_) => {}
             Err(error) if is_transient_accept_error(&error) => {
@@ -325,6 +515,68 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const SAMPLE: &str = r#"{
+        "schema": "groove.export.v1",
+        "grooves": [
+            {"id":"a1","genre":["metal"],"bpm":["bpm_140_159"],"kit":["kick"],
+             "bars":4,"meter":"4/4","ppq":480,"notes":[[36,0,120,100]]}
+        ]
+    }"#;
+
+    #[test]
+    fn every_api_route_is_recognised_and_nothing_else_is() {
+        assert!(is_api_route("/api/search"));
+        assert!(is_api_route("/api/groove"));
+        assert!(is_api_route("/api/health"));
+        assert!(!is_api_route("/api/../secret"));
+        assert!(!is_api_route("/app.js"));
+    }
+
+    #[test]
+    fn a_search_body_becomes_a_query() {
+        let body = parse_search_body(r#"{"genre":"metal","bpm":"bpm_140_159"}"#).unwrap();
+        assert_eq!(body.genre.as_deref(), Some("metal"));
+        assert_eq!(body.bpm.as_deref(), Some("bpm_140_159"));
+        assert_eq!(body.kit, None);
+    }
+
+    #[test]
+    fn an_empty_body_is_an_empty_query_not_an_error() {
+        assert_eq!(parse_search_body("{}").unwrap().genre, None);
+    }
+
+    #[test]
+    fn a_malformed_search_body_is_refused() {
+        assert!(parse_search_body("not json").is_err());
+        assert!(parse_search_body(r#"{"genre":42}"#).is_err());
+    }
+
+    #[test]
+    fn a_requested_limit_cannot_exceed_the_cap() {
+        // A query matching everything must not return the whole export as one
+        // response; the list is a picker, not a dump.
+        assert_eq!(
+            parse_search_body(r#"{"limit":9999}"#).unwrap().limit,
+            MAX_SEARCH_RESULTS
+        );
+    }
+
+    #[test]
+    fn a_search_response_omits_notes_but_counts_them() {
+        let catalog = Catalog::from_str(SAMPLE).unwrap();
+        let body = parse_search_body("{}").unwrap();
+        let json = search_response(&catalog, &body);
+        assert!(json.contains(r#""note_count":1"#));
+        assert!(!json.contains(r#""notes""#));
+    }
+
+    #[test]
+    fn a_groove_response_carries_notes_and_an_unknown_id_carries_nothing() {
+        let catalog = Catalog::from_str(SAMPLE).unwrap();
+        assert!(groove_response(&catalog, "a1").unwrap().contains("[36,0,120,100]"));
+        assert!(groove_response(&catalog, "nope").is_none());
+    }
 
     #[test]
     fn parses_exact_local_request() {
@@ -361,7 +613,13 @@ mod tests {
         let shutdown = Arc::new(AtomicBool::new(false));
         let server_shutdown = Arc::clone(&shutdown);
         let server_thread =
-            thread::spawn(move || run(listener, PathBuf::new(), "abc".to_owned(), server_shutdown));
+            thread::spawn(move || run(
+                    listener,
+                    PathBuf::new(),
+                    "abc".to_owned(),
+                    server_shutdown,
+                    Arc::new(Catalog::from_str(SAMPLE).unwrap()),
+                ));
 
         let mut client = TcpStream::connect(("127.0.0.1", port)).unwrap();
         client
@@ -399,7 +657,13 @@ mod tests {
         let shutdown = Arc::new(AtomicBool::new(false));
         let server_shutdown = Arc::clone(&shutdown);
         let server_thread =
-            thread::spawn(move || run(listener, PathBuf::new(), "abc".to_owned(), server_shutdown));
+            thread::spawn(move || run(
+                    listener,
+                    PathBuf::new(),
+                    "abc".to_owned(),
+                    server_shutdown,
+                    Arc::new(Catalog::from_str(SAMPLE).unwrap()),
+                ));
 
         let mut client = TcpStream::connect(("127.0.0.1", port)).unwrap();
         client
@@ -430,7 +694,13 @@ mod tests {
         let shutdown = Arc::new(AtomicBool::new(false));
         let server_shutdown = Arc::clone(&shutdown);
         let server_thread =
-            thread::spawn(move || run(listener, PathBuf::new(), "abc".to_owned(), server_shutdown));
+            thread::spawn(move || run(
+                    listener,
+                    PathBuf::new(),
+                    "abc".to_owned(),
+                    server_shutdown,
+                    Arc::new(Catalog::from_str(SAMPLE).unwrap()),
+                ));
 
         let mut client = TcpStream::connect(("127.0.0.1", port)).unwrap();
         client
