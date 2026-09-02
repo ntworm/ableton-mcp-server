@@ -1,10 +1,10 @@
 # ableton-mcp-server
 
-[**:globe_with_meridians: Live Landing Page & Interactive 96-Tool Catalog**](https://ntworm.github.io/ableton-mcp-server/) <!-- TOOL_COUNT: active_total --> · [**Architecture Diagram**](docs/ARCHITECTURE.md) · [**Agent Playbook**](docs/AGENT_PLAYBOOK.md) · [**Tool Index**](docs/TOOL_REFERENCE.md)
+[**:globe_with_meridians: Live Landing Page & Interactive 97-Tool Catalog**](https://ntworm.github.io/ableton-mcp-server/) <!-- TOOL_COUNT: active_total --> · [**Architecture Diagram**](docs/ARCHITECTURE.md) · [**Agent Playbook**](docs/AGENT_PLAYBOOK.md) · [**Tool Index**](docs/TOOL_REFERENCE.md)
 
 An open **Model Context Protocol (MCP)** server that enables AI agents (Antigravity, Gemini, Codex) and audio developers to query, analyze, drive, and automate a running Ableton Live 12 Set.
 
-The current tool surface is 96 tools over TCP, WebSockets, composed routes, and local execution <!-- TOOL_COUNT: active_total --> (with primary device resolution via device_name, track_index, and clip_index); the current v0.6.0 release ships 96 tools. Historical milestones exposed 65 certified tools in v0.5.2 <!-- HISTORICAL_TOOL_COUNT: 65; baseline=v0.5.2 --> and 88 tools in the v0.5.6 source milestone <!-- HISTORICAL_TOOL_COUNT: 88; baseline=v0.5.6 -->. v0.6.0 adds three deterministic offline music-generation tools and five Groove Intelligence tools. Groove retrieval, evidence, generation, and comparison stay offline; only the guarded apply path reaches Live. A FastMCP server in Python communicates with a MIDI Remote Script on TCP `127.0.0.1:9888` and an Extension Host bridge over WebSockets on `127.0.0.1:9889`.
+The current tool surface is 97 tools over TCP, WebSockets, composed routes, and local execution <!-- TOOL_COUNT: active_total --> (with primary device resolution via device_name, track_index, and clip_index); the current v0.6.0 release ships 96 tools. Historical milestones exposed 65 certified tools in v0.5.2 <!-- HISTORICAL_TOOL_COUNT: 65; baseline=v0.5.2 --> and 88 tools in the v0.5.6 source milestone <!-- HISTORICAL_TOOL_COUNT: 88; baseline=v0.5.6 -->. v0.6.0 adds three deterministic offline music-generation tools and five Groove Intelligence tools. Groove retrieval, evidence, generation, and comparison stay offline; only the guarded apply path reaches Live. A FastMCP server in Python communicates with a MIDI Remote Script on TCP `127.0.0.1:9888` and an Extension Host bridge over WebSockets on `127.0.0.1:9889`.
 
 Groove Intelligence is offline by default. Its deterministic generator needs no
 provider installation; an optional neural provider is isolated behind a fixed
@@ -31,14 +31,14 @@ target and empty slot before one commit.
 > `ableton-mcp-server` runs locally on your host OS over standard input/output (`stdio`) or IPC loopback. The AI agent spawns the `ableton-mcp-server.exe` process directly. There are no external cloud endpoints or API keys required, guaranteeing zero network latency and maximum privacy.
 
 ### How AI Agents Interact with Ableton Live:
-1. **Tool Discovery (`tools/list`)**: When an MCP client (Antigravity, Cursor, Windsurf) launches the server, it automatically discovers all 96 tool schemas <!-- TOOL_COUNT: active_total -->.
+1. **Tool Discovery (`tools/list`)**: When an MCP client (Antigravity, Cursor, Windsurf) launches the server, it automatically discovers all 97 tool schemas <!-- TOOL_COUNT: active_total -->.
 2. **Tool Execution (`tools/call`)**: When the LLM decides to manipulate Ableton Live, it issues JSON-RPC messages (e.g. `set_tempo(tempo=128.0)` or `create_clip(...)`).
 3. **Write-Then-Verify Loop**: The server writes to Live's local socket and verifies object model state before returning a result.
 4. **Self-Correcting Error Taxonomy**: If an error occurs, the server returns structured codes (`CAPABILITY_UNAVAILABLE`, `AMBIGUOUS_MATCH`, `VERIFICATION_FAILED`), enabling the agent to reason and adapt.
 
 ### Recommended System Prompt for AI Agents:
 ```text
-You have direct access to an active Ableton Live Set via ableton-mcp-server (96 tools) <!-- TOOL_COUNT: active_total -->.
+You have direct access to an active Ableton Live Set via ableton-mcp-server (97 tools) <!-- TOOL_COUNT: active_total -->.
 1. Always start by inspecting the project state using `get_session_overview()` or `get_track_list()`.
 2. To modify track properties, resolve the target track index using `live_find_track(name_pattern)` first.
 3. For parameter adjustments, query parameters via `get_device_list()` and `get_parameter_value()`, then apply changes using `set_parameter_value()`.
@@ -144,11 +144,11 @@ If you operate from **WSL2**, point the MCP client at the Windows binary so loop
 
 ---
 
-## 📦 What It Does (96 MCP Tools) <!-- TOOL_COUNT: active_total -->
+## 📦 What It Does (97 MCP Tools) <!-- TOOL_COUNT: active_total -->
 
 > v0.6.0 extends the certified 65-tool v0.5.2 baseline <!-- HISTORICAL_TOOL_COUNT: 65; baseline=v0.5.2 -->. v0.5.3 introduced colour writes, clip-target diagnostics, and five hierarchy tools that validate then return `CAPABILITY_UNAVAILABLE`; v0.6.0 adds offline music generation, Groove retrieval, and guarded apply. See [the offline music reference](docs/TOOL_REFERENCE.md#offline-music-generation).
 
-The 96 MCP tools are grouped into operational domains <!-- TOOL_COUNT: active_total -->:
+The 97 MCP tools are grouped into operational domains <!-- TOOL_COUNT: active_total -->:
 
 - **Transport & Session**: `get_session_info`, `set_tempo`, `start_playback`, `stop_playback`, `get_loop_settings`, `set_loop`, `set_loop_start`, `set_loop_length`, `set_current_song_time`, `get_song_length`, `get_session_overview`, `get_scenes`, `get_scene_state`, `fire_scene`, `fire_clip`.
 - **Tracks & Devices**: `get_track_list`, `live_find_track`, `live_find_device`, `live_find_clip`, `get_track_state`, `get_device_list`, `list_device_params`, `get_parameter_value`, `get_plugin_presets`, `set_plugin_preset`, `get_clip_summary`, `set_parameter_value`, `create_clip`, `get_clip_notes`, `add_notes_to_clip`, `delete_clip`, `clear_clip_notes`, `set_clip_properties`, `get_clip_info`, `set_track_property`, `set_track_color`, `set_clip_color`, `diagnose_clip_targets`, `create_midi_track`, `create_audio_track`, `rename_track`, `move_track`, `reorder_tracks`, `move_track_to_group`, `ungroup_track`, `merge_groups`, `get_routing`, `diff_snapshots_tool`, `take_snapshot`, `get_selected_context`, `get_composition_structure`, `diagnose_midi_clip`, `search_browser`, `load_device_to_track`, `get_warp_state`, `set_warp_state`.

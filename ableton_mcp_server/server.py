@@ -75,6 +75,7 @@ from .groove_intelligence.runtime import (
     serialize_tool_result,
 )
 from .groove_intelligence.search import search as groove_search_service
+from .journeys import plan_user_journey as _plan_user_journey
 from .music_brain import Generation as _Generation
 from .music_brain import Traits as _Traits
 from .music_brain import generate_bass as _generate_bass
@@ -2554,6 +2555,27 @@ def groove_apply(
     return _explicit_json_result(receipt.model_dump(mode="json", exclude_none=True))
 
 
+
+@mcp.tool()
+def plan_user_journey(
+    journey_type: Literal[
+        "sequence_drums", "compose_melody", "compose_harmony", "design_sound"
+    ],
+    traits: Annotated[str, Field(max_length=2000)],
+) -> ToolResult:
+    """Plan a capability-aware guided journey as a fixed stage grid.
+
+    Side effects: none; the plan names tools but calls none of them.
+    Example: ``plan_user_journey("sequence_drums", "half time, dark")``.
+    Edge cases: identity or exact-copy language returns a clarification request.
+    """
+
+    request = models.PlanUserJourneyRequest.model_validate(locals())
+    return _explicit_json_result(
+        _plan_user_journey(request.journey_type, request.traits)
+    )
+
+
 # Canonical ordered tuple of every public tool callable. Assembled after the
 # v0.5.0 offline mix analysis wrappers are defined so all names are in scope.
 PUBLIC_TOOL_FUNCTIONS = (
@@ -2572,6 +2594,7 @@ PUBLIC_TOOL_FUNCTIONS = (
     groove_generate,
     groove_compare,
     groove_apply,
+    plan_user_journey,
 )
 
 

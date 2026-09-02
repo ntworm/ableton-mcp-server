@@ -8,7 +8,24 @@ The canonical certification policy that governs the promotion decision
 
 ## [Unreleased]
 
-No unreleased changes.
+### Added
+
+- `plan_user_journey` returns a four-stage plan — discover, await confirmation,
+  apply, verify — naming the tool each stage would use without calling any of
+  them. It brings the current surface to 97 tools; the released v0.6.0 still
+  ships 96.
+
+### Fixed
+
+- `plan_user_journey` was registered after `main()`, so `mcp.run()` blocked
+  before the decorator ran and the tool existed only when the module was
+  imported rather than executed. Its body also called an undefined
+  `_plan_user_journey`. It is now imported, registered with the other tools, and
+  present in the catalog, the request models, and the landing page.
+- The retrieval seed is rebuilt on the per-collection articulation map: 4,000
+  representatives from 266 collections, `other_percussion` down from 12.6% to
+  4.7% of the kit facet rows, `genre` coverage up from 58.3% to 85.8%, and a new
+  `bpm` axis at 61.7%.
 
 ## [0.6.0] - 2026-08-24
 

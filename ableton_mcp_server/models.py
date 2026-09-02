@@ -1059,6 +1059,20 @@ class MusicPlanProductionRequest(RequestModel):
     bpm: Annotated[float, Field(ge=40, le=300)] | None = None
 
 
+class PlanUserJourneyRequest(RequestModel):
+    """Request payload for ``plan_user_journey``.
+
+    ``journey_type`` is closed because the plan is a fixed stage grid per
+    journey, not a generated one. ``traits`` is free text that the tool only
+    inspects and echoes; nothing downstream executes it.
+    """
+
+    journey_type: Literal[
+        "sequence_drums", "compose_melody", "compose_harmony", "design_sound"
+    ]
+    traits: Annotated[str, Field(max_length=2000)]
+
+
 TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "get_session_info": GetSessionInfoRequest,
     "get_bridge_status": GetBridgeStatusRequest,
@@ -1155,6 +1169,7 @@ TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {
     "music_generate_drum_groove": MusicGenerateDrumGrooveRequest,
     "music_generate_bass": MusicGenerateBassRequest,
     "music_plan_production": MusicPlanProductionRequest,
+    "plan_user_journey": PlanUserJourneyRequest,
 }
 
 TOOL_REQUEST_MODELS.update(

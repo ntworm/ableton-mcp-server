@@ -69,6 +69,7 @@ BASELINE_PROBE_GROUPS: dict[str, tuple[str, ...]] = {
         "music_generate_drum_groove",
         "music_generate_bass",
         "music_plan_production",
+        "plan_user_journey",
         "groove_search",
         "groove_evidence",
         "groove_generate",

@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232EC4B6'><path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/></svg>">
   <title>Ableton MCP Server — Production Tool Surface for Ableton Live 12</title>
-  <meta name="description" content="Local MCP server exposing 96 typed tools over stdio, backed by loopback TCP and WebSocket bridges for Ableton Live 12."> <!-- TOOL_COUNT: active_total -->
-  <meta property="og:title" content="Ableton MCP Server — Technical Specification & 96-Tool Catalog"> <!-- TOOL_COUNT: active_total -->
+  <meta name="description" content="Local MCP server exposing 97 typed tools over stdio, backed by loopback TCP and WebSocket bridges for Ableton Live 12."> <!-- TOOL_COUNT: active_total -->
+  <meta property="og:title" content="Ableton MCP Server — Technical Specification & 97-Tool Catalog"> <!-- TOOL_COUNT: active_total -->
   <meta property="og:description" content="Dual-bridge FastMCP server for querying parameters, driving transport, automating clips, and non-realtime mix analysis in Ableton Live 12.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://ntworm.github.io/ableton-mcp-server/">
@@ -494,7 +494,7 @@
           <a href="#config" data-en="Agent Config" data-pt="Configuração">Agent Config</a>
           <a href="#taxonomy" data-en="Error Taxonomy" data-pt="Taxonomia de Erros">Error Taxonomy</a>
           <a href="#inspiration" data-en="Prior Art" data-pt="Trabalhos Anteriores">Prior Art</a>
-          <a href="#tools" data-en="MCP Tools (96)" data-pt="Ferramentas MCP (96)">MCP Tools (96)</a> <!-- TOOL_COUNT: active_total -->
+          <a href="#tools" data-en="MCP Tools (97)" data-pt="Ferramentas MCP (97)">MCP Tools (97)</a> <!-- TOOL_COUNT: active_total -->
         </div>
 
         <div class="lang-switcher">
@@ -511,7 +511,7 @@
       <div class="hero-badge">
         <span>⚡ FastMCP Production Bridge</span>
         <span>·</span>
-        <span data-en="96 Tools Over IPC" data-pt="96 Ferramentas via IPC">96 Tools Over IPC</span> <!-- TOOL_COUNT: active_total -->
+        <span data-en="97 Tools Over IPC" data-pt="97 Ferramentas via IPC">97 Tools Over IPC</span> <!-- TOOL_COUNT: active_total -->
       </div>
       <h1 data-en="Ableton Live 12 Integration Surface for AI Agents" data-pt="Superfície de Integração do Ableton Live 12 para Agentes de IA">Ableton Live 12 Integration Surface for AI Agents</h1>
       <p class="subtitle" data-en="A high-density, low-latency MCP server that exposes active Ableton Live 12 Sets to AI agents and Python scripts. Query live LOM parameters, drive transport, automate clips, analyze audio in non-realtime, and execute atomic transactions." data-pt="Servidor MCP de baixa latência que expõe projetos ativos do Ableton Live 12 para agentes de IA e scripts Python. Consulta de parâmetros LOM em tempo real, controle de transport, automação de clips, análise de áudio offline e transações atômicas.">
@@ -533,7 +533,7 @@
           <span data-en="Repository on GitHub" data-pt="Repositório no GitHub">Repository on GitHub</span>
         </a>
         <a href="#config" class="btn btn-secondary" data-en="Agent Config JSON" data-pt="JSON de Configuração do Agente">Agent Config JSON</a>
-        <a href="#tools" class="btn btn-secondary" data-en="Browse 96 Tools" data-pt="Catálogo das 96 Ferramentas">Browse 96 Tools</a> <!-- TOOL_COUNT: active_total -->
+        <a href="#tools" class="btn btn-secondary" data-en="Browse 97 Tools" data-pt="Catálogo das 97 Ferramentas">Browse 97 Tools</a> <!-- TOOL_COUNT: active_total -->
       </div>
     </div>
   </section>
@@ -543,7 +543,7 @@
     <div class="container">
       <h2 class="section-title" data-en="Server Execution & Agent Runtime Model" data-pt="Modelo de Execução e Runtime do Agente">Server Execution & Agent Runtime Model</h2>
       <p class="section-desc" data-en="`ableton-mcp-server` runs locally over stdio IPC. It exposes 96 typed tool contracts directly to LLM agent runtimes with write verification, grouped undo semantics, and explicit error taxonomies." data-pt="O `ableton-mcp-server` executa localmente via IPC stdio. Ele expõe 96 ferramentas tipadas para runtimes de agentes LLM com confirmação de escrita, undo agrupado e taxonomia explícita de erros.">
-        `ableton-mcp-server` runs locally over stdio IPC. It exposes 96 typed tool contracts directly to LLM agent runtimes with write verification, grouped undo semantics, and explicit error taxonomies. <!-- TOOL_COUNT: active_total -->
+        `ableton-mcp-server` runs locally over stdio IPC. It exposes 97 typed tool contracts directly to LLM agent runtimes with write verification, grouped undo semantics, and explicit error taxonomies. <!-- TOOL_COUNT: active_total -->
       </p>
 
       <div class="grid-3">
@@ -581,7 +581,7 @@
             <span>agent_system_prompt_context.txt</span>
             <span>Production Prompt Injection</span>
           </div>
-<pre><code>You are connected to an active Ableton Live 12 Set via ableton-mcp-server (96 tools). <!-- TOOL_COUNT: active_total -->
+<pre><code>You are connected to an active Ableton Live 12 Set via ableton-mcp-server (97 tools). <!-- TOOL_COUNT: active_total -->
 Operational rules:
 1. Always inspect live set topology first via `get_session_overview()` or `get_track_list()`.
 2. Resolve target tracks by index or via fuzzy name matching (`live_find_track`).
@@ -640,7 +640,7 @@ Operational rules:
           
           <rect x="380" y="70" width="260" height="230" rx="8" fill="#101726" stroke="#1e293b" />
           <text x="400" y="100" fill="#2ec4b6" font-size="14" font-weight="bold">ableton_mcp_server</text>
-          <text x="400" y="125" fill="#94a3b8">• 96 Tool Dispatch Surface</text> <!-- TOOL_COUNT: active_total -->
+          <text x="400" y="125" fill="#94a3b8">• 97 Tool Dispatch Surface</text> <!-- TOOL_COUNT: active_total -->
           <text x="400" y="148" fill="#94a3b8">• Cross-bridge Error Taxonomy</text>
           <text x="400" y="171" fill="#94a3b8">• Offline Mix Analysis Engine</text>
           <text x="400" y="194" fill="#f2b94b">• WSL2 Loopback Executable</text>
@@ -850,14 +850,14 @@ Operational rules:
   <!-- Tools Catalog Matrix -->
   <section id="tools" class="arch-section">
     <div class="container">
-      <h2 class="section-title" data-en="Complete 96 MCP Tool Surface" data-pt="Catálogo Completo das 96 Ferramentas MCP">Complete 96 MCP Tool Surface</h2> <!-- TOOL_COUNT: active_total -->
+      <h2 class="section-title" data-en="Complete 97 MCP Tool Surface" data-pt="Catálogo Completo das 97 Ferramentas MCP">Complete 97 MCP Tool Surface</h2> <!-- TOOL_COUNT: active_total -->
       <p class="section-desc" data-en="Typed parameter signatures and descriptions for all 96 tools exposed to AI agents. Search by name, category, or parameter signature." data-pt="Assinaturas de parâmetros e descrições tipadas para todas as 96 ferramentas expostas aos agentes de IA. Pesquise por nome, categoria ou assinatura.">
-        Typed parameter signatures and descriptions for all 96 tools exposed to AI agents. Search by name, category, or parameter signature. <!-- TOOL_COUNT: active_total -->
+        Typed parameter signatures and descriptions for all 97 tools exposed to AI agents. Search by name, category, or parameter signature. <!-- TOOL_COUNT: active_total -->
       </p>
 
       <div class="tool-controls">
         <input type="text" id="tool-search" class="search-input" placeholder="Search tool by name, parameters, or signature..." oninput="filterTools()">
-        <button class="filter-btn active" onclick="setCategory('all', this)" data-en="All (96)" data-pt="Todas (96)">All (96)</button> <!-- TOOL_COUNT: active_total -->
+        <button class="filter-btn active" onclick="setCategory('all', this)" data-en="All (97)" data-pt="Todas (97)">All (97)</button> <!-- TOOL_COUNT: active_total -->
         <button class="filter-btn" onclick="setCategory('transport', this)" data-en="Transport & Session" data-pt="Transport e Sessão">Transport & Session</button>
         <button class="filter-btn" onclick="setCategory('track', this)" data-en="Tracks & Devices" data-pt="Tracks e Dispositivos">Tracks & Devices</button>
         <button class="filter-btn" onclick="setCategory('lifecycle', this)" data-en="Lifecycle & Fade" data-pt="Ciclo de Vida e Fade">Lifecycle & Fade</button>
@@ -981,6 +981,7 @@ Operational rules:
       { name: 'groove_compare', cat: 'music', desc_en: 'Compares bounded groove cards and projections.', desc_pt: 'Compara cards e projeções limitados de grooves.', sig: 'groove_compare(schema_version: str, artifact_ids: list, metrics: list)' },
       { name: 'groove_apply', cat: 'music', desc_en: 'Previews or guardedly applies a mapped groove to one confirmed empty slot.', desc_pt: 'Visualiza ou aplica com guarda um groove mapeado em um slot vazio confirmado.', sig: 'groove_apply(schema_version: str, artifact_id: str, track_index: int, clip_index: int, kit_mapping_profile: str, mode: str)' },
 
+      { name: 'plan_user_journey', cat: 'music', desc_en: 'Plans a guided journey as four named stages without calling any of them.', desc_pt: 'Planeja uma jornada guiada em quatro estágios nomeados sem executar nenhum deles.', sig: 'plan_user_journey(journey_type: str, traits: str)' },
       // Inspection & Batch
       { name: 'run_batch', cat: 'inspection', desc_en: 'Executes mutations in one grouped undo step; a successful prefix persists if a later command fails.', desc_pt: 'Executa mutações em um undo agrupado; o prefixo bem-sucedido persiste se uma chamada posterior falhar.', sig: 'run_batch(commands: list)' },
       { name: 'get_locators', cat: 'inspection', desc_en: 'Returns list of all arrangement cue points / locators.', desc_pt: 'Retorna a lista de todos os pontos de marcação (locators) do arrangement.', sig: 'get_locators()' },
@@ -991,7 +992,7 @@ Operational rules:
       { name: 'get_browser_categories', cat: 'inspection', desc_en: 'Returns top-level categories from Ableton browser database.', desc_pt: 'Retorna as categorias principais da base de dados do browser.', sig: 'get_browser_categories()' },
       { name: 'get_project_metadata', cat: 'inspection', desc_en: 'Reads project directory name, set file path, and creation time.', desc_pt: 'Lê nome do diretório, caminho do arquivo do projeto e data.', sig: 'get_project_metadata()' },
       { name: 'get_ableton_logs', cat: 'inspection', desc_en: 'Reads latest log entries from Ableton Live Log.txt.', desc_pt: 'Lê as entradas mais recentes do arquivo de log do Ableton (Log.txt).', sig: 'get_ableton_logs(lines: int = 50)' },
-      { name: 'get_bridge_status', cat: 'inspection', desc_en: 'Reports bridge health plus the canonical 96-tool capability matrix.', desc_pt: 'Relata a saúde das bridges e a matriz canônica das 96 ferramentas.', sig: 'get_bridge_status()' }, // <!-- TOOL_COUNT: active_total -->
+      { name: 'get_bridge_status', cat: 'inspection', desc_en: 'Reports bridge health plus the canonical 97-tool capability matrix.', desc_pt: 'Relata a saúde das bridges e a matriz canônica das 97 ferramentas.', sig: 'get_bridge_status()' }, // <!-- TOOL_COUNT: active_total -->
       { name: 'scaffold_extension', cat: 'inspection', desc_en: 'Creates a local Ableton Extension project scaffold.', desc_pt: 'Cria localmente a estrutura inicial de uma Ableton Extension.', sig: 'scaffold_extension(project_path: str, name: str = "AbletonMCPServer")' },
       { name: 'build_extension', cat: 'inspection', desc_en: 'Installs dependencies and builds an Ableton Extension project.', desc_pt: 'Instala dependências e compila um projeto de Ableton Extension.', sig: 'build_extension(project_path: str)' }
     ];
