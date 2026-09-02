@@ -10,7 +10,7 @@ export interface HelperReady {
 
 export type ModalResult =
   | { action: 'cancel'; confirmed: false; protocol: 1 }
-  | { action: 'insert_groove'; confirmed: true; protocol: 1; grooveId: string };
+  | { action: 'handoff'; confirmed: true; protocol: 1 };
 
 function parseObject(raw: string, code: string): Record<string, unknown> {
   let value: unknown;
@@ -49,20 +49,10 @@ export function parseModalResult(raw: string): ModalResult {
   if (candidate.action === 'cancel' && candidate.confirmed === false) {
     return candidate as unknown as ModalResult;
   }
-  if (
-    candidate.action === 'insert_groove'
-    && candidate.confirmed === true
-    && typeof candidate.groove_id === 'string'
-    && candidate.groove_id.length > 0
-  ) {
-    // Rebuilt rather than cast: the panel sends snake_case and an id is the one
-    // field the extension cannot fall back on, so an absent one is a refusal.
-    return {
-      action: 'insert_groove',
-      confirmed: true,
-      protocol: GATE0_PROTOCOL,
-      grooveId: candidate.groove_id,
-    };
+  // The modal no longer carries the choice. It closes so Live becomes usable
+  // again, and the groove arrives later through the helper, picked on a phone.
+  if (candidate.action === 'handoff' && candidate.confirmed === true) {
+    return { action: 'handoff', confirmed: true, protocol: GATE0_PROTOCOL };
   }
   throw new Error('INVALID_MODAL_RESULT');
 }

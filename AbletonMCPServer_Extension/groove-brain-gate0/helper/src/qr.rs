@@ -58,6 +58,41 @@ mod tests {
     }
 
     #[test]
+    fn the_finder_patterns_land_where_a_scanner_looks_for_them() {
+        // Every QR carries a 7x7 finder at three corners. Checking them proves
+        // the module grid was not flipped, transposed or shifted off the quiet
+        // zone, which is the whole failure mode of rendering one by hand: the
+        // image still looks like a QR and no scanner can read it.
+        let out = svg("http://192.168.1.40:45123/picker.html#abc").unwrap();
+        let q = QUIET_ZONE;
+
+        // Top-left finder: its outer ring is dark, the ring inside it is light.
+        for x in 0..7 {
+            assert!(
+                out.contains(&format!("M{},{}h1v1h-1z", x + q, q)),
+                "top edge of the top-left finder is missing at x={x}"
+            );
+        }
+        assert!(!out.contains(&format!("M{},{}h1v1h-1z", 1 + q, 1 + q)));
+
+        // A separator column sits immediately right of the finder.
+        assert!(!out.contains(&format!("M{},{}h1v1h-1z", 7 + q, q)));
+
+        // The other two finders, which is what fixes the orientation.
+        let code = QrCode::encode_text(
+            "http://192.168.1.40:45123/picker.html#abc",
+            QrCodeEcc::Medium,
+        )
+        .unwrap();
+        let last = code.size() - 1;
+        assert!(out.contains(&format!("M{},{}h1v1h-1z", last + q, q)));
+        assert!(out.contains(&format!("M{},{}h1v1h-1z", q, last + q)));
+        // The bottom-right corner has no finder, which is how a reader tells
+        // which way up the code is.
+        assert!(!out.contains(&format!("M{},{}h1v1h-1z", last + q, last + q)));
+    }
+
+    #[test]
     fn two_calls_agree() {
         let text = "http://10.0.0.5:1/picker.html#tok";
         assert_eq!(svg(text).unwrap(), svg(text).unwrap());

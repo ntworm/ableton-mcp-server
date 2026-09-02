@@ -16,7 +16,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("BOOTSTRAP_EOF".into());
     }
     let bootstrap = parse_bootstrap(first.trim_end()).map_err(|code| code.to_owned())?;
-    for name in ["index.html", "app.js", "styles.css"] {
+    for name in ["index.html", "app.js", "styles.css", "picker.html", "picker.js"] {
         if !bootstrap.ui_dir.join(name).is_file() {
             return Err(format!("MISSING_UI_ASSET:{name}").into());
         }
@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let catalog = Arc::new(catalog);
 
-    let listener = server::bind_loopback()?;
+    let listener = server::bind_lan()?;
     let port = listener.local_addr()?.port();
     let ready = ReadyMessage {
         r#type: "ready",
@@ -62,6 +62,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    server::run(listener, bootstrap.ui_dir, bootstrap.token, shutdown, catalog)?;
+    server::run(
+        listener,
+        bootstrap.ui_dir,
+        bootstrap.token,
+        shutdown,
+        catalog,
+        Arc::new(server::Selection::default()),
+    )?;
     Ok(())
 }

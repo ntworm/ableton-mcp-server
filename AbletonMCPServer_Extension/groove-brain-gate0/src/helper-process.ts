@@ -276,6 +276,23 @@ export class HelperSession {
     return `${this.origin}/#${this.token}`;
   }
 
+  /** Ask whether the browser has picked something yet. */
+  async pollSelection(): Promise<string | null> {
+    const response = await fetch(`${this.origin}/api/selection`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+        Origin: this.origin,
+        'Content-Type': 'application/json',
+      },
+      cache: 'no-store',
+      body: '{}',
+    });
+    if (!response.ok) throw new Error(`HELPER_SELECTION_${response.status}`);
+    const body = (await response.json()) as { id?: string | null };
+    return typeof body.id === 'string' && body.id.length > 0 ? body.id : null;
+  }
+
   /** Fetch one groove while the helper is still alive. */
   async fetchGroove(id: string): Promise<string> {
     let timer: NodeJS.Timeout | undefined;
