@@ -44,6 +44,28 @@ Live  ──SDK──  extension  ──HTTP──  helper  ──HTTP──  pa
 
 The extension pushes a snapshot whenever it changes, and polls for commands. The panel renders the snapshot and posts commands. Neither side blocks the other, and Live stays usable throughout.
 
+## What the mapping investigation changed
+
+This plan was written before the note map was measured. Two of its assumptions
+did not survive, and the corrections are load-bearing rather than cosmetic.
+
+**A profile belongs to a kit, not to a plugin.** Reading Settings > MIDI
+In/E-Drums twice, with two kits loaded and no edit by the user, gives two
+different maps: note 76 moved from Snare Sidestick to Ride Crescendo and note
+70's articulation moved to note 4, with every row still reporting `Edited: No`.
+Section 12.4 of the design calls the structural signature optional; it is not.
+The kit name is in the SD3 header, and the profile is keyed by it.
+
+**A hi-hat is two dimensions.** SD3 spends 35 notes on it: openness runs tight,
+closed, then open in six graded steps, and the strike zone is separately pedal,
+edge, tip, shank or bell. The `hat_closed` / `hat_open` / `hat_pedal` ontology
+cannot represent the half-open hats that make up most of that range.
+
+**What is now measured, and is why the panel is worth building.** With a full
+kit loaded, 97.5% to 98.3% of the seed's notes reach the drum they were
+recorded for. Under 1% land on the wrong drum. The rest are articulations the
+loaded instrument does not have, and those are what Task 4a exists for.
+
 ## Blocking owner decisions
 
 ### D1 — what "generate" means in this Gate
@@ -506,6 +528,166 @@ git commit -m "feat(gate3): validate panel commands before they reach the live s
 ```
 
 ---
+
+### Task 4a: Resolve a note through the loaded kit's profile
+
+**Files:**
+- Create: `AbletonMCPServer_Extension/groove-brain-gate0/src/kit-profile.ts`
+- Create: `AbletonMCPServer_Extension/groove-brain-gate0/tests/kit-profile.test.ts`
+- Reference: `ableton_mcp_server/groove_intelligence/profiles/toontrack-sd3-default-observed.json`
+
+Nothing reaches Live without passing through this. A note whose articulation the
+loaded kit does not have is silent, and the panel has to say so rather than write
+it and leave the user wondering why the groove sounds thin.
+
+- [ ] **Step 1: Write the failing tests**
+
+```typescript
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { resolveNote, summariseCoverage } from '../src/kit-profile.js';
+
+const PROFILE = {
+  kit: 'Ludwig Classic Default',
+  notes: {
+    '36': { name: 'Kick Open', piece: 'kick', loaded: true },
+    '38': { name: 'Snare Center', piece: 'snare', loaded: true },
+    '68': { name: 'Snare Muted', piece: 'snare', loaded: false },
+    '62': { name: 'Hi-Hat Tight Edge', piece: 'hihat', loaded: true, openness: 0, zone: 'edge' },
+    '26': { name: 'Hi-Hat Open Edge 3', piece: 'hihat', loaded: true, openness: 0.76, zone: 'edge' },
+    '122': { name: 'Hi-Hat Open Bell 2', piece: 'hihat', loaded: false, openness: 0.64, zone: 'bell' },
+    '99': { name: 'Cymbal 3 Bow Shank', piece: 'cymbal', loaded: null },
+  },
+};
+
+test('a loaded note passes through unchanged', () => {
+  assert.deepEqual(resolveNote(PROFILE, 36), { status: 'plays', pitch: 36 });
+});
+
+test('an unloaded hi-hat falls back to the nearest openness that plays', () => {
+  // A bell hit the kit lacks is still a hi-hat at that openness. Dropping it
+  // loses the pattern; moving it to the nearest playable one keeps the part.
+  const out = resolveNote(PROFILE, 122);
+  assert.equal(out.status, 'substituted');
+  assert.equal(out.pitch, 26);
+});
+
+test('an unloaded note with no playable relative is silent and says so', () => {
+  const out = resolveNote(PROFILE, 68);
+  assert.equal(out.status, 'silent');
+  assert.equal(out.pitch, null);
+});
+
+test('a note the profile never observed is reported, not guessed', () => {
+  // Null means nobody looked. Calling it playable writes a note that may be
+  // silent; calling it silent drops one that may be fine.
+  assert.equal(resolveNote(PROFILE, 99).status, 'unknown');
+});
+
+test('a note absent from the profile is unknown, not silent', () => {
+  assert.equal(resolveNote(PROFILE, 7).status, 'unknown');
+});
+
+test('coverage counts what the user will actually hear', () => {
+  const summary = summariseCoverage(PROFILE, [36, 36, 38, 68, 122, 99]);
+  assert.equal(summary.plays, 3);
+  assert.equal(summary.substituted, 1);
+  assert.equal(summary.silent, 1);
+  assert.equal(summary.unknown, 1);
+});
+```
+
+- [ ] **Step 2: Run to verify failure**
+
+```bash
+cd AbletonMCPServer_Extension && npx tsx --test groove-brain-gate0/tests/kit-profile.test.ts
+```
+
+Expected: `Cannot find module '../src/kit-profile.js'`.
+
+- [ ] **Step 3: Implement**
+
+```typescript
+/**
+ * What the loaded kit will actually play.
+ *
+ * SD3 marks an articulation "(not loaded)" when the mapping exists but the kit
+ * has no sample behind it. Such a note is not a wrong drum, it is no drum, and
+ * a measurement made against a note map alone cannot see it. Everything written
+ * to Live passes through here first.
+ */
+
+export interface ProfileNote {
+  name: string;
+  piece: string;
+  /** True plays, false is mapped but silent, null was never observed. */
+  loaded: boolean | null;
+  openness?: number;
+  zone?: string;
+}
+
+export interface KitProfile {
+  kit: string;
+  notes: Record<string, ProfileNote>;
+}
+
+export type Resolution =
+  | { status: 'plays'; pitch: number }
+  | { status: 'substituted'; pitch: number }
+  | { status: 'silent'; pitch: null }
+  | { status: 'unknown'; pitch: number };
+
+export function resolveNote(profile: KitProfile, pitch: number): Resolution {
+  const entry = profile.notes[String(pitch)];
+  if (!entry || entry.loaded === null) return { status: 'unknown', pitch };
+  if (entry.loaded) return { status: 'plays', pitch };
+
+  // Nearest playable relative: same piece, and for a hi-hat the closest
+  // openness, because openness is what the part is made of while the strike
+  // zone is a colour on top of it.
+  let best: { pitch: number; distance: number } | null = null;
+  for (const [key, candidate] of Object.entries(profile.notes)) {
+    if (candidate.loaded !== true || candidate.piece !== entry.piece) continue;
+    const distance = entry.openness !== undefined && candidate.openness !== undefined
+      ? Math.abs(entry.openness - candidate.openness)
+      : Number.POSITIVE_INFINITY;
+    if (best === null || distance < best.distance) best = { pitch: Number(key), distance };
+  }
+  if (best === null || !Number.isFinite(best.distance)) return { status: 'silent', pitch: null };
+  return { status: 'substituted', pitch: best.pitch };
+}
+
+export interface Coverage {
+  plays: number;
+  substituted: number;
+  silent: number;
+  unknown: number;
+}
+
+export function summariseCoverage(profile: KitProfile, pitches: number[]): Coverage {
+  const summary: Coverage = { plays: 0, substituted: 0, silent: 0, unknown: 0 };
+  for (const pitch of pitches) summary[resolveNote(profile, pitch).status] += 1;
+  return summary;
+}
+```
+
+- [ ] **Step 4: Run the tests**
+
+```bash
+cd AbletonMCPServer_Extension && npx tsx --test groove-brain-gate0/tests/kit-profile.test.ts
+```
+
+Expected: `pass 6`.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add AbletonMCPServer_Extension/groove-brain-gate0/src/kit-profile.ts AbletonMCPServer_Extension/groove-brain-gate0/tests/kit-profile.test.ts
+git commit -m "feat(gate3): resolve every note through the loaded kit's profile"
+```
+
+---
+
 
 ### Task 4: Write into the track and slot the panel named
 
