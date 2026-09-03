@@ -9,6 +9,7 @@ type Handler = () => void;
 class FakeNode {
   className = '';
   disabled = false;
+  href = '';
   hidden = false;
   innerHTML = '';
   textContent = '';
@@ -53,12 +54,16 @@ interface Harness {
   nodes: Record<string, FakeNode>;
   messages: unknown[];
   requests: { path: string; body: unknown }[];
+  ticks: (() => void)[];
 }
 
 async function runPage(
   file: string,
   selectors: string[],
-  options: { bridgeThrows?: boolean; searchStatus?: number; emptySearch?: boolean } = {},
+  options: {
+    bridgeThrows?: boolean; searchStatus?: number; emptySearch?: boolean;
+    session?: number | (() => number);
+  } = {},
 ): Promise<Harness> {
   const nodes: Record<string, FakeNode> = {};
   const bySelector = new Map<string, FakeNode>();
@@ -70,6 +75,7 @@ async function runPage(
   nodes.controls.hidden = true;
 
   const messages: unknown[] = [];
+  const ticks: (() => void)[] = [];
   const requests: { path: string; body: unknown }[] = [];
   const token = 'a'.repeat(64);
   const source = fs.readFileSync(path.resolve(`groove-brain-gate0/ui/${file}`), 'utf8');
@@ -80,9 +86,12 @@ async function runPage(
     Math,
     String,
     setTimeout,
-    // A no-op: the panel's refresh loop would otherwise hold the test
-    // process open, and nothing here depends on it firing.
-    setInterval: () => 0,
+    // Captured rather than run: a live timer would hold the test process
+    // open, and a test that wants a tick can fire one itself.
+    setInterval: (fn: () => void) => {
+      ticks.push(fn);
+      return 0;
+    },
     document: {
       querySelector(selector: string) {
         const node = bySelector.get(selector);
@@ -96,7 +105,8 @@ async function runPage(
     fetch: async (target: string, init: { body?: string }) => {
       requests.push({ path: target, body: init.body ? JSON.parse(init.body) : undefined });
       if (target === '/api/health') {
-        return { ok: true, status: 200, async json() { return { status: 'ok', protocol: 1 }; } };
+        const session = typeof options.session === 'function' ? options.session() : (options.session ?? 1);
+        return { ok: true, status: 200, async json() { return { status: 'ok', protocol: 1, session }; } };
       }
       if (target === '/api/panel') {
         return { ok: true, status: 200, async json() { return PANEL_PAYLOAD; } };
@@ -126,7 +136,7 @@ async function runPage(
   });
   vm.runInContext(source, context, { filename: file });
   await settle();
-  return { nodes, messages, requests };
+  return { nodes, messages, requests, ticks };
 }
 
 async function settle(): Promise<void> {
@@ -271,4 +281,22 @@ test('a failing request on the picker is visible and terminal', async () => {
   assert.equal(nodes.status.textContent, 'Falha no Groove Brain.');
   assert.equal(nodes.error.textContent, 'HELPER_SEARCH_500');
   assert.equal(nodes.controls.hidden, true);
+});
+
+test('the handoff page offers the URL as a link, not as text to copy', async () => {
+  const { nodes } = await runPage('app.js', HANDOFF_NODES);
+  assert.equal(nodes.url.href, PANEL_PAYLOAD.url);
+});
+
+test('a page left open from an earlier helper says so instead of failing later', async () => {
+  // This is the ERR_CONNECTION_REFUSED the owner hit: the page belonged to a
+  // helper that had already gone, and nothing told them.
+  let run = 1;
+  const { nodes, ticks } = await runPage('picker.js', PICKER_NODES, { session: () => run });
+  assert.equal(nodes.controls.hidden, false);
+
+  run = 2;
+  ticks[0]?.();
+  await settle();
+  assert.match(nodes.error.textContent, /SESSAO_ENCERRADA/u);
 });

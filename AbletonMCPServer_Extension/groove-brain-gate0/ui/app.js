@@ -72,6 +72,9 @@ async function bootstrap() {
   // The SVG comes from the helper, not from the network, and carries no script.
   if (qr) qrNode.innerHTML = qr;
   urlNode.textContent = url;
+  // Clickable, not just readable: on the same machine the panel is one tap
+  // away, and typing a sixty-four character token is nobody's idea of a link.
+  urlNode.href = url;
   statusNode.textContent = 'Aponte a câmera do celular para o código.';
   controls.hidden = false;
 }
