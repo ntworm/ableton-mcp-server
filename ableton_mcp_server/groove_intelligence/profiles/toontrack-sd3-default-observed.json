@@ -1,0 +1,719 @@
+{
+  "schema": "groove.instrument-profile.v2",
+  "profile_id": "toontrack-sd3-default-observed",
+  "version": 1,
+  "instrument": "Superior Drummer 3",
+  "instrument_version": "3.3.1",
+  "preset": "Default",
+  "origin": "observed",
+  "captured": "2026-09-02",
+  "source": "Read from Settings > MIDI In/E-Drums on the owner's installation. 'loaded' is false where SD3 marks the articulation '(not loaded)': the note is mapped but the current kit has no sample for it, so it makes no sound.",
+  "notes": {
+    "6": {
+      "name": "Snare Zone Trigger",
+      "piece": "snare",
+      "loaded": true
+    },
+    "7": {
+      "name": "Hi-Hat Edge Trigger",
+      "piece": "hihat",
+      "loaded": true,
+      "zone": "edge"
+    },
+    "8": {
+      "name": "Hi-Hat Tip Trigger",
+      "piece": "hihat",
+      "loaded": true,
+      "zone": "tip"
+    },
+    "9": {
+      "name": "Hi-Hat Bell Trigger",
+      "piece": "hihat",
+      "loaded": true,
+      "zone": "bell"
+    },
+    "10": {
+      "name": "Hi-Hat Closed Pedal",
+      "piece": "hihat",
+      "loaded": true,
+      "openness": 0.25,
+      "zone": "pedal"
+    },
+    "11": {
+      "name": "Hi-Hat Closed Tip",
+      "piece": "hihat",
+      "loaded": true,
+      "openness": 0.25,
+      "zone": "tip"
+    },
+    "12": {
+      "name": "Hi-Hat Open Tip 0",
+      "piece": "hihat",
+      "loaded": true,
+      "openness": 0.4,
+      "zone": "tip"
+    },
+    "13": {
+      "name": "Hi-Hat Open Tip 1",
+      "piece": "hihat",
+      "loaded": true,
+      "openness": 0.52,
+      "zone": "tip"
+    },
+    "14": {
+      "name": "Hi-Hat Open Tip 2",
+      "piece": "hihat",
+      "loaded": true,
+      "openness": 0.64,
+      "zone": "tip"
+    },
+    "15": {
+      "name": "Hi-Hat Open Tip 3",
+      "piece": "hihat",
+      "loaded": true,
+      "openness": 0.76,
+      "zone": "tip"
+    },
+    "16": {
+      "name": "Hi-Hat Open Tip 4",
+      "piece": "hihat",
+      "loaded": true,
+      "openness": 0.88,
+      "zone": "tip"
+    },
+    "17": {
+      "name": "Hi-Hat Open Tip 5",
+      "piece": "hihat",
+      "loaded": false,
+      "openness": 1.0,
+      "zone": "tip"
+    },
+    "18": {
+      "name": "Hi-Hat Edge Trigger",
+      "piece": "hihat",
+      "loaded": true,
+      "zone": "edge"
+    },
+    "19": {
+      "name": "Hi-Hat Tip Trigger",
+      "piece": "hihat",
+      "loaded": true,
+      "zone": "tip"
+    },
+    "20": {
+      "name": "Hi-Hat Shaft Trigger",
+      "piece": "hihat",
+      "loaded": true
+    },
+    "21": {
+      "name": "Hi-Hat Closed Pedal",
+      "piece": "hihat",
+      "loaded": true,
+      "openness": 0.25,
+      "zone": "pedal"
+    },
+    "22": {
+      "name": "Hi-Hat Closed Edge",
+      "piece": "hihat",
+      "loaded": true,
+      "openness": 0.25,
+      "zone": "edge"
+    },
+    "23": {
+      "name": "Hi-Hat Open Pedal",
+      "piece": "hihat",
+      "loaded": true,
+      "openness": 0.7,
+      "zone": "pedal"
+    },
+    "24": {
+      "name": "Hi-Hat Open Edge 1",
+      "piece": "hihat",
+      "loaded": true,
+      "openness": 0.52,
+      "zone": "edge"
+    },
+    "25": {
+      "name": "Hi-Hat Open Edge 2",
+      "piece": "hihat",
+      "loaded": true,
+      "openness": 0.64,
+      "zone": "edge"
+    },
+    "26": {
+      "name": "Hi-Hat Open Edge 3",
+      "piece": "hihat",
+      "loaded": true,
+      "openness": 0.76,
+      "zone": "edge"
+    },
+    "27": {
+      "name": "Cymbal 2 Bow Tip",
+      "piece": "cymbal",
+      "loaded": false,
+      "zone": "tip"
+    },
+    "28": {
+      "name": "Cymbal 2 Bell Shank",
+      "piece": "cymbal",
+      "loaded": false,
+      "zone": "shank"
+    },
+    "29": {
+      "name": "Ride Bow Shank",
+      "piece": "ride",
+      "loaded": true,
+      "zone": "shank"
+    },
+    "30": {
+      "name": "Ride Bell Tip",
+      "piece": "ride",
+      "loaded": true,
+      "zone": "tip"
+    },
+    "31": {
+      "name": "Cymbal 4 Bow Tip",
+      "piece": "cymbal",
+      "loaded": false,
+      "zone": "tip"
+    },
+    "32": {
+      "name": "Cymbal 4 Bell Shank",
+      "piece": "cymbal",
+      "loaded": false,
+      "zone": "shank"
+    },
+    "33": {
+      "name": "Snare Edge",
+      "piece": "snare",
+      "loaded": true,
+      "zone": "edge"
+    },
+    "34": {
+      "name": "Kick Open",
+      "piece": "kick",
+      "loaded": true
+    },
+    "35": {
+      "name": "Kick Hit",
+      "piece": "kick",
+      "loaded": true
+    },
+    "36": {
+      "name": "Kick Open",
+      "piece": "kick",
+      "loaded": true
+    },
+    "37": {
+      "name": "Snare Sidestick",
+      "piece": "snare",
+      "loaded": true
+    },
+    "38": {
+      "name": "Snare Center",
+      "piece": "snare",
+      "loaded": true
+    },
+    "39": {
+      "name": "Snare Closed Roll",
+      "piece": "snare",
+      "loaded": false
+    },
+    "40": {
+      "name": "Snare Rimshot",
+      "piece": "snare",
+      "loaded": true
+    },
+    "41": {
+      "name": "Floortom 2 Center",
+      "piece": "tom",
+      "loaded": false
+    },
+    "42": {
+      "name": "Hi-Hat Closed Tip",
+      "piece": "hihat",
+      "loaded": true,
+      "openness": 0.25,
+      "zone": "tip"
+    },
+    "43": {
+      "name": "Floortom 1 Center",
+      "piece": "tom",
+      "loaded": true
+    },
+    "44": {
+      "name": "Hi-Hat Closed Pedal",
+      "piece": "hihat",
+      "loaded": true,
+      "openness": 0.25,
+      "zone": "pedal"
+    },
+    "45": {
+      "name": "Racktom 3 Center",
+      "piece": "tom",
+      "loaded": false
+    },
+    "46": {
+      "name": "Hi-Hat Open Edge 2",
+      "piece": "hihat",
+      "loaded": true,
+      "openness": 0.64,
+      "zone": "edge"
+    },
+    "47": {
+      "name": "Racktom 2 Center",
+      "piece": "tom",
+      "loaded": false
+    },
+    "48": {
+      "name": "Racktom 1 Center",
+      "piece": "tom",
+      "loaded": true
+    },
+    "49": {
+      "name": "Cymbal 2 Crash",
+      "piece": "cymbal",
+      "loaded": true
+    },
+    "50": {
+      "name": "Cymbal 2 Mute Hit",
+      "piece": "cymbal",
+      "loaded": true
+    },
+    "51": {
+      "name": "Ride Bow Tip",
+      "piece": "ride",
+      "loaded": true,
+      "zone": "tip"
+    },
+    "52": {
+      "name": "Cymbal 5 Crash",
+      "piece": "cymbal",
+      "loaded": false
+    },
+    "53": {
+      "name": "Ride Bell Shank",
+      "piece": "ride",
+      "loaded": true,
+      "zone": "shank"
+    },
+    "54": {
+      "name": "Cymbal 5 Mute Hit",
+      "piece": "cymbal",
+      "loaded": false
+    },
+    "55": {
+      "name": "Cymbal 3 Crash",
+      "piece": "cymbal",
+      "loaded": false
+    },
+    "56": {
+      "name": "Cymbal 3 Mute Hit",
+      "piece": "cymbal",
+      "loaded": false
+    },
+    "57": {
+      "name": "Cymbal 4 Crash",
+      "piece": "cymbal",
+      "loaded": true
+    },
+    "58": {
+      "name": "Cymbal 4 Mute Hit",
+      "piece": "cymbal",
+      "loaded": true
+    },
+    "59": {
+      "name": "Ride Edge",
+      "piece": "ride",
+      "loaded": true,
+      "zone": "edge"
+    },
+    "60": {
+      "name": "Hi-Hat Open Edge 4",
+      "piece": "hihat",
+      "loaded": true,
+      "openness": 0.88,
+      "zone": "edge"
+    },
+    "61": {
+      "name": "Hi-Hat Closed Tip",
+      "piece": "hihat",
+      "loaded": true,
+      "openness": 0.25,
+      "zone": "tip"
+    },
+    "62": {
+      "name": "Hi-Hat Tight Edge",
+      "piece": "hihat",
+      "loaded": true,
+      "openness": 0.0,
+      "zone": "edge"
+    },
+    "63": {
+      "name": "Hi-Hat Tight Tip",
+      "piece": "hihat",
+      "loaded": true,
+      "openness": 0.0,
+      "zone": "tip"
+    },
+    "64": {
+      "name": "Hi-Hat Open Edge 0",
+      "piece": "hihat",
+      "loaded": true,
+      "openness": 0.4,
+      "zone": "edge"
+    },
+    "65": {
+      "name": "Hi-Hat Sequenced Hits",
+      "piece": "hihat",
+      "loaded": false
+    },
+    "66": {
+      "name": "Snare Backward Swirl",
+      "piece": "snare",
+      "loaded": false
+    },
+    "67": {
+      "name": "Snare Forward Swirl",
+      "piece": "snare",
+      "loaded": false
+    },
+    "68": {
+      "name": "Snare Muted",
+      "piece": "snare",
+      "loaded": false
+    },
+    "69": {
+      "name": "Snare Flam",
+      "piece": "snare",
+      "loaded": false
+    },
+    "70": {
+      "name": "Snare Muted Accent",
+      "piece": "snare",
+      "loaded": false
+    },
+    "71": {
+      "name": "Snare Rim Only",
+      "piece": "snare",
+      "loaded": true
+    },
+    "72": {
+      "name": "Floortom 2 Rim Only",
+      "piece": "tom",
+      "loaded": false
+    },
+    "73": {
+      "name": "Floortom 2 Rimshot",
+      "piece": "tom",
+      "loaded": false
+    },
+    "74": {
+      "name": "Floortom 1 Rim Only",
+      "piece": "tom",
+      "loaded": true
+    },
+    "75": {
+      "name": "Floortom 1 Rimshot",
+      "piece": "tom",
+      "loaded": true
+    },
+    "76": {
+      "name": "Snare Sidestick",
+      "piece": "snare",
+      "loaded": true
+    },
+    "77": {
+      "name": "Racktom 3 Rim Only",
+      "piece": "tom",
+      "loaded": false
+    },
+    "78": {
+      "name": "Racktom 3 Rimshot",
+      "piece": "tom",
+      "loaded": false
+    },
+    "79": {
+      "name": "Racktom 2 Rim Only",
+      "piece": "tom",
+      "loaded": false
+    },
+    "80": {
+      "name": "Racktom 2 Rimshot",
+      "piece": "tom",
+      "loaded": false
+    },
+    "81": {
+      "name": "Racktom 1 Rim Only",
+      "piece": "tom",
+      "loaded": true
+    },
+    "82": {
+      "name": "Racktom 1 Rimshot",
+      "piece": "tom",
+      "loaded": true
+    },
+    "83": {
+      "name": "Cymbal 1 Mute Hit",
+      "piece": "cymbal",
+      "loaded": false
+    },
+    "84": {
+      "name": "Cymbal 1 Bow Tip",
+      "piece": "cymbal",
+      "loaded": false,
+      "zone": "tip"
+    },
+    "85": {
+      "name": "Cymbal 1 Bell Shank",
+      "piece": "cymbal",
+      "loaded": false,
+      "zone": "shank"
+    },
+    "86": {
+      "name": "Cymbal 1 Crash",
+      "piece": "cymbal",
+      "loaded": false
+    },
+    "87": {
+      "name": "Cymbal 1 Bow Shank",
+      "piece": "cymbal",
+      "loaded": false,
+      "zone": "shank"
+    },
+    "88": {
+      "name": "Cymbal 1 Bell Tip",
+      "piece": "cymbal",
+      "loaded": false,
+      "zone": "tip"
+    },
+    "89": {
+      "name": "Cymbal 2 Bow Tip",
+      "piece": "cymbal",
+      "loaded": false,
+      "zone": "tip"
+    },
+    "90": {
+      "name": "Cymbal 2 Bell Shank",
+      "piece": "cymbal",
+      "loaded": false,
+      "zone": "shank"
+    },
+    "91": {
+      "name": "Cymbal 2 Crash",
+      "piece": "cymbal",
+      "loaded": true
+    },
+    "92": {
+      "name": "Cymbal 2 Bow Shank",
+      "piece": "cymbal",
+      "loaded": false,
+      "zone": "shank"
+    },
+    "93": {
+      "name": "Cymbal 2 Bell Tip",
+      "piece": "cymbal",
+      "loaded": false,
+      "zone": "tip"
+    },
+    "94": {
+      "name": "Cymbal 2 Mute Hit",
+      "piece": "cymbal",
+      "loaded": true
+    },
+    "95": {
+      "name": "Cymbal 3 Mute Hit",
+      "piece": "cymbal",
+      "loaded": false
+    },
+    "96": {
+      "name": "Cymbal 3 Bow Tip",
+      "piece": "cymbal",
+      "loaded": false,
+      "zone": "tip"
+    },
+    "97": {
+      "name": "Cymbal 3 Bell Shank",
+      "piece": "cymbal",
+      "loaded": false,
+      "zone": "shank"
+    },
+    "98": {
+      "name": "Cymbal 3 Crash",
+      "piece": "cymbal",
+      "loaded": false
+    },
+    "99": {
+      "name": "Cymbal 3 Bow Shank",
+      "piece": "cymbal",
+      "loaded": false,
+      "zone": "shank"
+    },
+    "100": {
+      "name": "Cymbal 3 Bell Tip",
+      "piece": "cymbal",
+      "loaded": false,
+      "zone": "tip"
+    },
+    "101": {
+      "name": "Cymbal 4 Bow Tip",
+      "piece": "cymbal",
+      "loaded": false,
+      "zone": "tip"
+    },
+    "102": {
+      "name": "Cymbal 4 Bell Shank",
+      "piece": "cymbal",
+      "loaded": false,
+      "zone": "shank"
+    },
+    "103": {
+      "name": "Cymbal 4 Crash",
+      "piece": "cymbal",
+      "loaded": true
+    },
+    "104": {
+      "name": "Cymbal 4 Bow Shank",
+      "piece": "cymbal",
+      "loaded": false,
+      "zone": "shank"
+    },
+    "105": {
+      "name": "Cymbal 4 Bell Tip",
+      "piece": "cymbal",
+      "loaded": false,
+      "zone": "tip"
+    },
+    "106": {
+      "name": "Cymbal 4 Mute Hit",
+      "piece": "cymbal",
+      "loaded": false
+    },
+    "107": {
+      "name": "Cymbal 5 Mute Hit",
+      "piece": "cymbal",
+      "loaded": false
+    },
+    "108": {
+      "name": "Cymbal 5 Bow Tip",
+      "piece": "cymbal",
+      "loaded": false,
+      "zone": "tip"
+    },
+    "109": {
+      "name": "Cymbal 5 Bell Shank",
+      "piece": "cymbal",
+      "loaded": false,
+      "zone": "shank"
+    },
+    "110": {
+      "name": "Cymbal 5 Crash",
+      "piece": "cymbal",
+      "loaded": false
+    },
+    "111": {
+      "name": "Cymbal 5 Bow Shank",
+      "piece": "cymbal",
+      "loaded": false,
+      "zone": "shank"
+    },
+    "112": {
+      "name": "Cymbal 5 Bell Tip",
+      "piece": "cymbal",
+      "loaded": false,
+      "zone": "tip"
+    },
+    "113": {
+      "name": "Ride Bow Tip",
+      "piece": "ride",
+      "loaded": true,
+      "zone": "tip"
+    },
+    "114": {
+      "name": "Ride Bell Shank",
+      "piece": "ride",
+      "loaded": true,
+      "zone": "shank"
+    },
+    "115": {
+      "name": "Ride Edge",
+      "piece": "ride",
+      "loaded": true,
+      "zone": "edge"
+    },
+    "116": {
+      "name": "Ride Bow Shank",
+      "piece": "ride",
+      "loaded": true,
+      "zone": "shank"
+    },
+    "117": {
+      "name": "Ride Bell Tip",
+      "piece": "ride",
+      "loaded": true,
+      "zone": "tip"
+    },
+    "118": {
+      "name": "Ride Mute Hit",
+      "piece": "ride",
+      "loaded": true
+    },
+    "119": {
+      "name": "Hi-Hat Closed Bell",
+      "piece": "hihat",
+      "loaded": false,
+      "openness": 0.25,
+      "zone": "bell"
+    },
+    "120": {
+      "name": "Hi-Hat Open Bell 0",
+      "piece": "hihat",
+      "loaded": false,
+      "openness": 0.4,
+      "zone": "bell"
+    },
+    "121": {
+      "name": "Hi-Hat Open Bell 1",
+      "piece": "hihat",
+      "loaded": false,
+      "openness": 0.52,
+      "zone": "bell"
+    },
+    "122": {
+      "name": "Hi-Hat Open Bell 2",
+      "piece": "hihat",
+      "loaded": false,
+      "openness": 0.64,
+      "zone": "bell"
+    },
+    "123": {
+      "name": "Hi-Hat Open Bell 3",
+      "piece": "hihat",
+      "loaded": false,
+      "openness": 0.76,
+      "zone": "bell"
+    },
+    "124": {
+      "name": "Hi-Hat Open Bell 4",
+      "piece": "hihat",
+      "loaded": false,
+      "openness": 0.88,
+      "zone": "bell"
+    },
+    "125": {
+      "name": "Snare Off Center",
+      "piece": "snare",
+      "loaded": true
+    },
+    "126": {
+      "name": "Snare Backward Brush Trigger",
+      "piece": "snare",
+      "loaded": false
+    },
+    "127": {
+      "name": "Snare Forward Brush Trigger",
+      "piece": "snare",
+      "loaded": false
+    }
+  }
+}
