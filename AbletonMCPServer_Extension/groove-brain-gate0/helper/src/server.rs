@@ -69,30 +69,47 @@ pub fn is_api_route(path: &str) -> bool {
             | "/api/panel"
             | "/api/search"
             | "/api/groove"
-            | "/api/select"
-            | "/api/selection"
+            | "/api/publish"
+            | "/api/snapshot"
+            | "/api/command"
+            | "/api/take"
     )
 }
 
-/// What the browser picked, waiting for the extension to collect it.
+/// The two things the extension and the panel pass between them.
 ///
-/// The panel no longer returns the choice through the modal, because the modal
-/// closes before the user has picked anything. The browser posts here and the
-/// extension polls, which is what lets Live stay usable in between.
+/// The modal closes before the user has picked anything, so nothing can travel
+/// back through it. The extension publishes what the Live set looks like and
+/// polls for work; the panel renders the one and posts the other. Neither
+/// blocks the other, which is what lets Live stay usable throughout.
 #[derive(Default)]
-pub struct Selection {
-    chosen: Mutex<Option<String>>,
+pub struct Relay {
+    snapshot: Mutex<Option<String>>,
+    command: Mutex<Option<String>>,
 }
 
-impl Selection {
-    pub fn set(&self, id: String) {
-        // Last write wins: changing your mind on the phone should change what
-        // lands in the slot, not queue a second clip.
-        *self.chosen.lock().expect("selection mutex") = Some(id);
+impl Relay {
+    /// Replace the published session. A newer one supersedes the older: the
+    /// panel wants the set as it is, not a history of it.
+    pub fn publish(&self, snapshot: String) {
+        *self.snapshot.lock().expect("relay mutex") = Some(snapshot);
     }
 
-    pub fn take(&self) -> Option<String> {
-        self.chosen.lock().expect("selection mutex").take()
+    /// Read without consuming. The panel re-renders whenever it likes.
+    pub fn snapshot(&self) -> Option<String> {
+        self.snapshot.lock().expect("relay mutex").clone()
+    }
+
+    /// Last write wins: changing your mind on the phone changes what lands in
+    /// the slot rather than queueing a second clip.
+    pub fn enqueue(&self, command: String) {
+        *self.command.lock().expect("relay mutex") = Some(command);
+    }
+
+    /// Taken, not read: a command is work to be done, and doing it twice would
+    /// write the clip twice.
+    pub fn take_command(&self) -> Option<String> {
+        self.command.lock().expect("relay mutex").take()
     }
 }
 
@@ -167,15 +184,6 @@ pub fn search_response(catalog: &Catalog, body: &SearchBody) -> String {
         })
         .collect();
     serde_json::json!({"total": total, "returned": items.len(), "items": items}).to_string()
-}
-
-#[derive(Debug, serde::Deserialize)]
-pub struct SelectBody {
-    pub id: String,
-}
-
-pub fn parse_select_body(raw: &str) -> Result<SelectBody, &'static str> {
-    serde_json::from_str(raw).map_err(|_| "INVALID_SELECT_BODY")
 }
 
 pub fn groove_response(catalog: &Catalog, id: &str) -> Option<String> {
@@ -357,7 +365,7 @@ fn handle_connection(
     port: u16,
     shutdown: &AtomicBool,
     catalog: &Catalog,
-    selection: &Selection,
+    relay: &Relay,
 ) -> io::Result<()> {
     let deadline = Instant::now() + CONNECTION_TIMEOUT;
     let raw = match read_headers(&mut stream, shutdown, deadline) {
@@ -453,18 +461,18 @@ fn handle_connection(
 
         let payload = if request.path == "/api/health" {
             Ok(r#"{"status":"ok","protocol":1}"#.to_owned())
-        } else if request.path == "/api/select" {
-            parse_select_body(&raw_body)
-                .map_err(|_| "400 Bad Request")
-                // Refusing an id the catalog does not hold keeps a typo in the
-                // browser from parking a selection the extension waits on.
-                .and_then(|body| match catalog.groove(&body.id) {
-                    Some(_) => {
-                        selection.set(body.id);
-                        Ok(r#"{"status":"selected"}"#.to_owned())
-                    }
-                    None => Err("404 Not Found"),
-                })
+        } else if request.path == "/api/publish" {
+            relay.publish(raw_body.clone());
+            Ok(r#"{"status":"published"}"#.to_owned())
+        } else if request.path == "/api/snapshot" {
+            // Null rather than 404: the panel may open before the first
+            // snapshot lands, and that is waiting, not an error.
+            Ok(relay.snapshot().unwrap_or_else(|| "null".to_owned()))
+        } else if request.path == "/api/command" {
+            relay.enqueue(raw_body.clone());
+            Ok(r#"{"status":"queued"}"#.to_owned())
+        } else if request.path == "/api/take" {
+            Ok(relay.take_command().unwrap_or_else(|| "null".to_owned()))
         } else if request.path == "/api/panel" {
             // The URL and its QR, so the page inside Live can hand the panel
             // over to a phone without knowing the machine's own address.
@@ -473,13 +481,6 @@ fn handle_connection(
                 Ok(image) => serde_json::json!({"url": url, "qr": image}).to_string(),
                 // A URL too long to encode is still a URL someone can type.
                 Err(_) => serde_json::json!({"url": url, "qr": null}).to_string(),
-            })
-        } else if request.path == "/api/selection" {
-            // Taken, not read: the extension collects a pick once, and a second
-            // poll after a write must not queue the same groove again.
-            Ok(match selection.take() {
-                Some(id) => serde_json::json!({"id": id}).to_string(),
-                None => r#"{"id":null}"#.to_owned(),
             })
         } else if request.path == "/api/search" {
             parse_search_body(&raw_body)
@@ -571,7 +572,7 @@ pub fn run(
     token: String,
     shutdown: Arc<AtomicBool>,
     catalog: Arc<Catalog>,
-    selection: Arc<Selection>,
+    relay: Arc<Relay>,
 ) -> io::Result<()> {
     let port = listener.local_addr()?.port();
 
@@ -587,7 +588,7 @@ pub fn run(
                     port,
                     shutdown.as_ref(),
                     catalog.as_ref(),
-                    selection.as_ref(),
+                    relay.as_ref(),
                 );
             }
             Ok(_) => {}
@@ -627,30 +628,37 @@ mod tests {
     }
 
     #[test]
-    fn a_selection_is_collected_once() {
-        // The extension polls until something arrives. Reading without taking
-        // would make a second poll after the write queue the same groove again.
-        let selection = Selection::default();
-        assert_eq!(selection.take(), None);
-        selection.set("a1".to_owned());
-        assert_eq!(selection.take(), Some("a1".to_owned()));
-        assert_eq!(selection.take(), None);
+    fn a_snapshot_is_read_many_times_and_a_command_is_taken_once() {
+        // The panel re-renders whenever it likes, so the snapshot has to stay.
+        // A command is work to be done, so taking it twice would do it twice.
+        let relay = Relay::default();
+        assert_eq!(relay.snapshot(), None);
+        relay.publish(r#"{"tempo":120}"#.to_owned());
+        assert_eq!(relay.snapshot().as_deref(), Some(r#"{"tempo":120}"#));
+        assert_eq!(relay.snapshot().as_deref(), Some(r#"{"tempo":120}"#));
+
+        assert_eq!(relay.take_command(), None);
+        relay.enqueue(r#"{"op":"write"}"#.to_owned());
+        assert_eq!(relay.take_command().as_deref(), Some(r#"{"op":"write"}"#));
+        assert_eq!(relay.take_command(), None);
     }
 
     #[test]
-    fn changing_your_mind_replaces_the_pick_rather_than_queueing_one() {
-        let selection = Selection::default();
-        selection.set("a1".to_owned());
-        selection.set("b2".to_owned());
-        assert_eq!(selection.take(), Some("b2".to_owned()));
-        assert_eq!(selection.take(), None);
+    fn a_newer_snapshot_replaces_the_older_one() {
+        // The panel wants the set as it is, not a history of it.
+        let relay = Relay::default();
+        relay.publish("a".to_owned());
+        relay.publish("b".to_owned());
+        assert_eq!(relay.snapshot().as_deref(), Some("b"));
     }
 
     #[test]
-    fn a_select_body_needs_an_id() {
-        assert_eq!(parse_select_body(r#"{"id":"a1"}"#).unwrap().id, "a1");
-        assert!(parse_select_body("{}").is_err());
-        assert!(parse_select_body("not json").is_err());
+    fn changing_your_mind_replaces_the_command_rather_than_queueing_one() {
+        let relay = Relay::default();
+        relay.enqueue("first".to_owned());
+        relay.enqueue("second".to_owned());
+        assert_eq!(relay.take_command().as_deref(), Some("second"));
+        assert_eq!(relay.take_command(), None);
     }
 
     #[test]
@@ -756,7 +764,7 @@ mod tests {
                     "abc".to_owned(),
                     server_shutdown,
                     Arc::new(Catalog::from_str(SAMPLE).unwrap()),
-                    Arc::new(Selection::default()),
+                    Arc::new(Relay::default()),
                 ));
 
         let mut client = TcpStream::connect(("127.0.0.1", port)).unwrap();
@@ -801,7 +809,7 @@ mod tests {
                     "abc".to_owned(),
                     server_shutdown,
                     Arc::new(Catalog::from_str(SAMPLE).unwrap()),
-                    Arc::new(Selection::default()),
+                    Arc::new(Relay::default()),
                 ));
 
         let mut client = TcpStream::connect(("127.0.0.1", port)).unwrap();
@@ -839,7 +847,7 @@ mod tests {
                     "abc".to_owned(),
                     server_shutdown,
                     Arc::new(Catalog::from_str(SAMPLE).unwrap()),
-                    Arc::new(Selection::default()),
+                    Arc::new(Relay::default()),
                 ));
 
         let mut client = TcpStream::connect(("127.0.0.1", port)).unwrap();
