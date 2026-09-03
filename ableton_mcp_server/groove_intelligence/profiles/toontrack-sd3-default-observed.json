@@ -1,13 +1,13 @@
 {
   "schema": "groove.instrument-profile.v2",
-  "profile_id": "toontrack-sd3-default-observed",
+  "profile_id": "toontrack-sd3-ludwig-classic-default",
   "version": 1,
   "instrument": "Superior Drummer 3",
   "instrument_version": "3.3.1",
   "preset": "Default",
   "origin": "observed",
   "captured": "2026-09-02",
-  "source": "Read from Settings > MIDI In/E-Drums on the owner's installation. 'loaded' is false where SD3 marks the articulation '(not loaded)': the note is mapped but the current kit has no sample for it, so it makes no sound.",
+  "source": "Read from Settings > MIDI In/E-Drums with the Ludwig Classic Default kit loaded, SD3 3.3.1. 'loaded' false means SD3 marks the articulation '(not loaded)': mapped but silent. Null means not observed with this kit.",
   "notes": {
     "6": {
       "name": "Snare Zone Trigger",
@@ -84,7 +84,7 @@
     "17": {
       "name": "Hi-Hat Open Tip 5",
       "piece": "hihat",
-      "loaded": false,
+      "loaded": null,
       "openness": 1.0,
       "zone": "tip"
     },
@@ -150,13 +150,13 @@
     "27": {
       "name": "Cymbal 2 Bow Tip",
       "piece": "cymbal",
-      "loaded": false,
+      "loaded": null,
       "zone": "tip"
     },
     "28": {
       "name": "Cymbal 2 Bell Shank",
       "piece": "cymbal",
-      "loaded": false,
+      "loaded": null,
       "zone": "shank"
     },
     "29": {
@@ -174,13 +174,13 @@
     "31": {
       "name": "Cymbal 4 Bow Tip",
       "piece": "cymbal",
-      "loaded": false,
+      "loaded": null,
       "zone": "tip"
     },
     "32": {
       "name": "Cymbal 4 Bell Shank",
       "piece": "cymbal",
-      "loaded": false,
+      "loaded": null,
       "zone": "shank"
     },
     "33": {
@@ -227,7 +227,7 @@
     "41": {
       "name": "Floortom 2 Center",
       "piece": "tom",
-      "loaded": false
+      "loaded": true
     },
     "42": {
       "name": "Hi-Hat Closed Tip",
@@ -251,7 +251,7 @@
     "45": {
       "name": "Racktom 3 Center",
       "piece": "tom",
-      "loaded": false
+      "loaded": true
     },
     "46": {
       "name": "Hi-Hat Open Edge 2",
@@ -263,7 +263,7 @@
     "47": {
       "name": "Racktom 2 Center",
       "piece": "tom",
-      "loaded": false
+      "loaded": true
     },
     "48": {
       "name": "Racktom 1 Center",
@@ -289,7 +289,7 @@
     "52": {
       "name": "Cymbal 5 Crash",
       "piece": "cymbal",
-      "loaded": false
+      "loaded": true
     },
     "53": {
       "name": "Ride Bell Shank",
@@ -300,17 +300,17 @@
     "54": {
       "name": "Cymbal 5 Mute Hit",
       "piece": "cymbal",
-      "loaded": false
+      "loaded": true
     },
     "55": {
       "name": "Cymbal 3 Crash",
       "piece": "cymbal",
-      "loaded": false
+      "loaded": true
     },
     "56": {
       "name": "Cymbal 3 Mute Hit",
       "piece": "cymbal",
-      "loaded": false
+      "loaded": true
     },
     "57": {
       "name": "Cymbal 4 Crash",
@@ -366,7 +366,7 @@
     "65": {
       "name": "Hi-Hat Sequenced Hits",
       "piece": "hihat",
-      "loaded": false
+      "loaded": true
     },
     "66": {
       "name": "Snare Backward Swirl",
@@ -391,7 +391,7 @@
     "70": {
       "name": "Snare Muted Accent",
       "piece": "snare",
-      "loaded": false
+      "loaded": null
     },
     "71": {
       "name": "Snare Rim Only",
@@ -401,12 +401,12 @@
     "72": {
       "name": "Floortom 2 Rim Only",
       "piece": "tom",
-      "loaded": false
+      "loaded": true
     },
     "73": {
       "name": "Floortom 2 Rimshot",
       "piece": "tom",
-      "loaded": false
+      "loaded": true
     },
     "74": {
       "name": "Floortom 1 Rim Only",
@@ -419,29 +419,29 @@
       "loaded": true
     },
     "76": {
-      "name": "Snare Sidestick",
+      "name": "Ride Crescendo",
       "piece": "snare",
-      "loaded": true
+      "loaded": false
     },
     "77": {
       "name": "Racktom 3 Rim Only",
       "piece": "tom",
-      "loaded": false
+      "loaded": true
     },
     "78": {
       "name": "Racktom 3 Rimshot",
       "piece": "tom",
-      "loaded": false
+      "loaded": true
     },
     "79": {
       "name": "Racktom 2 Rim Only",
       "piece": "tom",
-      "loaded": false
+      "loaded": true
     },
     "80": {
       "name": "Racktom 2 Rimshot",
       "piece": "tom",
-      "loaded": false
+      "loaded": true
     },
     "81": {
       "name": "Racktom 1 Rim Only",
@@ -456,7 +456,7 @@
     "83": {
       "name": "Cymbal 1 Mute Hit",
       "piece": "cymbal",
-      "loaded": false
+      "loaded": true
     },
     "84": {
       "name": "Cymbal 1 Bow Tip",
@@ -473,7 +473,7 @@
     "86": {
       "name": "Cymbal 1 Crash",
       "piece": "cymbal",
-      "loaded": false
+      "loaded": true
     },
     "87": {
       "name": "Cymbal 1 Bow Shank",
@@ -507,13 +507,13 @@
     "92": {
       "name": "Cymbal 2 Bow Shank",
       "piece": "cymbal",
-      "loaded": false,
+      "loaded": null,
       "zone": "shank"
     },
     "93": {
       "name": "Cymbal 2 Bell Tip",
       "piece": "cymbal",
-      "loaded": false,
+      "loaded": null,
       "zone": "tip"
     },
     "94": {
@@ -524,47 +524,47 @@
     "95": {
       "name": "Cymbal 3 Mute Hit",
       "piece": "cymbal",
-      "loaded": false
+      "loaded": null
     },
     "96": {
       "name": "Cymbal 3 Bow Tip",
       "piece": "cymbal",
-      "loaded": false,
+      "loaded": null,
       "zone": "tip"
     },
     "97": {
       "name": "Cymbal 3 Bell Shank",
       "piece": "cymbal",
-      "loaded": false,
+      "loaded": null,
       "zone": "shank"
     },
     "98": {
       "name": "Cymbal 3 Crash",
       "piece": "cymbal",
-      "loaded": false
+      "loaded": null
     },
     "99": {
       "name": "Cymbal 3 Bow Shank",
       "piece": "cymbal",
-      "loaded": false,
+      "loaded": null,
       "zone": "shank"
     },
     "100": {
       "name": "Cymbal 3 Bell Tip",
       "piece": "cymbal",
-      "loaded": false,
+      "loaded": null,
       "zone": "tip"
     },
     "101": {
       "name": "Cymbal 4 Bow Tip",
       "piece": "cymbal",
-      "loaded": false,
+      "loaded": null,
       "zone": "tip"
     },
     "102": {
       "name": "Cymbal 4 Bell Shank",
       "piece": "cymbal",
-      "loaded": false,
+      "loaded": null,
       "zone": "shank"
     },
     "103": {
@@ -575,52 +575,52 @@
     "104": {
       "name": "Cymbal 4 Bow Shank",
       "piece": "cymbal",
-      "loaded": false,
+      "loaded": null,
       "zone": "shank"
     },
     "105": {
       "name": "Cymbal 4 Bell Tip",
       "piece": "cymbal",
-      "loaded": false,
+      "loaded": null,
       "zone": "tip"
     },
     "106": {
       "name": "Cymbal 4 Mute Hit",
       "piece": "cymbal",
-      "loaded": false
+      "loaded": null
     },
     "107": {
       "name": "Cymbal 5 Mute Hit",
       "piece": "cymbal",
-      "loaded": false
+      "loaded": null
     },
     "108": {
       "name": "Cymbal 5 Bow Tip",
       "piece": "cymbal",
-      "loaded": false,
+      "loaded": null,
       "zone": "tip"
     },
     "109": {
       "name": "Cymbal 5 Bell Shank",
       "piece": "cymbal",
-      "loaded": false,
+      "loaded": null,
       "zone": "shank"
     },
     "110": {
       "name": "Cymbal 5 Crash",
       "piece": "cymbal",
-      "loaded": false
+      "loaded": null
     },
     "111": {
       "name": "Cymbal 5 Bow Shank",
       "piece": "cymbal",
-      "loaded": false,
+      "loaded": null,
       "zone": "shank"
     },
     "112": {
       "name": "Cymbal 5 Bell Tip",
       "piece": "cymbal",
-      "loaded": false,
+      "loaded": null,
       "zone": "tip"
     },
     "113": {
@@ -714,6 +714,27 @@
       "name": "Snare Forward Brush Trigger",
       "piece": "snare",
       "loaded": false
+    },
+    "4": {
+      "loaded": false,
+      "name": "Snare Muted Accent"
+    },
+    "1": {
+      "piece": "snare",
+      "name": "Snare Sidestick",
+      "loaded": true
+    },
+    "2": {
+      "piece": "snare",
+      "name": "Snare Sidestick",
+      "loaded": true
+    },
+    "3": {
+      "piece": "snare",
+      "name": "Snare Sidestick",
+      "loaded": true
     }
-  }
+  },
+  "kit": "Ludwig Classic Default",
+  "kit_changes_the_map": "The map is a property of the loaded kit, not of the plugin. Between the previous kit and this one, note 76 moved from Snare Sidestick to Ride Crescendo and note 70's articulation moved to note 4. A profile must therefore be keyed by kit, and the kit name is shown in the SD3 header."
 }
