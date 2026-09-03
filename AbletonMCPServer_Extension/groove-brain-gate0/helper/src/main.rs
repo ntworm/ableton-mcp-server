@@ -68,7 +68,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         bootstrap.token,
         shutdown,
         catalog,
-        Arc::new(server::Selection::default()),
+        Arc::new(server::Relay::default()),
     )?;
     Ok(())
 }
