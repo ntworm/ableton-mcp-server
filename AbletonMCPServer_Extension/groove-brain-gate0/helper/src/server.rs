@@ -460,7 +460,10 @@ fn handle_connection(
         }
 
         let payload = if request.path == "/api/health" {
-            Ok(r#"{"status":"ok","protocol":1}"#.to_owned())
+            // The port identifies this helper run. A page left open from an
+            // earlier one sees the number change and can say so, instead of
+            // failing later with a refused connection nobody can interpret.
+            Ok(serde_json::json!({"status": "ok", "protocol": 1, "session": port}).to_string())
         } else if request.path == "/api/publish" {
             relay.publish(raw_body.clone());
             Ok(r#"{"status":"published"}"#.to_owned())

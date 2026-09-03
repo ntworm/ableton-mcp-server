@@ -23,6 +23,7 @@ const AXIS_LABEL = {
 };
 
 let bearer = null;
+let session = null;
 let snapshot = null;
 let trackIndex = null;
 let slotIndex = null;
@@ -129,6 +130,12 @@ function readKnobs() {
 }
 
 async function refresh() {
+  // A helper restart means this page belongs to a session that no longer
+  // exists. Saying so beats the refused connection the user saw before.
+  const health = await api('/api/health');
+  if (session !== null && health.session !== session) {
+    throw new Error('SESSAO_ENCERRADA: escaneie o código de novo');
+  }
   const next = await api('/api/snapshot');
   if (!next) return;
   snapshot = next;
@@ -197,6 +204,7 @@ async function bootstrap() {
   if (!/^[0-9a-f]{64}$/i.test(bearer)) throw new Error('INVALID_BOOTSTRAP_TOKEN');
   const health = await api('/api/health');
   if (health.status !== 'ok' || health.protocol !== 1) throw new Error('HELPER_PROTOCOL_MISMATCH');
+  session = health.session ?? null;
 
   renderKnobs();
   await refresh();

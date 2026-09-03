@@ -14,7 +14,7 @@ button.secondary { background: #3a3a3a; color: #eee; }
 .handoff .qr { background: #fff; padding: 12px; border-radius: 8px; width: 260px; justify-self: center; }
 .handoff .qr svg { display: block; width: 100%; height: auto; }
 .handoff .url { color: #999; font-size: 13px; text-align: center; margin: 0; }
-.handoff .url code { color: #ffb347; font-size: 14px; word-break: break-all; }
+.handoff .url a { color: #ffb347; font-size: 14px; word-break: break-all; }
 .handoff .note { color: #999; font-size: 13px; margin: 0; }
 
 .filters { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
