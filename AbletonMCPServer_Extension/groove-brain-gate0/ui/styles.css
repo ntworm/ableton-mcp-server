@@ -32,3 +32,17 @@ button.secondary { background: #3a3a3a; color: #eee; }
 .picker h1 { font-size: 24px; }
 .picker section { padding: 16px; }
 .picker #results li { padding: 16px 14px; }
+
+/* The session panel. Rows are tap targets on a phone held one-handed, so they
+   are generous and the selected one is unmistakable at arm's length. */
+.block { display: grid; gap: 10px; }
+.block h2 { font-size: 13px; margin: 0; color: #ffb347; letter-spacing: .1em; text-transform: uppercase; }
+.muted { color: #999; font-size: 13px; margin: 0; }
+#tracks, #slots { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+#tracks li, #slots li { padding: 14px 12px; border: 1px solid #3a3a3a; border-radius: 5px; font-size: 14px; }
+#tracks li.selected, #slots li.selected { border-color: #ff9f1a; background: #2a2317; }
+#slots li.filled { color: #cfcfcf; border-style: dashed; }
+#knobs { display: grid; gap: 14px; }
+#knobs label { display: grid; gap: 6px; font-size: 13px; color: #bbb; }
+#knobs input[type=range] { width: 100%; accent-color: #ff9f1a; }
+button.danger { background: #d9534f; color: #fff; }

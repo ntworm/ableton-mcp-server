@@ -58,7 +58,7 @@ interface Harness {
 async function runPage(
   file: string,
   selectors: string[],
-  options: { bridgeThrows?: boolean; searchStatus?: number } = {},
+  options: { bridgeThrows?: boolean; searchStatus?: number; emptySearch?: boolean } = {},
 ): Promise<Harness> {
   const nodes: Record<string, FakeNode> = {};
   const bySelector = new Map<string, FakeNode>();
@@ -77,8 +77,12 @@ async function runPage(
     AbortSignal,
     Error,
     JSON,
+    Math,
     String,
     setTimeout,
+    // A no-op: the panel's refresh loop would otherwise hold the test
+    // process open, and nothing here depends on it firing.
+    setInterval: () => 0,
     document: {
       querySelector(selector: string) {
         const node = bySelector.get(selector);
@@ -97,11 +101,15 @@ async function runPage(
       if (target === '/api/panel') {
         return { ok: true, status: 200, async json() { return PANEL_PAYLOAD; } };
       }
-      if (target === '/api/select') {
-        return { ok: true, status: 200, async json() { return { status: 'selected' }; } };
+      if (target === '/api/snapshot') {
+        return { ok: true, status: 200, async json() { return SNAPSHOT; } };
+      }
+      if (target === '/api/command') {
+        return { ok: true, status: 200, async json() { return { status: 'queued' }; } };
       }
       const status = options.searchStatus ?? 200;
-      return { ok: status === 200, status, async json() { return SEARCH_PAYLOAD; } };
+      const payload = options.emptySearch ? { total: 0, returned: 0, items: [] } : SEARCH_PAYLOAD;
+      return { ok: status === 200, status, async json() { return payload; } };
     },
     history: { replaceState() {} },
     window: {
@@ -129,8 +137,23 @@ async function settle(): Promise<void> {
 
 const HANDOFF_NODES = ['status', 'controls', 'error', 'qr', 'url', 'done', 'cancel'];
 const PICKER_NODES = [
-  'status', 'controls', 'error', 'genre', 'bpm', 'search', 'results', 'count', 'sent',
+  'status', 'controls', 'error', 'tempo', 'tracks', 'slotsBlock', 'slots',
+  'genre', 'bpm', 'surprise', 'chosen', 'knobs', 'write', 'receipt',
 ];
+
+const SNAPSHOT = {
+  tempo: 128,
+  tracks: [
+    {
+      index: 0, name: 'Superior Drummer 3', armed: true, hasDrumRack: true, meter: '4/4',
+      slots: [
+        { index: 0, filled: false, name: null, noteCount: 0 },
+        { index: 1, filled: true, name: 'Verse', noteCount: 34 },
+      ],
+    },
+    { index: 1, name: 'Bass', armed: false, hasDrumRack: false, meter: '4/4', slots: [] },
+  ],
+};
 
 test('the handoff page shows the QR and the URL for the phone', async () => {
   const { nodes } = await runPage('app.js', HANDOFF_NODES);
@@ -166,39 +189,85 @@ test('a bridge failure on the handoff page is visible and terminal', async () =>
   assert.equal(nodes.controls.hidden, true);
 });
 
-test('the picker searches as soon as it connects', async () => {
-  const { nodes, requests } = await runPage('picker.js', PICKER_NODES);
+test('the panel lists the tracks in the session', async () => {
+  const { nodes } = await runPage('picker.js', PICKER_NODES);
   assert.equal(nodes.controls.hidden, false);
-  assert.ok(requests.some((entry) => entry.path === '/api/search'));
-  assert.equal(nodes.results.children.length, 2);
-  assert.match(nodes.count.textContent, /103 encontrados/u);
+  assert.equal(nodes.tracks.children.length, 2);
+  assert.match(nodes.tempo.textContent, /128 BPM/u);
+  assert.match(nodes.tracks.children[0].textContent, /Superior Drummer 3/u);
 });
 
-test('a search sends only the filters that were filled in', async () => {
+test('slots appear only once a track is chosen', async () => {
+  const { nodes } = await runPage('picker.js', PICKER_NODES);
+  assert.equal(nodes.slotsBlock.hidden, true);
+
+  nodes.tracks.children[0].dispatch('click');
+  assert.equal(nodes.slotsBlock.hidden, false);
+  assert.equal(nodes.slots.children.length, 2);
+  assert.match(nodes.slots.children[1].textContent, /Verse/u);
+});
+
+test('write stays disabled until a track, a slot and a groove are all chosen', async () => {
+  const { nodes } = await runPage('picker.js', PICKER_NODES);
+  assert.equal(nodes.write.disabled, true);
+
+  nodes.tracks.children[0].dispatch('click');
+  assert.equal(nodes.write.disabled, true);
+  nodes.slots.children[0].dispatch('click');
+  assert.equal(nodes.write.disabled, true);
+
+  nodes.surprise.dispatch('click');
+  await settle();
+  assert.equal(nodes.write.disabled, false);
+});
+
+test('the button says replace and turns red on a filled slot', async () => {
+  // A filled slot has to look different before the tap, not after: the
+  // refusal downstream is a safety net, not the interface.
+  const { nodes } = await runPage('picker.js', PICKER_NODES);
+  nodes.tracks.children[0].dispatch('click');
+
+  nodes.slots.children[0].dispatch('click');
+  assert.equal(nodes.write.textContent, 'Escrever');
+  nodes.slots.children[1].dispatch('click');
+  assert.equal(nodes.write.textContent, 'Substituir');
+  assert.equal(nodes.write.className, 'danger');
+});
+
+test('the command carries the chosen indices and the knob values', async () => {
   const { nodes, requests } = await runPage('picker.js', PICKER_NODES);
-  nodes.genre.value = '  metal  ';
-  nodes.search.dispatch('click');
+  nodes.tracks.children[0].dispatch('click');
+  nodes.slots.children[0].dispatch('click');
+  nodes.surprise.dispatch('click');
   await settle();
 
-  const searches = requests.filter((entry) => entry.path === '/api/search');
-  assert.deepEqual(searches.at(-1)?.body, { genre: 'metal' });
-});
-
-test('tapping a result sends it to Live and the panel stays open', async () => {
-  // The panel does not close itself: picking a second groove for the next slot
-  // should not mean scanning the code again.
-  const { nodes, requests } = await runPage('picker.js', PICKER_NODES);
-  nodes.results.children[1].dispatch('click');
+  nodes.write.dispatch('click');
   await settle();
 
-  const select = requests.find((entry) => entry.path === '/api/select');
-  assert.deepEqual(select?.body, { id: 'b2' });
-  assert.equal(nodes.controls.hidden, false);
-  assert.equal(nodes.sent.hidden, false);
+  const sent = requests.find((entry) => entry.path === '/api/command');
+  const body = sent?.body as Record<string, unknown>;
+  assert.equal(body.op, 'write');
+  assert.equal(body.trackIndex, 0);
+  assert.equal(body.slotIndex, 0);
+  assert.equal(body.replace, false);
+  assert.equal(typeof body.grooveId, 'string');
 });
 
-test('a failing search on the picker is visible and terminal', async () => {
+test('a search with no match says so and leaves write disabled', async () => {
+  const { nodes } = await runPage('picker.js', PICKER_NODES, { emptySearch: true });
+  nodes.tracks.children[0].dispatch('click');
+  nodes.slots.children[0].dispatch('click');
+  nodes.surprise.dispatch('click');
+  await settle();
+
+  assert.match(nodes.chosen.textContent, /Nenhum groove/u);
+  assert.equal(nodes.write.disabled, true);
+});
+
+test('a failing request on the picker is visible and terminal', async () => {
   const { nodes } = await runPage('picker.js', PICKER_NODES, { searchStatus: 500 });
+  nodes.surprise.dispatch('click');
+  await settle();
   assert.equal(nodes.status.textContent, 'Falha no Groove Brain.');
   assert.equal(nodes.error.textContent, 'HELPER_SEARCH_500');
   assert.equal(nodes.controls.hidden, true);
