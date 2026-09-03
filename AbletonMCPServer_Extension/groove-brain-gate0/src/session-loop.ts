@@ -37,6 +37,7 @@ export interface SessionDeps {
   profile: KitProfile;
   stillActive: () => boolean;
   onReceipt?: (receipt: Receipt) => void;
+  onFailure?: (error: unknown) => void;
   nowMs?: () => number;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -82,9 +83,12 @@ export async function serveSession(deps: SessionDeps): Promise<void> {
       onReceipt?.(receipt);
       // Forces a republish on the next turn so the panel sees the new clip.
       published = '';
-    } catch {
+    } catch (error) {
       // A command that cannot be parsed or applied must not end the session:
       // the user is holding the panel and would see it die for one bad tap.
+      // The first failure is reported, because a loop that swallows every
+      // error leaves a dead session with nothing to diagnose it by.
+      if (failures === 0) deps.onFailure?.(error);
       failures += 1;
       await sleep(POLL_MS);
     }
