@@ -10,30 +10,51 @@
     <main>
       <p class="eyebrow">GROOVE BRAIN</p>
       <p id="status">Conectando…</p>
+
       <section id="controls" hidden>
-        <div class="filters">
-          <label>Gênero
-            <input id="genre" placeholder="metal" autocomplete="off"
-                   autocapitalize="none" spellcheck="false" enterkeyhint="search">
-          </label>
-          <label>BPM
-            <select id="bpm">
-              <option value="">qualquer</option>
-              <option value="bpm_60_79">60–79</option>
-              <option value="bpm_80_99">80–99</option>
-              <option value="bpm_100_119">100–119</option>
-              <option value="bpm_120_139">120–139</option>
-              <option value="bpm_140_159">140–159</option>
-              <option value="bpm_160_179">160–179</option>
-              <option value="bpm_180_plus">180+</option>
-            </select>
-          </label>
-          <button id="search">Buscar</button>
+        <div class="block">
+          <h2>Sessão <span id="tempo" class="muted"></span></h2>
+          <ul id="tracks"></ul>
         </div>
-        <p id="count" class="count"></p>
-        <ul id="results"></ul>
-        <p id="sent" class="sent" hidden>Enviado para o Live.</p>
+
+        <div class="block" id="slotsBlock" hidden>
+          <h2>Slot</h2>
+          <ul id="slots"></ul>
+        </div>
+
+        <div class="block">
+          <h2>Fonte</h2>
+          <div class="filters">
+            <label>Gênero
+              <input id="genre" placeholder="metal" autocomplete="off"
+                     autocapitalize="none" spellcheck="false" enterkeyhint="search">
+            </label>
+            <label>BPM
+              <select id="bpm">
+                <option value="">qualquer</option>
+                <option value="bpm_60_79">60–79</option>
+                <option value="bpm_80_99">80–99</option>
+                <option value="bpm_100_119">100–119</option>
+                <option value="bpm_120_139">120–139</option>
+                <option value="bpm_140_159">140–159</option>
+                <option value="bpm_160_179">160–179</option>
+                <option value="bpm_180_plus">180+</option>
+              </select>
+            </label>
+          </div>
+          <button id="surprise" class="secondary">Sortear groove</button>
+          <p id="chosen" class="muted"></p>
+        </div>
+
+        <div class="block">
+          <h2>Ajustes</h2>
+          <div id="knobs"></div>
+        </div>
+
+        <button id="write" disabled>Escrever</button>
+        <p id="receipt" class="muted"></p>
       </section>
+
       <pre id="error" role="alert"></pre>
     </main>
     <script src="/picker.js" defer></script>
