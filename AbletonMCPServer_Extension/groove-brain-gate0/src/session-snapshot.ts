@@ -66,16 +66,33 @@ function readSlot(slot: ReadableSlot, index: number): SlotState {
   return { index, filled: true, name: clip.name ?? null, noteCount };
 }
 
+function readTrack(track: ReadableTrack, index: number): TrackState {
+  // Each field is read defensively. Song.tracks holds return and main tracks
+  // as well as the ones the user made, and a getter that throws on one of them
+  // must not cost the whole snapshot: the panel would show nothing at all.
+  const safely = <T>(read: () => T, fallback: T): T => {
+    try {
+      return read() ?? fallback;
+    } catch {
+      return fallback;
+    }
+  };
+  return {
+    index,
+    name: safely(() => track.name, `Track ${index + 1}`),
+    armed: safely(() => track.arm, false) === true,
+    hasDrumRack: safely(
+      () => (track.devices ?? []).some((device) => device.className === 'DrumRack'),
+      false,
+    ),
+    meter: `${safely(() => track.signatureNumerator, 4)}/${safely(() => track.signatureDenominator, 4)}`,
+    slots: safely(() => (track.clipSlots ?? []).map(readSlot), []),
+  };
+}
+
 export function snapshotSession(song: ReadableSong): SessionSnapshot {
   return {
     tempo: song.tempo,
-    tracks: song.tracks.map((track, index) => ({
-      index,
-      name: track.name,
-      armed: track.arm === true,
-      hasDrumRack: (track.devices ?? []).some((device) => device.className === 'DrumRack'),
-      meter: `${track.signatureNumerator ?? 4}/${track.signatureDenominator ?? 4}`,
-      slots: (track.clipSlots ?? []).map(readSlot),
-    })),
+    tracks: song.tracks.map(readTrack),
   };
 }

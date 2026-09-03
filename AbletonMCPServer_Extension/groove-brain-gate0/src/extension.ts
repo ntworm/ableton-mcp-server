@@ -90,6 +90,9 @@ function activate(activation: ActivationContext): void {
           song: context.application.song as never,
           profile: loadKitProfile(resourceRoot),
           stillActive: () => state.active,
+          onFailure: (error) => {
+            console.error(`[groove-brain] session: ${sanitizeErrorMessage(error)}`);
+          },
           onReceipt: (receipt) => {
             console.log(`[groove-brain] ${receipt.status} ${receipt.code} `
               + `${receipt.trackName ?? '?'} slot ${receipt.slotIndex + 1} `
