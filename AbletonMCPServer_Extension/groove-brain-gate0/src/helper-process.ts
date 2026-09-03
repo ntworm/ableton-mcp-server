@@ -276,6 +276,43 @@ export class HelperSession {
     return `${this.origin}/#${this.token}`;
   }
 
+  private async post(path: string, body: unknown, timeoutMs = 2_000): Promise<string> {
+    let timer: NodeJS.Timeout | undefined;
+    let response: Response;
+    try {
+      response = await Promise.race([
+        fetch(`${this.origin}${path}`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.token}`,
+            Origin: this.origin,
+            'Content-Type': 'application/json',
+          },
+          cache: 'no-store',
+          body: JSON.stringify(body),
+        }),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error(`HELPER_TIMEOUT${path}`)), timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+    if (!response.ok) throw new Error(`HELPER_${path.slice(5).toUpperCase()}_${response.status}`);
+    return response.text();
+  }
+
+  /** Publish what the Live set looks like now. */
+  async publishSnapshot(snapshot: unknown): Promise<void> {
+    await this.post('/api/publish', snapshot);
+  }
+
+  /** Collect the command the panel posted, if any. */
+  async takeCommand(): Promise<string | null> {
+    const raw = await this.post('/api/take', {});
+    return raw.trim() === 'null' ? null : raw;
+  }
+
   /** Ask whether the browser has picked something yet. */
   async pollSelection(): Promise<string | null> {
     const response = await fetch(`${this.origin}/api/selection`, {

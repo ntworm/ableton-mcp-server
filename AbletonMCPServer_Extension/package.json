@@ -15,7 +15,7 @@
     "gate0:test": "tsx --test groove-brain-gate0/tests/*.test.ts",
     "gate0:build": "npm run gate0:typecheck && tsx groove-brain-gate0/build.ts",
     "gate0:export": "../.venv/Scripts/python.exe ../scripts/export_groove_index.py",
-    "gate0:package": "npm run gate0:build && tsx groove-brain-gate0/package.ts --version 0.3.0"
+    "gate0:package": "npm run gate0:build && tsx groove-brain-gate0/package.ts --version 0.4.0"
   },
   "dependencies": {
     "@ableton-extensions/sdk": "file:./vendor/ableton-extensions-sdk-1.0.0-beta.0.tgz",
