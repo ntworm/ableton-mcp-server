@@ -269,10 +269,16 @@ function main(): void {
     // nothing, which reads as an empty seed rather than a broken build.
     throw new Error('EXPORT_MISSING: run scripts/export_groove_index.py first');
   }
-  const profileSource = path.join(sourceRoot, 'data', 'kit-profile.json');
+  // Taken from where it is maintained rather than copied into data/, which is
+  // generated and ignored. One profile, one home.
+  const profileSource = path.resolve(
+    sourceRoot, '..', '..',
+    'ableton_mcp_server', 'groove_intelligence', 'profiles',
+    'toontrack-sd3-default-observed.json',
+  );
   if (!lstatIfPresent(profileSource)?.isFile()) {
-    // Without it every note resolves as unknown and nothing is written.
-    throw new Error('KIT_PROFILE_MISSING: copy it from groove_intelligence/profiles');
+    // Without it every note resolves as unknown and nothing is written at all.
+    throw new Error('KIT_PROFILE_MISSING');
   }
   fs.mkdirSync(path.join(stage, 'data'), { recursive: true });
   fs.copyFileSync(exportSource, path.join(stage, 'data', 'grooves.json'));
