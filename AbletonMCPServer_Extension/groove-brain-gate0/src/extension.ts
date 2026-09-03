@@ -1,13 +1,12 @@
 import { initialize, type ActivationContext } from '@ableton-extensions/sdk';
+import fs from 'node:fs';
+import nodePath from 'node:path';
 import { performance as nodePerformance } from 'node:perf_hooks';
 import { openGate0Modal, releaseGate0Helper, shutdownGate0Modal } from './actions.js';
-import { storeReceipt } from './receipt-store.js';
 import { resourceRootFromEntryDir } from './resource-path.js';
-import { adaptClipSlot } from './sdk-slot-adapter.js';
-import { parseGrooveResponse } from './groove-client.js';
-import { clipLengthBeats, toClipNotes } from './groove-writer.js';
-import type { HelperSession } from './helper-process.js';
-import { runSessionClipProbe, type ProbeReceipt } from './session-clip-probe.js';
+import type { KitProfile } from './kit-profile.js';
+import { serveSession } from './session-loop.js';
+import type { ProbeReceipt } from './session-clip-probe.js';
 
 const COMMAND_ID = 'groove-brain.gate0.open';
 
@@ -45,32 +44,16 @@ export function receiptModalDataUrl(receipt: ProbeReceipt): string {
   return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
 }
 
-/** How long the panel stays open on the phone before the helper is released. */
-const SELECTION_TIMEOUT_MS = 15 * 60 * 1000;
-/** Slow enough to be free, fast enough that a tap feels immediate. */
-const SELECTION_POLL_MS = 400;
-
 /**
- * Wait for the browser to pick a groove.
+ * The kit profile bundled with the package.
  *
- * Returns null when the extension is deactivated or the panel is abandoned:
- * a helper left listening on the LAN because nobody pressed anything is the
- * one outcome this must not produce.
+ * Keyed by kit rather than by plugin: the same settings page read with two kits
+ * loaded gives two different maps, with no edit by the user. A profile for the
+ * kit actually loaded is future work; this is the one that was measured.
  */
-export async function waitForSelection(
-  helper: Pick<HelperSession, 'pollSelection'>,
-  stillActive: () => boolean,
-  nowMs: () => number = Date.now,
-  sleep: (ms: number) => Promise<void> = (ms) =>
-    new Promise((resolve) => setTimeout(resolve, ms)),
-): Promise<string | null> {
-  const deadline = nowMs() + SELECTION_TIMEOUT_MS;
-  while (stillActive() && nowMs() < deadline) {
-    const chosen = await helper.pollSelection();
-    if (chosen !== null) return chosen;
-    await sleep(SELECTION_POLL_MS);
-  }
-  return null;
+function loadKitProfile(resourceRoot: string): KitProfile {
+  const path = nodePath.join(resourceRoot, 'data', 'kit-profile.json');
+  return JSON.parse(fs.readFileSync(path, 'utf8')) as KitProfile;
 }
 
 function activate(activation: ActivationContext): void {
@@ -93,38 +76,26 @@ function activate(activation: ActivationContext): void {
     if (!state.active || state.operation) return;
     const operation = (async (): Promise<void> => {
       try {
-        const { handle, result, version, helper } = await openGate0Modal(
+        const { result, helper } = await openGate0Modal(
           context,
           argument,
           resourceRoot,
         );
         if (result.action === 'cancel' || !helper || !state.active) return;
 
-        // Live is usable again from here: the modal is closed and the panel is
-        // on the phone. Nothing below opens a window until the clip is written.
-        const grooveId = await waitForSelection(helper, () => state.active);
-        if (grooveId === null || !state.active) return;
-        const groove = parseGrooveResponse(await helper.fetchGroove(grooveId));
-
-        const slot = adaptClipSlot(context, handle);
-        const injectFailure = process.env.GROOVE_BRAIN_GATE0_INJECT === 'after_create'
-          ? 'after_create' as const
-          : undefined;
-        const receipt = await runSessionClipProbe(slot, {
-          extensionVersion: version,
-          nowEpochMs: Date.now,
-          nowMonotonicMs: monotonicNow,
-          injectFailure,
-          notes: toClipNotes(groove),
-          lengthBeats: clipLengthBeats(groove),
-          // The id, not a path or a digest: enough to find the groove again
-          // through search, and nothing about where it came from.
-          clipName: `Groove Brain ${groove.id}`,
+        // Live is usable from here: the modal is closed and the panel is on the
+        // phone. Nothing below opens a window.
+        await serveSession({
+          helper,
+          song: context.application.song as never,
+          profile: loadKitProfile(resourceRoot),
+          stillActive: () => state.active,
+          onReceipt: (receipt) => {
+            console.log(`[groove-brain] ${receipt.status} ${receipt.code} `
+              + `${receipt.trackName ?? '?'} slot ${receipt.slotIndex + 1} `
+              + `${receipt.noteCount} notas`);
+          },
         });
-        storeReceipt(context, receipt);
-        if (state.active) {
-          await context.ui.showModalDialog(receiptModalDataUrl(receipt), 840, 620);
-        }
       } catch (error: unknown) {
         console.error(`[groove-brain-gate0] ${sanitizeErrorMessage(error)}`);
       } finally {

@@ -269,8 +269,14 @@ function main(): void {
     // nothing, which reads as an empty seed rather than a broken build.
     throw new Error('EXPORT_MISSING: run scripts/export_groove_index.py first');
   }
+  const profileSource = path.join(sourceRoot, 'data', 'kit-profile.json');
+  if (!lstatIfPresent(profileSource)?.isFile()) {
+    // Without it every note resolves as unknown and nothing is written.
+    throw new Error('KIT_PROFILE_MISSING: copy it from groove_intelligence/profiles');
+  }
   fs.mkdirSync(path.join(stage, 'data'), { recursive: true });
   fs.copyFileSync(exportSource, path.join(stage, 'data', 'grooves.json'));
+  fs.copyFileSync(profileSource, path.join(stage, 'data', 'kit-profile.json'));
 
   fs.cpSync(path.join(sourceRoot, 'ui'), path.join(stage, 'ui'), { recursive: true });
   fs.copyFileSync(path.join(sourceRoot, 'dist', 'extension.js'), path.join(stage, 'dist', 'extension.js'));
