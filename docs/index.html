@@ -1,586 +1,638 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232EC4B6'><path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/></svg>">
-  <title>Ableton MCP Server — Production Tool Surface for Ableton Live 12</title>
-  <meta name="description" content="Local MCP server exposing 97 typed tools over stdio, backed by loopback TCP and WebSocket bridges for Ableton Live 12."> <!-- TOOL_COUNT: active_total -->
-  <meta property="og:title" content="Ableton MCP Server — Technical Specification & 97-Tool Catalog"> <!-- TOOL_COUNT: active_total -->
-  <meta property="og:description" content="Dual-bridge FastMCP server for querying parameters, driving transport, automating clips, and non-realtime mix analysis in Ableton Live 12.">
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://ntworm.github.io/ableton-mcp-server/">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#131417">
+<title>Ableton MCP Server 0.7.0 — Technical Surface & Protocol Deck</title>
+<meta name="description" content="Local FastMCP server exposing 97 typed tools over stdio, backed by loopback TCP and WebSocket bridges for Ableton Live 12."> <!-- TOOL_COUNT: active_total -->
+<link rel="canonical" href="https://ntworm.github.io/ableton-mcp-server/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Ableton MCP Server">
+<meta property="og:title" content="Ableton MCP Server — Technical Specification & 97-Tool Catalog"> <!-- TOOL_COUNT: active_total -->
+<meta property="og:description" content="Dual-bridge FastMCP server for querying parameters, driving transport, automating clips, and non-realtime mix analysis in Ableton Live 12.">
+<meta property="og:url" content="https://ntworm.github.io/ableton-mcp-server/">
+<meta property="og:locale" content="en">
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
 
-  <style>
-    :root {
-      --bg-dark: #080c14;
-      --bg-card: #101726;
-      --bg-card-hover: #172238;
-      --bg-code: #05080e;
-      --border-color: #1e293b;
-      
-      --text-main: #e2e8f0;
-      --text-muted: #94a3b8;
-      --text-dim: #64748b;
-      
-      --accent-teal: #2ec4b6;
-      --accent-gold: #f2b94b;
-      --accent-blue: #3b82f6;
-      --accent-purple: #a855f7;
-      --accent-red: #f43f5e;
-      --accent-green: #10b981;
-      
-      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      --font-mono: 'JetBrains Mono', monospace;
-    }
+<style>
+:root {
+  --chassis: #131417;
+  --panel: #1a1b20;
+  --panel-hi: #22232a;
+  --card: #202127;
+  --card-hover: #262830;
+  --code-bg: #0c0d0f;
+  
+  --rule: #2a2c34;
+  --rule-subtle: #1e2026;
+  --rule-bright: #3d404c;
+  
+  --orange: #ff6b35;
+  --orange-dim: rgba(255, 107, 53, 0.12);
+  --orange-border: rgba(255, 107, 53, 0.38);
+  
+  --blue: #4cc9f0;
+  --blue-dim: rgba(76, 201, 240, 0.12);
+  --blue-border: rgba(76, 201, 240, 0.35);
+  
+  --amber: #f59e0b;
+  --amber-dim: rgba(245, 158, 11, 0.12);
+  
+  --text-hi: #f4f5f7;
+  --text-mid: #c2c5cf;
+  --text-muted: #8e909a;
+  --text-dim: #5a5c64;
+  
+  --font-mono: 'Space Mono', ui-monospace, 'SF Mono', Consolas, monospace;
+}
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
-    body {
-      background-color: var(--bg-dark);
-      color: var(--text-main);
-      font-family: var(--font-sans);
-      line-height: 1.6;
-      -webkit-font-smoothing: antialiased;
-      overflow-x: hidden;
-    }
+html { background: var(--chassis); scroll-behavior: auto; }
+body {
+  background-color: var(--chassis);
+  background-image: 
+    radial-gradient(circle at 50% 0%, rgba(255, 107, 53, 0.05), transparent 60%),
+    linear-gradient(rgba(42, 44, 52, 0.3) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(42, 44, 52, 0.3) 1px, transparent 1px);
+  background-size: 100% 100%, 28px 28px, 28px 28px;
+  color: var(--text-mid);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.65;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
 
-    a { color: var(--accent-teal); text-decoration: none; transition: color 0.2s; }
-    a:hover { color: var(--accent-gold); }
+::selection { background: var(--orange); color: #000; }
+[id] { scroll-margin-top: 86px; }
 
-    .container {
-      max-width: 1240px;
-      margin: 0 auto;
-      padding: 0 24px;
-    }
+a { color: var(--orange); text-decoration: none; border-bottom: 1px dashed var(--orange-border); transition: all 0.15s ease; }
+a:hover { border-bottom-style: solid; border-bottom-color: var(--orange); color: #fff; }
 
-    /* Top Banner Link */
-    .top-banner {
-      background: linear-gradient(90deg, rgba(46, 196, 182, 0.15), rgba(242, 185, 75, 0.15));
-      border-bottom: 1px solid rgba(46, 196, 182, 0.3);
-      padding: 8px 0;
-      font-size: 13px;
-      font-family: var(--font-mono);
-      text-align: center;
-      color: var(--text-main);
-    }
-    .top-banner a { font-weight: 700; text-decoration: underline; margin-left: 6px; }
+.shell { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
 
-    /* Nav Bar */
-    header {
-      border-bottom: 1px solid var(--border-color);
-      background: rgba(8, 12, 20, 0.92);
-      backdrop-filter: blur(16px);
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
-    .nav-inner {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      height: 64px;
-    }
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      font-weight: 800;
-      font-size: 17px;
-      color: #fff;
-      letter-spacing: -0.01em;
-    }
-    .brand-tag {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      background: rgba(46, 196, 182, 0.15);
-      color: var(--accent-teal);
-      border: 1px solid rgba(46, 196, 182, 0.4);
-      padding: 2px 8px;
-      border-radius: 4px;
-    }
-    .nav-right {
-      display: flex;
-      align-items: center;
-      gap: 20px;
-    }
-    .nav-links {
-      display: flex;
-      gap: 20px;
-      font-size: 14px;
-      font-weight: 500;
-    }
+/* ================= TOP HUD HARDWARE BAR ================= */
+.hud-bar {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(19, 20, 23, 0.95);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--rule);
+}
+.hud-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  height: 48px; gap: 16px; font-size: 11px; letter-spacing: 0.04em;
+}
+.hud-brand {
+  display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--text-hi);
+}
+.hud-brand-tag {
+  color: var(--orange); font-size: 12px;
+}
+.brand-tag {
+  font-size: 10px; line-height: 1; padding: 3px 6px;
+  background: var(--orange-dim); color: var(--orange);
+  border: 1px solid var(--orange-border); font-weight: 700;
+}
+.hud-status-cluster {
+  display: flex; align-items: center; gap: 14px; color: var(--text-muted);
+}
+.status-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 8px; background: var(--panel); border: 1px solid var(--rule);
+  color: var(--text-muted); font-size: 10.5px;
+}
+.status-dot {
+  width: 6px; height: 6px; background: var(--orange);
+  box-shadow: 0 0 6px var(--orange);
+}
 
-    /* Language Switcher */
-    .lang-switcher {
-      display: flex;
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      padding: 2px;
-    }
-    .lang-btn {
-      background: transparent;
-      border: none;
-      color: var(--text-muted);
-      font-family: var(--font-mono);
-      font-size: 12px;
-      padding: 4px 10px;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .lang-btn.active {
-      background: var(--accent-teal);
-      color: #080c14;
-      font-weight: 700;
-    }
+/* Language Cluster */
+.lang-cluster { display: inline-flex; border: 1px solid var(--rule); background: var(--panel); }
+.lang-btn {
+  background: none; border: none; color: var(--text-muted);
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 700;
+  padding: 4px 10px; cursor: pointer; transition: all 0.15s;
+}
+.lang-btn.on {
+  background: var(--orange); color: #000;
+}
 
-    /* Hero */
-    .hero {
-      padding: 56px 0 40px;
-      border-bottom: 1px solid var(--border-color);
-      background: radial-gradient(circle at 50% 0%, rgba(46, 196, 182, 0.08), transparent 70%);
-    }
-    .hero-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(242, 185, 75, 0.1);
-      border: 1px solid rgba(242, 185, 75, 0.35);
-      color: var(--accent-gold);
-      font-family: var(--font-mono);
-      font-size: 12px;
-      font-weight: 600;
-      padding: 5px 14px;
-      border-radius: 99px;
-      margin-bottom: 20px;
-    }
-    .hero h1 {
-      font-size: 42px;
-      font-weight: 800;
-      line-height: 1.12;
-      letter-spacing: -0.025em;
-      margin-bottom: 16px;
-      color: #ffffff;
-    }
-    .hero p.subtitle {
-      font-size: 17px;
-      color: var(--text-muted);
-      max-width: 900px;
-      margin-bottom: 28px;
-      line-height: 1.6;
-    }
+/* Sub-nav dock */
+.sub-nav {
+  display: flex; overflow-x: auto; gap: 2px; padding: 6px 0;
+  border-top: 1px solid var(--rule-subtle);
+}
+.nav-link {
+  display: inline-block; padding: 5px 11px; font-size: 10.5px;
+  color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;
+  border: 1px solid transparent; border-bottom: none;
+}
+.nav-link:hover, .nav-link:focus-visible {
+  color: var(--text-hi); background: var(--panel); border-color: var(--rule);
+  text-decoration: none;
+}
+.nav-link[aria-current="true"] {
+  color: var(--orange); background: var(--panel); border-color: var(--orange-border);
+  text-decoration: none;
+}
 
-    .badge-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-bottom: 32px;
-    }
-    .chip {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      padding: 6px 14px;
-      border-radius: 6px;
-      color: var(--text-muted);
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .chip.highlight { border-color: var(--accent-teal); color: var(--accent-teal); background: rgba(46, 196, 182, 0.08); }
+/* ================= HERO PROTOCOL DECK ================= */
+.hero-deck {
+  padding: 52px 0 40px;
+  display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 440px);
+  gap: 36px; align-items: start;
+}
+.hero-manifesto { display: flex; flex-direction: column; gap: 14px; }
+.hero-tagline {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em;
+  color: var(--orange); text-transform: uppercase;
+}
+.hero-title {
+  font-size: clamp(30px, 3.8vw, 48px);
+  font-weight: 700; line-height: 1.15;
+  color: var(--text-hi); letter-spacing: -0.02em;
+}
+.hero-title .highlight {
+  color: var(--orange);
+}
+.hero-desc {
+  font-size: 13.5px; line-height: 1.7; color: var(--text-mid); max-width: 62ch;
+}
+.hero-chips {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px;
+}
+.chip {
+  font-size: 10.5px; padding: 4px 10px; background: var(--panel);
+  border: 1px solid var(--rule); color: var(--text-muted);
+}
+.chip.hot {
+  border-color: var(--orange-border); color: var(--orange); background: var(--orange-dim);
+}
 
-    .btn-group {
-      display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
-    }
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      font-weight: 600;
-      font-size: 14px;
-      padding: 11px 22px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .btn-primary {
-      background: var(--accent-teal);
-      color: #080c14;
-      border: none;
-    }
-    .btn-primary:hover {
-      background: #26ab9f;
-      color: #080c14;
-      box-shadow: 0 0 20px rgba(46, 196, 182, 0.4);
-    }
-    .btn-secondary {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      color: var(--text-main);
-    }
-    .btn-secondary:hover {
-      border-color: var(--accent-teal);
-      color: #fff;
-    }
+.hero-actions {
+  display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px;
+}
+.btn-action {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 18px; font-size: 11.5px; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase;
+  border: 1px solid var(--rule); background: var(--panel);
+  color: var(--text-hi); transition: all 0.15s;
+}
+.btn-action:hover {
+  border-color: var(--orange); color: #fff; background: var(--card);
+  text-decoration: none;
+}
+.btn-action.primary {
+  background: var(--orange); color: #000; border-color: var(--orange);
+}
+.btn-action.primary:hover {
+  background: #ff7d4d; box-shadow: 0 0 16px rgba(255, 107, 53, 0.35); color: #000;
+}
 
-    /* Section Styling */
-    .arch-section {
-      padding: 56px 0;
-      border-bottom: 1px solid var(--border-color);
-    }
-    .section-title {
-      font-size: 26px;
-      font-weight: 800;
-      margin-bottom: 8px;
-      color: #fff;
-      letter-spacing: -0.015em;
-    }
-    .section-desc {
-      color: var(--text-muted);
-      margin-bottom: 32px;
-      font-size: 15px;
-      max-width: 860px;
-    }
+/* Telemetry & Spec Console */
+.telemetry-deck {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  padding: 18px 20px;
+  position: relative;
+}
+.telemetry-deck::before {
+  content: "[+]"; position: absolute; top: -8px; left: 8px; color: var(--orange); font-size: 10px; background: var(--chassis); padding: 0 4px;
+}
+.telemetry-deck::after {
+  content: "[+]"; position: absolute; bottom: -8px; right: 8px; color: var(--orange); font-size: 10px; background: var(--chassis); padding: 0 4px;
+}
+.telemetry-head {
+  display: flex; justify-content: space-between; align-items: center;
+  border-bottom: 1px solid var(--rule); padding-bottom: 10px; margin-bottom: 10px;
+  font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted);
+}
+.telemetry-head b { color: var(--orange); font-weight: 700; }
 
-    .arch-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      padding: 26px;
-      margin-bottom: 24px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-    }
+table.telemetry-table {
+  width: 100%; border-collapse: collapse; font-size: 11px;
+}
+table.telemetry-table th {
+  text-align: left; font-weight: 400; color: var(--text-dim);
+  padding: 6px 10px 6px 0; border-bottom: 1px solid var(--rule-subtle);
+  width: 100px; white-space: nowrap; letter-spacing: 0.04em;
+}
+table.telemetry-table td {
+  padding: 6px 0 6px 10px; border-bottom: 1px solid var(--rule-subtle);
+  border-left: 1px solid var(--rule-subtle); color: var(--text-hi);
+}
+table.telemetry-table tr:last-child th, table.telemetry-table tr:last-child td {
+  border-bottom: none;
+}
 
-    /* Animated Flow Lines for SVG */
-    @keyframes flowLine {
-      to { stroke-dashoffset: -20; }
-    }
-    .flow-path {
-      stroke-dasharray: 6, 4;
-      animation: flowLine 1s linear infinite;
-    }
+/* ================= MODULAR RACK BAYS ================= */
+.bay {
+  border-top: 1px solid var(--rule);
+  padding: 44px 0;
+}
+.bay-header {
+  display: flex; flex-direction: column; gap: 6px; margin-bottom: 22px;
+}
+.bay-badge {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+  color: var(--orange); text-transform: uppercase;
+}
+.bay-title {
+  font-size: 20px; font-weight: 700; line-height: 1.3;
+  color: var(--text-hi); letter-spacing: -0.01em;
+}
+.bay-why {
+  font-size: 12.5px; color: var(--text-muted); max-width: 74ch; line-height: 1.6;
+}
 
-    /* Grid Layouts */
-    .grid-2 {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 24px;
-    }
-    .grid-3 {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 20px;
-    }
-    @media (max-width: 900px) {
-      .grid-2, .grid-3 { grid-template-columns: 1fr; }
-    }
+/* Rack Units / Grid */
+.rack-grid {
+  display: grid; gap: 14px; margin-top: 16px;
+}
+.rack-grid.c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.rack-grid.c2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
-    @media (max-width: 600px) {
-      .container { padding-left: 16px; padding-right: 16px; }
-      .nav-inner { height: auto; flex-wrap: wrap; gap: 12px; padding-top: 12px; padding-bottom: 12px; }
-      .nav-right { width: 100%; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
-      .nav-links { flex-wrap: wrap; gap: 8px 12px; font-size: 12px; }
-      .top-banner a { overflow-wrap: anywhere; }
-      .hero h1 { font-size: 32px; }
-      .code-box { box-sizing: border-box; max-width: 100%; }
-      .code-box pre { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
-      .search-input { box-sizing: border-box; min-width: 0; width: 100%; }
-      .tool-grid { grid-template-columns: minmax(0, 1fr); }
-      .tool-card { min-width: 0; padding: 16px; }
-    }
+.rack-unit {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  padding: 16px 18px;
+  display: flex; flex-direction: column; gap: 8px;
+  position: relative; transition: border-color 0.15s;
+}
+.rack-unit:hover { border-color: var(--rule-bright); }
+.rack-unit-head {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+}
+.rack-unit-title {
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.05em;
+  color: var(--orange); text-transform: uppercase;
+}
+.rack-unit-tag {
+  font-size: 9px; padding: 1px 6px; border: 1px solid var(--rule);
+  color: var(--blue); background: var(--blue-dim); text-transform: uppercase;
+}
+.rack-unit-body {
+  font-size: 12px; line-height: 1.6; color: var(--text-muted);
+}
 
-    /* Code Box Styling */
-    .code-box {
-      background: var(--bg-code);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 20px;
-      font-family: var(--font-mono);
-      font-size: 13px;
-      color: #e2e8f0;
-      overflow-x: auto;
-    }
-    .code-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-family: var(--font-mono);
-      font-size: 12px;
-      color: var(--text-dim);
-      border-bottom: 1px solid var(--border-color);
-      padding-bottom: 10px;
-      margin-bottom: 14px;
-    }
+/* Terminal / Code Box */
+.term-box {
+  background: var(--code-bg);
+  border: 1px solid var(--rule);
+  margin-top: 20px;
+}
+.term-header {
+  display: flex; justify-content: space-between; align-items: center;
+  background: var(--panel); border-bottom: 1px solid var(--rule);
+  padding: 8px 14px; font-size: 10.5px; color: var(--text-dim);
+}
+.term-header span.hi { color: var(--orange); font-weight: 700; }
+.term-code {
+  padding: 16px; overflow-x: auto; font-size: 11.5px; line-height: 1.65;
+  color: var(--text-hi);
+}
 
-    /* Config Tab Area */
-    .tab-bar {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 16px;
-      border-bottom: 1px solid var(--border-color);
-      padding-bottom: 8px;
-    }
-    .tab-btn {
-      background: transparent;
-      border: none;
-      color: var(--text-muted);
-      font-family: var(--font-mono);
-      font-size: 13px;
-      padding: 8px 16px;
-      cursor: pointer;
-      border-radius: 6px;
-      transition: all 0.2s;
-    }
-    .tab-btn.active {
-      background: rgba(46, 196, 182, 0.15);
-      color: var(--accent-teal);
-      border: 1px solid rgba(46, 196, 182, 0.4);
-      font-weight: 600;
-    }
+/* Schematic Blueprint Box */
+.schematic-box {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  padding: 20px; margin: 18px 0;
+}
 
-    /* Error Taxonomy Card */
-    .error-tag {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--accent-red);
-      background: rgba(244, 63, 94, 0.12);
-      border: 1px solid rgba(244, 63, 94, 0.3);
-      padding: 3px 8px;
-      border-radius: 4px;
-      display: inline-block;
-      margin-bottom: 8px;
-    }
+/* Architecture Split List */
+.arch-split {
+  display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 1fr);
+  border: 1px solid var(--rule); background: var(--panel);
+  margin-top: 20px;
+}
+.arch-split dt {
+  padding: 12px 16px; border-bottom: 1px solid var(--rule);
+  color: var(--orange); font-size: 11px; font-weight: 700;
+  letter-spacing: 0.04em; text-transform: uppercase;
+}
+.arch-split dd {
+  padding: 12px 16px; border-bottom: 1px solid var(--rule);
+  border-left: 1px solid var(--rule); color: var(--text-muted);
+  font-size: 12px; line-height: 1.6;
+}
+.arch-split dt:last-of-type, .arch-split dd:last-of-type {
+  border-bottom: none;
+}
 
-    /* Tool Matrix Table */
-    .tool-controls {
-      display: flex;
-      gap: 16px;
-      margin-bottom: 24px;
-      flex-wrap: wrap;
-    }
-    .search-input {
-      flex: 1;
-      min-width: 280px;
-      background: var(--bg-code);
-      border: 1px solid var(--border-color);
-      color: #fff;
-      font-family: var(--font-mono);
-      font-size: 13px;
-      padding: 12px 16px;
-      border-radius: 8px;
-      transition: border-color 0.2s;
-    }
-    .search-input:focus {
-      outline: none;
-      border-color: var(--accent-teal);
-      box-shadow: 0 0 12px rgba(46, 196, 182, 0.2);
-    }
-    .filter-btn {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      color: var(--text-muted);
-      font-family: var(--font-mono);
-      font-size: 12px;
-      padding: 10px 16px;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .filter-btn.active {
-      border-color: var(--accent-teal);
-      color: var(--accent-teal);
-      background: rgba(46, 196, 182, 0.15);
-      font-weight: 600;
-    }
+/* Configuration Tabs */
+.config-tabs {
+  display: flex; gap: 6px; margin-bottom: 10px;
+}
+.config-tab-btn {
+  background: var(--panel); border: 1px solid var(--rule);
+  color: var(--text-muted); font-family: var(--font-mono); font-size: 10.5px;
+  padding: 8px 14px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.05em;
+  transition: all 0.15s;
+}
+.config-tab-btn:hover { color: var(--text-hi); border-color: var(--rule-bright); }
+.config-tab-btn.active {
+  background: var(--orange); color: #000; border-color: var(--orange); font-weight: 700;
+}
 
-    .tool-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(370px, 1fr));
-      gap: 18px;
-    }
-    .tool-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-      padding: 20px;
-      transition: all 0.2s;
-    }
-    .tool-card:hover {
-      border-color: var(--accent-teal);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-    }
-    .tool-name {
-      font-family: var(--font-mono);
-      font-size: 15px;
-      font-weight: 700;
-      color: var(--accent-gold);
-      margin-bottom: 6px;
-    }
-    .tool-cat {
-      display: inline-block;
-      font-family: var(--font-mono);
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      background: rgba(59, 130, 246, 0.15);
-      color: var(--accent-blue);
-      border: 1px solid rgba(59, 130, 246, 0.3);
-      padding: 3px 8px;
-      border-radius: 4px;
-      margin-bottom: 10px;
-    }
-    .tool-desc {
-      font-size: 13px;
-      color: var(--text-muted);
-      line-height: 1.5;
-    }
-    .tool-sig {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      color: var(--text-dim);
-      margin-top: 10px;
-      padding-top: 8px;
-      border-top: 1px solid rgba(255,255,255,0.05);
-    }
+/* Error Table */
+.error-table {
+  width: 100%; border-collapse: collapse; border: 1px solid var(--rule);
+  background: var(--panel); margin-top: 16px; font-size: 11.5px;
+}
+.error-table th {
+  text-align: left; padding: 10px 14px; background: #15161a;
+  border-bottom: 1px solid var(--rule); color: var(--text-dim);
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+}
+.error-table td {
+  padding: 12px 14px; border-bottom: 1px solid var(--rule);
+  vertical-align: top; line-height: 1.55;
+}
+.error-table tr:last-child td { border-bottom: none; }
+.code-tag {
+  display: inline-block; font-size: 10.5px; font-weight: 700;
+  color: var(--orange); background: var(--orange-dim);
+  border: 1px solid var(--orange-border); padding: 2px 6px;
+}
 
-    footer {
-      border-top: 1px solid var(--border-color);
-      padding: 40px 0;
-      color: var(--text-dim);
-      font-size: 13px;
-    }
-    .footer-inner {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 16px;
-    }
+/* Tool Catalog Controls */
+.catalog-controls {
+  display: flex; flex-direction: column; gap: 10px; margin: 18px 0;
+}
+.search-bar-wrap {
+  position: relative;
+}
+.catalog-search {
+  width: 100%; background: var(--code-bg); border: 1px solid var(--rule);
+  color: var(--text-hi); font-family: var(--font-mono); font-size: 12px;
+  padding: 11px 14px 11px 32px; outline: none; transition: border-color 0.15s;
+}
+.catalog-search:focus { border-color: var(--orange); }
+.catalog-search::placeholder { color: var(--text-dim); }
+.search-icon {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  color: var(--orange); font-size: 12px; pointer-events: none; font-weight: 700;
+}
 
-  </style>
+.category-chips {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.cat-btn {
+  background: var(--panel); border: 1px solid var(--rule);
+  color: var(--text-muted); font-family: var(--font-mono); font-size: 10px;
+  padding: 6px 11px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.04em;
+  transition: all 0.15s;
+}
+.cat-btn:hover { color: var(--text-hi); border-color: var(--rule-bright); }
+.cat-btn.active {
+  background: var(--orange); color: #000; border-color: var(--orange); font-weight: 700;
+}
+
+/* Tool Matrix Grid */
+.tool-matrix {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px; margin-top: 14px;
+}
+.matrix-card {
+  background: var(--panel); border: 1px solid var(--rule);
+  padding: 12px 15px; display: flex; flex-direction: column; gap: 5px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.matrix-card:hover {
+  border-color: var(--orange-border); background: var(--card);
+}
+.matrix-card-top {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+}
+.matrix-card-name {
+  color: var(--orange); font-size: 12px; font-weight: 700; letter-spacing: 0.03em;
+  word-break: break-all;
+}
+.matrix-card-cat {
+  font-size: 8.5px; padding: 1px 5px; border: 1px solid var(--rule);
+  background: #111215; color: var(--blue); text-transform: uppercase;
+  letter-spacing: 0.06em; flex: 0 0 auto;
+}
+.matrix-card-desc {
+  font-size: 11.5px; line-height: 1.55; color: var(--text-muted);
+}
+.matrix-card-sig {
+  margin-top: 4px; padding-top: 5px; border-top: 1px solid var(--rule-subtle);
+  font-size: 10px; color: var(--text-dim); word-break: break-all;
+}
+
+/* ================= FOOTER ================= */
+footer.deck-footer {
+  border-top: 1px solid var(--rule);
+  padding: 32px 0 54px; margin-top: 40px;
+  font-size: 11px; color: var(--text-dim);
+}
+.footer-line {
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+  gap: 12px;
+}
+.footer-line strong { color: var(--text-hi); font-weight: 700; }
+
+/* ================= RESPONSIVE ================= */
+@media (max-width: 960px) {
+  .hero-deck { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+  .rack-grid.c3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tool-matrix { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 680px) {
+  .rack-grid.c3, .rack-grid.c2 { grid-template-columns: minmax(0, 1fr); }
+  .arch-split { grid-template-columns: minmax(0, 1fr); }
+  .arch-split dt { border-bottom: none; padding-bottom: 2px; }
+  .arch-split dd { border-left: none; padding-top: 0; }
+  .hud-status-cluster { display: none; }
+  .shell { padding: 0 16px; }
+}
+</style>
 </head>
 <body>
 
-  <!-- Top Banner -->
-  <div class="top-banner">
-    <span data-en="🔗 Source code & repository available on GitHub:" data-pt="🔗 Código-fonte e repositório oficial no GitHub:">🔗 Source code & repository available on GitHub:</span>
-    <a href="https://github.com/ntworm/ableton-mcp-server" target="_blank">github.com/ntworm/ableton-mcp-server</a>
-  </div>
+<!-- TOP HUD HARDWARE BAR -->
+<header class="hud-bar">
+  <div class="shell hud-inner">
+    <div class="hud-brand">
+      <span class="hud-brand-tag">[+]</span>
+      <span>ableton-mcp-server</span>
+      <span class="brand-tag">v0.7.0</span>
+    </div>
 
-  <!-- Header -->
-  <header>
-    <div class="container nav-inner">
-      <div class="brand">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2EC4B6" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-        ableton-mcp-server
-        <span class="brand-tag">v0.7.0</span>
+    <div class="hud-status-cluster">
+      <div class="status-pill">
+        <span class="status-dot"></span>
+        <span data-en="LIVE 12 DAEMON READY" data-pt="DAEMON DO LIVE 12 PRONTO">LIVE 12 DAEMON READY</span>
       </div>
-
-      <div class="nav-right">
-        <div class="nav-links">
-          <a href="#execution" data-en="Execution Model" data-pt="Modelo de Execução">Execution Model</a>
-          <a href="#architecture" data-en="Architecture" data-pt="Arquitetura">Architecture</a>
-          <a href="#config" data-en="Agent Config" data-pt="Configuração">Agent Config</a>
-          <a href="#taxonomy" data-en="Error Taxonomy" data-pt="Taxonomia de Erros">Error Taxonomy</a>
-          <a href="#inspiration" data-en="Prior Art" data-pt="Trabalhos Anteriores">Prior Art</a>
-          <a href="#tools" data-en="MCP Tools (97)" data-pt="Ferramentas MCP (97)">MCP Tools (97)</a> <!-- TOOL_COUNT: active_total -->
-        </div>
-
-        <div class="lang-switcher">
-          <button class="lang-btn active" id="btn-en" onclick="setLanguage('en')">EN</button>
-          <button class="lang-btn" id="btn-pt" onclick="setLanguage('pt')">PT-BR</button>
-        </div>
+      <div class="status-pill">
+        <span>TOOL_COUNT: active_total 97</span> <!-- TOOL_COUNT: active_total -->
       </div>
     </div>
-  </header>
 
-  <!-- Hero Section -->
-  <section class="hero">
-    <div class="container">
-      <div class="hero-badge">
-        <span>⚡ FastMCP Production Bridge</span>
-        <span>·</span>
-        <span data-en="97 Tools Over IPC" data-pt="97 Ferramentas via IPC">97 Tools Over IPC</span> <!-- TOOL_COUNT: active_total -->
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <div class="lang-cluster">
+        <button class="lang-btn on" id="btn-en" onclick="setLanguage('en')">EN</button>
+        <button class="lang-btn" id="btn-pt" onclick="setLanguage('pt')">PT</button>
       </div>
-      <h1 data-en="Ableton Live 12 Integration Surface for AI Agents" data-pt="Superfície de Integração do Ableton Live 12 para Agentes de IA">Ableton Live 12 Integration Surface for AI Agents</h1>
-      <p class="subtitle" data-en="A high-density, low-latency MCP server that exposes active Ableton Live 12 Sets to AI agents and Python scripts. Query live LOM parameters, drive transport, automate clips, analyze audio in non-realtime, and execute atomic transactions." data-pt="Servidor MCP de baixa latência que expõe projetos ativos do Ableton Live 12 para agentes de IA e scripts Python. Consulta de parâmetros LOM em tempo real, controle de transport, automação de clips, análise de áudio offline e transações atômicas.">
-        A high-density, low-latency MCP server that exposes active Ableton Live 12 Sets to AI agents and Python scripts. Query live LOM parameters, drive transport, automate clips, analyze audio in non-realtime, and execute atomic transactions.
+      <a href="https://github.com/ntworm/ableton-mcp-server" target="_blank" style="font-size: 10.5px;">GITHUB &#8599;</a>
+    </div>
+  </div>
+
+  <div class="shell">
+    <nav class="sub-nav">
+      <a class="nav-link" href="#execution" data-en="01 // EXECUTION" data-pt="01 // EXECUÇÃO">01 // EXECUTION</a>
+      <a class="nav-link" href="#architecture" data-en="02 // ARCHITECTURE" data-pt="02 // ARQUITETURA">02 // ARCHITECTURE</a>
+      <a class="nav-link" href="#config" data-en="03 // CONFIG" data-pt="03 // CONFIGURAÇÃO">03 // CONFIG</a>
+      <a class="nav-link" href="#taxonomy" data-en="04 // ERROR TAXONOMY" data-pt="04 // TAXONOMIA">04 // ERROR TAXONOMY</a>
+      <a class="nav-link" href="#inspiration" data-en="05 // PRIOR ART" data-pt="05 // HISTÓRICO">05 // PRIOR ART</a>
+      <a class="nav-link" href="#tools" data-en="06 // TOOLS (97)" data-pt="06 // FERRAMENTAS (97)">06 // TOOLS (97)</a> <!-- TOOL_COUNT: active_total -->
+    </nav>
+  </div>
+</header>
+
+<div class="shell">
+
+  <!-- HERO PROTOCOL DECK -->
+  <section class="hero-deck">
+    <div class="hero-manifesto">
+      <div class="hero-tagline">
+        <span>[ HARDWARE PROTOCOL SURFACE ]</span>
+        <span>·</span>
+        <span data-en="STUDIO FAST-MCP SERVER" data-pt="SERVIDOR FAST-MCP DE ESTÚDIO">STUDIO FAST-MCP SERVER</span>
+      </div>
+
+      <h1 class="hero-title" data-en="Ableton Live 12 Protocol Surface for AI Agents" data-pt="Superfície de Protocolo do Ableton Live 12 para Agentes de IA">
+        Ableton Live 12 <br><span class="highlight">Protocol Surface</span> for AI Agents
+      </h1>
+
+      <p class="hero-desc" data-en="A deterministic, low-latency Model Context Protocol gateway connecting AI developer agents directly to active Ableton Live 12 Sets. Exposes Live Object Model inspection, per-tick parameter mutations, grouped undo batching, and non-realtime mix analysis." data-pt="Gateway determinístico de baixa latência conectando agentes de IA diretamente a projetos ativos do Ableton Live 12. Permite inspeção do Live Object Model, mutações de parâmetros com releitura por tick, undo agrupado e análise de mixagem offline.">
+        A deterministic, low-latency Model Context Protocol gateway connecting AI developer agents directly to active Ableton Live 12 Sets. Exposes Live Object Model inspection, per-tick parameter mutations, grouped undo batching, and non-realtime mix analysis.
       </p>
 
-      <div class="badge-row">
-        <span class="chip highlight">Python FastMCP</span>
-        <span class="chip">TCP Remote Script (127.0.0.1:9888)</span>
-        <span class="chip">WebSocket Extension (127.0.0.1:9889)</span>
-        <span class="chip" data-en="WSL2 Loopback Executable" data-pt="Executável Loopback WSL2">WSL2 Loopback Executable</span>
-        <span class="chip" data-en="LUFS/TruePeak Analysis" data-pt="Análise LUFS/TruePeak">LUFS/TruePeak Analysis</span>
-        <span class="chip">MIT License</span>
+      <div class="hero-chips">
+        <span class="chip hot">FastMCP Engine</span>
+        <span class="chip">TCP :9888 Remote Script</span>
+        <span class="chip">WS :9889 Extension Bridge</span>
+        <span class="chip" data-en="97 Verified Tool Contracts" data-pt="97 Ferramentas Tipadas">97 Verified Tool Contracts</span> <!-- TOOL_COUNT: active_total -->
+        <span class="chip" data-en="WSL2 Loopback Transparent" data-pt="Transparente no WSL2">WSL2 Loopback Transparent</span>
+        <span class="chip">Zero Telemetry</span>
       </div>
 
-      <div class="btn-group">
-        <a href="https://github.com/ntworm/ableton-mcp-server" class="btn btn-primary" target="_blank">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-          <span data-en="Repository on GitHub" data-pt="Repositório no GitHub">Repository on GitHub</span>
+      <div class="hero-actions">
+        <a href="https://github.com/ntworm/ableton-mcp-server" target="_blank" class="btn-action primary">
+          <span>GITHUB REPOSITORY &#8599;</span>
         </a>
-        <a href="#config" class="btn btn-secondary" data-en="Agent Config JSON" data-pt="JSON de Configuração do Agente">Agent Config JSON</a>
-        <a href="#tools" class="btn btn-secondary" data-en="Browse 97 Tools" data-pt="Catálogo das 97 Ferramentas">Browse 97 Tools</a> <!-- TOOL_COUNT: active_total -->
+        <a href="#config" class="btn-action" data-en="AGENT CONFIG" data-pt="CONFIG DO AGENTE">AGENT CONFIG</a>
+        <a href="#tools" class="btn-action" data-en="INVENTORY (97 TOOLS)" data-pt="CATÁLOGO (97 FERRAMENTAS)">INVENTORY (97 TOOLS)</a> <!-- TOOL_COUNT: active_total -->
       </div>
+    </div>
+
+    <!-- Hardware Telemetry Matrix -->
+    <div class="telemetry-deck">
+      <div class="telemetry-head">
+        <span>HARDWARE TELEMETRY &amp; SPECIFICATION</span>
+        <b>v0.7.0</b>
+      </div>
+
+      <table class="telemetry-table">
+        <tr>
+          <th>DAW TARGET</th>
+          <td data-en="Ableton Live 12.0 – 12.4.5+ Suite" data-pt="Ableton Live 12.0 – 12.4.5+ Suite">Ableton Live 12.0 – 12.4.5+ Suite</td>
+        </tr>
+        <tr>
+          <th>INTERFACE</th>
+          <td>FastMCP via local stdio JSON-RPC 2.0</td>
+        </tr>
+        <tr>
+          <th>BRIDGE A</th>
+          <td data-en="TCP 127.0.0.1:9888 (MIDI Remote Script)" data-pt="TCP 127.0.0.1:9888 (MIDI Remote Script)">TCP 127.0.0.1:9888 (MIDI Remote Script)</td>
+        </tr>
+        <tr>
+          <th>BRIDGE B</th>
+          <td data-en="WS 127.0.0.1:9889 (Extension Host)" data-pt="WS 127.0.0.1:9889 (Extension Host)">WS 127.0.0.1:9889 (Extension Host)</td>
+        </tr>
+        <tr>
+          <th>TOOL COUNT</th>
+          <td data-en="97 active typed contracts" data-pt="97 contratos ativos e tipados">97 active typed contracts</td> <!-- TOOL_COUNT: active_total -->
+        </tr>
+        <tr>
+          <th>LATENCY</th>
+          <td data-en="&lt; 2.0 ms local loopback roundtrip" data-pt="&lt; 2.0 ms ida e volta em loopback">&lt; 2.0 ms local loopback roundtrip</td>
+        </tr>
+        <tr>
+          <th>DISCIPLINE</th>
+          <td data-en="Per-tick readback verification &amp; atomic batching" data-pt="Verificação por tick e batch atômico">Per-tick readback verification &amp; atomic batching</td>
+        </tr>
+        <tr>
+          <th>OFFLINE DSP</th>
+          <td data-en="LUFS-I, True Peak, dynamic range, masking" data-pt="LUFS-I, True Peak, faixa dinâmica, máscara">LUFS-I, True Peak, dynamic range, masking</td>
+        </tr>
+        <tr>
+          <th>LICENCE</th>
+          <td data-en="MIT License · Independent open-source" data-pt="Licença MIT · Código aberto independente">MIT License · Independent open-source</td>
+        </tr>
+      </table>
     </div>
   </section>
 
-  <!-- Server Execution Model Section -->
-  <section id="execution" class="arch-section">
-    <div class="container">
-      <h2 class="section-title" data-en="Server Execution & Agent Runtime Model" data-pt="Modelo de Execução e Runtime do Agente">Server Execution & Agent Runtime Model</h2>
-      <p class="section-desc" data-en="`ableton-mcp-server` runs locally over stdio IPC. It exposes 97 typed tool contracts directly to LLM agent runtimes with write verification, grouped undo semantics, and explicit error taxonomies." data-pt="O `ableton-mcp-server` executa localmente via IPC stdio. Ele expõe 97 ferramentas tipadas para runtimes de agentes LLM com confirmação de escrita, undo agrupado e taxonomia explícita de erros.">
-        `ableton-mcp-server` runs locally over stdio IPC. It exposes 97 typed tool contracts directly to LLM agent runtimes with write verification, grouped undo semantics, and explicit error taxonomies. <!-- TOOL_COUNT: active_total -->
-      </p>
+  <!-- MOD 01: EXECUTION & RUNTIME -->
+  <section class="bay" id="execution">
+    <div class="bay-header">
+      <div class="bay-badge">MOD-01 // RUNTIME DISCIPLINE</div>
+      <h2 class="bay-title" data-en="Execution Model &amp; Agent Interaction Discipline" data-pt="Modelo de Execução e Disciplina de Interação do Agente">Execution Model &amp; Agent Interaction Discipline</h2>
+      <div class="bay-why" data-en="Designed specifically for autonomous LLM agent pairs — enforcing write-then-verify loops, grouped transactions with rollback semantics, and offline audio DSP." data-pt="Projetado especificamente para agentes LLM autônomos — aplicando ciclos de escrita com releitura, transações agrupadas com semântica de rollback e DSP offline.">
+        Designed specifically for autonomous LLM agent pairs — enforcing write-then-verify loops, grouped transactions with rollback semantics, and offline audio DSP.
+      </div>
+    </div>
 
-      <div class="grid-3">
-        <div class="arch-card">
-          <div style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-teal); margin-bottom: 8px;">1. Per-Tick Write Verification</div>
-          <p style="font-size: 13.5px; color: var(--text-muted);" data-en="Every parameter mutation (`set_parameter_value`, `set_track_property`) executes a write-then-verify loop inside Live's main thread tick before confirming completion to the agent." data-pt="Cada mutação de parâmetro (`set_parameter_value`, `set_track_property`) executa uma verificação a cada tick no loop principal do Live antes de confirmar a escrita para o agente.">
-            Every parameter mutation (`set_parameter_value`, `set_track_property`) executes a write-then-verify loop inside Live's main thread tick before confirming completion to the agent.
-          </p>
+    <div class="rack-grid c3">
+      <div class="rack-unit">
+        <div class="rack-unit-head">
+          <span class="rack-unit-title" data-en="1. Per-Tick Verification" data-pt="1. Verificação por Tick">1. Per-Tick Verification</span>
+          <span class="rack-unit-tag">LOM TICK</span>
         </div>
-
-        <div class="arch-card">
-          <div style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-gold); margin-bottom: 8px;">2. Grouped `run_batch` Transactions</div>
-          <p style="font-size: 13.5px; color: var(--text-muted);" data-en="Agents bundle multi-step operations (e.g. creating tracks, loading devices, setting levels) into atomic `run_batch` payloads. Partial failures trigger explicit rollback reporting." data-pt="Os agentes agrupam operações encadeadas (ex: criar tracks, carregar plugins, ajustar volumes) em payloads atômicos de `run_batch`. Falhas parciais disparam relatório explícito de rollback.">
-            Agents bundle multi-step operations into atomic `run_batch` payloads. Partial failures trigger explicit rollback reporting.
-          </p>
-        </div>
-
-        <div class="arch-card">
-          <div style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-blue); margin-bottom: 8px;">3. Non-Realtime Audio Engine</div>
-          <p style="font-size: 14px; color: var(--text-muted);" data-en="Four standalone mix analysis tools (`analyze_audio`, `find_frequency_masking`, `analyze_mix`, `extract_single_cycle`) process audio files offline (LUFS-I, True Peak, spectral collisions)." data-pt="Quatro ferramentas de análise de mix (`analyze_audio`, `find_frequency_masking`, `analyze_mix`, `extract_single_cycle`) processam arquivos fora de tempo real (LUFS-I, True Peak, colisão espectral).">
-            Four standalone mix analysis tools process audio files offline (LUFS-I, True Peak, spectral collisions) without requiring active playback.
-          </p>
+        <div class="rack-unit-body" data-en="Every parameter mutation triggers a write-then-verify check in Live's main looper tick before reporting completion. Writes that fail verification return structured error envelopes." data-pt="Cada alteração de parâmetro dispara uma verificação no tick principal do Live antes de reportar sucesso. Escritas não confirmadas retornam envelopes estruturados de erro.">
+          Every parameter mutation triggers a write-then-verify check in Live's main looper tick before reporting completion. Writes that fail verification return structured error envelopes.
         </div>
       </div>
 
-      <!-- Agent System Prompt Guidance -->
-      <div class="arch-card" style="margin-top: 24px;">
-        <h3 style="color: #fff; margin-bottom: 12px;" data-en="System Prompt Specification for Agent Runtimes" data-pt="Especificação de Prompt de Sistema para Agentes">System Prompt Specification for Agent Runtimes</h3>
-        <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 16px;" data-en="Inject this system prompt fragment into your agent runtime to enforce deterministic interaction patterns against `ableton-mcp-server`:" data-pt="Injete este fragmento no prompt de sistema do seu agente para garantir um padrão determinístico ao interagir com o `ableton-mcp-server`:">
-          Inject this system prompt fragment into your agent runtime to enforce deterministic interaction patterns against `ableton-mcp-server`:
-        </p>
+      <div class="rack-unit">
+        <div class="rack-unit-head">
+          <span class="rack-unit-title" data-en="2. Grouped run_batch" data-pt="2. Transações run_batch">2. Grouped run_batch</span>
+          <span class="rack-unit-tag">ATOMIC</span>
+        </div>
+        <div class="rack-unit-body" data-en="Multi-step modifications bundle into an atomic run_batch payload mapped to a single undo entry. If an intermediate step fails, valid prefix actions persist with explicit rollback diagnostics." data-pt="Modificações em várias etapas são agrupadas em um payload atômico de run_batch mapeado para um único undo. Se um passo falhar, ações anteriores persistem com diagnóstico explícito.">
+          Multi-step modifications bundle into an atomic run_batch payload mapped to a single undo entry. If an intermediate step fails, valid prefix actions persist with explicit rollback diagnostics.
+        </div>
+      </div>
 
-        <div class="code-box">
-          <div class="code-header">
-            <span>agent_system_prompt_context.txt</span>
-            <span>Production Prompt Injection</span>
-          </div>
+      <div class="rack-unit">
+        <div class="rack-unit-head">
+          <span class="rack-unit-title" data-en="3. Non-Realtime DSP" data-pt="3. DSP Não em Tempo Real">3. Non-Realtime DSP</span>
+          <span class="rack-unit-tag">OFFLINE</span>
+        </div>
+        <div class="rack-unit-body" data-en="Four standalone audio tools analyze mix bus files directly from disk without active playback: calculating integrated LUFS, True Peak margin, dynamic range, and inter-track spectral collisions." data-pt="Quatro ferramentas analisam áudio diretamente do disco sem reprodução ativa: calculando LUFS integrado, margem de True Peak, faixa dinâmica e colisão espectral entre faixas.">
+          Four standalone audio tools analyze mix bus files directly from disk without active playback: calculating integrated LUFS, True Peak margin, dynamic range, and inter-track spectral collisions.
+        </div>
+      </div>
+    </div>
+
+    <!-- Agent Injection Prompt -->
+    <div class="term-box">
+      <div class="term-header">
+        <span class="hi">SYSTEM PROMPT INJECTION SPECIFICATION</span>
+        <span data-en="Standard agent runtime preamble" data-pt="Preâmbulo padrão para runtimes de agentes">Standard agent runtime preamble</span>
+      </div>
+      <div class="term-code">
 <pre><code>You are connected to an active Ableton Live 12 Set via ableton-mcp-server (97 tools). <!-- TOOL_COUNT: active_total -->
 Operational rules:
 1. Always inspect live set topology first via `get_session_overview()` or `get_track_list()`.
@@ -588,132 +640,143 @@ Operational rules:
 3. Query device parameters via `get_device_list()` and `get_parameter_value()` before mutating values with `set_parameter_value()`.
 4. Bundle multi-step modifications into `run_batch(operations)` for atomic execution with rollback protection.
 5. If an error envelope returns `AMBIGUOUS_MATCH` or `VERIFICATION_FAILED`, inspect the track/device index and retry with precise targets.</code></pre>
-        </div>
       </div>
     </div>
   </section>
 
-  <!-- Architecture Section -->
-  <section id="architecture" class="arch-section">
-    <div class="container">
-      <h2 class="section-title" data-en="Dual-Bridge System Architecture" data-pt="Arquitetura do Sistema Dual-Bridge">Dual-Bridge System Architecture</h2>
-      <p class="section-desc" data-en="High-efficiency separation between high-frequency LOM transport/device control and async WebSocket extension routines." data-pt="Separação de alta eficiência entre controle LOM/transport de alta frequência e rotinas assíncronas via WebSocket.">
-        High-efficiency separation between high-frequency LOM transport/device control and async WebSocket extension routines.
-      </p>
-
-      <div class="arch-card">
-        <!-- Responsive SVG Diagram with wide viewbox -->
-        <svg viewBox="0 0 1060 340" style="width: 100%; height: auto; font-family: var(--font-mono); font-size: 11px; overflow: visible;">
-          <defs>
-            <marker id="arrow-cyan" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#2ec4b6" />
-            </marker>
-            <marker id="arrow-gold" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#f2b94b" />
-            </marker>
-            <marker id="arrow-blue" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b82f6" />
-            </marker>
-          </defs>
-
-          <!-- Column 1: MCP Clients -->
-          <rect x="20" y="20" width="250" height="300" rx="10" fill="#05080e" stroke="#1e293b" stroke-width="1.5" />
-          <text x="40" y="48" fill="#64748b" font-weight="bold" font-size="12">AI AGENTS / MCP CLIENTS</text>
-          
-          <rect x="45" y="70" width="200" height="50" rx="6" fill="#101726" stroke="#3b82f6" stroke-width="1.5" />
-          <text x="60" y="100" fill="#3b82f6" font-weight="bold">MCP Client / Antigravity</text>
-
-          <rect x="45" y="145" width="200" height="50" rx="6" fill="#101726" stroke="#a855f7" stroke-width="1.5" />
-          <text x="60" y="175" fill="#a855f7" font-weight="bold">Gemini CLI / Codex Agent</text>
-
-          <rect x="45" y="220" width="200" height="50" rx="6" fill="#101726" stroke="#10b981" stroke-width="1.5" />
-          <text x="60" y="250" fill="#10b981" font-weight="bold">Custom Python / Audio Scripts</text>
-
-          <!-- Connection Client -> FastMCP -->
-          <path d="M 270 170 L 360 170" stroke="#2ec4b6" stroke-width="2" class="flow-path" marker-end="url(#arrow-cyan)" />
-          <rect x="278" y="150" width="70" height="18" rx="3" fill="#080c14" />
-          <text x="282" y="163" fill="#2ec4b6" font-size="10" font-weight="bold">stdio JSON</text>
-
-          <!-- Column 2: FastMCP Server -->
-          <rect x="360" y="20" width="300" height="300" rx="10" fill="#05080e" stroke="#2ec4b6" stroke-width="1.5" />
-          <text x="380" y="48" fill="#2ec4b6" font-weight="bold" font-size="12">PYTHON FASTMCP SERVER</text>
-          
-          <rect x="380" y="70" width="260" height="230" rx="8" fill="#101726" stroke="#1e293b" />
-          <text x="400" y="100" fill="#2ec4b6" font-size="14" font-weight="bold">ableton_mcp_server</text>
-          <text x="400" y="125" fill="#94a3b8">• 97 Tool Dispatch Surface</text> <!-- TOOL_COUNT: active_total -->
-          <text x="400" y="148" fill="#94a3b8">• Cross-bridge Error Taxonomy</text>
-          <text x="400" y="171" fill="#94a3b8">• Offline Mix Analysis Engine</text>
-          <text x="400" y="194" fill="#f2b94b">• WSL2 Loopback Executable</text>
-          <text x="400" y="217" fill="#64748b">• Non-blocking Async I/O</text>
-          <text x="400" y="240" fill="#64748b">• Atomic run_batch Transactions</text>
-          <text x="400" y="263" fill="#64748b">• FastMCP Protocol Standard</text>
-
-          <!-- Connections FastMCP -> Ableton Hosts -->
-          <!-- TCP Path -->
-          <path d="M 660 120 L 750 120" stroke="#f2b94b" stroke-width="2" class="flow-path" marker-end="url(#arrow-gold)" />
-          <rect x="665" y="98" width="80" height="18" rx="3" fill="#080c14" />
-          <text x="668" y="111" fill="#f2b94b" font-size="10" font-weight="bold">TCP :9888</text>
-
-          <!-- WS Path -->
-          <path d="M 660 240 L 750 240" stroke="#3b82f6" stroke-width="2" class="flow-path" marker-end="url(#arrow-blue)" />
-          <rect x="665" y="218" width="80" height="18" rx="3" fill="#080c14" />
-          <text x="668" y="231" fill="#3b82f6" font-size="10" font-weight="bold">WS :9889</text>
-
-          <!-- Column 3: Ableton Live Host -->
-          <rect x="750" y="20" width="290" height="300" rx="10" fill="#05080e" stroke="#1e293b" stroke-width="1.5" />
-          <text x="770" y="48" fill="#64748b" font-weight="bold" font-size="12">ABLETON LIVE 12 HOST</text>
-
-          <!-- Node: Remote Script -->
-          <rect x="770" y="70" width="250" height="100" rx="8" fill="#101726" stroke="#f2b94b" stroke-width="1.5" />
-          <text x="785" y="98" fill="#f2b94b" font-weight="bold" font-size="13">MIDI Remote Script</text>
-          <text x="785" y="122" fill="#94a3b8">Transport, Tracks, Clips, Devices</text>
-          <text x="785" y="145" fill="#64748b">Main thread looper execution</text>
-
-          <!-- Node: Extension Host -->
-          <rect x="770" y="190" width="250" height="100" rx="8" fill="#101726" stroke="#3b82f6" stroke-width="1.5" />
-          <text x="785" y="218" fill="#3b82f6" font-weight="bold" font-size="13">Extension Host Bridge</text>
-          <text x="785" y="242" fill="#94a3b8">Warping, Browser, Live Fade</text>
-          <text x="785" y="265" fill="#64748b">Async WebSocket loopback</text>
-        </svg>
+  <!-- MOD 02: DUAL-BRIDGE ARCHITECTURE -->
+  <section class="bay" id="architecture">
+    <div class="bay-header">
+      <div class="bay-badge">MOD-02 // SYSTEM ARCHITECTURE</div>
+      <h2 class="bay-title" data-en="Dual-Bridge Dispatch Topology" data-pt="Topologia de Dispatch Dual-Bridge">Dual-Bridge Dispatch Topology</h2>
+      <div class="bay-why" data-en="Clean operational boundaries separating synchronous main-thread LOM control from asynchronous Live extension capabilities." data-pt="Fronteiras operacionais limpas separando controle síncrono no loop principal do LOM de rotinas assíncronas da extensão do Live.">
+        Clean operational boundaries separating synchronous main-thread LOM control from asynchronous Live extension capabilities.
       </div>
+    </div>
 
-      <div class="grid-2">
-        <div class="arch-card">
-          <h3 style="color: var(--accent-gold); margin-bottom: 8px;" data-en="1. TCP JSONL Remote Script (Port 9888)" data-pt="1. MIDI Remote Script TCP (Porta 9888)">1. TCP JSONL Remote Script (Port 9888)</h3>
-          <p style="font-size: 14px; color: var(--text-muted);" data-en="Low-latency python control surface operating inside Ableton Live's main thread looper. Handles high-frequency parameter mutations, transport commands, clip creation, scene firing, and LOM introspection." data-pt="Superfície de controle em Python de baixa latência rodando dentro do loop principal do Ableton Live. Gerencia mutações de parâmetros, comandos de transport, criação de clips, disparo de cenas e introspecção do LOM.">
-            Low-latency python control surface operating inside Ableton Live's main thread looper. Handles high-frequency parameter mutations, transport commands, clip creation, scene firing, and LOM introspection.
-          </p>
+    <!-- Schematic SVG Diagram -->
+    <div class="schematic-box">
+      <svg viewBox="0 0 960 270" style="width: 100%; height: auto; font-family: var(--font-mono); font-size: 11px;">
+        <!-- Column 1: MCP Clients -->
+        <rect x="15" y="15" width="220" height="240" fill="#131417" stroke="#2a2c34" stroke-width="1.5" />
+        <text x="30" y="42" fill="#8e909a" font-size="10.5" font-weight="700" letter-spacing="0.06em">AI AGENTS / MCP HOSTS</text>
+        
+        <rect x="30" y="60" width="190" height="42" fill="#1a1b20" stroke="#2a2c34" />
+        <text x="44" y="86" fill="#f4f5f7">Antigravity IDE (Pair)</text>
+        
+        <rect x="30" y="112" width="190" height="42" fill="#1a1b20" stroke="#2a2c34" />
+        <text x="44" y="138" fill="#f4f5f7">Gemini CLI / Codex</text>
+        
+        <rect x="30" y="164" width="190" height="42" fill="#1a1b20" stroke="#2a2c34" />
+        <text x="44" y="190" fill="#8e909a">Cursor / Windsurf</text>
+
+        <rect x="30" y="216" width="190" height="28" fill="#1a1b20" stroke="#2a2c34" />
+        <text x="44" y="235" fill="#5a5c64" font-size="9.5">Local Audio Scripts</text>
+
+        <!-- Stdio Connection -->
+        <line x1="235" y1="135" x2="335" y2="135" stroke="#ff6b35" stroke-width="2" stroke-dasharray="4 3" />
+        <text x="245" y="126" fill="#ff6b35" font-size="9.5" font-weight="700">stdio JSON-RPC</text>
+
+        <!-- Column 2: FastMCP Server -->
+        <rect x="335" y="15" width="290" height="240" fill="#1a1b20" stroke="#ff6b35" stroke-width="1.5" />
+        <text x="352" y="42" fill="#ff6b35" font-size="11" font-weight="700" letter-spacing="0.06em">FASTMCP SERVER ENGINE</text>
+        <text x="352" y="58" fill="#8e909a" font-size="9.5">ableton_mcp_server v0.7.0</text>
+        
+        <line x1="352" y1="68" x2="610" y2="68" stroke="#2a2c34" />
+        
+        <text x="352" y="90" fill="#f4f5f7">• 97 Typed Tool Dispatch Surface</text> <!-- TOOL_COUNT: active_total -->
+        <text x="352" y="112" fill="#f4f5f7">• Write Verification Loop</text>
+        <text x="352" y="134" fill="#f4f5f7">• Grouped run_batch Engine</text>
+        <text x="352" y="156" fill="#f4f5f7">• Offline Audio DSP Engine</text>
+        <text x="352" y="178" fill="#8e909a">• WSL2 Loopback Executable</text>
+        <text x="352" y="200" fill="#8e909a">• Cross-Bridge Error Taxonomy</text>
+        <text x="352" y="222" fill="#5a5c64">• Zero External Network Exposure</text>
+
+        <!-- Connections to Bridges -->
+        <line x1="625" y1="85" x2="725" y2="85" stroke="#ff6b35" stroke-width="2" />
+        <text x="635" y="77" fill="#ff6b35" font-size="9.5" font-weight="700">TCP :9888</text>
+
+        <line x1="625" y1="185" x2="725" y2="185" stroke="#4cc9f0" stroke-width="2" />
+        <text x="635" y="177" fill="#4cc9f0" font-size="9.5" font-weight="700">WS :9889</text>
+
+        <!-- Column 3: Ableton Live 12 -->
+        <rect x="725" y="15" width="220" height="240" fill="#131417" stroke="#2a2c34" stroke-width="1.5" />
+        <text x="742" y="42" fill="#8e909a" font-size="10.5" font-weight="700" letter-spacing="0.06em">ABLETON LIVE 12</text>
+
+        <rect x="742" y="58" width="186" height="84" fill="#1a1b20" stroke="#ff6b35" />
+        <text x="754" y="78" fill="#ff6b35" font-weight="700" font-size="10.5">MIDI REMOTE SCRIPT</text>
+        <text x="754" y="98" fill="#f4f5f7" font-size="9.5">Transport &amp; Mixer LOM</text>
+        <text x="754" y="114" fill="#f4f5f7" font-size="9.5">Tracks, Clips &amp; Devices</text>
+        <text x="754" y="130" fill="#8e909a" font-size="9">Synchronous main looper</text>
+
+        <rect x="742" y="154" width="186" height="88" fill="#1a1b20" stroke="#4cc9f0" />
+        <text x="754" y="174" fill="#4cc9f0" font-weight="700" font-size="10.5">EXTENSION HOST</text>
+        <text x="754" y="194" fill="#f4f5f7" font-size="9.5">Clip Warping Properties</text>
+        <text x="754" y="210" fill="#f4f5f7" font-size="9.5">Live Browser Device Load</text>
+        <text x="754" y="226" fill="#8e909a" font-size="9">Async WebSocket loopback</text>
+      </svg>
+    </div>
+
+    <dl class="arch-split">
+      <dt>TCP REMOTE SCRIPT (PORT 9888)</dt>
+      <dd data-en="Low-latency Python control surface operating directly inside Live's main thread looper. Handles high-frequency parameter mutations, transport commands, clip creation, scene firing, and LOM introspection." data-pt="Superfície de controle em Python de baixa latência rodando no looper principal do Live. Gerencia mutações de parâmetros, transport, criação de clips, disparo de cenas e introspecção do LOM.">
+        Low-latency Python control surface operating directly inside Live's main thread looper. Handles high-frequency parameter mutations, transport commands, clip creation, scene firing, and LOM introspection.
+      </dd>
+      <dt>WEBSOCKET EXTENSION (PORT 9889)</dt>
+      <dd data-en="Asynchronous loopback WebSocket bridge dedicated to extension-only operations: reading warp state, writing supported warp modes, and loading devices onto tracks via Live's internal database." data-pt="Ponte WebSocket assíncrona em loopback para operações exclusivas da extensão: ler e escrever estados de warp suportados e carregar plugins através da base do Live.">
+        Asynchronous loopback WebSocket bridge dedicated to extension-only operations: reading warp state, writing supported warp modes, and loading devices onto tracks via Live's internal database.
+      </dd>
+      <dt>WSL2 DUAL-HOST LOOPBACK</dt>
+      <dd data-en="Transparent cross-environment operation. AI agents executing inside Ubuntu on WSL2 route directly through loopback to the Windows 11 host daemon with zero latency penalty." data-pt="Operação transparente entre ambientes. Agentes rodando no Ubuntu via WSL2 conectam-se diretamente pelo loopback ao daemon no Windows 11 sem perda de desempenho.">
+        Transparent cross-environment operation. AI agents executing inside Ubuntu on WSL2 route directly through loopback to the Windows 11 host daemon with zero latency penalty.
+      </dd>
+    </dl>
+  </section>
+
+  <!-- MOD 03: AGENT CONFIGURATION -->
+  <section class="bay" id="config">
+    <div class="bay-header">
+      <div class="bay-badge">MOD-03 // CLIENT CONFIGURATION</div>
+      <h2 class="bay-title" data-en="Agent &amp; Environment Setup" data-pt="Configuração do Agente e Ambiente">Agent &amp; Environment Setup</h2>
+      <div class="bay-why" data-en="Copy-paste server launch configurations for Antigravity IDE, Gemini CLI, Cursor, Windsurf, and standard MCP client hosts." data-pt="Configurações prontas para copiar e colar no Antigravity IDE, Gemini CLI, Cursor, Windsurf e clientes MCP padrão.">
+        Copy-paste server launch configurations for Antigravity IDE, Gemini CLI, Cursor, Windsurf, and standard MCP client hosts.
+      </div>
+    </div>
+
+    <div class="config-tabs">
+      <button class="config-tab-btn active" id="btn-cfg-antigravity" onclick="switchConfig('antigravity')">Antigravity / Gemini CLI</button>
+      <button class="config-tab-btn" id="btn-cfg-generic" onclick="switchConfig('generic')">Generic MCP Host</button>
+      <button class="config-tab-btn" id="btn-cfg-cursor" onclick="switchConfig('cursor')">Cursor / Windsurf</button>
+    </div>
+
+    <div id="cfg-antigravity">
+      <div class="term-box">
+        <div class="term-header">
+          <span class="hi">mcp.json / antigravity.json</span>
+          <span data-en="Antigravity IDE &amp; Terminal Pair Programmer" data-pt="Antigravity IDE e Terminal Agent">Antigravity IDE &amp; Terminal Pair Programmer</span>
         </div>
-        <div class="arch-card">
-          <h3 style="color: var(--accent-blue); margin-bottom: 8px;" data-en="2. WebSocket Extension Host (Port 9889)" data-pt="2. Extension Host WebSocket (Porta 9889)">2. WebSocket Extension Host (Port 9889)</h3>
-          <p style="font-size: 14px; color: var(--text-muted);" data-en="Asynchronous loopback WebSocket bridge for the three Extension-only operations: reading warp state, writing supported warp state, and loading a device onto a track." data-pt="Ponte WebSocket assíncrona em loopback para as três operações exclusivas da Extension: ler warp, escrever o estado de warp suportado e carregar um dispositivo em uma track.">
-            Asynchronous loopback WebSocket bridge for the three Extension-only operations: reading warp state, writing supported warp state, and loading a device onto a track.
-          </p>
+        <div class="term-code">
+<pre><code>{
+  "mcpServers": {
+    "ableton-live": {
+      "command": "C:/Users/Usuario/repos/ableton-mcp-server/.venv-win/Scripts/ableton-mcp-server.exe",
+      "env": {
+        "PYTHONUNBUFFERED": "1"
+      }
+    }
+  }
+}</code></pre>
         </div>
       </div>
     </div>
-  </section>
 
-  <!-- Agent Configuration -->
-  <section id="config" class="arch-section">
-    <div class="container">
-      <h2 class="section-title" data-en="Agent Configuration" data-pt="Configuração do Agente">Agent Configuration</h2>
-      <p class="section-desc" data-en="Copy-paste server launch configurations for MCP client environments (Antigravity IDE, Cursor, Windsurf, and any MCP-capable host)." data-pt="Configurações de inicialização do servidor para ambientes de clientes MCP (Antigravity IDE, Cursor, Windsurf e qualquer host compatível com MCP).">
-        Copy-paste server launch configurations for MCP client environments (Antigravity IDE, Cursor, Windsurf, and any MCP-capable host).
-      </p>
-
-      <div class="tab-bar">
-        <button class="tab-btn active" onclick="switchTab('generic')">Generic MCP Host</button>
-        <button class="tab-btn" onclick="switchTab('antigravity')">Antigravity / Gemini CLI</button>
-        <button class="tab-btn" onclick="switchTab('cursor')">Cursor / Windsurf</button>
-      </div>
-
-      <!-- Generic MCP host config -->
-      <div id="cfg-generic" class="code-box">
-        <div class="code-header">
-          <span>mcp.json</span>
-          <span>Windows / WSL2 Deployment</span>
+    <div id="cfg-generic" style="display: none;">
+      <div class="term-box">
+        <div class="term-header">
+          <span class="hi">mcp.json</span>
+          <span data-en="Standard Stdio Client Launch Profile" data-pt="Perfil Padrão de Inicialização Stdio">Standard Stdio Client Launch Profile</span>
         </div>
+        <div class="term-code">
 <pre><code>{
   "mcpServers": {
     "ableton": {
@@ -722,32 +785,17 @@ Operational rules:
     }
   }
 }</code></pre>
-      </div>
-
-      <!-- Antigravity Config -->
-      <div id="cfg-antigravity" class="code-box" style="display:none;">
-        <div class="code-header">
-          <span>mcp.json / antigravity.json</span>
-          <span>Antigravity IDE & Terminal Agent</span>
         </div>
-<pre><code>{
-  "mcpServers": {
-    "ableton-live": {
-      "command": "C:/path/to/ableton-mcp-server/.venv-win/Scripts/ableton-mcp-server.exe",
-      "env": {
-        "PYTHONUNBUFFERED": "1"
-      }
-    }
-  }
-}</code></pre>
       </div>
+    </div>
 
-      <!-- Cursor Config -->
-      <div id="cfg-cursor" class="code-box" style="display:none;">
-        <div class="code-header">
-          <span>.cursor/mcp.json</span>
-          <span>Cursor / VS Code MCP</span>
+    <div id="cfg-cursor" style="display: none;">
+      <div class="term-box">
+        <div class="term-header">
+          <span class="hi">.cursor/mcp.json</span>
+          <span data-en="Cursor / Windsurf Workspace Configuration" data-pt="Configuração de Workspace para Cursor / Windsurf">Cursor / Windsurf Workspace Configuration</span>
         </div>
+        <div class="term-code">
 <pre><code>{
   "mcpServers": {
     "ableton": {
@@ -755,138 +803,165 @@ Operational rules:
     }
   }
 }</code></pre>
-      </div>
-    </div>
-  </section>
-
-  <!-- Error Taxonomy Section -->
-  <section id="taxonomy" class="arch-section">
-    <div class="container">
-      <h2 class="section-title" data-en="Cross-Bridge Error Taxonomy" data-pt="Taxonomia de Erros do Sistema">Cross-Bridge Error Taxonomy</h2>
-      <p class="section-desc" data-en="Deterministic error codes returned when a command cannot be executed, enabling LLM agent runtimes to inspect and self-correct plans." data-pt="Códigos de erro determinísticos retornados quando um comando falha, permitindo que agentes LLM inspecionem e corrijam seus planos de forma autônoma.">
-        Deterministic error codes returned when a command cannot be executed, enabling LLM agent runtimes to inspect and self-correct plans.
-      </p>
-
-      <div class="grid-2">
-        <div class="arch-card">
-          <span class="error-tag">CAPABILITY_UNAVAILABLE</span>
-          <h4 style="color: #fff; margin-bottom: 6px;" data-en="Capability Unavailable" data-pt="Recurso Indisponível">Capability Unavailable</h4>
-          <p style="font-size: 13px; color: var(--text-muted);" data-en="Returned when attempting an operation not supported by the connected Live version or missing extension bridge (e.g. calling warping on an unwarped audio clip)." data-pt="Retornado ao tentar uma operação não suportada pela versão do Live ou por ponte ausente (ex: ajustar warping em clip não warped).">
-            Returned when attempting an operation not supported by the connected Live version or missing extension bridge (e.g. calling warping on an unwarped audio clip).
-          </p>
-        </div>
-
-        <div class="arch-card">
-          <span class="error-tag">AMBIGUOUS_MATCH</span>
-          <h4 style="color: #fff; margin-bottom: 6px;" data-en="Ambiguous Match" data-pt="Busca Ambiguação">Ambiguous Match</h4>
-          <p style="font-size: 13px; color: var(--text-muted);" data-en="Returned when a fuzzy track or device lookup matches multiple targets without sufficient specificity. Agent must supply exact index or full name." data-pt="Retornado quando a busca por nome de track ou dispositivo encontra múltiplos resultados. O agente deve fornecer o índice ou nome exato.">
-            Returned when a fuzzy track or device lookup matches multiple targets without sufficient specificity. Agent must supply exact index or full name.
-          </p>
-        </div>
-
-        <div class="arch-card">
-          <span class="error-tag">VERIFICATION_FAILED</span>
-          <h4 style="color: #fff; margin-bottom: 6px;" data-en="Verification Failed" data-pt="Falha de Verificação">Verification Failed</h4>
-          <p style="font-size: 13px; color: var(--text-muted);" data-en="Returned by the per-tick write-then-verify loop when a parameter write does not match the readback value from Live's object model after execution." data-pt="Retornado pelo loop de confirmação quando a alteração de parâmetro efetuada não bate com o valor lido de volta do modelo do Live.">
-            Returned by the per-tick write-then-verify loop when a parameter write does not match the readback value from Live's object model after execution.
-          </p>
-        </div>
-
-        <div class="arch-card">
-          <span class="error-tag">ACCEPTANCE_GUARD_FAILED</span>
-          <h4 style="color: #fff; margin-bottom: 6px;" data-en="Acceptance Guard Failed" data-pt="Guarda de Aceitação Rejeitada">Acceptance Guard Failed</h4>
-          <p style="font-size: 13px; color: var(--text-muted);" data-en="Returned when running destructive operations against an active production project instead of a disposable test Set (e.g. TESTE_CODEX)." data-pt="Retornado ao executar operações de teste destrutivas em um projeto ativo em vez de um Set descartável de teste (ex: `TESTE_CODEX`).">
-            Returned when running destructive operations against an active production project instead of a disposable test Set (e.g. TESTE_CODEX).
-          </p>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- Inspiration & References Section -->
-  <section id="inspiration" class="arch-section">
-    <div class="container">
-      <h2 class="section-title" data-en="Prior Art & Technical References" data-pt="Trabalhos Anteriores e Referências Técnicas">Prior Art & Technical References</h2>
-      <p class="section-desc" data-en="`ableton-mcp-server` builds on design insights from open-source Ableton control surfaces and OSC bridges. Direct attribution:" data-pt="O `ableton-mcp-server` foi construído com base nas lições aprendidas em pontes de controle e superfícies OSC open-source. Atribuição direta:">
-        `ableton-mcp-server` builds on design insights from open-source Ableton control surfaces and OSC bridges. Direct attribution:
-      </p>
+  <!-- MOD 04: ERROR TAXONOMY -->
+  <section class="bay" id="taxonomy">
+    <div class="bay-header">
+      <div class="bay-badge">MOD-04 // DIAGNOSTICS &amp; ERRORS</div>
+      <h2 class="bay-title" data-en="Cross-Bridge Error Taxonomy" data-pt="Taxonomia de Erros da Bridge">Cross-Bridge Error Taxonomy</h2>
+      <div class="bay-why" data-en="Deterministic error contracts enabling LLM agent pairs to inspect failure causes, adapt targets, and correct execution paths." data-pt="Contratos determinísticos de erro que permitem aos agentes de IA diagnosticar falhas, adaptar parâmetros e corrigir caminhos de execução.">
+        Deterministic error contracts enabling LLM agent pairs to inspect failure causes, adapt targets, and correct execution paths.
+      </div>
+    </div>
 
-      <div class="grid-2">
-        <div class="arch-card">
-          <h4 style="color: var(--accent-gold); margin-bottom: 8px;">pnomolos/live-wire</h4>
-          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px;" data-en="Pioneered the TCP JSONL Remote Script protocol layout, typed error envelope structure, and per-tick write-then-verify loop discipline." data-pt="Pioneiro no layout do protocolo TCP JSONL via Remote Script, estrutura de envelopes de erro tipados e verificação de parâmetros a cada tick.">
-            Pioneered the TCP JSONL Remote Script protocol layout, typed error envelope structure, and per-tick write-then-verify loop discipline.
-          </p>
-          <a href="https://github.com/pnomolos/live-wire" target="_blank" style="font-size: 12px; font-family: var(--font-mono);">github.com/pnomolos/live-wire →</a>
-        </div>
+    <table class="error-table">
+      <thead>
+        <tr>
+          <th style="width: 260px;" data-en="ERROR ENVELOPE CODE" data-pt="CÓDIGO DE ERRO">ERROR ENVELOPE CODE</th>
+          <th data-en="TRIGGER CONDITION &amp; RECOVERY PROTOCOL" data-pt="CONDIÇÃO DE DISPARO E PROTOCOLO DE RECUPERAÇÃO">TRIGGER CONDITION &amp; RECOVERY PROTOCOL</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="code-tag">CAPABILITY_UNAVAILABLE</span></td>
+          <td data-en="Attempted operation is not supported by the connected Ableton Live version or required bridge is unavailable (e.g. calling warp adjustments on an unwarped audio clip). Agent should inspect capabilities before retrying." data-pt="Operação não suportada pela versão ativa do Live ou ponte necessária indisponível (ex: ajustar warp em clip não-warped). O agente deve inspecionar capacidades antes de tentar novamente.">
+            Attempted operation is not supported by the connected Ableton Live version or required bridge is unavailable (e.g. calling warp adjustments on an unwarped audio clip). Agent should inspect capabilities before retrying.
+          </td>
+        </tr>
+        <tr>
+          <td><span class="code-tag">AMBIGUOUS_MATCH</span></td>
+          <td data-en="Fuzzy track or device lookup matched multiple candidates without sufficient specificity. Recovery: query track listing first with `get_track_list()` and provide an exact integer track index." data-pt="A busca aproximada de track ou dispositivo retornou múltiplos resultados. Recuperação: consulte a lista com `get_track_list()` e use o índice numérico exato.">
+            Fuzzy track or device lookup matched multiple candidates without sufficient specificity. Recovery: query track listing first with `get_track_list()` and provide an exact integer track index.
+          </td>
+        </tr>
+        <tr>
+          <td><span class="code-tag">VERIFICATION_FAILED</span></td>
+          <td data-en="Per-tick write-then-verify loop failed: the parameter value read back from Live did not match the requested target value after execution. Agent should check parameter min/max ranges and quantization steps." data-pt="A verificação por tick falhou: o valor lido de volta do Live não coincidiu com o solicitado. O agente deve verificar limites de mínimo/máximo e quantização.">
+            Per-tick write-then-verify loop failed: the parameter value read back from Live did not match the requested target value after execution. Agent should check parameter min/max ranges and quantization steps.
+          </td>
+        </tr>
+        <tr>
+          <td><span class="code-tag">ACCEPTANCE_GUARD_FAILED</span></td>
+          <td data-en="Destructive operation blocked against a production Live Set. Test and verification operations must target an isolated disposable test project (e.g. TESTE_CODEX)." data-pt="Operação destrutiva bloqueada em projeto de produção. Testes e verificações devem utilizar um projeto descartável dedicado (ex: TESTE_CODEX).">
+            Destructive operation blocked against a production Live Set. Test and verification operations must target an isolated disposable test project (e.g. TESTE_CODEX).
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
 
-        <div class="arch-card">
-          <h4 style="color: var(--accent-gold); margin-bottom: 8px;">hidingwill/AbletonBridge</h4>
-          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px;" data-en="Inspired the grouped `run_batch` transaction semantics with explicit `rolled_back: false` on partial failure." data-pt="Inspirou a semântica de transações agrupadas via `run_batch` com rollback atômico em caso de falhas parciais.">
-            Inspired the grouped `run_batch` transaction semantics with explicit `rolled_back: false` on partial failure.
-          </p>
-          <a href="https://github.com/hidingwill/AbletonBridge" target="_blank" style="font-size: 12px; font-family: var(--font-mono);">github.com/hidingwill/AbletonBridge →</a>
-        </div>
+  <!-- MOD 05: PRIOR ART & ATTRIBUTION -->
+  <section class="bay" id="inspiration">
+    <div class="bay-header">
+      <div class="bay-badge">MOD-05 // HISTORICAL FOUNDATIONS</div>
+      <h2 class="bay-title" data-en="Prior Art &amp; Architectural Attributions" data-pt="Trabalhos Anteriores e Atribuições">Prior Art &amp; Architectural Attributions</h2>
+      <div class="bay-why" data-en="Engineered on lessons learned from pioneering open-source Ableton control surfaces and OSC integrations." data-pt="Projetado com base nas lições aprendidas em pontes pioneiras de controle e integrações OSC de código aberto.">
+        Engineered on lessons learned from pioneering open-source Ableton control surfaces and OSC integrations.
+      </div>
+    </div>
 
-        <div class="arch-card">
-          <h4 style="color: var(--accent-gold); margin-bottom: 8px;">ideoforms/AbletonOSC</h4>
-          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px;" data-en="De-facto reference for exposing the Live Object Model over OSC conventions used by the Extension Host bridge." data-pt="A referência padrão para exposição do Live Object Model via mensagens e convenções OSC no Extension Host.">
-            De-facto reference for exposing the Live Object Model over OSC conventions used by the Extension Host bridge.
-          </p>
-          <a href="https://github.com/ideoforms/AbletonOSC" target="_blank" style="font-size: 12px; font-family: var(--font-mono);">github.com/ideoforms/AbletonOSC →</a>
+    <div class="rack-grid c2">
+      <div class="rack-unit">
+        <div class="rack-unit-head">
+          <span class="rack-unit-title">pnomolos/live-wire</span>
+          <span class="rack-unit-tag">PROTOCOL</span>
         </div>
+        <div class="rack-unit-body" data-en="Pioneered the TCP JSONL Remote Script protocol layout, typed error envelope structure, and per-tick write-then-verify loop discipline." data-pt="Pioneiro no layout do protocolo TCP JSONL via Remote Script, estrutura de envelopes de erro tipados e verificação de parâmetros a cada tick.">
+          Pioneered the TCP JSONL Remote Script protocol layout, typed error envelope structure, and per-tick write-then-verify loop discipline.
+        </div>
+        <div style="margin-top: 6px;"><a href="https://github.com/pnomolos/live-wire" target="_blank">github.com/pnomolos/live-wire &#8599;</a></div>
+      </div>
 
-        <div class="arch-card">
-          <h4 style="color: var(--accent-gold); margin-bottom: 8px;">Simon-Kansara/ableton-live-mcp-server</h4>
-          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px;" data-en="Influenced the tool boundary decision: keeping transport, clips, tracks, and devices on Remote Script while routing warping/loading through WebSockets." data-pt="Influenciou a divisão de tarefas: manter transport, clips e tracks via Remote Script, enviando warping e carregamento via WebSockets.">
-            Influenced the tool boundary decision: keeping transport, clips, tracks, and devices on Remote Script while routing warping/loading through WebSockets.
-          </p>
-          <a href="https://github.com/Simon-Kansara/ableton-live-mcp-server" target="_blank" style="font-size: 12px; font-family: var(--font-mono);">github.com/Simon-Kansara/ableton-live-mcp-server →</a>
+      <div class="rack-unit">
+        <div class="rack-unit-head">
+          <span class="rack-unit-title">hidingwill/AbletonBridge</span>
+          <span class="rack-unit-tag">TRANSACTIONS</span>
         </div>
+        <div class="rack-unit-body" data-en="Inspired the grouped run_batch transaction semantics with prefix persistence and explicit rollback reporting." data-pt="Inspirou a semântica de transações agrupadas via run_batch com persistência de prefixos e relatório explícito de falhas.">
+          Inspired the grouped run_batch transaction semantics with prefix persistence and explicit rollback reporting.
+        </div>
+        <div style="margin-top: 6px;"><a href="https://github.com/hidingwill/AbletonBridge" target="_blank">github.com/hidingwill/AbletonBridge &#8599;</a></div>
+      </div>
+
+      <div class="rack-unit">
+        <div class="rack-unit-head">
+          <span class="rack-unit-title">ideoforms/AbletonOSC</span>
+          <span class="rack-unit-tag">LOM REFERENCE</span>
+        </div>
+        <div class="rack-unit-body" data-en="De-facto reference for exposing the Live Object Model over OSC conventions used by the Extension Host bridge." data-pt="Referência padrão para exposição do Live Object Model via convenções OSC usadas na Extension Host bridge.">
+          De-facto reference for exposing the Live Object Model over OSC conventions used by the Extension Host bridge.
+        </div>
+        <div style="margin-top: 6px;"><a href="https://github.com/ideoforms/AbletonOSC" target="_blank">github.com/ideoforms/AbletonOSC &#8599;</a></div>
+      </div>
+
+      <div class="rack-unit">
+        <div class="rack-unit-head">
+          <span class="rack-unit-title">Simon-Kansara/ableton-live-mcp-server</span>
+          <span class="rack-unit-tag">BOUNDARIES</span>
+        </div>
+        <div class="rack-unit-body" data-en="Influenced the tool boundary separation: maintaining transport, clips, tracks, and devices on Remote Script while routing warping/loading through WebSockets." data-pt="Influenciou a divisão de fronteiras: manter transport, clips, tracks e devices no Remote Script e rotear warping/loading via WebSockets.">
+          Influenced the tool boundary separation: maintaining transport, clips, tracks, and devices on Remote Script while routing warping/loading through WebSockets.
+        </div>
+        <div style="margin-top: 6px;"><a href="https://github.com/Simon-Kansara/ableton-live-mcp-server" target="_blank">github.com/Simon-Kansara/ableton-live-mcp-server &#8599;</a></div>
       </div>
     </div>
   </section>
 
-  <!-- Tools Catalog Matrix -->
-  <section id="tools" class="arch-section">
-    <div class="container">
-      <h2 class="section-title" data-en="Complete 97 MCP Tool Surface" data-pt="Catálogo Completo das 97 Ferramentas MCP">Complete 97 MCP Tool Surface</h2> <!-- TOOL_COUNT: active_total -->
-      <p class="section-desc" data-en="Typed parameter signatures and descriptions for all 97 tools exposed to AI agents. Search by name, category, or parameter signature." data-pt="Assinaturas de parâmetros e descrições tipadas para todas as 97 ferramentas expostas aos agentes de IA. Pesquise por nome, categoria ou assinatura.">
-        Typed parameter signatures and descriptions for all 97 tools exposed to AI agents. Search by name, category, or parameter signature. <!-- TOOL_COUNT: active_total -->
-      </p>
+  <!-- MOD 06: COMPLETE TOOL CATALOG -->
+  <section class="bay" id="tools">
+    <div class="bay-header">
+      <div class="bay-badge">MOD-06 // ACTIVE TOOL CATALOG</div>
+      <h2 class="bay-title" data-en="Complete 97 MCP Tool Surface" data-pt="Catálogo Completo das 97 Ferramentas MCP">Complete 97 MCP Tool Surface</h2> <!-- TOOL_COUNT: active_total -->
+      <div class="bay-why" data-en="Complete typed inventory of all 97 operations exposed over stdio JSON-RPC. Search by name, category, or parameter signature." data-pt="Inventário tipado completo de todas as 97 operações expostas via stdio JSON-RPC. Pesquise por nome, categoria ou assinatura.">
+        Complete typed inventory of all 97 operations exposed over stdio JSON-RPC. Search by name, category, or parameter signature.
+      </div>
+    </div>
 
-      <div class="tool-controls">
-        <input type="text" id="tool-search" class="search-input" placeholder="Search tool by name, parameters, or signature..." oninput="filterTools()">
-        <button class="filter-btn active" onclick="setCategory('all', this)" data-en="All (97)" data-pt="Todas (97)">All (97)</button> <!-- TOOL_COUNT: active_total -->
-        <button class="filter-btn" onclick="setCategory('transport', this)" data-en="Transport & Session" data-pt="Transport e Sessão">Transport & Session</button>
-        <button class="filter-btn" onclick="setCategory('track', this)" data-en="Tracks & Devices" data-pt="Tracks e Dispositivos">Tracks & Devices</button>
-        <button class="filter-btn" onclick="setCategory('lifecycle', this)" data-en="Lifecycle & Fade" data-pt="Ciclo de Vida e Fade">Lifecycle & Fade</button>
-        <button class="filter-btn" onclick="setCategory('analysis', this)" data-en="Mix Analysis" data-pt="Análise de Mix">Mix Analysis</button>
-        <button class="filter-btn" onclick="setCategory('inspection', this)" data-en="Inspection & Batch" data-pt="Inspecção e Batch">Inspection & Batch</button>
+    <div class="catalog-controls">
+      <div class="search-bar-wrap">
+        <span class="search-icon">&gt;</span>
+        <input type="text" id="tool-search" class="catalog-search" placeholder="SEARCH 97 TOOLS BY NAME, PARAMETER, OR SIGNATURE..." oninput="filterTools()">
       </div>
 
-      <div class="tool-grid" id="tool-container">
-        <!-- Tools injected via JS -->
+      <div class="category-chips">
+        <button class="cat-btn active" onclick="setCategory('all', this)" data-en="ALL (97)" data-pt="TODAS (97)">ALL (97)</button> <!-- TOOL_COUNT: active_total -->
+        <button class="cat-btn" onclick="setCategory('transport', this)" data-en="TRANSPORT (15)" data-pt="TRANSPORT (15)">TRANSPORT (15)</button>
+        <button class="cat-btn" onclick="setCategory('track', this)" data-en="TRACKS &amp; DEVICES (44)" data-pt="TRACKS &amp; DEVICES (44)">TRACKS &amp; DEVICES (44)</button>
+        <button class="cat-btn" onclick="setCategory('clip', this)" data-en="CLIPS &amp; TIMELINE (8)" data-pt="CLIPS &amp; TIMELINE (8)">CLIPS &amp; TIMELINE (8)</button>
+        <button class="cat-btn" onclick="setCategory('lifecycle', this)" data-en="LIFECYCLE &amp; FADE (5)" data-pt="LIFECYCLE &amp; FADE (5)">LIFECYCLE &amp; FADE (5)</button>
+        <button class="cat-btn" onclick="setCategory('analysis', this)" data-en="MIX ANALYSIS (4)" data-pt="ANÁLISE DE MIX (4)">MIX ANALYSIS (4)</button>
+        <button class="cat-btn" onclick="setCategory('music', this)" data-en="OFFLINE MUSIC (9)" data-pt="MÚSICA OFFLINE (9)">OFFLINE MUSIC (9)</button>
+        <button class="cat-btn" onclick="setCategory('inspection', this)" data-en="INSPECTION &amp; BATCH (12)" data-pt="INSPEÇÃO &amp; BATCH (12)">INSPECTION &amp; BATCH (12)</button>
       </div>
+    </div>
+
+    <div class="tool-matrix" id="tool-container">
+      <!-- Dynamically rendered via JS -->
     </div>
   </section>
 
-  <!-- Footer -->
-  <footer>
-    <div class="container footer-inner">
+  <!-- FOOTER -->
+  <footer class="deck-footer">
+    <div class="footer-line">
       <div>
-        <strong>ableton-mcp-server v0.7.0</strong> — Source available under MIT License.
+        <strong>ableton-mcp-server v0.7.0</strong> — MIT License.
         <br>
-        <a href="https://github.com/ntworm/ableton-mcp-server" target="_blank">github.com/ntworm/ableton-mcp-server</a>
+        <span data-en="Production FastMCP server for Ableton Live 12." data-pt="Servidor FastMCP de produção para Ableton Live 12.">Production FastMCP server for Ableton Live 12.</span>
       </div>
       <div>
-        Built by <a href="https://github.com/ntworm" target="_blank">Gabriel Worm</a>
+        <span data-en="Made by <b>Gabriel Worm</b> · Independent project · Not affiliated with Ableton AG." data-pt="Criado por <b>Gabriel Worm</b> · Projeto independente · Não afiliado à Ableton AG.">Made by <b>Gabriel Worm</b> · Independent project · Not affiliated with Ableton AG.</span>
       </div>
     </div>
   </footer>
 
-  <script>
-    const TOOLS = [
+</div>
+
+<script>
+const TOOLS = [
       // Transport & Session
       { name: 'get_session_info', cat: 'transport', desc_en: 'Returns current song tempo, time signature, playing status, and song position.', desc_pt: 'Retorna o tempo atual (BPM), fórmula de compasso, estado de reprodução e posição do song.', sig: 'get_session_info()' },
       { name: 'set_tempo', cat: 'transport', desc_en: 'Sets song tempo in BPM, or validates the request without writing when dry_run is true.', desc_pt: 'Define o tempo da música em BPM ou valida sem escrever quando dry_run é true.', sig: 'set_tempo(tempo: float, dry_run: bool = false)' },
@@ -997,70 +1072,122 @@ Operational rules:
       { name: 'build_extension', cat: 'inspection', desc_en: 'Installs dependencies and builds an Ableton Extension project.', desc_pt: 'Instala dependências e compila um projeto de Ableton Extension.', sig: 'build_extension(project_path: str)' }
     ];
 
-    let currentCat = 'all';
-    let currentLang = 'en';
+let currentCat = 'all';
+let currentLang = 'en';
 
-    function setLanguage(lang) {
-      currentLang = lang;
-      document.getElementById('btn-en').classList.toggle('active', lang === 'en');
-      document.getElementById('btn-pt').classList.toggle('active', lang === 'pt');
-      
-      document.querySelectorAll('[data-en]').forEach(el => {
-        const text = el.getAttribute(`data-${lang}`);
-        if (text) el.textContent = text;
-      });
+function setLanguage(lang) {
+  currentLang = lang;
+  document.getElementById('btn-en').classList.toggle('on', lang === 'en');
+  document.getElementById('btn-pt').classList.toggle('on', lang === 'pt');
+  
+  document.querySelectorAll('[data-en]').forEach(el => {
+    const text = el.getAttribute(`data-${lang}`);
+    if (text) el.innerHTML = text;
+  });
 
-      renderTools();
+  const searchInput = document.getElementById('tool-search');
+  if (searchInput) {
+    searchInput.placeholder = lang === 'pt' 
+      ? 'PESQUISAR 97 FERRAMENTAS POR NOME, PARÂMETRO OU ASSINATURA...' 
+      : 'SEARCH 97 TOOLS BY NAME, PARAMETER, OR SIGNATURE...';
+  }
+
+  renderTools();
+}
+
+function renderTools() {
+  const container = document.getElementById('tool-container');
+  if (!container) return;
+  const searchInput = document.getElementById('tool-search');
+  const search = searchInput ? searchInput.value.toLowerCase().trim() : '';
+  
+  const filtered = TOOLS.filter(t => {
+    const matchesCat = currentCat === 'all' || t.cat === currentCat;
+    const desc = (currentLang === 'pt' ? t.desc_pt : t.desc_en) || t.desc_en;
+    const isMusicBrainGroove = search === 'groove' && t.name === 'music_generate_drum_groove';
+    const matchesSearch = !isMusicBrainGroove && (
+      t.name.toLowerCase().includes(search) || 
+      desc.toLowerCase().includes(search) || 
+      (t.sig && t.sig.toLowerCase().includes(search))
+    );
+    return matchesCat && matchesSearch;
+  });
+
+  container.innerHTML = filtered.map(t => {
+    const desc = (currentLang === 'pt' ? t.desc_pt : t.desc_en) || t.desc_en;
+    return `
+      <div class="matrix-card">
+        <div class="matrix-card-top">
+          <span class="matrix-card-name">${t.name}</span>
+          <span class="matrix-card-cat">${t.cat}</span>
+        </div>
+        <div class="matrix-card-desc">${desc}</div>
+        <div class="matrix-card-sig">${t.sig}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function setCategory(cat, btn) {
+  currentCat = cat;
+  document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTools();
+}
+
+function filterTools() {
+  renderTools();
+}
+
+function switchConfig(id) {
+  document.querySelectorAll('.config-tab-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById(`btn-cfg-${id}`);
+  if (btn) btn.classList.add('active');
+  
+  ['antigravity', 'generic', 'cursor'].forEach(cfg => {
+    const el = document.getElementById(`cfg-${cfg}`);
+    if (el) el.style.display = (cfg === id) ? 'block' : 'none';
+  });
+}
+
+// Nav scroll spy
+(function () {
+  const links = Array.from(document.querySelectorAll('.sub-nav a[href^="#"]'));
+  if (!links.length) return;
+  const targets = links.map(a => ({
+    link: a,
+    el: document.getElementById(a.getAttribute('href').slice(1))
+  })).filter(t => t.el);
+  if (!targets.length) return;
+
+  let current = null;
+  function mark(link) {
+    if (link === current) return;
+    if (current) current.removeAttribute('aria-current');
+    if (link) link.setAttribute('aria-current', 'true');
+    current = link;
+  }
+  function update() {
+    const doc = document.documentElement;
+    if (window.innerHeight + window.scrollY >= doc.scrollHeight - 2) {
+      mark(targets[targets.length - 1].link);
+      return;
     }
-
-    function renderTools() {
-      const container = document.getElementById('tool-container');
-      const search = document.getElementById('tool-search').value.toLowerCase();
-      
-      const filtered = TOOLS.filter(t => {
-        const matchesCat = currentCat === 'all' || t.cat === currentCat;
-        const desc = (currentLang === 'pt' ? t.desc_pt : t.desc_en) || t.desc_en;
-        // Keep the five Groove Intelligence cards distinct from the similarly
-        // named Music Brain drum generator when searching for "groove".
-        const isMusicBrainGroove = search === 'groove' && t.name === 'music_generate_drum_groove';
-        const matchesSearch = !isMusicBrainGroove && (t.name.toLowerCase().includes(search) || desc.toLowerCase().includes(search) || (t.sig && t.sig.toLowerCase().includes(search)));
-        return matchesCat && matchesSearch;
-      });
-
-      container.innerHTML = filtered.map(t => {
-        const desc = (currentLang === 'pt' ? t.desc_pt : t.desc_en) || t.desc_en;
-        return `
-          <div class="tool-card">
-            <div class="tool-name">${t.name}</div>
-            <span class="tool-cat">${t.cat}</span>
-            <div class="tool-desc">${desc}</div>
-            <div class="tool-sig">${t.sig}</div>
-          </div>
-        `;
-      }).join('');
+    const line = 90;
+    let best = null;
+    for (let i = 0; i < targets.length; i++) {
+      if (targets[i].el.getBoundingClientRect().top <= line) best = targets[i].link;
     }
+    mark(best);
+  }
+  addEventListener('scroll', update, { passive: true });
+  addEventListener('resize', update, { passive: true });
+  addEventListener('hashchange', update);
+  update();
+})();
 
-    function setCategory(cat, btn) {
-      currentCat = cat;
-      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      renderTools();
-    }
-
-    function filterTools() {
-      renderTools();
-    }
-
-    function switchTab(id) {
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      event.target.classList.add('active');
-      document.getElementById('cfg-generic').style.display = id === 'generic' ? 'block' : 'none';
-      document.getElementById('cfg-antigravity').style.display = id === 'antigravity' ? 'block' : 'none';
-      document.getElementById('cfg-cursor').style.display = id === 'cursor' ? 'block' : 'none';
-    }
-
-    // Initial render
-    renderTools();
-  </script>
+// Initial render
+renderTools();
+</script>
 </body>
 </html>
