@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_release_version_is_aligned_across_package_metadata() -> None:
-    expected = "0.6.0"
+    expected = "0.7.0"
     manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     extension_manifest = json.loads(
