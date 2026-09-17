@@ -220,8 +220,9 @@ The certified baseline surface freezes these contracts; Slice 2 will expand
 without breaking them:
 
 - 97 catalogued public tools <!-- TOOL_COUNT: active_total -->; `tool_count` is the single source of truth.
-- Two loopback transports, desktop-only: TCP `127.0.0.1:9888` for the Remote
-  Script and WebSocket `127.0.0.1:9889` for the Extension. No LAN mode.
+- Three loopback transports, desktop-only: TCP `127.0.0.1:9888` for the Remote
+  Script, WebSocket `127.0.0.1:9889` for the Extension, and UDP `127.0.0.1:9890`
+  for realtime parameter control. No LAN mode.
 - `load_device_to_track` takes a primary `device_name` argument;
   `device_uri` is retained as a deprecated alias for one release cycle.
 - Warp markers are **read-only**: `get_warp_state` exposes the array, but

@@ -8,12 +8,21 @@ The canonical certification policy that governs the promotion decision
 
 ## [Unreleased]
 
+No unreleased changes.
+
+## [0.7.0] - 2026-09-17
+
 ### Added
 
 - `plan_user_journey` returns a four-stage plan — discover, await confirmation,
   apply, verify — naming the tool each stage would use without calling any of
-  them. It brings the current surface to 97 tools; the released v0.6.0 still
-  ships 96.
+  them. It brings the public FastMCP surface to 97 tools.
+- Realtime UDP control channel on port 9890 (`contracts.REALTIME_UDP_PORT`)
+  with a guarded drain queue for low-latency non-blocking parameter updates.
+- Regenerated retrieval seed v3 with 4,000 curated groove representatives across
+  266 collections, complete Superior Drummer 3 and General MIDI articulation
+  mapping, genre coverage increased to 85.8%, and tempo (bpm) indexing.
+- Polyrhythm transformation axis support for deterministic groove generation.
 
 ### Fixed
 
@@ -26,6 +35,7 @@ The canonical certification policy that governs the promotion decision
   representatives from 266 collections, `other_percussion` down from 12.6% to
   4.7% of the kit facet rows, `genre` coverage up from 58.3% to 85.8%, and a new
   `bpm` axis at 61.7%.
+- Vendor sidecar parsing made idempotent and cached per-process.
 
 ## [0.6.0] - 2026-08-24
 
