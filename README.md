@@ -142,6 +142,17 @@ If you operate from **WSL2**, point the MCP client at the Windows binary so loop
 /path/to/ableton-mcp-server/.venv-win/Scripts/ableton-mcp-server.exe
 ```
 
+### MCP Bundle (`.mcpb`)
+
+`scripts/build_mcpb.py` packs the server as an [MCP Bundle](https://github.com/modelcontextprotocol/mcpb) for Windows. The bundle carries the wheel and a locked launcher project; on first launch the host's `uv` installs Python and the dependencies from PyPI. It contains the server only, so the Remote Script and the Extension still install as described above.
+
+```powershell
+.\.venv-win\Scripts\python.exe scripts\build_mcpb.py build --out-dir dist\mcpb
+.\.venv-win\Scripts\python.exe scripts\build_mcpb.py smoke dist\mcpb\ableton-mcp-server-<version>.mcpb
+```
+
+`build` needs `uv`, Node.js (`npx` runs the pinned `@anthropic-ai/mcpb` CLI), and network access. `smoke` extracts the bundle, launches it over stdio, and checks `initialize`, `tools/list` against the catalog, and one offline tool, without Ableton Live.
+
 ---
 
 ## 📦 What It Does (97 MCP Tools) <!-- TOOL_COUNT: active_total -->
