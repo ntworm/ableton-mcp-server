@@ -8,7 +8,12 @@ The canonical certification policy that governs the promotion decision
 
 ## [Unreleased]
 
-No unreleased changes.
+### Added
+
+- `scripts/build_mcpb.py` packs the server as an MCP Bundle (`.mcpb`, manifest
+  0.4, `uv` server type) from a freshly built wheel and smoke-tests the result
+  over stdio. The manifest lists every catalog tool, takes its counts from the
+  catalog, and declares Windows only. Building the bundle publishes nothing.
 
 ## [0.7.0] - 2026-09-17
 
