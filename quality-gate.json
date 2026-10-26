@@ -1,0 +1,4 @@
+{
+  "paths": ["ableton_mcp_server", "AbletonMCPServer_RemoteScript", "scripts", "tests", "contracts.py"],
+  "exclude": ["AbletonMCPServer_RemoteScript/_contracts.py"]
+}

@@ -1,0 +1,480 @@
+{
+  "files": {
+    "AbletonMCPServer_RemoteScript/__init__.py": 4557,
+    "ableton_mcp_server/acceptance/runner.py": 3029,
+    "ableton_mcp_server/groove_intelligence/corpus.py": 709,
+    "ableton_mcp_server/groove_intelligence/deterministic.py": 729,
+    "ableton_mcp_server/groove_intelligence/fallback.py": 569,
+    "ableton_mcp_server/groove_intelligence/index.py": 872,
+    "ableton_mcp_server/groove_intelligence/taxonomy.py": 629,
+    "ableton_mcp_server/models.py": 1183,
+    "ableton_mcp_server/server.py": 2606,
+    "scripts/build_release_candidates.py": 613,
+    "scripts/mock_remote_script.py": 650,
+    "tests/_strict_fake.py": 1170,
+    "tests/remote_fakes.py": 630,
+    "tests/test_acceptance_audit_p0p1.py": 893,
+    "tests/test_acceptance_runner_integration.py": 1355,
+    "tests/test_build_release_candidates.py": 752,
+    "tests/test_track_hierarchy_and_color_v053.py": 524
+  },
+  "functions": {
+    "AbletonMCPServer_RemoteScript/__init__.py::JsonlSocketServer._serve_client": {
+      "complexity": 11
+    },
+    "AbletonMCPServer_RemoteScript/__init__.py::_automation_parameter": {
+      "complexity": 31,
+      "function_lines": 86
+    },
+    "AbletonMCPServer_RemoteScript/__init__.py::_create_clip_automation_steps": {
+      "complexity": 23,
+      "function_lines": 90
+    },
+    "AbletonMCPServer_RemoteScript/__init__.py::_dispatch_command_steps": {
+      "complexity": 31,
+      "function_lines": 132
+    },
+    "AbletonMCPServer_RemoteScript/__init__.py::_is_dry_run_only": {
+      "complexity": 11
+    },
+    "AbletonMCPServer_RemoteScript/__init__.py::_resolve_device_parameter": {
+      "complexity": 14,
+      "function_lines": 69
+    },
+    "AbletonMCPServer_RemoteScript/__init__.py::_run_batch_steps": {
+      "complexity": 12,
+      "function_lines": 61
+    },
+    "AbletonMCPServer_RemoteScript/__init__.py::_set_arrangement_clip_properties_steps": {
+      "complexity": 12
+    },
+    "AbletonMCPServer_RemoteScript/__init__.py::_set_clip_color_steps": {
+      "function_lines": 66
+    },
+    "AbletonMCPServer_RemoteScript/__init__.py::_set_clip_properties_steps": {
+      "complexity": 17
+    },
+    "AbletonMCPServer_RemoteScript/__init__.py::_set_parameter_value_steps": {
+      "complexity": 11,
+      "function_lines": 63
+    },
+    "AbletonMCPServer_RemoteScript/__init__.py::_validate_hierarchy_request": {
+      "complexity": 16,
+      "function_lines": 79
+    },
+    "AbletonMCPServer_RemoteScript/__init__.py::_validate_preconditions": {
+      "complexity": 24,
+      "function_lines": 72
+    },
+    "AbletonMCPServer_RemoteScript/__init__.py::cmd_add_notes_pattern": {
+      "complexity": 11
+    },
+    "AbletonMCPServer_RemoteScript/__init__.py::cmd_add_notes_to_clip": {
+      "complexity": 14
+    },
+    "AbletonMCPServer_RemoteScript/__init__.py::cmd_describe_instrument": {
+      "function_lines": 71
+    },
+    "AbletonMCPServer_RemoteScript/__init__.py::cmd_diagnose_clip_targets": {
+      "complexity": 11,
+      "function_lines": 91
+    },
+    "AbletonMCPServer_RemoteScript/__init__.py::cmd_diagnose_midi_clip": {
+      "complexity": 25,
+      "function_lines": 118
+    },
+    "AbletonMCPServer_RemoteScript/__init__.py::cmd_get_clip_automation": {
+      "complexity": 14,
+      "function_lines": 71
+    },
+    "AbletonMCPServer_RemoteScript/__init__.py::cmd_search_browser": {
+      "complexity": 22,
+      "function_lines": 79
+    },
+    "AbletonMCPServer_RemoteScript/__init__.py::live_fade_steps": {
+      "complexity": 22,
+      "function_lines": 117
+    },
+    "AbletonMCPServer_RemoteScript/realtime_server.py::RealtimeUDPServer._handle_packet": {
+      "complexity": 13
+    },
+    "ableton_mcp_server/acceptance/baseline.py::discover_baseline": {
+      "complexity": 11,
+      "function_lines": 86
+    },
+    "ableton_mcp_server/acceptance/helpers.py::_acceptance_safe_cue_times": {
+      "complexity": 14
+    },
+    "ableton_mcp_server/acceptance/probes/offline.py::run": {
+      "function_lines": 229
+    },
+    "ableton_mcp_server/acceptance/probes/offline.py::run.build_ext": {
+      "complexity": 16
+    },
+    "ableton_mcp_server/acceptance/probes/tcp_reads.py::_discover_first_enabled_device_parameter": {
+      "complexity": 21,
+      "function_lines": 75
+    },
+    "ableton_mcp_server/acceptance/probes/tcp_reads.py::run": {
+      "function_lines": 244
+    },
+    "ableton_mcp_server/acceptance/runner.py::run_live_acceptance": {
+      "complexity": 166,
+      "function_lines": 2652
+    },
+    "ableton_mcp_server/acceptance/runner.py::run_live_acceptance._run_track_creation": {
+      "complexity": 25,
+      "function_lines": 106
+    },
+    "ableton_mcp_server/acceptance/runner.py::run_live_acceptance.run_load_device": {
+      "complexity": 14,
+      "function_lines": 72
+    },
+    "ableton_mcp_server/acceptance/runner.py::run_live_acceptance.run_save_set": {
+      "complexity": 12
+    },
+    "ableton_mcp_server/acceptance/runner.py::run_live_acceptance.run_set_parameter_value": {
+      "complexity": 17,
+      "function_lines": 91
+    },
+    "ableton_mcp_server/acceptance/runner.py::run_offline_probes": {
+      "function_lines": 301
+    },
+    "ableton_mcp_server/acceptance/runner.py::run_offline_probes.build_ext": {
+      "complexity": 16
+    },
+    "ableton_mcp_server/acceptance/runner.py::run_offline_probes.groove_phase2": {
+      "function_lines": 77
+    },
+    "ableton_mcp_server/cli.py::main": {
+      "complexity": 15
+    },
+    "ableton_mcp_server/client.py::Client.call": {
+      "complexity": 17
+    },
+    "ableton_mcp_server/diagnostics.py::bridge_status": {
+      "function_lines": 114
+    },
+    "ableton_mcp_server/diff.py::diff_snapshots.walk": {
+      "complexity": 15
+    },
+    "ableton_mcp_server/groove_intelligence/apply.py::_receipt_from_bridge": {
+      "complexity": 22,
+      "function_lines": 70
+    },
+    "ableton_mcp_server/groove_intelligence/apply.py::apply_artifact": {
+      "function_lines": 95
+    },
+    "ableton_mcp_server/groove_intelligence/build.py::build_seed_bundle": {
+      "function_lines": 103
+    },
+    "ableton_mcp_server/groove_intelligence/build.py::compile_parsed_artifact": {
+      "function_lines": 127
+    },
+    "ableton_mcp_server/groove_intelligence/canonical.py::_normalize": {
+      "complexity": 15
+    },
+    "ableton_mcp_server/groove_intelligence/cards.py::_sanitize_public_value": {
+      "complexity": 19
+    },
+    "ableton_mcp_server/groove_intelligence/cards.py::artifact_card_from_artifact": {
+      "complexity": 18,
+      "function_lines": 71
+    },
+    "ableton_mcp_server/groove_intelligence/corpus.py::CorpusCatalog.scan": {
+      "complexity": 19,
+      "function_lines": 120
+    },
+    "ableton_mcp_server/groove_intelligence/corpus.py::build_curated_bundle": {
+      "complexity": 17,
+      "function_lines": 93
+    },
+    "ableton_mcp_server/groove_intelligence/corpus.py::curate_representatives": {
+      "complexity": 15
+    },
+    "ableton_mcp_server/groove_intelligence/deterministic.py::_transform_notes": {
+      "complexity": 37,
+      "function_lines": 149
+    },
+    "ableton_mcp_server/groove_intelligence/deterministic.py::deterministic_generate": {
+      "complexity": 23,
+      "function_lines": 199
+    },
+    "ableton_mcp_server/groove_intelligence/evidence.py::_generated_projection": {
+      "complexity": 11
+    },
+    "ableton_mcp_server/groove_intelligence/evidence.py::compare": {
+      "complexity": 20,
+      "function_lines": 91
+    },
+    "ableton_mcp_server/groove_intelligence/fallback.py::_sanitize_metadata": {
+      "complexity": 18
+    },
+    "ableton_mcp_server/groove_intelligence/fallback.py::generate_with_provider": {
+      "complexity": 11,
+      "function_lines": 82
+    },
+    "ableton_mcp_server/groove_intelligence/fallback.py::validate_provider_candidate": {
+      "complexity": 34,
+      "function_lines": 116
+    },
+    "ableton_mcp_server/groove_intelligence/index.py::ReadonlyGrooveIndex.load_artifact": {
+      "complexity": 21,
+      "function_lines": 129
+    },
+    "ableton_mcp_server/groove_intelligence/index.py::ReadonlyGrooveIndex.search_rows": {
+      "function_lines": 70
+    },
+    "ableton_mcp_server/groove_intelligence/index.py::open_readonly_index": {
+      "complexity": 32,
+      "function_lines": 121
+    },
+    "ableton_mcp_server/groove_intelligence/index.py::write_index": {
+      "complexity": 11,
+      "function_lines": 160
+    },
+    "ableton_mcp_server/groove_intelligence/lab.py::run_provider_gates": {
+      "complexity": 14,
+      "function_lines": 74
+    },
+    "ableton_mcp_server/groove_intelligence/mapping.py::map_artifact": {
+      "complexity": 27,
+      "function_lines": 115
+    },
+    "ableton_mcp_server/groove_intelligence/midi_lossless.py::decompress_bounded": {
+      "complexity": 15
+    },
+    "ableton_mcp_server/groove_intelligence/midi_lossless.py::parse_smf": {
+      "complexity": 42,
+      "function_lines": 182
+    },
+    "ableton_mcp_server/groove_intelligence/midi_lossless.py::serialize_note_smf": {
+      "complexity": 15,
+      "function_lines": 89
+    },
+    "ableton_mcp_server/groove_intelligence/neural_subprocess.py::NeuralSubprocessProvider.generate": {
+      "complexity": 24,
+      "function_lines": 105
+    },
+    "ableton_mcp_server/groove_intelligence/promotion.py::promotion_allowed": {
+      "complexity": 12
+    },
+    "ableton_mcp_server/groove_intelligence/runtime.py::GrooveRuntime.card": {
+      "complexity": 18,
+      "function_lines": 83
+    },
+    "ableton_mcp_server/groove_intelligence/runtime.py::GrooveRuntime.card_from_search_row": {
+      "complexity": 24,
+      "function_lines": 74
+    },
+    "ableton_mcp_server/groove_intelligence/search.py::_constraint_matches": {
+      "complexity": 13
+    },
+    "ableton_mcp_server/groove_intelligence/search.py::_matches": {
+      "complexity": 17
+    },
+    "ableton_mcp_server/groove_intelligence/search.py::decode_cursor": {
+      "complexity": 12
+    },
+    "ableton_mcp_server/groove_intelligence/search.py::rank_candidate": {
+      "complexity": 11
+    },
+    "ableton_mcp_server/groove_intelligence/search.py::search": {
+      "complexity": 24,
+      "function_lines": 91
+    },
+    "ableton_mcp_server/groove_intelligence/similarity.py::feature_distance": {
+      "complexity": 18
+    },
+    "ableton_mcp_server/groove_intelligence/taxonomy.py::_add_source_category": {
+      "complexity": 11
+    },
+    "ableton_mcp_server/groove_intelligence/taxonomy.py::_component_labels": {
+      "complexity": 12
+    },
+    "ableton_mcp_server/groove_intelligence/taxonomy.py::_path_values": {
+      "complexity": 13
+    },
+    "ableton_mcp_server/groove_intelligence/taxonomy.py::classify_facets": {
+      "complexity": 15
+    },
+    "ableton_mcp_server/protocol.py::decode_response": {
+      "complexity": 12
+    },
+    "ableton_mcp_server/server.py::_explicit_json_result": {
+      "complexity": 13
+    },
+    "ableton_mcp_server/server.py::_resolve_extension_entrypoint": {
+      "complexity": 11
+    },
+    "ableton_mcp_server/server.py::build_extension": {
+      "complexity": 13,
+      "function_lines": 116
+    },
+    "ableton_mcp_server/server.py::scaffold_extension": {
+      "function_lines": 106
+    },
+    "contracts.py::_request_work_units": {
+      "complexity": 15
+    },
+    "scripts/build_articulation_map.py::_classify_band": {
+      "complexity": 11
+    },
+    "scripts/build_groove_seed.py::_declared_inputs": {
+      "complexity": 11
+    },
+    "scripts/build_mcpb.py::build_manifest": {
+      "function_lines": 73
+    },
+    "scripts/build_release_candidates.py::build_release": {
+      "complexity": 16,
+      "function_lines": 142
+    },
+    "scripts/build_vendor_labels.py::_assign_roles": {
+      "complexity": 13
+    },
+    "scripts/build_vendor_labels.py::main": {
+      "complexity": 16,
+      "function_lines": 130
+    },
+    "scripts/gate0/verify_groove_brain_ablx.py::verify_ablx": {
+      "complexity": 22,
+      "function_lines": 72
+    },
+    "scripts/generate_capability_matrix.py::generate_markdown": {
+      "function_lines": 62
+    },
+    "scripts/ingest_private_corpus.py::main": {
+      "function_lines": 107
+    },
+    "scripts/measurement.py::_process_chunk": {
+      "complexity": 12
+    },
+    "scripts/mock_remote_script.py::MockRemoteScript._handle_mutation": {
+      "complexity": 46,
+      "function_lines": 215
+    },
+    "scripts/mock_remote_script.py::MockRemoteScript._handle_read": {
+      "complexity": 41,
+      "function_lines": 177
+    },
+    "scripts/mock_remote_script.py::default_snapshot": {
+      "function_lines": 73
+    },
+    "scripts/regenerate_seed.py::main": {
+      "function_lines": 89
+    },
+    "scripts/report.py::main": {
+      "complexity": 13,
+      "function_lines": 92
+    },
+    "tests/_strict_fake.py::StrictFakeBridge._initial_state": {
+      "function_lines": 87
+    },
+    "tests/_strict_fake.py::_strict_tcp_dispatch": {
+      "complexity": 140,
+      "function_lines": 647
+    },
+    "tests/_strict_fake.py::_strict_ws_dispatch": {
+      "complexity": 12
+    },
+    "tests/_strict_fake.py::_validate_hierarchy": {
+      "complexity": 13
+    },
+    "tests/_strict_fake.py::_validate_tcp": {
+      "complexity": 24
+    },
+    "tests/fixtures/groove_bridge.py::NewBridgeFixture.dispatch": {
+      "complexity": 23,
+      "function_lines": 85
+    },
+    "tests/fixtures/groove_mcp_wire.py::assert_client_schema_constraints": {
+      "complexity": 13
+    },
+    "tests/test_acceptance_audit_p0p1.py::test_p0_1_build_extension_contract_accepts_top_level_artifacts": {
+      "complexity": 11,
+      "function_lines": 63
+    },
+    "tests/test_acceptance_audit_p0p1.py::test_p0_2_baseline_does_not_read_mixer_state_from_get_track_list": {
+      "function_lines": 100
+    },
+    "tests/test_acceptance_audit_p0p1.py::test_p0_3_live_fade_readback_uses_track_state_mixer_volume": {
+      "function_lines": 62
+    },
+    "tests/test_acceptance_audit_p0p1.py::test_p1_5_jsonl_socket_dispatch_round_trip": {
+      "function_lines": 139
+    },
+    "tests/test_acceptance_audit_p0p1.py::test_p1_6_set_tempo_readback_fails_only_during_restore": {
+      "complexity": 14
+    },
+    "tests/test_acceptance_baseline.py::TestDiscoverBaseline._make_client._FakeClient.call": {
+      "complexity": 12
+    },
+    "tests/test_acceptance_baseline.py::TestDiscoverBaseline.test_happy_path": {
+      "complexity": 12
+    },
+    "tests/test_build_mcpb.py::test_manifest_lists_exactly_the_catalog_and_derives_every_count": {
+      "complexity": 12
+    },
+    "tests/test_build_mcpb.py::test_manifest_stays_inside_the_strict_mcpb_schema": {
+      "complexity": 12
+    },
+    "tests/test_build_release_candidates.py::fake_project": {
+      "function_lines": 96
+    },
+    "tests/test_build_release_candidates.py::test_builder_invokes_npm_with_list_argv": {
+      "complexity": 11
+    },
+    "tests/test_clip_color_and_hierarchy_ops_v053.py::test_new_tools_are_registered_across_every_source_of_truth": {
+      "complexity": 12
+    },
+    "tests/test_clip_mutations.py::test_fire_clip_and_add_notes_use_python_remote_script_lom_types": {
+      "complexity": 12
+    },
+    "tests/test_diagnostics.py::test_bridge_status_probes_live_instead_of_tool_discovery": {
+      "complexity": 12
+    },
+    "tests/test_documentation_consistency.py::test_current_guidance_and_changelog_name_the_current_surface": {
+      "complexity": 12
+    },
+    "tests/test_fake_bridge_strict.py::test_runner_against_strict_fake_emits_no_unknown_commands": {
+      "function_lines": 61
+    },
+    "tests/test_groove_articulation.py::test_v3_is_stamped_and_differs_only_where_the_map_says": {
+      "complexity": 11
+    },
+    "tests/test_groove_corpus_pipeline.py::test_inventory_is_relative_streaming_and_restartable": {
+      "complexity": 11
+    },
+    "tests/test_groove_export.py::test_export_carries_facets_notes_and_timing": {
+      "complexity": 11
+    },
+    "tests/test_groove_provider_fallback.py::test_provider_summary_and_lineage_are_recursively_public": {
+      "function_lines": 71
+    },
+    "tests/test_groove_provider_lab.py::test_threshold_defaults_are_published_and_stable": {
+      "complexity": 12
+    },
+    "tests/test_groove_taxonomy.py::test_relative_path_taxonomy_is_versioned_bounded_and_does_not_guess_unknown_genres": {
+      "complexity": 12
+    },
+    "tests/test_hierarchy_acceptance_scenario_v053.py::test_moving_pads_2_children_into_pads_is_refused_and_changes_nothing": {
+      "complexity": 11
+    },
+    "tests/test_packaging.py::test_baseline_docs_match_current_state": {
+      "complexity": 11
+    },
+    "tests/test_track_hierarchy_and_color_v053.py::test_hierarchy_commands_refuse_well_formed_requests": {
+      "complexity": 11
+    },
+    "tests/test_transaction.py::test_batch_advances_deferred_children_with_one_outer_undo": {
+      "complexity": 14
+    }
+  },
+  "limits": {
+    "complexity": 10,
+    "file_lines": 500,
+    "function_lines": 60
+  },
+  "version": 1
+}

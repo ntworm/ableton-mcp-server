@@ -47,6 +47,10 @@ target-version = "py310"
 select = ["E", "F", "I", "UP", "B", "SIM"]
 ignore = ["UP031"]
 
+[tool.ruff.lint.per-file-ignores]
+# Vendored structure gate, kept byte-identical to its source; it supports Python 3.8.
+"scripts/quality_gate.py" = ["E501", "UP006", "UP035"]
+
 [tool.mypy]
 python_version = "3.10"
 strict = true
