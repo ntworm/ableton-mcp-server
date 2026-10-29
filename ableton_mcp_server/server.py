@@ -811,11 +811,12 @@ def set_loop_length(length_beats: float) -> Any:
 
 @mcp.tool()
 def run_batch(commands: list[dict[str, Any]]) -> Any:
-    """Run allowed mutations sequentially inside one Live undo step.
+    """Run allowed mutations in order; undo them one Ctrl+Z at a time and re-read the Set.
 
-    Side effects: successful prefix mutations persist until one Ctrl+Z; no rollback occurs.
+    Side effects: commands that finish in one tick (Arrangement edits, create_clip, notes) share a
+    Ctrl+Z; one read back a tick later (tempo, loop, colours, cue points) ends it. No rollback.
     Example: ``run_batch([{"type": "set_tempo", "params": {"tempo": 128}}])``.
-    Edge cases: execution aborts at the first error and nested batches are rejected.
+    Edge cases: aborts at the first error, keeping the prefix applied; nested batches are rejected.
     """
     request = models.RunBatchRequest.model_validate({"commands": commands})
     return _remote("run_batch", request, exclude_defaults=True)
@@ -1237,9 +1238,9 @@ def set_arrangement_clip_properties(
 def move_arrangement_clip(track_index: int, clip_index: int, time: float) -> Any:
     """Move one Arrangement clip to a new beat.
 
-    Side effects: copies the clip to ``time`` and deletes the original, both
-    verified. The LOM exposes no setter for ``Clip.start_time``, so this is the
-    only way to reposition; a failed copy leaves the original in place.
+    Side effects: copies the clip to ``time``, then deletes the original once the copy is listed
+    (same tick on Live 12.4, so one Ctrl+Z undoes it). The LOM has no ``Clip.start_time`` setter,
+    so this is the only way to reposition; a failed copy leaves the original in place.
     Example: ``move_arrangement_clip(3, 2, 96.0)``.
     Edge cases: indices shift after the move — re-read with
     ``get_arrangement_clips``.
@@ -2275,10 +2276,9 @@ def _music_payload(
 ) -> ToolResult | Any:
     """Return the generated notes, writing them into Live only when asked.
 
-    The write is a single ``run_batch`` so the created clip and its notes
-    collapse into one undo step. ``create_clip`` already refuses a slot that is
-    not empty, so this path cannot overwrite existing material, and a failed
-    batch is never retried.
+    One ``run_batch`` writes the clip and its notes in the same Live tick, so they are one undo
+    step; a command that waits a tick would split them. ``create_clip`` refuses an occupied slot,
+    so this path cannot overwrite material, and a failed batch is never retried.
     """
     notes = generation.notes
     payload: dict[str, Any] = {

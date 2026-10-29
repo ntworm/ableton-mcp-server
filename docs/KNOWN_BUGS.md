@@ -7,7 +7,7 @@ The categories below describe recurring Live API failure shapes rather than one 
 The five categories below are the most likely to surprise or burn an AI agent that has not read this document end-to-end. Read the linked section before attempting anything in the same neighbourhood.
 
 - [Path-ids are session locators, not persistent handles.](#category-g--session-local-integer-paths) A `track:N` index from one call can refer to a different track on the next call; always re-resolve after structural edits. ([Category G](#category-g--session-local-integer-paths))
-- [`run_batch` is not a transaction.](#category-h--multi-command-undo-is-not-rollback) If command N fails after commands 1..N-1 already mutated the Set, a single Ctrl+Z reverts the whole prefix, not just the failing step; there is no automatic rollback. ([Category H](#category-h--multi-command-undo-is-not-rollback))
+- [`run_batch` is neither a transaction nor always one undo step.](#category-h--multi-command-undo-is-not-rollback) Live closes an undo step at the end of every UI tick: Arrangement edits and other commands that finish in one tick share a Ctrl+Z, while a command read back on a later tick (tempo, loop, colours, cue points) ends the step. If command N fails, commands 1..N-1 stay applied; there is no automatic rollback. ([Category H](#category-h--multi-command-undo-is-not-rollback))
 - [WSL loopback is not Windows loopback.](#category-k--wsl-loopback-is-not-windows-loopback-under-nat) `127.0.0.1:9888` in WSL is the WSL-side NAT interface, not the Windows process hosting Live. Tool discovery works; live calls will be refused. ([Category K](#category-k--wsl-loopback-is-not-windows-loopback-under-nat))
 - [Protocol constants must be vendored, not hand-edited.](#category-f--duplicated-protocol-constants-drift) The MCP server and the Live Remote Script will silently diverge if `contracts.py` is changed without re-running `scripts/vendor_contracts.py`. ([Category F](#category-f--duplicated-protocol-constants-drift))
 - [Prefix-based mutation blocking is gone; explicit allowlist applies.](#category-i--over-defensive-prefix-blocking) A tool such as `set_tempo` is permitted because it is explicitly allowlisted, not because it passes a prefix heuristic. Do not infer permissions from tool names. ([Category I](#category-i--over-defensive-prefix-blocking))
@@ -88,13 +88,28 @@ Duplicate-then-delete is **not** an acceptable emulation, and it does not even w
 
 ## Category H — Multi-command undo is not rollback
 
-**Symptom:** command two fails after command one already changed the Set.
+**Symptom:** command two fails after command one already changed the Set. Separately, undoing a batch could take more than one Ctrl+Z: on 29/10/2026 a batch that deleted one Arrangement copy and duplicated another needed two, and the first removed only the new copy.
 
-**Root cause:** closing an undo step groups mutations; it does not reverse a successful prefix.
+**Root cause:** a batch has no inverse, so a successful prefix stays applied. The undo split is Live's: it ends a Remote Script's undo step when each call into the script returns, at the end of every `update_display()` tick. `Song.begin_undo_step()` does not carry the step into the next tick, and setting the surface's `handle_undo_steps` to `True` does not change that (Live reads the attribute twice when it creates the script and never again). Within one tick Live puts every change in one step, with or without `begin_undo_step()`. A command that writes, waits a tick and reads the write back ends the step, so the next command of a batch writes in a new one. The Arrangement edits used to wait like that.
 
-**Mitigation:** `run_batch` aborts at the first error, closes the step in `finally`, returns `rolled_back: false`, and documents that one Ctrl+Z reverts the successful prefix. Automatic reverse replay is not implemented because not every mutation has a safe inverse.
+Measured on Live 12.4.15 and again on 12.4.25 against the disposable `TESTE_CODEX` Set, counting `Song.undo()` calls until the state was back, with `handle_undo_steps` both `False` and `True` (the results did not differ):
 
-**Runtime limitation:** `begin_undo_step`/`end_undo_step` are host-facing Remote Script capabilities rather than documented Max LOM calls. The script resolves a target that exposes both methods and refuses to mutate when no such target exists. Confirm the target on the installed Live build.
+| Case | Ctrl+Z needed |
+|---|---|
+| two renames in one tick, with or without `begin_undo_step()` | 1 |
+| two renames inside one `begin_undo_step()`/`end_undo_step()` with a tick between them | 2 |
+| `Track.delete_clip` and `Track.duplicate_clip_to_arrangement` in one tick | 1 |
+| the same two calls with a tick between them | 2 |
+| `run_batch([delete_arrangement_clip, duplicate_session_clip_to_arrangement, set_current_song_time])`, edits read back a tick later | 2 |
+| the same batch with the edits read back in their own tick | 1 |
+| `move_arrangement_clip`, copy read back a tick later | 2 |
+| `move_arrangement_clip` with the copy read back in its own tick | 1 |
+
+On 12.4.25 the lane lists a delete and a duplicate in the tick that made them (clip count 1, 0, 1 within one call), and `Track.duplicate_clip_to_arrangement` returns the new `Clip`. A real Ctrl+Z behaved like `Song.undo()` on both versions of the batch.
+
+**Mitigation:** `run_batch` aborts at the first error, closes its step in `finally` and returns `rolled_back: false`. Automatic reverse replay is not implemented because not every mutation has a safe inverse. The Arrangement edits read the lane back in the tick of the edit and wait a tick only when the lane does not list it yet, so a batch of them, and `move_arrangement_clip`, undo with one Ctrl+Z. Commands that finish without waiting (`create_clip`, `add_notes_to_clip`, `add_notes_pattern`, `rename_track`, `create_midi_track`, `delete_clip`) share that step too, which is why `music_generate_*` with `apply` and the `groove_apply` commit write a clip and its notes as one step. A command read back on a later tick (tempo, loop, transport, parameters, presets, track and clip properties, colours, automation, cue points) still ends the step. Undo one Ctrl+Z at a time and re-read the Set after each one; never press a precomputed number of Ctrl+Z, because pressing one too many undoes the edit made before the batch.
+
+**Runtime limitation:** `begin_undo_step`/`end_undo_step` are host-facing Remote Script capabilities rather than documented Max LOM calls. On Live 12.4 only `Song` exposes them; `c_instance`, the control surface and `Application` do not. The script resolves a target that exposes both methods and refuses to mutate when no such target exists.
 
 ## Category I — Over-defensive prefix blocking
 

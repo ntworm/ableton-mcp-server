@@ -6,6 +6,7 @@ from pathlib import Path
 
 from ableton_mcp_server import __version__
 from ableton_mcp_server.catalog import TOOL_CATALOG
+from ableton_mcp_server.server import run_batch
 
 ROOT = Path(__file__).resolve().parents[1]
 ACTIVE_COUNT_PATHS = (
@@ -117,3 +118,30 @@ def test_every_public_tool_is_present_in_canonical_user_docs() -> None:
     for item in TOOL_CATALOG:
         assert f"`{item.name}" in tool_reference, item.name
         assert f"name: '{item.name}'" in landing, item.name
+
+
+def test_run_batch_undo_claims_match_what_live_records() -> None:
+    # Measured on Live 12.4.15 and 12.4.25 (29/10/2026): Live closes an undo
+    # step at the end of every UI tick, so only commands that finish in one
+    # tick share a Ctrl+Z.
+    description = " ".join((run_batch.__doc__ or "").split())
+    assert "one Live undo step" not in description
+    assert "commands that finish in one tick" in description
+    assert "read back a tick later" in description
+    known_bugs = _text(ROOT / "docs" / "KNOWN_BUGS.md")
+    assert "a single Ctrl+Z reverts the whole prefix" not in known_bugs
+    assert "the same batch with the edits read back in their own tick | 1" in known_bugs
+    assert "Undo one Ctrl+Z at a time" in known_bugs
+
+
+def test_canonical_docs_no_longer_promise_a_grouped_batch_undo() -> None:
+    for path in (
+        ROOT / "AGENTS.md",
+        ROOT / "README.md",
+        ROOT / "docs" / "ARCHITECTURE.md",
+        ROOT / "docs" / "TOOL_REFERENCE.md",
+        ROOT / "docs" / "index.html",
+    ):
+        text = _text(path)
+        assert "grouped undo" not in text, path
+        assert "one Ctrl+Z reverts" not in text, path

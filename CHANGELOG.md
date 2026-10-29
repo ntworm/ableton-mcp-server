@@ -15,6 +15,20 @@ The canonical certification policy that governs the promotion decision
   over stdio. The manifest lists every catalog tool, takes its counts from the
   catalog, and declares Windows only. Building the bundle publishes nothing.
 
+### Fixed
+
+- A `run_batch` of Arrangement edits, and `move_arrangement_clip`, now undo
+  with one Ctrl+Z. Live closes a Remote Script's undo step at the end of every
+  UI tick, and neither `Song.begin_undo_step()` nor the surface's
+  `handle_undo_steps` keeps it open, so the edits split while each one waited a
+  tick to read the lane back; on 29/10/2026 a delete-and-duplicate batch needed
+  two Ctrl+Z. `delete_arrangement_clip`, `duplicate_session_clip_to_arrangement`
+  and `move_arrangement_clip` now confirm the edit in the tick that made it and
+  wait a tick only when the lane does not list it yet. Measured on Live 12.4.15
+  and 12.4.25 against a disposable Set. A command read back on a later tick
+  still ends the step; the tool descriptions, README, Tool Reference, Known
+  Bugs (Category H), Architecture and AGENTS now say which commands share one.
+
 ## [0.7.0] - 2026-09-17
 
 ### Added
