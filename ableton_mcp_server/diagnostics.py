@@ -339,11 +339,23 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def remote_script_files(source: Path) -> tuple[str, ...]:
+    """Name the required files plus every other module the script imports from its folder.
+
+    Live loads the whole folder, so a module left behind (``realtime_server.py`` was) breaks
+    ``__init__.py`` at import even though every listed file matches.
+    """
+    modules = sorted(
+        path.name for path in source.glob("*.py") if path.name not in REMOTE_SCRIPT_FILES
+    )
+    return REMOTE_SCRIPT_FILES + tuple(modules)
+
+
 def remote_script_status(source: Path, destination_root: Path) -> dict[str, Any]:
     target = destination_root / REMOTE_SCRIPT_NAME
     mismatched: list[str] = []
     missing: list[str] = []
-    for filename in REMOTE_SCRIPT_FILES:
+    for filename in remote_script_files(source):
         source_file = source / filename
         if not source_file.is_file():
             raise FileNotFoundError(f"Bundled Remote Script file is missing: {source_file}")
@@ -378,7 +390,7 @@ def install_remote_script(
 
     if dry_run:
         plan: list[dict[str, str | None]] = []
-        for filename in REMOTE_SCRIPT_FILES:
+        for filename in remote_script_files(source):
             src_file = source / filename
             tgt_file = target / filename
             plan.append(
@@ -396,7 +408,7 @@ def install_remote_script(
         }
 
     target.mkdir(parents=True, exist_ok=True)
-    for filename in REMOTE_SCRIPT_FILES:
+    for filename in remote_script_files(source):
         shutil.copy2(source / filename, target / filename)
     cache = target / "__pycache__"
     if cache.is_dir():

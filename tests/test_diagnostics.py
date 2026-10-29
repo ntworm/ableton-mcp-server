@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -16,6 +17,7 @@ from ableton_mcp_server.diagnostics import (
     detect_runtime,
     find_ableton_log_path,
     install_remote_script,
+    remote_script_files,
     remote_script_status,
 )
 
@@ -127,6 +129,34 @@ def test_remote_script_install_and_status_are_hash_verified(tmp_path: Path) -> N
     status = remote_script_status(source, destination_root)
     assert status["status"] == "stale"
     assert status["mismatched_files"] == ["__init__.py"]
+
+
+def test_remote_script_install_ships_every_module_beside_init(tmp_path: Path) -> None:
+    # The v0.7.0 installer copied __init__.py, which imports realtime_server, without it.
+    source = tmp_path / "source"
+    source.mkdir()
+    for name in ("__init__.py", "_contracts.py", "README.md", "realtime_server.py"):
+        (source / name).write_text(name, encoding="utf-8")
+    destination_root = tmp_path / "Remote Scripts"
+
+    install_remote_script(source, destination_root)
+
+    shipped = destination_root / "AbletonMCPServer_RemoteScript" / "realtime_server.py"
+    assert shipped.read_text(encoding="utf-8") == "realtime_server.py"
+    shipped.unlink()
+    status = remote_script_status(source, destination_root)
+    assert status["status"] == "missing"
+    assert status["missing_files"] == ["realtime_server.py"]
+
+
+def test_installer_ships_every_module_the_real_remote_script_imports() -> None:
+    package = Path(__file__).resolve().parents[1] / "AbletonMCPServer_RemoteScript"
+    source = (package / "__init__.py").read_text(encoding="utf-8")
+    imported = set(re.findall(r"^\s*from \.(\w+) import", source, re.MULTILINE))
+    shipped = {name.removesuffix(".py") for name in remote_script_files(package)}
+
+    assert imported
+    assert imported <= shipped
 
 
 def test_remote_script_install_dry_run_reports_plan_without_writing(tmp_path: Path) -> None:

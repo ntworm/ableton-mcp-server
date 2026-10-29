@@ -28,6 +28,10 @@ The canonical certification policy that governs the promotion decision
   and 12.4.25 against a disposable Set. A command read back on a later tick
   still ends the step; the tool descriptions, README, Tool Reference, Known
   Bugs (Category H), Architecture and AGENTS now say which commands share one.
+- `ableton-mcp install-script` copies every module of the Remote Script folder,
+  and `doctor` checks the same files. The 0.7.0 installer left
+  `realtime_server.py` behind, so a fresh install of the Remote Script could
+  not import in Live.
 
 ## [0.7.0] - 2026-09-17
 
