@@ -42,7 +42,7 @@ You have direct access to an active Ableton Live Set via ableton-mcp-server (97 
 1. Always start by inspecting the project state using `get_session_overview()` or `get_track_list()`.
 2. To modify track properties, resolve the target track index using `live_find_track(name_pattern)` first.
 3. For parameter adjustments, query parameters via `get_device_list()` and `get_parameter_value()`, then apply changes using `set_parameter_value()`.
-4. When executing multiple operations, bundle them using `run_batch(commands)` for one grouped undo step; a successful prefix persists if a later command fails.
+4. When executing multiple operations, bundle them using `run_batch(commands)`; a successful prefix persists if a later command fails. Live closes an undo step at the end of every UI tick, so Arrangement edits and other commands that finish in one tick share a Ctrl+Z, while each command read back on a later tick (tempo, loop, colours, cue points) takes its own.
 5. Respect the error taxonomy: if you receive `AMBIGUOUS_MATCH` or `VERIFICATION_FAILED`, inspect track context and retry.
 ```
 

@@ -514,8 +514,8 @@ footer.deck-footer {
         Ableton Live 12 <br><span class="highlight">Protocol Surface</span> for AI Agents
       </h1>
 
-      <p class="hero-desc" data-en="A deterministic, low-latency Model Context Protocol gateway connecting AI developer agents directly to active Ableton Live 12 Sets. Exposes Live Object Model inspection, per-tick parameter mutations, grouped undo batching, and non-realtime mix analysis." data-pt="Gateway determinístico de baixa latência conectando agentes de IA diretamente a projetos ativos do Ableton Live 12. Permite inspeção do Live Object Model, mutações de parâmetros com releitura por tick, undo agrupado e análise de mixagem offline.">
-        A deterministic, low-latency Model Context Protocol gateway connecting AI developer agents directly to active Ableton Live 12 Sets. Exposes Live Object Model inspection, per-tick parameter mutations, grouped undo batching, and non-realtime mix analysis.
+      <p class="hero-desc" data-en="A deterministic, low-latency Model Context Protocol gateway connecting AI developer agents directly to active Ableton Live 12 Sets. Exposes Live Object Model inspection, per-tick parameter mutations, ordered mutation batches, and non-realtime mix analysis." data-pt="Gateway determinístico de baixa latência conectando agentes de IA diretamente a projetos ativos do Ableton Live 12. Permite inspeção do Live Object Model, mutações de parâmetros com releitura por tick, lotes de mutações em ordem e análise de mixagem offline.">
+        A deterministic, low-latency Model Context Protocol gateway connecting AI developer agents directly to active Ableton Live 12 Sets. Exposes Live Object Model inspection, per-tick parameter mutations, ordered mutation batches, and non-realtime mix analysis.
       </p>
 
       <div class="hero-chips">
@@ -1058,7 +1058,7 @@ const TOOLS = [
 
       { name: 'plan_user_journey', cat: 'music', desc_en: 'Plans a guided journey as four named stages without calling any of them.', desc_pt: 'Planeja uma jornada guiada em quatro estágios nomeados sem executar nenhum deles.', sig: 'plan_user_journey(journey_type: str, traits: str)' },
       // Inspection & Batch
-      { name: 'run_batch', cat: 'inspection', desc_en: 'Executes mutations in one grouped undo step; a successful prefix persists if a later command fails.', desc_pt: 'Executa mutações em um undo agrupado; o prefixo bem-sucedido persiste se uma chamada posterior falhar.', sig: 'run_batch(commands: list)' },
+      { name: 'run_batch', cat: 'inspection', desc_en: 'Executes mutations in order; a successful prefix persists if a later command fails, and commands that finish in one Live tick share an undo step.', desc_pt: 'Executa mutações em ordem; o prefixo bem-sucedido persiste se uma chamada posterior falhar, e comandos que terminam no mesmo tick do Live dividem um passo de undo.', sig: 'run_batch(commands: list)' },
       { name: 'get_locators', cat: 'inspection', desc_en: 'Returns list of all arrangement cue points / locators.', desc_pt: 'Retorna a lista de todos os pontos de marcação (locators) do arrangement.', sig: 'get_locators()' },
       { name: 'create_cue_point', cat: 'inspection', desc_en: 'Creates arrangement locator at specified beat time.', desc_pt: 'Cria um locator no arrangement na batida especificada.', sig: 'create_cue_point(name: str, beat: float)' },
       { name: 'delete_cue_point', cat: 'inspection', desc_en: 'Deletes locator by index or name.', desc_pt: 'Apaga um locator por índice ou nome.', sig: 'delete_cue_point(index: int)' },

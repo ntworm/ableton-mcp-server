@@ -177,9 +177,11 @@ Python MIDI Remote Scripts do not use the Max LOM dictionary binding for `Clip.a
 
 Standalone mutations open and close one undo step. `run_batch` opens one outer step and invokes sub-handlers without nested undo steps.
 
-The selected runtime object must expose `begin_undo_step()` and `end_undo_step()`. The Control Surface resolves this capability from the control-surface instance, `c_instance`, application, or song. If no target exposes both methods, the mutation fails with `LIVE_UNAVAILABLE` before changing the Set.
+Live ends that step when the `update_display()` tick that opened it returns, whatever the script asked for: only writes made in the same tick share an undo step. A command that writes in one tick and reads the write back in the next therefore leaves its own step, and the next command of a batch starts a new one. Setting `handle_undo_steps` on the surface does not change this. The Arrangement edits read the lane back in the tick of the edit, which Live 12.4 lists at once, so a batch of them and `move_arrangement_clip` stay one step; they wait a tick only when the lane does not list the edit yet. Measured on Live 12.4.15 and 12.4.25; see `docs/KNOWN_BUGS.md` Category H.
 
-`run_batch` stops at the first error. Successful earlier commands remain applied inside the same undo step. `rolled_back` is always `false`; one Ctrl+Z reverts the grouped successful prefix. Reverse-operation replay is not attempted because it cannot restore every LOM mutation safely.
+The selected runtime object must expose `begin_undo_step()` and `end_undo_step()`. The Control Surface resolves this capability from the control-surface instance, `c_instance`, application, or song; on Live 12.4 only the song exposes them. If no target exposes both methods, the mutation fails with `LIVE_UNAVAILABLE` before changing the Set.
+
+`run_batch` stops at the first error. Successful earlier commands remain applied and `rolled_back` is always `false`; undoing them takes one Ctrl+Z per undo step they left. Reverse-operation replay is not attempted because it cannot restore every LOM mutation safely.
 
 ## State and Time Ownership
 

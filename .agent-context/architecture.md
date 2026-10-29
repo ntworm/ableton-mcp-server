@@ -68,7 +68,7 @@ The Node WebSocket server explicitly binds `127.0.0.1:9889`; `tests/test_extensi
 
 ## Mutation lifecycle
 
-Transport/cue mutations use deferred generators: write, yield to later Live ticks, read back, retry within contract limits, then return observed state or a typed error. Standalone mutations create one undo step. `run_batch` creates one outer undo step, stops on the first failure, and leaves the successful prefix applied.
+Transport/cue mutations use deferred generators: write, yield to later Live ticks, read back, retry within contract limits, then return observed state or a typed error. Standalone mutations open one undo step. `run_batch` opens one outer step, stops on the first failure, and leaves the successful prefix applied. Live closes an undo step at the end of every UI tick, so a command that verifies on a later tick ends its step; Arrangement edits verify in their own tick and stay in one step.
 
 Mutations are never replayed automatically after an ambiguous network failure.
 

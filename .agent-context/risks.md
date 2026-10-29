@@ -21,7 +21,7 @@ If the connection fails after a mutation is sent, the client cannot know whether
 
 ## High: `run_batch` is not rollback
 
-The batch stops at its first failure. Earlier successful commands remain applied inside one undo step and the response reports `rolled_back: false`. One user undo can revert the grouped successful prefix; automatic reverse replay is unsafe.
+The batch stops at its first failure. Earlier successful commands remain applied and the response reports `rolled_back: false`; automatic reverse replay is unsafe. The batch is one undo step only while its writes land in one tick: Live closes a step at the end of every UI tick, so each command read back on a later tick takes its own Ctrl+Z, and pressing one too many undoes the user's previous edit.
 
 ## High: duplicated contracts can drift
 

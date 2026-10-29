@@ -2084,6 +2084,15 @@ def _arrangement_clips(track: Any) -> list[Any] | None:
         return None
 
 
+def _lane_after(track: Any, seen: Callable[[list[Any]], bool]) -> Generator[None, None, list[Any]]:
+    """Confirm an edit in its own tick (one undo step, KNOWN_BUGS H); wait a tick only if unseen."""
+    clips = _arrangement_clips(track) or []
+    if not seen(clips):
+        yield
+        clips = _arrangement_clips(track) or []
+    return clips
+
+
 def _capture_clip_colour_target(
     clip: Any,
     *,
@@ -2212,16 +2221,12 @@ def _duplicate_session_clip_to_arrangement_steps(
             "This host does not expose Track.duplicate_clip_to_arrangement.",
         )
 
-    before = _arrangement_clips(track) or []
-    count_before = len(before)
+    count_before = len(_arrangement_clips(track) or [])
     duplicate(clip, destination)
-    yield
-    after = _arrangement_clips(track) or []
+    after = yield from _lane_after(track, lambda clips: len(clips) > count_before)
     if len(after) <= count_before:
-        raise RemoteError(
-            ERROR_LIVE_UNAVAILABLE,
-            "Arrangement clip creation was not observed on track %s." % track_index,
-        )
+        message = "Arrangement clip creation was not observed on track %s." % track_index
+        raise RemoteError(ERROR_LIVE_UNAVAILABLE, message)
 
     placed_index, placed = min(
         ((index, item) for index, item in enumerate(after)),
@@ -2249,18 +2254,13 @@ def _delete_arrangement_clip_steps(
 
     delete = _safe(lambda: track.delete_clip, None)
     if not callable(delete):
-        raise RemoteError(
-            ERROR_CAPABILITY_UNAVAILABLE,
-            "This host does not expose Track.delete_clip.",
-        )
+        message = "This host does not expose Track.delete_clip."
+        raise RemoteError(ERROR_CAPABILITY_UNAVAILABLE, message)
     delete(clip)
-    yield
-    remaining = _arrangement_clips(track) or []
+    remaining = yield from _lane_after(track, lambda clips: len(clips) < count_before)
     if len(remaining) >= count_before:
-        raise RemoteError(
-            ERROR_LIVE_UNAVAILABLE,
-            "Arrangement clip deletion was not observed on track %s." % track_index,
-        )
+        message = "Arrangement clip deletion was not observed on track %s." % track_index
+        raise RemoteError(ERROR_LIVE_UNAVAILABLE, message)
     return {"deleted": True, "clip": captured, "clip_count": len(remaining)}
 
 
@@ -2293,8 +2293,7 @@ def _move_arrangement_clip_steps(
         )
 
     duplicate(clip, destination)
-    yield
-    after_copy = _arrangement_clips(track) or []
+    after_copy = yield from _lane_after(track, lambda clips: len(clips) > count_before)
     if len(after_copy) <= count_before:
         raise RemoteError(
             ERROR_LIVE_UNAVAILABLE,
@@ -2302,8 +2301,7 @@ def _move_arrangement_clip_steps(
         )
 
     delete(clip)
-    yield
-    remaining = _arrangement_clips(track) or []
+    remaining = yield from _lane_after(track, lambda clips: len(clips) < len(after_copy))
     if len(remaining) != count_before:
         raise RemoteError(
             ERROR_LIVE_UNAVAILABLE,

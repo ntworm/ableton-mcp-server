@@ -94,7 +94,7 @@ Real Live connectivity is proven by `.\.venv-win\Scripts\ableton-mcp.exe doctor 
 - Preserve dirty worktrees and unrelated agent/user changes.
 - Do not push, publish, tag, release, force-reset, or rewrite history without explicit authorization.
 - Do not retry mutations after ambiguous network failure.
-- `run_batch` is grouped undo, not rollback: a successful prefix persists and `rolled_back` is `false`.
+- `run_batch` is not rollback: a successful prefix persists and `rolled_back` is `false`. It is one undo step only while its writes land in one Live tick: Live closes the step at the end of every UI tick, and `begin_undo_step()` or `handle_undo_steps` cannot hold it open. Arrangement edits confirm in their own tick, so a batch of them is one Ctrl+Z; each command read back on a later tick ends the step (`docs/KNOWN_BUGS.md` Category H).
 - Path IDs are session-local index locators; re-list after structural edits.
 - Keep bridges local-only. The WebSocket server is verified by source and
   `tests/test_extension_loopback.py` to bind only `127.0.0.1:9889`.

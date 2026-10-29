@@ -515,7 +515,7 @@ agent has never touched.
 - Returns: ordered results, completed count, failing index or `null`, and `rolled_back:false`.
 - Request: `{"type":"run_batch","params":{"commands":[{"type":"set_tempo","params":{"tempo":128.0}}]}}`
 - Response: `{"status":"ok","result":{"results":[{"index":0,"status":"ok","result":{"tempo":128.0}}],"completed":1,"aborted_at":null,"rolled_back":false}}`
-- Edge cases / side effects: one outer undo step, including deferred children; stops at first error; prior successes persist until one Ctrl+Z.
+- Edge cases / side effects: stops at first error; prior successes persist and nothing is rolled back. Live closes an undo step at the end of every UI tick (measured on Live 12.4.15 and 12.4.25, see `KNOWN_BUGS.md` Category H), so commands that finish in the same tick share one Ctrl+Z: the Arrangement edits (`delete_arrangement_clip`, `duplicate_session_clip_to_arrangement`, `move_arrangement_clip`), `create_clip`, `add_notes_to_clip`, `add_notes_pattern`, `rename_track`, `create_midi_track` and `delete_clip`. A command that reads its write back on a later tick — tempo, loop, transport, parameters, presets, track and clip properties, colours, automation, cue points — ends the step, and the next command starts a new one. Undo one Ctrl+Z at a time and re-read the Set after each.
 
 ### `add_notes_to_clip(track_index: int, clip_index: int, notes: list[NoteSpec])`
 
@@ -632,7 +632,7 @@ agent has never touched.
 ### `move_arrangement_clip(track_index, clip_index, time)`
 
 - Moves one Arrangement clip. `Clip.start_time` has no setter, so the move is a copy to `time` followed by deletion of the original, each half verified separately.
-- Edge cases / side effects: a failed copy leaves the original untouched rather than losing the clip. Indices shift after the move — re-read with `get_arrangement_clips`.
+- Edge cases / side effects: a failed copy leaves the original untouched rather than losing the clip. Indices shift after the move — re-read with `get_arrangement_clips`. One undo step: the original is deleted as soon as the copy is listed, which Live 12.4 does in the same tick. A host that lists the copy only on the next tick gets the delete a tick later, and the move then takes two Ctrl+Z.
 
 ### `delete_arrangement_clip(track_index, clip_index)`
 
@@ -690,7 +690,8 @@ on every machine and every run. No language model backs any of them.
 - Returns: `{"applied": bool, "traits_applied": false, "notes": [...]}`, plus
   `"bridge"` when the notes were written.
 - Side effects: none unless `apply` is true, which creates the clip and its
-  notes in a single `run_batch` undo step.
+  notes in one undo step: `create_clip` and `add_notes_to_clip` both finish in
+  the same Live tick.
 - Edge cases / side effects: `create_clip` refuses a slot that is not empty, so
   this cannot overwrite existing material; a failed batch is never retried.
 
@@ -867,5 +868,6 @@ an incompatible kit profile, source channel, rights level, or destination slot.
 - Receipts: `committed` means the batch completed; `rejected` means a precondition
   or mapping gate refused it; `partial` or `unknown` means a mutation may have
   happened. Inspect Live and recover deliberately in the latter cases—never
-  retry a possibly sent mutation. `run_batch` is one grouped undo step, not a
-  rollback guarantee.
+  retry a possibly sent mutation. `run_batch` is not a rollback guarantee; the
+  commit's clip creation and note insertion finish in the same Live tick, so
+  one Ctrl+Z undoes both.
