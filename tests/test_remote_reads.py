@@ -23,7 +23,8 @@ def test_session_track_and_project_reads() -> None:
     assert metadata == {
         "song_name": "Debug Set",
         "file_path": r"C:\Music\Debug Set.als",
-        "is_dirty": False,
+        "is_dirty": None,
+        "can_undo": False,
     }
     assert call("get_song_length") == {"song_length": 64.25}
 
@@ -98,3 +99,32 @@ def test_snapshot_has_epoch_timestamp_and_all_debug_sections(monkeypatch: object
     assert snapshot["live_version"] == "12.4.5"
     assert snapshot["locators"] == []
     assert snapshot["scenes"][0]["name"] == "Verse"
+
+
+class _SongWithoutSaveState:
+    """A Song that answers its name and undo state but exposes no dirty flag or path."""
+
+    name = "TESTE_CODEX"
+    can_undo = True
+
+
+class _SongThatRefusesUndoState(_SongWithoutSaveState):
+    @property
+    def can_undo(self) -> bool:  # type: ignore[override]
+        raise RuntimeError("Live refused the read")
+
+
+def test_project_metadata_says_unknown_instead_of_clean() -> None:
+    def metadata(song: object) -> object:
+        return execute_command(song, FakeApplication(), "get_project_metadata", {})
+
+    assert metadata(_SongWithoutSaveState()) == {
+        "song_name": "TESTE_CODEX",
+        "file_path": None,
+        "is_dirty": None,
+        "can_undo": True,
+    }
+    refused = metadata(_SongThatRefusesUndoState())
+    assert isinstance(refused, dict)
+    assert refused["can_undo"] is None
+    assert refused["is_dirty"] is None

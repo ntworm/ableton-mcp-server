@@ -385,11 +385,11 @@ def get_scene_state(scene_index: int) -> Any:
 
 @mcp.tool()
 def get_project_metadata() -> Any:
-    """Read Set name, file path, and dirty state.
+    """Read Set name, file path, dirty flag, and whether Live can undo anything.
 
     Side effects: none.
     Example: ``get_project_metadata()`` identifies the loaded Set.
-    Edge cases: unsaved Sets can have an empty file path.
+    Edge cases: ``null`` means Live did not answer; Live 12.4.25b1 has no ``Song.is_dirty``.
     """
     return _remote("get_project_metadata", models.GetProjectMetadataRequest())
 

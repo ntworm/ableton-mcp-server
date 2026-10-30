@@ -147,6 +147,14 @@ If a connection fails after a mutation was sent, the client cannot know whether 
 
 **Mitigation:** validate JSON/Pydantic note dictionaries at the MCP boundary, construct Python note specification objects inside Live, and pass them as a tuple.
 
+## Category S — Live's Python `Song` has no dirty flag
+
+**Symptom:** `get_project_metadata` answered `is_dirty: false` for a Set with unsaved changes. On 29/10/2026 the disposable `TESTE_CODEX` Set on Live 12.4.25b1 still read `false` after three devices loaded through the Extension and a whole acceptance run (two tracks, a clip, notes, warp), so the acceptance preflight that refuses a dirty Set never refused anything.
+
+**Root cause:** Live 12.4.25b1 has no `Song.is_dirty` in its Python API, and the Remote Script read it through `_safe(..., False)`, which turns the `AttributeError` into "clean". Measured on 30/10/2026 against `TESTE_CODEX` opened from disk: `hasattr(song, "is_dirty")` is `False` and the read raises `'Song' object has no attribute 'is_dirty'`; `dir(song)` names nothing about dirty, saved or modified state (only `can_undo`, `can_redo`, `undo`, `redo`, the undo-step pair and `file_path`); `Song.save` is absent too. `Song.file_path` exists and returns the `.als` path. After one `set_tempo` (120 to 121) the window title changed from `TESTE_CODEX` to `TESTE_CODEX*`, so Live tracks unsaved changes but does not expose them to Remote Scripts, while `can_undo` went from `false` to `true`.
+
+**Mitigation:** `get_project_metadata` answers `null` for a field Live does not expose or refuses to read, never a default, so Live 12.4.25b1 reports `is_dirty: null`. It also reports `Song.can_undo`, which is `false` while nothing undoable happened since the Set was opened. The acceptance preflight requires `can_undo: false` and refuses `is_dirty: true`; a Set with undo history, or with an unknown undo state, is refused before the first mutation. Reopen the saved Set without saving and run again. On 30/10/2026 the preflight refused the edited Set with `can_undo=True` and no mutation sent, and accepted it again once reopened without saving.
+
 ## Category K — WSL loopback is not Windows loopback under NAT
 
 **Symptom:** MCP tool discovery succeeds in WSL, but every Live call is refused at `127.0.0.1:9888`.
