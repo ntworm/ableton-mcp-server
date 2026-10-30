@@ -41,8 +41,9 @@ class AcceptanceSafetyError(RuntimeError):
 def require_fresh_set(metadata: Mapping[str, Any]) -> None:
     """Refuse a Set that may hold edits made since it was opened.
 
-    On Live 12.4.25b1 ``Song.is_dirty`` does not report unsaved changes
-    (``docs/KNOWN_BUGS.md`` Category S), so the flag cannot prove a clean Set.
+    Live 12.4.25b1 has no ``Song.is_dirty`` (``docs/KNOWN_BUGS.md`` Category
+    S) and ``get_project_metadata`` answers ``null``, so the flag cannot prove
+    a clean Set.
     An empty undo history (``can_undo is False``) can: nothing undoable
     happened since the Set was opened, so closing it without saving leaves the
     file on disk as it was. Anything else, unknown included, is refused before

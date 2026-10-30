@@ -29,12 +29,12 @@ The canonical certification policy that governs the promotion decision
 ### Fixed
 
 - The acceptance preflight no longer certifies a clean Set it never checked.
-  On Live 12.4.25b1 `Song.is_dirty` does not report unsaved changes, and the
-  Remote Script turned a missing or unreadable flag into `is_dirty: false`, so
-  the refusal of a dirty Set never fired: on 29/10/2026 the disposable Set
-  still read `false` after a whole acceptance run. `get_project_metadata` now
-  answers `null` for a field Live does not expose and adds `can_undo`; the
-  preflight requires
+  Live 12.4.25b1 has no `Song.is_dirty` in its Python API, and the Remote
+  Script turned the `AttributeError` into `is_dirty: false`, so the refusal of
+  a dirty Set never fired: on 29/10/2026 the disposable Set still read `false`
+  after a whole acceptance run. `get_project_metadata` now answers `null` for a
+  field Live does not expose and adds `can_undo`, measured `false` on a freshly
+  opened Set and `true` after one edit; the preflight requires
   `can_undo: false` (nothing undoable since the Set was opened) and refuses
   `is_dirty: true`. Run the acceptance on a freshly opened Set. Certification,
   Tool Reference, AGENTS and Known Bugs (Category S) say so.

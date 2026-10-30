@@ -389,7 +389,7 @@ def get_project_metadata() -> Any:
 
     Side effects: none.
     Example: ``get_project_metadata()`` identifies the loaded Set.
-    Edge cases: ``null`` means Live did not answer; on Live 12.4.25b1 ``is_dirty`` misses edits.
+    Edge cases: ``null`` means Live did not answer; Live 12.4.25b1 has no ``Song.is_dirty``.
     """
     return _remote("get_project_metadata", models.GetProjectMetadataRequest())
 
