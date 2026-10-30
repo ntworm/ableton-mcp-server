@@ -16,8 +16,8 @@ from typing import Any
 
 from .safety import AcceptanceSafetyError
 
-# Source of truth: ``AbletonMCPServer_RemoteScript/__init__.py``
-# line ~1896. The Remote Script maps ``target_percent=100`` to
+# Source of truth: ``AbletonMCPServer_RemoteScript/lifecycle.py``
+# (``LIVE_FADE_UNITY_VALUE``). The Remote Script maps ``target_percent=100`` to
 # ``LIVE_FADE_UNITY_VALUE`` on the user-facing fader — Live's
 # mixer volume parameter sits below unity so that 100% maps to
 # 0dB. The runner is a client-side component that does NOT

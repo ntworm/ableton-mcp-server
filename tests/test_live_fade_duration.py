@@ -37,7 +37,7 @@ class FakeSong:
 def clock(monkeypatch: pytest.MonkeyPatch) -> dict[str, float]:
     state: dict[str, float] = {"t": 1000.0}
     monkeypatch.setattr(
-        "AbletonMCPServer_RemoteScript.time.monotonic",
+        "AbletonMCPServer_RemoteScript.lifecycle.time.monotonic",
         lambda: state["t"],
     )
     return state

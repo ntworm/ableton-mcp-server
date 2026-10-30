@@ -123,6 +123,8 @@ To manually compute and verify the SHA-256 checksum of the installed `__init__.p
   shasum -a 256 "$HOME/Music/Ableton/User Library/Remote Scripts/AbletonMCPServer_RemoteScript/__init__.py"
   ```
 
+The Remote Script spans several modules, so `ableton-mcp install-status --json` is the check that compares every installed file.
+
 ### Agent Configuration (`mcp.json`):
 
 ```json

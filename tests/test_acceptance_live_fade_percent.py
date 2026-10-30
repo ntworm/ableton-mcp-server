@@ -48,7 +48,7 @@ from ._strict_fake import StrictFakeBridge
 # The canonical UNITY factor lives in
 # ``ableton_mcp_server.acceptance.LIVE_FADE_UNITY_VALUE`` (the
 # runner side). The Remote Script keeps a matching constant at
-# ``AbletonMCPServer_RemoteScript/__init__.py``. The drift
+# ``AbletonMCPServer_RemoteScript/lifecycle.py``. The drift
 # guard below compares the runner's value directly to the
 # Remote Script's value; we do NOT introduce a parallel local
 # constant here. If the two sides ever drift, the guard fails
@@ -65,7 +65,7 @@ def _read_remote_script_unity_value() -> float | None:
     canonical unity factor.
     """
     repo_root = Path(__file__).resolve().parents[1]
-    remote_script = repo_root / "AbletonMCPServer_RemoteScript" / "__init__.py"
+    remote_script = repo_root / "AbletonMCPServer_RemoteScript" / "lifecycle.py"
     if not remote_script.is_file():
         return None
     for line in remote_script.read_text(encoding="utf-8").splitlines():

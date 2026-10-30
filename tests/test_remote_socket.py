@@ -127,7 +127,7 @@ def test_processor_maps_unexpected_lom_exception_to_live_unavailable() -> None:
     response_queue: Any = __import__("queue").Queue(maxsize=1)
     processor.enqueue(QueuedRequest("get_session_info", {}, response_queue))
     with patch(
-        "AbletonMCPServer_RemoteScript.COMMAND_HANDLERS",
+        "AbletonMCPServer_RemoteScript.dispatch.COMMAND_HANDLERS",
         {"get_session_info": lambda *_args: (_ for _ in ()).throw(RuntimeError("Live busy"))},
     ):
         processor.process_pending()

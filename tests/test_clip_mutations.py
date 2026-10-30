@@ -132,7 +132,7 @@ def test_add_notes_passes_optional_expression_fields_to_host_specification() -> 
 def test_add_notes_reports_missing_note_expression_capability() -> None:
     with (
         patch(
-            "AbletonMCPServer_RemoteScript._midi_note_specification",
+            "AbletonMCPServer_RemoteScript.clips._midi_note_specification",
             side_effect=TypeError("unsupported field"),
         ),
         pytest.raises(RemoteError) as error,

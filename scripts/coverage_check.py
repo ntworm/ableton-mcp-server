@@ -10,9 +10,11 @@ from types import CodeType
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-TARGETS = sorted((ROOT / "ableton_mcp_server").glob("*.py")) + [
-    ROOT / "AbletonMCPServer_RemoteScript" / "__init__.py"
-]
+TARGETS = sorted((ROOT / "ableton_mcp_server").glob("*.py")) + sorted(
+    path
+    for path in (ROOT / "AbletonMCPServer_RemoteScript").glob("*.py")
+    if path.name not in {"_contracts.py", "realtime_server.py"}
+)
 
 
 class PathAwareIgnore:

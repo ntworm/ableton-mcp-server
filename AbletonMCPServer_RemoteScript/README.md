@@ -8,7 +8,7 @@ This directory is the Live-side execution engine for `ableton-mcp-server`. It li
 2. Restart Live.
 3. Select `AbletonMCPServer` as a Control Surface.
 
-For repository development, `python scripts/vendor_contracts.py` refreshes `_contracts.py` before a manual copy.
+For repository development, `python scripts/vendor_contracts.py` refreshes `_contracts.py` before a manual copy of the whole `AbletonMCPServer_RemoteScript` folder.
 
 Do not edit `_contracts.py`; it is generated from root `contracts.py`.
 

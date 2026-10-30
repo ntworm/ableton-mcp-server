@@ -92,7 +92,7 @@ def test_path_reads_resolve_against_current_state() -> None:
 
 
 def test_snapshot_has_epoch_timestamp_and_all_debug_sections(monkeypatch: object) -> None:
-    monkeypatch.setattr("AbletonMCPServer_RemoteScript.time.time", lambda: 123.456)  # type: ignore[attr-defined]
+    monkeypatch.setattr("AbletonMCPServer_RemoteScript.reads.time.time", lambda: 123.456)  # type: ignore[attr-defined]
     snapshot = call("take_snapshot")
     assert snapshot["captured_at_unix_ms"] == 123456
     assert snapshot["live_version"] == "12.4.5"

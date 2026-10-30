@@ -26,8 +26,8 @@ def test_remote_error_envelope_includes_optional_hint() -> None:
 
 def test_verbose_logging_uses_stable_mcp_server_prefix() -> None:
     with (
-        patch("AbletonMCPServer_RemoteScript._VERBOSE", True),
-        patch("AbletonMCPServer_RemoteScript.logger.info") as info,
+        patch("AbletonMCPServer_RemoteScript.common._VERBOSE", True),
+        patch("AbletonMCPServer_RemoteScript.common.logger.info") as info,
     ):
         _dbg("startup endpoint=127.0.0.1:9888")
     info.assert_called_once_with("[MCP-Server] %s", "startup endpoint=127.0.0.1:9888")

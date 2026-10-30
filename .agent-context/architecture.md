@@ -18,7 +18,7 @@ MCP client
                  -> Node.js Live Object Model
 ```
 
-Primary evidence: `README.md`, `docs/ARCHITECTURE.md`, `ableton_mcp_server/client.py`, `AbletonMCPServer_RemoteScript/__init__.py`, and `AbletonMCPServer_Extension/src/index.ts`.
+Primary evidence: `README.md`, `docs/ARCHITECTURE.md`, `ableton_mcp_server/client.py`, `AbletonMCPServer_RemoteScript/`, and `AbletonMCPServer_Extension/src/index.ts`.
 
 ## Components and ownership
 
@@ -33,7 +33,7 @@ Primary evidence: `README.md`, `docs/ARCHITECTURE.md`, `ableton_mcp_server/clien
 
 ### Remote Script
 
-`AbletonMCPServer_RemoteScript/__init__.py` owns the TCP listener, per-request response queues, deferred command generators, undo grouping, and Python LOM handlers. Socket work stays off the UI thread; `update_display()` advances queued LOM work on Live's main thread.
+`AbletonMCPServer_RemoteScript/` owns the TCP listener, per-request response queues, deferred command generators, undo grouping, and Python LOM handlers, with one module per LOM area. Socket work stays off the UI thread; `update_display()` advances queued LOM work on Live's main thread.
 
 ### Extension
 
