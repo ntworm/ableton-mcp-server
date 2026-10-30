@@ -25,6 +25,16 @@ The canonical certification policy that governs the promotion decision
   surface. Every file and function now fits the structure gate, so
   `quality-baseline.json` dropped the 22 entries of the old file. Behavior is
   unchanged; a manual copy of the Remote Script takes the whole folder.
+- `load_device_to_track` puts a device where the track's chain accepts it
+  instead of always appending: a MIDI effect after the MIDI effects already
+  there, an instrument before the first audio effect, an audio effect at the
+  end. The server reads the first level of the Browser (the `search_browser`
+  bridge command takes a `max_depth`) and the new `type` of each device in
+  `get_device_list` (Live's `Device.type`), then sends the Extension a
+  `device_index`. A second instrument is refused with `BAD_INPUT` before Live is
+  touched. The acceptance probe also loads Arpeggiator and checks that it lands
+  before Operator. Positions need the reinstalled Extension; an older one
+  appends as before.
 
 ### Fixed
 

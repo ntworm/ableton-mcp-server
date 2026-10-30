@@ -33,7 +33,7 @@ from typing import Any
 from ableton_mcp_server.errors import CapabilityUnavailableError
 from contracts import CAPABILITY_EVIDENCE, UNSUPPORTED_CAPABILITIES
 
-from ._fake_device_chain import append_device
+from ._fake_device_chain import append_device, browser_search, typed_devices
 
 # ---------------------------------------------------------------------------
 # Contract specs
@@ -581,7 +581,7 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str, params: dict[st
         track = params["track_index"]
         for t in s["tracks"]:
             if t["index"] == track:
-                return list(t.get("devices", []))
+                return typed_devices(t.get("devices", []))
         return []
     if command == "get_parameter_value":
         track_id = f"track:{params['track_index']}"
@@ -606,10 +606,7 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str, params: dict[st
         return list(s["browser_categories"])
     if command == "search_browser":
         s["search_browser_queries"].append(params["query"])
-        # For the runner's query "o" return some results; otherwise empty.
-        if params.get("query") == "o":
-            return [{"name": "Operator", "uri": "query:Operator#0"}]
-        return []
+        return browser_search(params)
     if command == "get_song_length":
         return {"song_length": float(s.get("song_length", 64.0))}
     if command == "live_find_track":
@@ -1154,5 +1151,7 @@ def _strict_ws_dispatch(bridge: StrictFakeBridge, method: str, params: dict[str,
         s["warp"]["warping"] = params["warping"]
         return dict(s["warp"])
     if method == "load_device_to_track":
-        return append_device(s["tracks"], params["track_index"], params["device_name"])
+        return append_device(
+            s["tracks"], params["track_index"], params["device_name"], params.get("device_index")
+        )
     raise RuntimeError(f"UNKNOWN_WS_METHOD: {method}")

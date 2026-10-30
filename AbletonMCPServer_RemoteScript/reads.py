@@ -265,6 +265,21 @@ def _browser_search_limit(params: dict[str, Any]) -> int:
     return max(1, min(200, raw_limit))
 
 
+def _browser_search_depth(params: dict[str, Any]) -> int:
+    """Return how many levels below each category a search descends.
+
+    The first level of ``instruments``, ``audio_effects`` and ``midi_effects``
+    lists Live's built-in devices, so ``max_depth=1`` finds a device without
+    walking its presets.
+    """
+    max_depth = params.get("max_depth", 5)
+    if isinstance(max_depth, bool) or not isinstance(max_depth, int) or not 1 <= max_depth <= 5:
+        raise RemoteError(
+            ERROR_INVALID_PARAMS, "Parameter 'max_depth' must be an integer from 1 to 5."
+        )
+    return max_depth
+
+
 def _browser_search_categories(params: dict[str, Any]) -> tuple[str, ...]:
     """Return the browser categories a search has to visit."""
     category_filter = params.get("category_type")
@@ -328,6 +343,7 @@ def _browser_visit(
     query: str,
     results: list[dict[str, Any]],
     visited: set[str],
+    max_depth: int,
 ) -> list[Any] | None:
     """Visit one browser item, appending its match and returning its children."""
     item, path, depth, ordinal_path = entry
@@ -339,7 +355,7 @@ def _browser_visit(
     name = str(_safe(lambda item=item: item.name, ""))
     if depth > 0 and query in name.casefold():
         results.append(_browser_match(item, uri, name, category, path))
-    if depth >= 5:
+    if depth >= max_depth:
         return None
     return _browser_children(item, path, depth, ordinal_path)
 
@@ -352,6 +368,7 @@ def _traverse_browser_category(
     budget: int,
     results: list[dict[str, Any]],
     visited: set[str],
+    max_depth: int,
 ) -> None:
     """Walk one browser category and append the matches it finds to ``results``."""
     # Slice 1 Task 5: Live's LOM yields fresh proxy wrappers on every
@@ -360,7 +377,7 @@ def _traverse_browser_category(
     # trees) to bound traversal.
     stack = [entry]
     while stack and len(results) < limit and len(visited) < budget:
-        children = _browser_visit(stack.pop(), category, query, results, visited)
+        children = _browser_visit(stack.pop(), category, query, results, visited, max_depth)
         if children is not None:
             stack.extend(children)
 
@@ -372,6 +389,7 @@ def cmd_search_browser(
 ) -> list[dict[str, Any]]:
     query = _string_param(params, "query").casefold()
     limit = _browser_search_limit(params)
+    max_depth = _browser_search_depth(params)
     selected = _browser_search_categories(params)
     results: list[dict[str, Any]] = []
     visited: set[str] = set()
@@ -382,7 +400,7 @@ def cmd_search_browser(
             continue
         root_name = str(_safe(lambda root=root: root.name, category.replace("_", " ").title()))
         _traverse_browser_category(
-            (root, [root_name], 0, ()), category, query, limit, budget, results, visited
+            (root, [root_name], 0, ()), category, query, limit, budget, results, visited, max_depth
         )
         if len(results) >= limit or len(visited) >= budget:
             break

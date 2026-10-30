@@ -147,7 +147,6 @@ async function handleLoadDeviceToTrack(params: any) {
 
   const song = context.application.song;
   const track = getTrackAtIndex(song, params.track_index);
-  const index = track.devices.length;
 
   // Slice 1 Task 6: ``device_name`` is the primary contract; ``device_uri``
   // is the deprecated alias kept for backward compatibility with v0.5.0
@@ -162,6 +161,17 @@ async function handleLoadDeviceToTrack(params: any) {
     throw new RpcDomainError(
       "INVALID_PARAMS",
       "load_device_to_track requires a non-empty device_name",
+    );
+  }
+
+  // The server picks ``device_index`` from the chain order Live accepts (MIDI
+  // effects, one instrument, audio effects); without it the device is appended.
+  const count = track.devices.length;
+  const index = params.device_index ?? count;
+  if (!Number.isInteger(index) || index < 0 || index > count) {
+    throw new RpcDomainError(
+      "INVALID_PARAMS",
+      `device_index must be an integer from 0 to ${count}`,
     );
   }
   const device = await track.insertDevice(deviceName, index);

@@ -9,6 +9,7 @@ import pytest
 from fastmcp import Client as FastMCPClient
 
 import ableton_mcp_server.server as server
+from ableton_mcp_server.errors import BadInputError
 
 FORWARD_CASES: list[tuple[Callable[..., Any], tuple[Any, ...], str, dict[str, Any]]] = [
     (server.get_session_info, (), "get_session_info", {}),
@@ -177,10 +178,14 @@ def test_diff_tool_is_local_and_deterministic() -> None:
 
 
 @pytest.mark.asyncio
+@patch("ableton_mcp_server.server.get_client")
 @patch("ableton_mcp_server.server._remote_ws")
 async def test_websocket_tools_validate_and_forward_exact_contract(
     mock_remote_ws: MagicMock,
+    mock_get_client: MagicMock,
 ) -> None:
+    # The Browser lists no such device, so load_device_to_track plans no index.
+    mock_get_client.return_value.call.return_value = []
     mock_remote_ws.side_effect = [
         {"warping": True},
         {"warping": False},
@@ -208,12 +213,15 @@ async def test_websocket_tools_validate_and_forward_exact_contract(
 
 
 @pytest.mark.asyncio
+@patch("ableton_mcp_server.server.get_client")
 @patch("ableton_mcp_server.server._remote_ws")
 async def test_load_device_to_track_sends_only_resolved_name_over_ws(
     mock_remote_ws: MagicMock,
+    mock_get_client: MagicMock,
 ) -> None:
     """Both public arguments must collapse to the same payload — and only
     the resolved ``device_name`` field travels over the bridge."""
+    mock_get_client.return_value.call.return_value = []
     mock_remote_ws.side_effect = [
         {
             "status": "loaded",
@@ -240,6 +248,50 @@ async def test_load_device_to_track_sends_only_resolved_name_over_ws(
         ("load_device_to_track", {"track_index": 0, "device_name": "Operator"}),
         ("load_device_to_track", {"track_index": 0, "device_name": "Utility"}),
     ]
+
+
+@pytest.mark.asyncio
+@patch("ableton_mcp_server.server.get_client")
+@patch("ableton_mcp_server.server._remote_ws")
+async def test_load_device_to_track_forwards_the_planned_position(
+    mock_remote_ws: MagicMock,
+    mock_get_client: MagicMock,
+) -> None:
+    def remote_script(command: str, params: Any = None) -> Any:
+        if command == "search_browser":
+            listed = params["category_type"] == "midi_effects"
+            return [{"name": "Arpeggiator"}] if listed else []
+        return [{"name": "Operator", "type": "instrument"}]
+
+    mock_get_client.return_value.call.side_effect = remote_script
+    mock_remote_ws.return_value = {"status": "loaded", "device_index": 0}
+
+    await server.load_device_to_track(1, device_name="arpeggiator")
+
+    mock_remote_ws.assert_awaited_once_with(
+        "load_device_to_track",
+        {"track_index": 1, "device_name": "Arpeggiator", "device_index": 0},
+    )
+
+
+@pytest.mark.asyncio
+@patch("ableton_mcp_server.server.get_client")
+@patch("ableton_mcp_server.server._remote_ws")
+async def test_load_device_to_track_refuses_a_second_instrument(
+    mock_remote_ws: MagicMock,
+    mock_get_client: MagicMock,
+) -> None:
+    def remote_script(command: str, params: Any = None) -> Any:
+        if command == "search_browser":
+            listed = params["category_type"] == "instruments"
+            return [{"name": "Wavetable"}] if listed else []
+        return [{"name": "Operator", "type": "instrument"}]
+
+    mock_get_client.return_value.call.side_effect = remote_script
+
+    with pytest.raises(BadInputError, match="already holds the instrument 'Operator'"):
+        await server.load_device_to_track(0, device_name="Wavetable")
+    assert mock_remote_ws.await_count == 0
 
 
 @pytest.mark.asyncio

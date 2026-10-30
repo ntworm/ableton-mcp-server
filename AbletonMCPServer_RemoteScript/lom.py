@@ -163,6 +163,16 @@ def _plugin_state(class_name: str, parameters: list[dict[str, Any]]) -> dict[str
     return state
 
 
+# ``Device.type`` codes. Live keeps a chain in the order MIDI effects, one
+# instrument, audio effects, and refuses an insert that breaks it.
+_DEVICE_TYPES = {1: "instrument", 2: "audio_effect", 4: "midi_effect"}
+
+
+def _device_type(device: Any) -> str:
+    """Return ``Device.type`` as text, or ``undefined`` when Live reports none."""
+    return _DEVICE_TYPES.get(_safe(lambda: int(device.type), 0), "undefined")
+
+
 def _capture_device(device: Any, track_index: int, device_index: int) -> dict[str, Any]:
     device_id = "track:%s/device:%s" % (track_index, device_index)
     parameters = [
@@ -174,6 +184,7 @@ def _capture_device(device: Any, track_index: int, device_index: int) -> dict[st
         "id": device_id,
         "name": str(_safe(lambda: device.name, "")),
         "class_name": class_name,
+        "type": _device_type(device),
         "is_active": bool(_safe(lambda: device.is_active, True)),
         "parameters": parameters,
     }

@@ -89,7 +89,7 @@ async def test_ws_client_explains_live_insert_refusal(method: str, explained: bo
 
     assert exc_info.value.code == "EXTENSION_RPC_-32603"
     assert str(exc_info.value).startswith("Failed to insert device")
-    assert ("second instrument" in str(exc_info.value)) is explained
+    assert ("reinstall the Extension" in str(exc_info.value)) is explained
 
 
 @pytest.mark.asyncio

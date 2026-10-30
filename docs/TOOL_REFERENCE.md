@@ -352,9 +352,11 @@ agent has never touched.
 ### `get_device_list(track_index: int)`
 
 - Params: non-negative track index.
-- Returns: device path-ids, class/name/activity, and parameter snapshots.
+- Returns: device path-ids, class/name/activity, `type` (Live's `Device.type`:
+  `instrument`, `audio_effect`, `midi_effect` or `undefined`), and parameter
+  snapshots.
 - Request: `{"type":"get_device_list","params":{"track_index":0}}`
-- Response: `{"status":"ok","result":[{"id":"track:0/device:0","name":"Operator","parameters":[]}]}`
+- Response: `{"status":"ok","result":[{"id":"track:0/device:0","name":"Operator","type":"instrument","parameters":[]}]}`
 - Edge cases / side effects: pure read; special tracks can return an empty list.
 
 ### `get_parameter_value(track_index: int, device_index: int, parameter_name: str)`
@@ -565,20 +567,28 @@ agent has never touched.
 
 - Performs case-insensitive depth-first search through `application.browser` over TCP.
 - Returns display name, URI when exposed, category, path, and `is_loadable`.
-- Edge cases / side effects: pure read; limit is 1..200 and traversal is capped at depth 5, 500 children per node, and 5000 visited nodes.
+- Edge cases / side effects: pure read; limit is 1..200 and traversal is capped at depth 5, 500 children per node, and 5000 visited nodes. The bridge command also takes `max_depth` (1..5); `load_device_to_track` uses `max_depth=1`, where the device categories list Live's built-in devices, and the public tool keeps the full depth.
 
 ### `load_device_to_track(track_index: int, device_name=None, device_uri=None)`
 
-- Loads a built-in Live device through the Extension SDK and appends it to the
-  end of the track's device chain. `device_name` is canonical; `device_uri`
-  remains a deprecated query-URI alias.
+- Loads a built-in Live device through the Extension SDK at the position the
+  track's chain accepts. Live keeps MIDI effects, then one instrument, then audio
+  effects, so a MIDI effect goes after the MIDI effects already there, an
+  instrument before the first audio effect, and an audio effect at the end.
+  `device_name` is canonical; `device_uri` remains a deprecated query-URI alias.
+- How the position is chosen: two TCP reads first. `search_browser` at the first
+  level of `instruments`, `midi_effects` and `audio_effects` gives the device's
+  role and the Browser's spelling of its name, and `get_device_list` gives the
+  `type` of each device on the track. A name the Browser does not list is sent
+  without a position and appended, as before.
 - Edge cases / side effects: mutates the track device chain through the
   WebSocket bridge and requires the AbletonMCPServer Extension to be installed.
-  Live keeps MIDI effects, then one instrument, then audio effects, and answers
-  every refused insert with `Failed to insert device`: an unknown name, a second
-  instrument, an instrument after an audio effect, or a MIDI effect after an
-  instrument. The error message lists these causes. Load an instrument onto a
-  MIDI track that has none ([Known Bugs, Category R](KNOWN_BUGS.md#category-r--live-refuses-an-out-of-order-device-with-one-generic-error)).
+  A track that already holds an instrument refuses a second one with `BAD_INPUT`
+  before anything is sent to Live. Live still answers `Failed to insert device`
+  for an unknown name, an instrument or MIDI effect on an audio, return or main
+  track, and an Extension installed before positional inserts, which ignores the
+  position and appends; the error message lists these causes ([Known Bugs,
+  Category R](KNOWN_BUGS.md#category-r--live-refuses-an-out-of-order-device-with-one-generic-error)).
 
 ### `delete_clip(track_index, clip_index)`
 
