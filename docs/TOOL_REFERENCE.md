@@ -569,10 +569,16 @@ agent has never touched.
 
 ### `load_device_to_track(track_index: int, device_name=None, device_uri=None)`
 
-- Loads a device onto a track through the Extension SDK browser API. `device_name`
-  is canonical; `device_uri` remains a deprecated query-URI alias.
+- Loads a built-in Live device through the Extension SDK and appends it to the
+  end of the track's device chain. `device_name` is canonical; `device_uri`
+  remains a deprecated query-URI alias.
 - Edge cases / side effects: mutates the track device chain through the
   WebSocket bridge and requires the AbletonMCPServer Extension to be installed.
+  Live keeps MIDI effects, then one instrument, then audio effects, and answers
+  every refused insert with `Failed to insert device`: an unknown name, a second
+  instrument, an instrument after an audio effect, or a MIDI effect after an
+  instrument. The error message lists these causes. Load an instrument onto a
+  MIDI track that has none ([Known Bugs, Category R](KNOWN_BUGS.md#category-r--live-refuses-an-out-of-order-device-with-one-generic-error)).
 
 ### `delete_clip(track_index, clip_index)`
 
