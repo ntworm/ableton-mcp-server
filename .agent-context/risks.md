@@ -9,7 +9,7 @@
 
 The socket thread must never touch Live's Python Object Model. It parses/enqueues work; `update_display()` advances handlers on Live's UI thread. Direct socket-thread LOM access can destabilize Live.
 
-Evidence: `AbletonMCPServer_RemoteScript/__init__.py`, `docs/ARCHITECTURE.md`, and remote-threading tests.
+Evidence: `AbletonMCPServer_RemoteScript/socket_server.py`, `AbletonMCPServer_RemoteScript/dispatch.py`, `docs/ARCHITECTURE.md`, and remote-threading tests.
 
 ## High: WSL loopback is not Windows loopback
 

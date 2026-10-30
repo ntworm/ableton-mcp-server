@@ -16,7 +16,7 @@ The paths below are curated because their responsibilities and coupled-change re
 
 ## Live execution
 
-- `AbletonMCPServer_RemoteScript/__init__.py`: largest and highest-churn file; owns threading, queues, undo steps, deferred generators, and most Python LOM behavior. Relevant coverage spans remote reads/errors/threading, cue, clip, transaction, and transport tests.
+- `AbletonMCPServer_RemoteScript/`: the Remote Script package; `dispatch.py` and `socket_server.py` are the threading, queue, undo and deferred-generator hot spots. Relevant coverage spans remote reads/errors/threading, cue, clip, transaction, and transport tests.
 - `tests/remote_fakes.py`: shared test Live model. Handler changes frequently require realistic fake updates.
 - `AbletonMCPServer_Extension/src/index.ts`: owns all WebSocket handlers and network bind behavior. Pair changes with Python routing/client tests and an Extension build.
 

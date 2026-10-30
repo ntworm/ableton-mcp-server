@@ -15,6 +15,17 @@ The canonical certification policy that governs the promotion decision
   over stdio. The manifest lists every catalog tool, takes its counts from the
   catalog, and declares Windows only. Building the bundle publishes nothing.
 
+### Changed
+
+- The Remote Script is one module per area instead of a single 4555-line
+  `__init__.py`: `common`, `lom`, `reads`, `devices`, `instruments`,
+  `transport`, `cues`, `tracks`, `arrangement`, `clips`, `automation`,
+  `composition`, `lifecycle`, `preconditions`, `handlers`, `dispatch` and
+  `socket_server`. `__init__.py` keeps `create_instance` and the control
+  surface. Every file and function now fits the structure gate, so
+  `quality-baseline.json` dropped the 22 entries of the old file. Behavior is
+  unchanged; a manual copy of the Remote Script takes the whole folder.
+
 ### Fixed
 
 - A `run_batch` of Arrangement edits, and `move_arrangement_clip`, now undo

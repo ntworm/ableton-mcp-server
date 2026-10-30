@@ -8,11 +8,10 @@ from tests.remote_fakes import FakeApplication, FakeSong
 
 
 def test_remote_script_never_blocks_live_ui_with_sleep() -> None:
-    source = Path("AbletonMCPServer_RemoteScript/__init__.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
     blocking_calls = [
         node
-        for node in ast.walk(tree)
+        for path in sorted(Path("AbletonMCPServer_RemoteScript").glob("*.py"))
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Attribute)
         and isinstance(node.func.value, ast.Name)

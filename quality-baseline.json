@@ -1,6 +1,5 @@
 {
   "files": {
-    "AbletonMCPServer_RemoteScript/__init__.py": 4557,
     "ableton_mcp_server/acceptance/runner.py": 3029,
     "ableton_mcp_server/groove_intelligence/corpus.py": 709,
     "ableton_mcp_server/groove_intelligence/deterministic.py": 729,
@@ -19,82 +18,6 @@
     "tests/test_track_hierarchy_and_color_v053.py": 524
   },
   "functions": {
-    "AbletonMCPServer_RemoteScript/__init__.py::JsonlSocketServer._serve_client": {
-      "complexity": 11
-    },
-    "AbletonMCPServer_RemoteScript/__init__.py::_automation_parameter": {
-      "complexity": 31,
-      "function_lines": 86
-    },
-    "AbletonMCPServer_RemoteScript/__init__.py::_create_clip_automation_steps": {
-      "complexity": 23,
-      "function_lines": 90
-    },
-    "AbletonMCPServer_RemoteScript/__init__.py::_dispatch_command_steps": {
-      "complexity": 31,
-      "function_lines": 132
-    },
-    "AbletonMCPServer_RemoteScript/__init__.py::_is_dry_run_only": {
-      "complexity": 11
-    },
-    "AbletonMCPServer_RemoteScript/__init__.py::_resolve_device_parameter": {
-      "complexity": 14,
-      "function_lines": 69
-    },
-    "AbletonMCPServer_RemoteScript/__init__.py::_run_batch_steps": {
-      "complexity": 12,
-      "function_lines": 61
-    },
-    "AbletonMCPServer_RemoteScript/__init__.py::_set_arrangement_clip_properties_steps": {
-      "complexity": 12
-    },
-    "AbletonMCPServer_RemoteScript/__init__.py::_set_clip_color_steps": {
-      "function_lines": 66
-    },
-    "AbletonMCPServer_RemoteScript/__init__.py::_set_clip_properties_steps": {
-      "complexity": 17
-    },
-    "AbletonMCPServer_RemoteScript/__init__.py::_set_parameter_value_steps": {
-      "complexity": 11,
-      "function_lines": 63
-    },
-    "AbletonMCPServer_RemoteScript/__init__.py::_validate_hierarchy_request": {
-      "complexity": 16,
-      "function_lines": 79
-    },
-    "AbletonMCPServer_RemoteScript/__init__.py::_validate_preconditions": {
-      "complexity": 24,
-      "function_lines": 72
-    },
-    "AbletonMCPServer_RemoteScript/__init__.py::cmd_add_notes_pattern": {
-      "complexity": 11
-    },
-    "AbletonMCPServer_RemoteScript/__init__.py::cmd_add_notes_to_clip": {
-      "complexity": 14
-    },
-    "AbletonMCPServer_RemoteScript/__init__.py::cmd_describe_instrument": {
-      "function_lines": 71
-    },
-    "AbletonMCPServer_RemoteScript/__init__.py::cmd_diagnose_clip_targets": {
-      "complexity": 11,
-      "function_lines": 91
-    },
-    "AbletonMCPServer_RemoteScript/__init__.py::cmd_diagnose_midi_clip": {
-      "complexity": 25,
-      "function_lines": 118
-    },
-    "AbletonMCPServer_RemoteScript/__init__.py::cmd_get_clip_automation": {
-      "complexity": 14,
-      "function_lines": 71
-    },
-    "AbletonMCPServer_RemoteScript/__init__.py::cmd_search_browser": {
-      "complexity": 22,
-      "function_lines": 79
-    },
-    "AbletonMCPServer_RemoteScript/__init__.py::live_fade_steps": {
-      "complexity": 22,
-      "function_lines": 117
-    },
     "AbletonMCPServer_RemoteScript/realtime_server.py::RealtimeUDPServer._handle_packet": {
       "complexity": 13
     },

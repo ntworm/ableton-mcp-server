@@ -1086,7 +1086,7 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str, params: dict[st
         target_value = params.get("target_value")
         if target_percent is not None:
             # Match the Remote Script's
-            # ``AbletonMCPServer_RemoteScript/__init__.py``
+            # ``AbletonMCPServer_RemoteScript/lifecycle.py``
             # ``LIVE_FADE_UNITY_VALUE`` factor: ``target_percent=100``
             # maps to ``0.85``, not ``1.0``. Without this, the runner's
             # post-fade readback in
