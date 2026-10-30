@@ -527,15 +527,15 @@ def test_release_ready_policy_matrix() -> None:
     assert report4.finish()["release_ready"] is False
 
 
-def test_save_set_order_and_is_dirty_checking() -> None:
+def test_save_set_order_and_fresh_set_checking() -> None:
     """Verify that save_set executes before other mutations.
 
-    Also verify that preflight blocks if project is dirty.
+    Also verify that preflight blocks a Set edited since it was opened.
     """
     bridge = StrictFakeBridge()
-    # 1. Verify preflight safety check blocks when is_dirty is True
-    bridge.state["is_dirty"] = True
-    with pytest.raises(AcceptanceSafetyError, match="Loaded project dirty state is non-clean"):
+    # 1. Verify preflight safety check blocks when the undo history is not empty
+    bridge.state["can_undo"] = True
+    with pytest.raises(AcceptanceSafetyError, match=r"undo history \(can_undo=True\)"):
         asyncio.run(
             run_live_acceptance(
                 bridge,
@@ -549,17 +549,17 @@ def test_save_set_order_and_is_dirty_checking() -> None:
         )
 
 
-def test_preflight_is_dirty_missing_or_ambiguous() -> None:
-    """Verify that metadata missing is_dirty or non-False value raises error."""
+def test_preflight_undo_state_missing_or_ambiguous() -> None:
+    """Verify that metadata missing can_undo or non-False value raises error."""
 
-    class MissingDirtyBridge(StrictFakeBridge):
+    class MissingUndoStateBridge(StrictFakeBridge):
         def call(self, command_type: str, params: Any = None, *, timeout: Any = None) -> Any:
             if command_type == "get_project_metadata":
                 return {"song_name": "TESTE_CODEX"}
             return super().call(command_type, params, timeout=timeout)
 
-    bridge = MissingDirtyBridge()
-    with pytest.raises(AcceptanceSafetyError, match="non-clean"):
+    bridge = MissingUndoStateBridge()
+    with pytest.raises(AcceptanceSafetyError, match=r"undo history \(can_undo=None\)"):
         asyncio.run(
             run_live_acceptance(
                 bridge,

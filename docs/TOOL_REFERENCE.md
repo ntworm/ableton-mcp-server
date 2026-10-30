@@ -305,10 +305,10 @@ agent has never touched.
 ### `get_project_metadata()`
 
 - Params: none.
-- Returns: Set name, file path, and dirty flag.
+- Returns: Set name, file path, dirty flag (`is_dirty`), and `can_undo`, which is `false` while nothing undoable happened since the Set was opened.
 - Request: `{"type":"get_project_metadata","params":{}}`
-- Response: `{"status":"ok","result":{"song_name":"Debug Set","file_path":"C:\\Music\\Debug Set.als","is_dirty":false}}`
-- Edge cases / side effects: pure read; unsaved Sets can have an empty path.
+- Response: `{"status":"ok","result":{"song_name":"Debug Set","file_path":"C:\\Music\\Debug Set.als","is_dirty":null,"can_undo":false}}`
+- Edge cases / side effects: pure read. A field Live does not expose or refuses to read is `null`, never a default. On Live 12.4.25b1 `is_dirty` does not report unsaved changes, so neither `null` nor `false` means a saved Set (Known Bugs, Category S); the acceptance preflight relies on `can_undo: false` instead.
 
 ### `get_loop_settings()`
 

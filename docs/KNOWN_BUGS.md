@@ -147,6 +147,14 @@ If a connection fails after a mutation was sent, the client cannot know whether 
 
 **Mitigation:** validate JSON/Pydantic note dictionaries at the MCP boundary, construct Python note specification objects inside Live, and pass them as a tuple.
 
+## Category S — `Song.is_dirty` does not report unsaved changes
+
+**Symptom:** `get_project_metadata` answered `is_dirty: false` for a Set with unsaved changes. On 29/10/2026 the disposable `TESTE_CODEX` Set on Live 12.4.25b1 still read `false` after three devices loaded through the Extension and a whole acceptance run (two tracks, a clip, notes, warp), so the acceptance preflight that refuses a dirty Set never refused anything.
+
+**Root cause:** the Remote Script read `song.is_dirty` through `_safe(..., False)`, which answers "clean" when the attribute is missing or Live refuses the read, so a missing flag and a saved Set looked the same. The Live 12.4.25b1 executable points to a missing attribute: its Python `Song` bindings carry docstrings (`can_undo`: "Returns true if there is an action that we can restore."), none describes a dirty flag, and the only `is_dirty` string sits in the Extension host's name table, for which neither the Extension SDK nor the host module offers a getter.
+
+**Mitigation:** `get_project_metadata` answers `null` for a field Live does not expose or refuses to read, never a default. It also reports `Song.can_undo`, which is `false` while nothing undoable happened since the Set was opened. The acceptance preflight requires `can_undo: false` and refuses `is_dirty: true`; a Set with undo history, or with an unknown undo state, is refused before the first mutation. Reopen the saved Set without saving and run again.
+
 ## Category K — WSL loopback is not Windows loopback under NAT
 
 **Symptom:** MCP tool discovery succeeds in WSL, but every Live call is refused at `127.0.0.1:9888`.

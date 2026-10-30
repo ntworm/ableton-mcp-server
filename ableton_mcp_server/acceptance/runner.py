@@ -60,7 +60,7 @@ from .report import (
     _release_ready,
     build_baseline_report,
 )
-from .safety import AcceptanceClient, AcceptanceSafetyError, _resolve_track_id
+from .safety import AcceptanceClient, AcceptanceSafetyError, _resolve_track_id, require_fresh_set
 
 # ---------------------------------------------------------------------------
 # Offline probes
@@ -475,11 +475,7 @@ async def run_live_acceptance(
                         f"confirmation {confirm_project_name!r}; no "
                         "mutations were sent."
                     )
-                if metadata.get("is_dirty") is not False:
-                    raise AcceptanceSafetyError(
-                        f"Loaded project dirty state is non-clean ({metadata.get('is_dirty')!r}); "
-                        "acceptance requires a saved, clean project baseline."
-                    )
+                require_fresh_set(metadata)
                 baseline = _discover_baseline(client)
 
                 occupied_clip_target: tuple[int, int] | None = None

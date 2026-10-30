@@ -38,6 +38,29 @@ class AcceptanceSafetyError(RuntimeError):
     """Raised before mutation when the disposable Set cannot be proven safe."""
 
 
+def require_fresh_set(metadata: Mapping[str, Any]) -> None:
+    """Refuse a Set that may hold edits made since it was opened.
+
+    On Live 12.4.25b1 ``Song.is_dirty`` does not report unsaved changes
+    (``docs/KNOWN_BUGS.md`` Category S), so the flag cannot prove a clean Set.
+    An empty undo history (``can_undo is False``) can: nothing undoable
+    happened since the Set was opened, so closing it without saving leaves the
+    file on disk as it was. Anything else, unknown included, is refused before
+    the first mutation.
+    """
+    if metadata.get("is_dirty") is True:
+        raise AcceptanceSafetyError(
+            "Loaded project reports unsaved changes (is_dirty=True); no mutations were sent."
+        )
+    can_undo = metadata.get("can_undo")
+    if can_undo is not False:
+        raise AcceptanceSafetyError(
+            f"Loaded project has undo history (can_undo={can_undo!r}); acceptance needs a "
+            "Set opened from disk with no edits since. Reopen the saved Set without "
+            "saving and retry; no mutations were sent."
+        )
+
+
 def resolve_track_id(client: AcceptanceClient, index: int) -> str:
     """Return the Live-stable track id for the given index.
 
