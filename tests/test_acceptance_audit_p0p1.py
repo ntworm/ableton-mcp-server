@@ -633,7 +633,7 @@ def test_p1_5_jsonl_socket_dispatch_round_trip(
             }, f"get_session_info unexpected shape: {session}"
 
             metadata = c.call("get_project_metadata", {})
-            assert metadata == {"song_name": "TESTE_CODEX", "is_dirty": False}, (
+            assert metadata == {"song_name": "TESTE_CODEX", "is_dirty": False, "can_undo": False}, (
                 f"get_project_metadata unexpected shape: {metadata}"
             )
 

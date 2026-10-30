@@ -52,7 +52,8 @@ the following hold simultaneously:
 5. No row reports ``manual_required`` for an operation the runner
    could have exercised. The documented exceptions are ``quit_ableton``
    and the strict ``save_set`` fallback used when Live does not expose
-   ``Song.save()`` but the preflight already proved ``is_dirty: false``.
+   ``Song.save()`` but the preflight already proved an empty undo history
+   (``can_undo: false``).
 
 Any other condition — including transient infra problems — must
 surface as ``failed`` (with evidence) rather than as a green-washed
@@ -126,9 +127,15 @@ blocker (effectively a ``failed`` row). The runner enforces this in
 ## Cleanup restore semantics
 
 Before any mutation occurs, the metadata preflight requires
-``is_dirty: false`` and thereby certifies that the loaded project
-matches a clean saved baseline. The subsequent ``save_set`` probe
-either performs a real ``Song.save()`` with a clean readback or
+``can_undo: false``: nothing undoable happened since the Set was
+opened, so the loaded project still matches the file on disk. On Live
+12.4.25b1 ``Song.is_dirty`` does not report unsaved changes (it read
+``false`` after a whole acceptance run), so the flag cannot prove a
+clean Set there (``docs/KNOWN_BUGS.md`` Category S); the preflight only
+refuses ``is_dirty: true``. A Set with undo history, or with an unknown undo
+state, is refused before the first mutation: reopen the saved Set
+without saving. The subsequent ``save_set`` probe either performs a
+real ``Song.save()`` with a clean ``is_dirty: false`` readback or
 honestly records ``manual_required`` when that API is unavailable.
 
 Every in-place reversible mutation (tempo, song position, loop boundaries, cue points, mixer properties, parameter values, and warp state) is captured in baseline snapshots and explicitly restored during cleanup. Each restoration is followed by a readback check; a readback mismatch — even when the initial mutation succeeded — downgrades the affected tool's status to ``failed``.
@@ -137,7 +144,7 @@ Structural additions (such as loading a device via
 ``load_device_to_track`` or creating new tracks via
 ``create_audio_track`` / ``create_midi_track``) persist as unsaved
 in-memory modifications in the open Live session. Because the preflight
-refuses a dirty Set before any mutation, closing Live without saving
+refuses a Set edited since it was opened, closing Live without saving
 returns to the already-saved baseline on disk even when ``Song.save()``
 is unavailable. Manual cleanup instructions are also recorded in the
 audit artifact as an operational fallback reference. See
@@ -153,7 +160,7 @@ its ``manifest.json`` ``source_commit`` field.
 To ensure strict provenance:
 1. The ``source_commit`` must contain 100% of the source code, unit/integration tests, and documentation required for gate verification. This commit must pass all quality gates (pytest, coverage, Ruff, mypy strict, build tests) independently.
 2. The subsequent candidate generation commit must modify exclusively files under ``releases/v<version>-rc<N>/``. No test files, implementation logic, or documentation may be bundled into candidate commits.
-3. Under ``release_ready`` policy, ``manual_required`` is permitted exclusively for ``quit_ableton`` and for ``save_set`` (when the host bridge reports ``api_available: false`` and the baseline snapshot was confirmed clean with ``is_dirty: false``). Any other tool with ``manual_required`` blocks release promotion.
+3. Under ``release_ready`` policy, ``manual_required`` is permitted exclusively for ``quit_ableton`` and for ``save_set`` (when the host bridge reports ``api_available: false`` and the preflight confirmed an empty undo history with ``can_undo: false``). Any other tool with ``manual_required`` blocks release promotion.
 
 ## Probe groups and the catalog <!-- TOOL_COUNT: active_total -->
 
@@ -165,7 +172,10 @@ the count assertion.
 
 ## How to read the runner output
 
-The full gated acceptance runner is driven with:
+Open the disposable Set from disk right before the run and leave it
+untouched: the preflight refuses a Set with undo history. A second run
+needs the Set reopened without saving. The full gated acceptance runner
+is driven with:
 
 ```powershell
 .\.venv-cert\Scripts\ableton-mcp.exe acceptance `
