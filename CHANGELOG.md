@@ -32,6 +32,17 @@ The canonical certification policy that governs the promotion decision
   and `doctor` checks the same files. The 0.7.0 installer left
   `realtime_server.py` behind, so a fresh install of the Remote Script could
   not import in Live.
+- The baseline acceptance no longer fails `load_device_to_track` when the MIDI
+  target track already holds an instrument. The Extension appends the device
+  to the end of the chain, and Live refuses a second instrument with the
+  generic `Failed to insert device`; the probe appended Operator to the target
+  track of the disposable Set, which holds one, so it failed on every run. It
+  now loads onto the empty MIDI track that `create_midi_track` adds, and the
+  strict test fake refuses a second instrument as Live does. The refusal is not
+  a Live 12.4.25 regression: the Extension Host logs show it on 12.4.5 betas.
+  The WebSocket client appends the possible causes to that message (an unknown
+  name, a second instrument, an instrument after an audio effect, a MIDI effect
+  after an instrument), and Known Bugs gains Category R with the measurements.
 
 ## [0.7.0] - 2026-09-17
 

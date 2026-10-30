@@ -169,6 +169,27 @@ If a connection fails after a mutation was sent, the client cannot know whether 
 
 **Mitigation:** the bridge reports the state instead of returning a silently empty list. Plugin devices carry a `plugin_state` block in `get_device_list` and `list_device_params`; with nothing configured it reads `{"status": "not_configured", "hint": "PLUGIN_NOT_CONFIGURED", ...}`, and parameter lookups fail with the same explanation under `details.hint_code`. Ask the user to configure the controls in Live. `PluginDevice.presets` and `selected_preset_index` are exempt from the Configure gate, so `get_plugin_presets` / `set_plugin_preset` work regardless.
 
+## Category R — Live refuses an out-of-order device with one generic error
+
+**Symptom:** `load_device_to_track(0, device_name="Operator")` fails with `EXTENSION_RPC_-32603` and the message `Failed to insert device`. The baseline acceptance failed this way on every run against the disposable `TESTE_CODEX` Set, whose MIDI target track already holds an Operator, and on Live 12.4.25b1 it looked like a beta regression.
+
+**Root cause:** the Extension calls the SDK's `Track.insertDevice(name, index)` with `index = track.devices.length`, so the device always goes to the end of the chain. Live keeps MIDI effects before the instrument and audio effects after it, takes one instrument per chain, and refuses an insert that breaks that order or names a device it does not know. Every refusal reaches the Extension as the same error, `Failed to insert device`, which comes from Live and not from the SDK package. The SDK's `Device` exposes only `name` and `parameters`, so the Extension cannot tell the cases apart or choose another position. Measured on Live 12.4.25b1 against `TESTE_CODEX` on 29/10/2026, one call per row:
+
+| Chain before the call | Device appended | Result |
+|---|---|---|
+| empty MIDI track | Operator | loaded at index 0 |
+| Operator | Operator | refused |
+| Operator | Wavetable | refused |
+| Operator | Arpeggiator | refused |
+| Operator | Reverb | loaded at index 1 |
+| empty MIDI track | Reverb | loaded at index 0 |
+| Reverb | Operator | refused |
+| Reverb | NoSuchDevice123 | refused |
+
+The refusal is not new in 12.4.25: the Extension Host log (`ExtensionHost.txt` in Live's Preferences folder) shows it on 12.4.5b7, b10 and b11, alternating with successful loads as the target track's chain changed.
+
+**Mitigation:** the WebSocket client keeps the code and Live's message and appends the possible causes, so the caller sees why the insert failed. The acceptance probe loads Operator onto the empty MIDI track that `create_midi_track` adds, so it neither depends on nor changes the chains of the Set's own tracks, and the strict test fake refuses a second instrument the way Live does. Load an instrument onto a MIDI track that has none. The tool takes no position, so it cannot add a MIDI effect to a chain that holds an instrument, nor an instrument to a chain that ends with an audio effect.
+
 ## LOM calls used for clip debugging
 
 The implementation follows the official references for [`ClipSlot.create_clip` and `ClipSlot.fire`](https://docs.cycling74.com/apiref/lom/clipslot/) and adapts [`Clip.add_new_notes` / `get_notes_extended`](https://docs.cycling74.com/apiref/lom/clip/) to the embedded Python binding.

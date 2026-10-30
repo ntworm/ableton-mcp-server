@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from ableton_mcp_server.client import Client
-from ableton_mcp_server.errors import ExtensionUnavailableError
+from ableton_mcp_server.errors import BridgeError, ExtensionUnavailableError
 from ableton_mcp_server.ws_client import WSClient
 
 
@@ -59,6 +59,37 @@ async def test_ws_client_error_response() -> None:
         pytest.raises(Exception, match="Clip is not an audio clip"),
     ):
         await client.call("get_warp_state", {"track_index": 0, "clip_index": 0})
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("method", "explained"),
+    [("load_device_to_track", True), ("get_warp_state", False)],
+)
+async def test_ws_client_explains_live_insert_refusal(method: str, explained: bool) -> None:
+    client = WSClient()
+
+    mock_connection = AsyncMock()
+    mock_connection.__aenter__.return_value = mock_connection
+    mock_connection.recv = AsyncMock(
+        return_value=json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "error": {"code": -32603, "message": "Failed to insert device"},
+                "id": 1,
+            }
+        )
+    )
+
+    with (
+        patch("websockets.asyncio.client.connect", return_value=mock_connection),
+        pytest.raises(BridgeError) as exc_info,
+    ):
+        await client.call(method, {"track_index": 0, "device_name": "Operator"})
+
+    assert exc_info.value.code == "EXTENSION_RPC_-32603"
+    assert str(exc_info.value).startswith("Failed to insert device")
+    assert ("second instrument" in str(exc_info.value)) is explained
 
 
 @pytest.mark.asyncio

@@ -1559,13 +1559,13 @@ async def load_device_to_track(
     device_name: str | None = None,
     device_uri: str | None = None,
 ) -> str:
-    """Load a device onto a track using the Extensions SDK browser API.
+    """Load a built-in Live device at the end of a track's device chain.
 
-    Side effects: mutates the track device chain via the Extension Host.
-    Example: ``load_device_to_track(0, device_name="Operator")`` loads Operator
-    on track 0. ``device_uri`` is retained as a deprecated alias for callers
-    that still pass a query URI.
-    Edge cases: requires the AbletonMCPServer Extension to be installed.
+    Side effects: appends to the track device chain via the Extension Host.
+    Example: ``load_device_to_track(1, device_name="Operator")`` loads Operator
+    onto an empty MIDI track. ``device_uri`` is a deprecated alias for a query URI.
+    Edge cases: Live refuses an unknown name, a second instrument, an instrument
+    after an audio effect and a MIDI effect after an instrument (Known Bugs, R).
     """
     request = models.LoadDeviceToTrackRequest(
         track_index=track_index,
