@@ -49,6 +49,9 @@ from .probes import (
     composed as _composed,
 )
 from .probes import (
+    load_device as _load_device,
+)
+from .probes import (
     quit as _quit,
 )
 from .probes import (
@@ -61,6 +64,10 @@ from .report import (
     build_baseline_report,
 )
 from .safety import AcceptanceClient, AcceptanceSafetyError, _resolve_track_id
+
+# Rows the runner records after cleanup. The load probe uses the empty MIDI
+# track that create_midi_track adds, so it never touches the user's tracks.
+_STRUCTURAL_TOOLS = ("create_audio_track", "create_midi_track", *_load_device.TOOLS)
 
 # ---------------------------------------------------------------------------
 # Offline probes
@@ -1148,7 +1155,7 @@ async def run_live_acceptance(
 
                     # Original warp state for restore.
                     original_warp = None
-                    track_creation_runner: Callable[[str], Awaitable[str]] | None = None
+                    track_creation_runner: Callable[[str], Awaitable[int]] | None = None
                     if baseline["track_types"].get(audio_track_index) == "audio":
                         try:
                             audio_slots = call(
@@ -2228,82 +2235,6 @@ async def run_live_acceptance(
 
                         await _record_call(report, "set_warp_state", run_set_warp_state)
 
-                        # ----- load_device_to_track + readback -----
-                        async def run_load_device() -> str:
-                            load_target = midi_track_index
-                            devs_before = call("get_device_list", {"track_index": load_target})
-                            if not isinstance(devs_before, list):
-                                raise AssertionError(
-                                    "get_device_list prior to load_device_to_track "
-                                    f"returned non-list: {devs_before!r}"
-                                )
-                            count_before = len(devs_before)
-
-                            load_result = await call_ws(
-                                "load_device_to_track",
-                                {
-                                    "track_index": load_target,
-                                    "device_name": "Operator",
-                                },
-                            )
-                            import json as _json
-
-                            if isinstance(load_result, str):
-                                load_result = _json.loads(load_result)
-
-                            if not isinstance(load_result, dict):
-                                raise AssertionError(
-                                    f"load_device_to_track non-dict response: {load_result!r}"
-                                )
-                            if load_result.get("status") != "loaded":
-                                raise AssertionError(
-                                    f"load_device_to_track unexpected status: {load_result}"
-                                )
-                            if load_result.get("track_index") != load_target:
-                                raise AssertionError(
-                                    f"load_device_to_track track_index mismatch: {load_result}"
-                                )
-                            if load_result.get("device_name") != "Operator":
-                                raise AssertionError(
-                                    f"load_device_to_track device_name mismatch: {load_result}"
-                                )
-                            dev_idx = load_result.get("device_index")
-                            if not isinstance(dev_idx, int):
-                                raise AssertionError(
-                                    f"load_device_to_track missing device_index: {load_result}"
-                                )
-
-                            devs_after = call("get_device_list", {"track_index": load_target})
-                            if (
-                                not isinstance(devs_after, list)
-                                or len(devs_after) != count_before + 1
-                            ):
-                                post_str = (
-                                    len(devs_after) if isinstance(devs_after, list) else "non-list"
-                                )
-                                raise AssertionError(
-                                    "load_device_to_track did not increase device count by 1: "
-                                    f"before={count_before}, after={post_str}"
-                                )
-
-                            if (
-                                dev_idx < 0
-                                or dev_idx >= len(devs_after)
-                                or devs_after[dev_idx].get("name") != "Operator"
-                            ):
-                                raise AssertionError(
-                                    f"load_device_to_track device at index {dev_idx} "
-                                    f"is not Operator: {devs_after}"
-                                )
-
-                            artifacts["manual_cleanup"].append(
-                                f"Operator loaded on track {load_target}; "
-                                "remove via Live UI or Undo"
-                            )
-                            return f"Operator loaded at index {dev_idx} on track {load_target}"
-
-                        await _record_call(report, "load_device_to_track", run_load_device)
-
                         if "quit" not in profiles and "quit_ableton" not in report.recorded:
                             report.record(
                                 Verification(
@@ -2313,7 +2244,7 @@ async def run_live_acceptance(
                                 )
                             )
 
-                        async def _run_track_creation(kind: str) -> str:
+                        async def _run_track_creation(kind: str) -> int:
                             tool_name = f"create_{kind}_track"
                             pre_tracks = call("get_track_list")
                             if not isinstance(pre_tracks, list):
@@ -2418,7 +2349,7 @@ async def run_live_acceptance(
                                 f"delete {kind} track at index {new_index} "
                                 "(originally created by acceptance runner)"
                             )
-                            return f"new {kind} track index={new_index}"
+                            return new_index
 
                         track_creation_runner = _run_track_creation
 
@@ -2875,7 +2806,7 @@ async def run_live_acceptance(
                             cleanup_details = "; ".join(
                                 f"{tool}: {reason}" for tool, reason in cleanup_failures
                             )
-                            for tool in ("create_audio_track", "create_midi_track"):
+                            for tool in _STRUCTURAL_TOOLS:
                                 report.record(
                                     Verification(
                                         tool,
@@ -2885,7 +2816,7 @@ async def run_live_acceptance(
                                     )
                                 )
                         elif track_creation_runner is None:
-                            for tool in ("create_audio_track", "create_midi_track"):
+                            for tool in _STRUCTURAL_TOOLS:
                                 report.record(
                                     Verification(
                                         tool,
@@ -2899,10 +2830,17 @@ async def run_live_acceptance(
                                 "create_audio_track",
                                 lambda: track_creation_runner("audio"),
                             )
-                            await _record_call(
+                            created_midi = await _record_call(
                                 report,
                                 "create_midi_track",
                                 lambda: track_creation_runner("midi"),
+                            )
+                            await _load_device.run(
+                                report,
+                                call=call,
+                                call_ws=call_ws,
+                                track_index=created_midi,
+                                artifacts=artifacts,
                             )
 
                 if "quit" in profiles and "mutations" not in expanded:
