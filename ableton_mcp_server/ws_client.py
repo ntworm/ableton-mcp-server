@@ -25,13 +25,13 @@ _RECV_TIMEOUT = 10.0
 
 # Live answers every refused ``Track.insertDevice`` with this one message, so an
 # unknown name and a device out of chain order look alike (docs/KNOWN_BUGS.md,
-# Category R). The Extension appends at the end of the chain.
+# Category R). The server already picks the position that the chain order allows.
 _INSERT_REFUSED = "Failed to insert device"
 _INSERT_REFUSED_CAUSES = (
-    "Live refuses a name that is not a built-in Live device, and load_device_to_track "
-    "appends to the end of the chain, where Live refuses a second instrument, an "
-    "instrument after an audio effect and a MIDI effect after an instrument. Load an "
-    "instrument onto a MIDI track without one."
+    "Live refuses a name that is not one of its built-in devices, and an instrument or "
+    "MIDI effect on an audio, return or main track. An AbletonMCPServer Extension "
+    "installed before positional inserts ignores device_index and appends, which Live "
+    "refuses for a device that has to go earlier in the chain; reinstall the Extension."
 )
 
 

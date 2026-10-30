@@ -19,7 +19,7 @@ from pydantic import Field
 
 from contracts import DEFAULT_HOST, DEFAULT_PORT, DEFAULT_WS_PORT
 
-from . import models
+from . import device_insert, models
 from .analysis import (
     analyze_audio as _analyze_audio,
 )
@@ -1559,23 +1559,23 @@ async def load_device_to_track(
     device_name: str | None = None,
     device_uri: str | None = None,
 ) -> str:
-    """Load a built-in Live device at the end of a track's device chain.
+    """Load a built-in Live device where the track's chain accepts it.
 
-    Side effects: appends to the track device chain via the Extension Host.
-    Example: ``load_device_to_track(1, device_name="Operator")`` loads Operator
-    onto an empty MIDI track. ``device_uri`` is a deprecated alias for a query URI.
-    Edge cases: Live refuses an unknown name, a second instrument, an instrument
-    after an audio effect and a MIDI effect after an instrument (Known Bugs, R).
+    Side effects: reads the chain and Browser, then inserts via the Extension Host: MIDI
+    effects after the MIDI effects, an instrument before the audio effects, audio last.
+    Example: ``load_device_to_track(1, device_name="Arpeggiator")``; ``device_uri`` is deprecated.
+    Edge cases: a second instrument is refused with ``BAD_INPUT``; Live refuses unknown names
+    and instruments or MIDI effects on audio tracks (Known Bugs, R).
     """
     request = models.LoadDeviceToTrackRequest(
         track_index=track_index,
         device_name=device_name,
         device_uri=device_uri,
     )
-    result = await _remote_ws(
-        "load_device_to_track",
-        {"track_index": request.track_index, "device_name": request.resolved_name},
+    params = device_insert.insert_params(
+        get_client().call, request.track_index, request.resolved_name
     )
+    result = await _remote_ws("load_device_to_track", params)
     return json.dumps(result, indent=2)
 
 

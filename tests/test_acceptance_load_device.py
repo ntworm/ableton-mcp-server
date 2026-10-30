@@ -56,7 +56,11 @@ def test_fake_refuses_a_second_instrument_like_live() -> None:
 
     assert refused.value.code == "EXTENSION_RPC_-32603"
     assert append_device(tracks, 0, "Reverb")["device_index"] == 1
-    assert [device["name"] for device in tracks[0]["devices"]] == ["Operator", "Reverb"]
+    with pytest.raises(BridgeError, match="Failed to insert device"):
+        append_device(tracks, 0, "Arpeggiator")
+    assert append_device(tracks, 0, "Arpeggiator", 0)["device_index"] == 0
+    names = [device["name"] for device in tracks[0]["devices"]]
+    assert names == ["Arpeggiator", "Operator", "Reverb"]
 
 
 def test_probe_loads_onto_the_created_midi_track() -> None:
@@ -67,8 +71,14 @@ def test_probe_loads_onto_the_created_midi_track() -> None:
 
     assert _row(result, "load_device_to_track")["status"] == "live_passed"
     created = [entry for entry in result["artifacts"]["tracks_created"] if "midi:" in entry]
+    created_index = int(created[0].split(":")[1])
     loads = [params for method, params in bridge.ws_calls if method == "load_device_to_track"]
-    assert loads == [{"track_index": int(created[0].split(":")[1]), "device_name": "Operator"}]
+    assert loads == [
+        {"track_index": created_index, "device_name": "Operator", "device_index": 0},
+        {"track_index": created_index, "device_name": "Arpeggiator", "device_index": 0},
+    ]
+    created_track = next(t for t in bridge.state["tracks"] if t["index"] == created_index)
+    assert [device["name"] for device in created_track["devices"]] == ["Arpeggiator", "Operator"]
     assert bridge.state["tracks"][0]["devices"] == target_devices
     commands = [command for _route, command, _params in bridge.timeline_calls]
     assert commands.index("create_midi_track") < commands.index("load_device_to_track")

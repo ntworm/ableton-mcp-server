@@ -118,8 +118,12 @@ def test_set_tempo_resolved_sub_object(mock_get_client: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
+@patch("ableton_mcp_server.server.get_client")
 @patch("ableton_mcp_server.server._remote_ws", new_callable=AsyncMock)
-async def test_load_device_to_track_resolved_sub_object(mock_remote_ws: AsyncMock) -> None:
+async def test_load_device_to_track_resolved_sub_object(
+    mock_remote_ws: AsyncMock, mock_get_client: MagicMock
+) -> None:
+    mock_get_client.return_value.call.return_value = []
     mock_remote_ws.return_value = {
         "status": "loaded",
         "track_index": 0,
