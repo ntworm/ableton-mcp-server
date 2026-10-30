@@ -387,7 +387,7 @@ class FakeSong:
         self.view = FakeSongView(self.tracks[0], self.scenes[0])
         self.name = "Debug Set"
         self.file_path = r"C:\Music\Debug Set.als"
-        self.is_dirty = False
+        self.can_undo = False
         self.toggle_count = 0
         if save is not None:
             # v0.5.0 — Lifecycle seam. ``Song.save`` only exists when the Live host

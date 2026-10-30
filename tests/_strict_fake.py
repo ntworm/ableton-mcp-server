@@ -306,7 +306,7 @@ class StrictFakeBridge:
             },
             "warp": {"warping": False, "warp_mode": "beats"},
             "search_browser_queries": [],
-            "is_dirty": False,
+            "is_dirty": False, "can_undo": False,
             "song_length": 64.0,
         }
 
@@ -486,9 +486,9 @@ def _strict_tcp_dispatch(bridge: StrictFakeBridge, command: str, params: dict[st
     _validate_tcp(command, params)
     s = bridge.state
     if command not in _READ_ONLY_TCP_COMMANDS and command != "save_set":
-        s.update({"is_dirty": True})
+        s.update({"is_dirty": True, "can_undo": True})
     if command == "get_project_metadata":
-        return {"song_name": "TESTE_CODEX", "is_dirty": bool(s.get("is_dirty", False))}
+        return {"song_name": "TESTE_CODEX", "is_dirty": s["is_dirty"], "can_undo": s["can_undo"]}
     if command == "get_track_list":
         # The real ``get_track_list`` contract returns identity plus the
         # hierarchy/colour fields. Mixer state (mute, solo, arm, volume)
@@ -1144,7 +1144,7 @@ def _strict_ws_dispatch(bridge: StrictFakeBridge, method: str, params: dict[str,
             raise RuntimeError(f"BAD_FIELD_TYPE: {method}.{field} expected {expected.__name__}")
     s = bridge.state
     if method in ("set_warp_state", "load_device_to_track"):
-        s.update({"is_dirty": True})
+        s.update({"is_dirty": True, "can_undo": True})
     if method == "get_warp_state":
         return dict(s["warp"])
     if method == "set_warp_state":
