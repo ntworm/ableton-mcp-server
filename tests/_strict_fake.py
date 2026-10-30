@@ -33,6 +33,8 @@ from typing import Any
 from ableton_mcp_server.errors import CapabilityUnavailableError
 from contracts import CAPABILITY_EVIDENCE, UNSUPPORTED_CAPABILITIES
 
+from ._fake_device_chain import append_device
+
 # ---------------------------------------------------------------------------
 # Contract specs
 # ---------------------------------------------------------------------------
@@ -1152,19 +1154,5 @@ def _strict_ws_dispatch(bridge: StrictFakeBridge, method: str, params: dict[str,
         s["warp"]["warping"] = params["warping"]
         return dict(s["warp"])
     if method == "load_device_to_track":
-        target = params["track_index"]
-        device_name = params["device_name"]
-        device_index = None
-        for track in s["tracks"]:
-            if track["index"] == target:
-                devs = track.setdefault("devices", [])
-                device_index = len(devs)
-                devs.append({"name": device_name})
-                break
-        return {
-            "status": "loaded",
-            "track_index": target,
-            "device_name": device_name,
-            "device_index": device_index,
-        }
+        return append_device(s["tracks"], params["track_index"], params["device_name"])
     raise RuntimeError(f"UNKNOWN_WS_METHOD: {method}")

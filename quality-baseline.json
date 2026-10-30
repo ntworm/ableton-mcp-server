@@ -1,7 +1,7 @@
 {
   "files": {
     "AbletonMCPServer_RemoteScript/__init__.py": 4557,
-    "ableton_mcp_server/acceptance/runner.py": 3029,
+    "ableton_mcp_server/acceptance/runner.py": 2967,
     "ableton_mcp_server/groove_intelligence/corpus.py": 709,
     "ableton_mcp_server/groove_intelligence/deterministic.py": 729,
     "ableton_mcp_server/groove_intelligence/fallback.py": 569,
@@ -11,7 +11,7 @@
     "ableton_mcp_server/server.py": 2606,
     "scripts/build_release_candidates.py": 613,
     "scripts/mock_remote_script.py": 650,
-    "tests/_strict_fake.py": 1170,
+    "tests/_strict_fake.py": 1158,
     "tests/remote_fakes.py": 630,
     "tests/test_acceptance_audit_p0p1.py": 893,
     "tests/test_acceptance_runner_integration.py": 1355,
@@ -120,15 +120,11 @@
     },
     "ableton_mcp_server/acceptance/runner.py::run_live_acceptance": {
       "complexity": 166,
-      "function_lines": 2652
+      "function_lines": 2583
     },
     "ableton_mcp_server/acceptance/runner.py::run_live_acceptance._run_track_creation": {
       "complexity": 25,
       "function_lines": 106
-    },
-    "ableton_mcp_server/acceptance/runner.py::run_live_acceptance.run_load_device": {
-      "complexity": 14,
-      "function_lines": 72
     },
     "ableton_mcp_server/acceptance/runner.py::run_live_acceptance.run_save_set": {
       "complexity": 12
@@ -374,9 +370,6 @@
     "tests/_strict_fake.py::_strict_tcp_dispatch": {
       "complexity": 140,
       "function_lines": 647
-    },
-    "tests/_strict_fake.py::_strict_ws_dispatch": {
-      "complexity": 12
     },
     "tests/_strict_fake.py::_validate_hierarchy": {
       "complexity": 13

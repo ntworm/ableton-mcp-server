@@ -23,6 +23,24 @@ logger = logging.getLogger("AbletonMCPServer.ws")
 _CONNECT_TIMEOUT = 3.0
 _RECV_TIMEOUT = 10.0
 
+# Live answers every refused ``Track.insertDevice`` with this one message, so an
+# unknown name and a device out of chain order look alike (docs/KNOWN_BUGS.md,
+# Category R). The Extension appends at the end of the chain.
+_INSERT_REFUSED = "Failed to insert device"
+_INSERT_REFUSED_CAUSES = (
+    "Live refuses a name that is not a built-in Live device, and load_device_to_track "
+    "appends to the end of the chain, where Live refuses a second instrument, an "
+    "instrument after an audio effect and a MIDI effect after an instrument. Load an "
+    "instrument onto a MIDI track without one."
+)
+
+
+def _rpc_error(method: str, message: str, code: object) -> BridgeError:
+    """Build the error for a plain JSON-RPC failure, explaining Live's insert refusal."""
+    if method == "load_device_to_track" and message == _INSERT_REFUSED:
+        message = f"{_INSERT_REFUSED}. {_INSERT_REFUSED_CAUSES}"
+    return BridgeError(message, code=f"EXTENSION_RPC_{code}")
+
 
 class WSClient:
     """Async JSON-RPC 2.0 client for the Extension Host WebSocket bridge."""
@@ -91,11 +109,10 @@ class WSClient:
                     str(error_data.get("message", details["code"])),
                     hint if isinstance(hint, str) else None,
                 )
-            error_msg = error_data.get("message", str(error_data))
-            error_code = error_data.get("code", -1)
-            raise BridgeError(
-                error_msg,
-                code=f"EXTENSION_RPC_{error_code}",
+            raise _rpc_error(
+                method,
+                error_data.get("message", str(error_data)),
+                error_data.get("code", -1),
             )
 
         return response.get("result")
