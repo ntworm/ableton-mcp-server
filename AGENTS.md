@@ -76,7 +76,7 @@ npm run build
 Use the existing Extension `node_modules`; do not run a normal `npm install` during
 verification.
 
-Real Live connectivity is proven by `.\.venv-win\Scripts\ableton-mcp.exe doctor --json`, not by local tool discovery. Run the guarded acceptance command only against a disposable Set with the exact project-name confirmation and an empty target MIDI clip slot, freshly opened from disk: the preflight refuses a Set with undo history (`can_undo`), because on Live 12.4.25b1 `Song.is_dirty` does not report unsaved changes (`docs/KNOWN_BUGS.md` Category S).
+Real Live connectivity is proven by `.\.venv-win\Scripts\ableton-mcp.exe doctor --json`, not by local tool discovery. Run the guarded acceptance command only against a disposable Set with the exact project-name confirmation and an empty target MIDI clip slot, freshly opened from disk: the preflight refuses a Set with undo history (`can_undo`), because Live 12.4.25b1 has no Python `Song.is_dirty` (`docs/KNOWN_BUGS.md` Category S).
 
 ## Coupled-change rules
 

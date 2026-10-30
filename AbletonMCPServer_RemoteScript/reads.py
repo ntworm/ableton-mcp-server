@@ -112,10 +112,10 @@ def cmd_get_scene_state(song: Any, _application: Any, params: dict[str, Any]) ->
 def cmd_get_project_metadata(
     song: Any, _application: Any, _params: dict[str, Any]
 ) -> dict[str, Any]:
-    # ``None`` means Live did not answer, never "saved" or "clean". On Live
-    # 12.4.25b1 ``Song.is_dirty`` does not report unsaved changes
-    # (docs/KNOWN_BUGS.md Category S), so the acceptance preflight checks
-    # ``can_undo``: false while nothing undoable happened since the Set opened.
+    # ``None`` means Live did not answer, never "saved" or "clean". Live
+    # 12.4.25b1 has no ``Song.is_dirty`` (docs/KNOWN_BUGS.md Category S), so
+    # the acceptance preflight checks ``can_undo``: false while nothing
+    # undoable happened since the Set was opened.
     file_path = _safe(lambda: song.file_path, None)
     is_dirty = _safe(lambda: song.is_dirty, None)
     can_undo = _safe(lambda: song.can_undo, None)

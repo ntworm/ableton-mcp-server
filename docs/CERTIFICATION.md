@@ -128,11 +128,11 @@ blocker (effectively a ``failed`` row). The runner enforces this in
 
 Before any mutation occurs, the metadata preflight requires
 ``can_undo: false``: nothing undoable happened since the Set was
-opened, so the loaded project still matches the file on disk. On Live
-12.4.25b1 ``Song.is_dirty`` does not report unsaved changes (it read
-``false`` after a whole acceptance run), so the flag cannot prove a
-clean Set there (``docs/KNOWN_BUGS.md`` Category S); the preflight only
-refuses ``is_dirty: true``. A Set with undo history, or with an unknown undo
+opened, so the loaded project still matches the file on disk. Live
+12.4.25b1 has no ``Song.is_dirty`` in its Python API and answers
+``is_dirty: null``, so the flag cannot prove a clean Set there
+(``docs/KNOWN_BUGS.md`` Category S); the preflight only refuses
+``is_dirty: true``. A Set with undo history, or with an unknown undo
 state, is refused before the first mutation: reopen the saved Set
 without saving. The subsequent ``save_set`` probe either performs a
 real ``Song.save()`` with a clean ``is_dirty: false`` readback or
