@@ -8,6 +8,8 @@ The canonical certification policy that governs the promotion decision
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-30
+
 ### Added
 
 - `scripts/build_mcpb.py` packs the server as an MCP Bundle (`.mcpb`, manifest
