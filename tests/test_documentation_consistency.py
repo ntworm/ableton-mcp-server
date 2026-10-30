@@ -99,17 +99,22 @@ def test_current_guidance_and_changelog_name_the_current_surface() -> None:
     readme = _text(ROOT / "README.md")
     changelog_head = _text(ROOT / "CHANGELOG.md").split("## [0.5.3]", maxsplit=1)[0]
 
-    assert __version__ == "0.7.0"
+    assert __version__ == "0.8.0"
     assert re.search(r"server\.py.*97 public MCP tools", agents)
     assert "Offline Music Generation" in readme
-    assert "current v0.7.0 release ships 97 tools" in readme
-    assert "## [Unreleased]" in changelog_head
-    assert "## [0.7.0] - 2026-09-17" in changelog_head
-    assert "## [0.6.0] - 2026-08-24" in changelog_head
-    assert "## [0.5.6] - 2026-08-18" in changelog_head
-    assert "three deterministic" in changelog_head
-    assert "five Groove Intelligence tools" in changelog_head
-    assert "## v0.7.0" in _text(ROOT / "releases" / "v0.7.0" / "RELEASE-NOTES.md")
+    assert "current v0.8.0 release ships 97 tools" in readme
+    expected_changelog = (
+        "## [Unreleased]",
+        "## [0.8.0] - 2026-10-30",
+        "## [0.7.0] - 2026-09-17",
+        "## [0.6.0] - 2026-08-24",
+        "## [0.5.6] - 2026-08-18",
+        "three deterministic",
+        "five Groove Intelligence tools",
+    )
+    for section in expected_changelog:
+        assert section in changelog_head
+    assert "## v0.8.0" in _text(ROOT / "releases" / "v0.8.0" / "RELEASE-NOTES.md")
 
 
 def test_every_public_tool_is_present_in_canonical_user_docs() -> None:

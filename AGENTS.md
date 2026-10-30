@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`ableton-mcp-server` v0.7.0 exposes 97 MCP tools for inspecting and safely mutating an Ableton Live Set. Fourteen are local/headless and 83 may require Ableton Live; the current routes are loopback TCP, loopback WebSocket, composed local calls, and local-only tools. A Python FastMCP process coordinates a Live MIDI Remote Script over TCP and an Ableton Extension over WebSocket. The repository is MIT-licensed and targets Windows-hosted Ableton Live; WSL clients must launch the Windows-native executable.
+`ableton-mcp-server` v0.8.0 exposes 97 MCP tools for inspecting and safely mutating an Ableton Live Set. Fourteen are local/headless and 83 may require Ableton Live; the current routes are loopback TCP, loopback WebSocket, composed local calls, and local-only tools. A Python FastMCP process coordinates a Live MIDI Remote Script over TCP and an Ableton Extension over WebSocket. The repository is MIT-licensed and targets Windows-hosted Ableton Live; WSL clients must launch the Windows-native executable.
 
 ## Read order
 
