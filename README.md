@@ -4,7 +4,7 @@
 
 An open **Model Context Protocol (MCP)** server that enables AI agents (Antigravity, Gemini, Codex) and audio developers to query, analyze, drive, and automate a running Ableton Live 12 Set.
 
-The current tool surface is 97 tools over TCP, WebSockets, composed routes, and local execution <!-- TOOL_COUNT: active_total --> (with primary device resolution via device_name, track_index, and clip_index); the current v0.8.0 release ships 97 tools. Historical milestones exposed 65 certified tools in v0.5.2 <!-- HISTORICAL_TOOL_COUNT: 65; baseline=v0.5.2 -->, 88 tools in the v0.5.6 source milestone <!-- HISTORICAL_TOOL_COUNT: 88; baseline=v0.5.6 -->, 96 tools in the v0.6.0 release <!-- HISTORICAL_TOOL_COUNT: 96; baseline=v0.6.0 -->, and v0.7.0 with journey planning and realtime UDP. v0.8.0 modularizes the Remote Script into 17 domain modules, adds chain-order-safe device insertion (`load_device_to_track`), and introduces preflight clean-set verification. Groove retrieval, evidence, generation, and comparison stay offline; only the guarded apply path reaches Live. A FastMCP server in Python communicates with a MIDI Remote Script on TCP `127.0.0.1:9888` and an Extension Host bridge over WebSockets on `127.0.0.1:9889`.
+The current tool surface is 97 tools over TCP, WebSockets, composed routes, and local execution <!-- TOOL_COUNT: active_total --> (with primary device resolution via device_name, track_index, and clip_index); the current v0.8.1 release ships 97 tools. Historical milestones exposed 65 certified tools in v0.5.2 <!-- HISTORICAL_TOOL_COUNT: 65; baseline=v0.5.2 -->, 88 tools in the v0.5.6 source milestone <!-- HISTORICAL_TOOL_COUNT: 88; baseline=v0.5.6 -->, 96 tools in the v0.6.0 release <!-- HISTORICAL_TOOL_COUNT: 96; baseline=v0.6.0 -->, and v0.7.0 with journey planning and realtime UDP. v0.8.0 modularizes the Remote Script into 17 domain modules, adds chain-order-safe device insertion (`load_device_to_track`), and introduces preflight clean-set verification. v0.8.1 removes the curated groove corpus from every distributed package. Groove retrieval, evidence, generation, and comparison stay offline; only the guarded apply path reaches Live. A FastMCP server in Python communicates with a MIDI Remote Script on TCP `127.0.0.1:9888` and an Extension Host bridge over WebSockets on `127.0.0.1:9889`.
 
 Groove Intelligence is offline by default. Its deterministic generator needs no
 provider installation; an optional neural provider is isolated behind a fixed
@@ -12,10 +12,12 @@ allowlist, bounded local IPC, resource limits, and signed laboratory gates.
 Provider failures always return the equivalent deterministic artifact, and no
 provider receives corpus paths, raw MIDI, notes, SQL, credentials, or network
 access. See [the provider laboratory contract](docs/groove_intelligence/provider-lab.md).
-The curated seed ships inside the wheel; `ABLETON_GROOVE_SEED_BUNDLE` can
-override it explicitly, while derived artifacts stay in LocalAppData. Groove
-retrieval, evidence, comparison, and deterministic generation are portable and
-do not depend on the private source library. A generation request can use one
+The curated corpus no longer ships inside the wheel or any other distributed
+package. An optional private seed is read from
+`%LOCALAPPDATA%\AbletonMCPServer\groove-seed`, or from the path given in
+`ABLETON_GROOVE_SEED_BUNDLE`, while derived artifacts stay in LocalAppData.
+Groove retrieval, evidence, comparison, and deterministic generation are
+portable and do not depend on the private source library. A generation request can use one
 primary groove plus up to seven references; incompatible PPQ, meter, or rights
 are rejected explicitly. Within the Groove Intelligence surface, the only Live
 mutation is guarded `groove_apply`, which must be previewed against an explicit
@@ -57,6 +59,10 @@ License is **MIT**. Copy, fork, ship — see [LICENSE](LICENSE).
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1
 ```
+
+Install the release wheel from the project's GitHub Releases page (the
+downloaded `.whl` file). There is no PyPI install for this server: the public
+`ableton-mcp-server` name on PyPI belongs to an unrelated project.
 
 Preview the exact Remote Script copy plan without creating `.venv-win`, installing
 dependencies, or writing to Ableton's User Library:
@@ -154,6 +160,24 @@ If you operate from **WSL2**, point the MCP client at the Windows binary so loop
 ```
 
 `build` needs `uv`, Node.js (`npx` runs the pinned `@anthropic-ai/mcpb` CLI), and network access. `smoke` extracts the bundle, launches it over stdio, and checks `initialize`, `tools/list` against the catalog, and one offline tool, without Ableton Live.
+
+### Optional private groove seed
+
+The curated groove corpus is **not** part of this wheel, the MCP bundle, or any
+other distributed package. No groove corpus is downloaded at install time or later.
+The server starts normally and exposes all 97 tools without a corpus; only the
+corpus-backed operations need one.
+
+When you have a licensed local copy, point the server at it with either:
+
+- `%LOCALAPPDATA%\AbletonMCPServer\groove-seed` — the default location.
+- `ABLETON_GROOVE_SEED_BUNDLE` — an explicit path that overrides the default
+  location.
+
+Without a configured seed the corpus operations (`groove_search`,
+`groove_evidence`, `groove_compare`, and `groove_generate` from a corpus
+source) answer with an explicit "no corpus configured" error instead of
+fetching anything.
 
 ---
 

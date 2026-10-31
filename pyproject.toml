@@ -1,6 +1,6 @@
 [project]
 name = "ableton-mcp-server"
-version = "0.8.0"
+version = "0.8.1"
 description = "Debug-grade MCP server and MIDI Remote Script for Ableton Live"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -16,6 +16,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "hatchling>=1.31,<2",
     "pytest>=9,<10",
     "pytest-asyncio>=1,<2",
     "ruff>=0.15,<1",
@@ -30,8 +31,35 @@ ableton-mcp = "ableton_mcp_server.cli:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.sdist]
+include = [
+    "/ableton_mcp_server",
+    "/contracts.py",
+    "/pyproject.toml",
+    "/README.md",
+    "/LICENSE",
+    "/AbletonMCPServer_RemoteScript",
+    "/AbletonMCPServer_Extension/vendor",
+]
+exclude = [
+    "/ableton_mcp_server/resources/groove_seed/**",
+    "/.local/**",
+    "/.hub-review/**",
+    "/.worktrees/**",
+    "/worktrees/**",
+    "/AbletonMCPServer_Extension/groove-brain-gate0/data/**",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["ableton_mcp_server"]
+exclude = [
+    "/ableton_mcp_server/resources/groove_seed/**",
+    "/.local/**",
+    "/.hub-review/**",
+    "/.worktrees/**",
+    "/worktrees/**",
+    "/AbletonMCPServer_Extension/groove-brain-gate0/data/**",
+]
 
 [tool.hatch.build.targets.wheel.force-include]
 "contracts.py" = "contracts.py"

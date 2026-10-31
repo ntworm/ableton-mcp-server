@@ -7,6 +7,7 @@ import pytest
 from ableton_mcp_server.acceptance.probes.offline import run
 from ableton_mcp_server.catalog import TOOL_CATALOG
 from ableton_mcp_server.certification import CertificationReport, Verification
+from tests.fixtures.groove_bundle import build_pilot_bundle
 from tests.fixtures.groove_runtime import make_pilot_acceptance_inputs
 
 
@@ -35,13 +36,14 @@ async def test_offline_probe_records_five_groove_tools_without_bridge(
 
 
 @pytest.mark.asyncio
-async def test_canonical_offline_runner_uses_packaged_seed_without_env_override(
+async def test_canonical_offline_runner_uses_a_synthetic_licensed_seed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The bundled seed is the default; an environment override is optional."""
+    """The runner resolves a licensed seed bundle from the environment."""
     from ableton_mcp_server.acceptance import runner
 
-    monkeypatch.delenv("ABLETON_GROOVE_SEED_BUNDLE", raising=False)
+    bundle = build_pilot_bundle(tmp_path / "seed")
+    monkeypatch.setenv("ABLETON_GROOVE_SEED_BUNDLE", str(bundle))
     report = CertificationReport(tool_names=tuple(item.name for item in TOOL_CATALOG))
     real_record_call = runner._record_call
 

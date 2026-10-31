@@ -251,10 +251,13 @@ without breaking them:
 
 ## Groove retrieval boundary (Phase 2)
 
-The groove runtime is an offline read-only adapter over the packaged curated
+The groove runtime is an offline read-only adapter over an optional private
 SQLite seed (`mode=ro&immutable=1`) plus a host-selected local artifact store
-for derived values. `ABLETON_GROOVE_SEED_BUNDLE` remains an explicit override;
-the default seed is package-owned and loaded lazily. Its four MCP tools expose
+for derived values. No seed is packaged: the corpus is configured explicitly at
+`%LOCALAPPDATA%\AbletonMCPServer\groove-seed`, or through the
+`ABLETON_GROOVE_SEED_BUNDLE` override, and nothing is downloaded
+automatically. The server starts and serves its full tool surface without a
+seed; the corpus-backed reads then report that no corpus is configured. Its four MCP tools expose
 bounded cards, evidence, deterministic generation, and comparison only. They do not resolve a request-provided path,
 execute SQL, call the bridge, start a model runtime, or return note arrays and
 payload bytes. `ArtifactId` values use `ga1_`; seed bundles use the distinct

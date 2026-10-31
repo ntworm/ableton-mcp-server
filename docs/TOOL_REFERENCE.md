@@ -1,6 +1,6 @@
 # Tool Reference
 
-The v0.8.0 FastMCP server exposes 97 snake_case tools <!-- TOOL_COUNT: active_total -->, up from the certified 65-tool v0.5.2 baseline <!-- HISTORICAL_TOOL_COUNT: 65; baseline=v0.5.2 -->. Remote examples below show the JSONL command envelope after MCP/Pydantic validation. All error responses use `{"status":"error","code","message","hint?"}`.
+The v0.8.1 FastMCP server exposes 97 snake_case tools <!-- TOOL_COUNT: active_total -->, up from the certified 65-tool v0.5.2 baseline <!-- HISTORICAL_TOOL_COUNT: 65; baseline=v0.5.2 -->. Remote examples below show the JSONL command envelope after MCP/Pydantic validation. All error responses use `{"status":"error","code","message","hint?"}`.
 
 A machine-readable view of these tools (route, risk, acceptance mode, reversibility) is exposed at runtime via the `get_bridge_status` tool's `tools` list and `capability_counts` keys, derived from the canonical `TOOL_CATALOG`. A generated [API Capability Matrix](api_capability_matrix.md) is also available for quick reference.
 
@@ -761,8 +761,13 @@ value too small to cross `electro`'s grid threshold does not claim credit.
 
 ### Groove Intelligence V2 (offline retrieval, generation, and guarded apply)
 
-Groove Intelligence opens the packaged immutable seed by default (or the
-explicit `ABLETON_GROOVE_SEED_BUNDLE` override). The seed is portable and does
+Groove Intelligence opens an optional private immutable seed when one is
+configured: the default location is
+`%LOCALAPPDATA%\AbletonMCPServer\groove-seed`, and the explicit
+`ABLETON_GROOVE_SEED_BUNDLE` override takes precedence. No corpus is packaged
+and none is downloaded automatically: the server starts and serves its full
+tool surface without a seed, and the corpus-backed reads then report that no
+corpus is configured. The seed is portable and does
 not depend on the private source library: no local path, SQL, BLOB, raw MIDI, or
 note array crosses the MCP card boundary. `groove_search`, `groove_evidence`,
 and `groove_compare` are deterministic offline reads. `groove_generate` writes

@@ -37,6 +37,7 @@ from .client import Client
 from .diagnostics import bridge_status, find_ableton_log_path
 from .diff import diff_snapshots
 from .errors import BridgeError
+from .groove_intelligence import GrooveIndexInvalid
 from .groove_intelligence.apply import apply_artifact
 from .groove_intelligence.artifacts import SeedBackedArtifactStore
 from .groove_intelligence.canonical import canonical_json
@@ -75,6 +76,12 @@ from .groove_intelligence.runtime import (
     serialize_tool_result,
 )
 from .groove_intelligence.search import search as groove_search_service
+from .groove_intelligence.seed_paths import (
+    DEFAULT_GROOVE_SEED_BUNDLE as DEFAULT_GROOVE_SEED_BUNDLE,
+)
+from .groove_intelligence.seed_paths import (
+    resolve_groove_seed_bundle as resolve_groove_seed_bundle,
+)
 from .journeys import plan_user_journey as _plan_user_journey
 from .music_brain import Generation as _Generation
 from .music_brain import Traits as _Traits
@@ -118,18 +125,6 @@ class CountableFastMCP(FastMCP):
 mcp = CountableFastMCP("AbletonMCPServer")
 _client: Client | None = None
 DEFAULT_RESPONSE_BUDGET = ResponseBudget()
-DEFAULT_GROOVE_SEED_BUNDLE = (
-    Path(__file__).resolve().parent / "resources" / "groove_seed"
-)
-
-
-def resolve_groove_seed_bundle() -> Path:
-    """Resolve the packaged seed, with an explicit host override."""
-
-    configured = os.environ.get("ABLETON_GROOVE_SEED_BUNDLE")
-    if configured:
-        return Path(configured).expanduser().resolve(strict=True)
-    return DEFAULT_GROOVE_SEED_BUNDLE.resolve()
 
 
 def get_client() -> Client:
@@ -148,7 +143,12 @@ def get_groove_runtime(*, client: Client | None = None) -> Any:
     from .groove_intelligence.runtime import GrooveRuntime
 
     bundle = resolve_groove_seed_bundle()
-    index = open_readonly_index(bundle)
+    try:
+        index = open_readonly_index(bundle)
+    except (GrooveIndexInvalid, FileNotFoundError) as error:
+        raise GrooveIndexInvalid(
+            f"Local groove seed unavailable: {bundle}. Set ABLETON_GROOVE_SEED_BUNDLE."
+        ) from error
     configured_store = os.environ.get("ABLETON_GROOVE_ARTIFACT_STORE")
     if configured_store:
         store_root = Path(configured_store).expanduser().resolve()

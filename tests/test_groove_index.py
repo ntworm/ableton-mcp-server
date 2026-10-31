@@ -326,9 +326,9 @@ def test_load_artifact_round_trips_real_format_timing_and_tracks(tmp_path: Path)
         index.close()
 
 
-def test_open_readonly_index_accepts_the_packaged_seed() -> None:
-    packaged = Path(__file__).resolve().parents[1] / "ableton_mcp_server/resources/groove_seed"
-    index = open_readonly_index(packaged)
+def test_open_readonly_index_accepts_a_synthetic_seed_bundle(tmp_path: Path) -> None:
+    bundle = build_pilot_bundle(tmp_path)
+    index = open_readonly_index(bundle)
     try:
         assert index.user_version == SQLITE_USER_VERSION
         assert index.meta["schema_version"] == INDEX_SCHEMA_VERSION

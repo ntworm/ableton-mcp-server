@@ -8,6 +8,19 @@ The canonical certification policy that governs the promotion decision
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-10-31
+
+### Changed
+
+- The curated groove corpus no longer ships inside the wheel, the MCP bundle, or
+  any other distributed package. The server starts and exposes its 97 tools
+  without a corpus, and the corpus-backed operations report that no corpus is
+  configured instead of fetching one.
+- The corpus is now an optional private seed, read from
+  `%LOCALAPPDATA%\AbletonMCPServer\groove-seed` or from the path in
+  `ABLETON_GROOVE_SEED_BUNDLE`. Nothing is downloaded automatically, and this
+  project no longer redistributes the corpus.
+
 ## [0.8.0] - 2026-10-30
 
 ### Added

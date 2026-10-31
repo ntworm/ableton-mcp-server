@@ -99,12 +99,13 @@ def test_current_guidance_and_changelog_name_the_current_surface() -> None:
     readme = _text(ROOT / "README.md")
     changelog_head = _text(ROOT / "CHANGELOG.md").split("## [0.5.3]", maxsplit=1)[0]
 
-    assert __version__ == "0.8.0"
+    assert __version__ == "0.8.1"
     assert re.search(r"server\.py.*97 public MCP tools", agents)
     assert "Offline Music Generation" in readme
-    assert "current v0.8.0 release ships 97 tools" in readme
+    assert "current v0.8.1 release ships 97 tools" in readme
     expected_changelog = (
         "## [Unreleased]",
+        "## [0.8.1] - 2026-10-31",
         "## [0.8.0] - 2026-10-30",
         "## [0.7.0] - 2026-09-17",
         "## [0.6.0] - 2026-08-24",
