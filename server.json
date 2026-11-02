@@ -1,0 +1,23 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.ntworm/ableton-mcp-server",
+  "title": "Ableton MCP Server",
+  "description": "Inspect, analyze, and safely edit a running Ableton Live Set on Windows; 97 tools.",
+  "repository": {
+    "url": "https://github.com/ntworm/ableton-mcp-server",
+    "source": "github"
+  },
+  "websiteUrl": "https://ntworm.github.io/ableton-mcp-server/",
+  "version": "0.8.1-rc1",
+  "packages": [
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/ntworm/ableton-mcp-server/releases/download/v0.8.1-rc1/ableton-mcp-server-0.8.1.mcpb",
+      "version": "0.8.1-rc1",
+      "fileSha256": "3d79104141a14d116436cdbd67d6e3b0f3a621d5ab35238e62a0f12f432d3c47",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
