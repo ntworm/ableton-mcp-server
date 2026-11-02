@@ -77,7 +77,8 @@ from .groove_intelligence.runtime import (
 )
 from .groove_intelligence.search import search as groove_search_service
 from .groove_intelligence.seed_paths import (
-    DEFAULT_GROOVE_SEED_BUNDLE as DEFAULT_GROOVE_SEED_BUNDLE,
+    groove_artifact_root,
+    seed_unavailable_message,
 )
 from .groove_intelligence.seed_paths import (
     resolve_groove_seed_bundle as resolve_groove_seed_bundle,
@@ -146,18 +147,8 @@ def get_groove_runtime(*, client: Client | None = None) -> Any:
     try:
         index = open_readonly_index(bundle)
     except (GrooveIndexInvalid, FileNotFoundError) as error:
-        raise GrooveIndexInvalid(
-            f"Local groove seed unavailable: {bundle}. Set ABLETON_GROOVE_SEED_BUNDLE."
-        ) from error
-    configured_store = os.environ.get("ABLETON_GROOVE_ARTIFACT_STORE")
-    if configured_store:
-        store_root = Path(configured_store).expanduser().resolve()
-    else:
-        local_appdata = Path(
-            os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
-        ).expanduser()
-        store_root = (local_appdata / "AbletonMCPServer" / "groove-artifacts-v1").resolve()
-    store = SeedBackedArtifactStore(index, store_root)
+        raise GrooveIndexInvalid(seed_unavailable_message(bundle, error)) from error
+    store = SeedBackedArtifactStore(index, groove_artifact_root())
     return GrooveRuntime(index=index, store=store, client=client)
 
 

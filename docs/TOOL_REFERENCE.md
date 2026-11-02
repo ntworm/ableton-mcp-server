@@ -763,8 +763,9 @@ value too small to cross `electro`'s grid threshold does not claim credit.
 
 Groove Intelligence opens an optional private immutable seed when one is
 configured: the default location is
-`%LOCALAPPDATA%\AbletonMCPServer\groove-seed`, and the explicit
-`ABLETON_GROOVE_SEED_BUNDLE` override takes precedence. No corpus is packaged
+`%LOCALAPPDATA%\AbletonMCPServer\groove-seed` on Windows and
+`~/Library/Application Support/AbletonMCPServer/groove-seed` on macOS, and
+the explicit `ABLETON_GROOVE_SEED_BUNDLE` override takes precedence. No corpus is packaged
 and none is downloaded automatically: the server starts and serves its full
 tool surface without a seed, and the corpus-backed reads then report that no
 corpus is configured. The seed is portable and does

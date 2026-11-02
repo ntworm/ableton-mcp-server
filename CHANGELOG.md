@@ -8,6 +8,24 @@ The canonical certification policy that governs the promotion decision
 
 ## [Unreleased]
 
+### Changed
+
+- The private groove seed and the derived-artifact folder now follow the host
+  layout: `%LOCALAPPDATA%\AbletonMCPServer` on Windows and
+  `~/Library/Application Support/AbletonMCPServer` on macOS. Artifacts derived
+  by earlier builds on macOS stay in `~/AppData/Local`; they are not migrated
+  and can be deleted by hand.
+- A missing seed and an invalid seed now report different messages:
+  `No groove corpus configured: ...` and
+  `Invalid groove seed at <bundle>: <cause>. ...`.
+- Continuous integration now runs on Python 3.10, 3.11, 3.12, 3.13, and 3.14.
+
+### Fixed
+
+- The server no longer fails to import on a host without a home directory: the
+  seed bundle path is resolved when it is used, not when the module is
+  imported.
+
 ## [0.8.1] - 2026-10-31
 
 ### Changed

@@ -41,6 +41,10 @@ def executable_lines(path: Path) -> set[int]:
     lines: set[int] = set()
 
     def visit(item: CodeType) -> None:
+        if item.co_name == "__annotate__":
+            # PEP 649 helpers hold the annotation expressions only; they are
+            # not part of the executed body of the module or the function.
+            return
         lines.update(
             line for _offset, line in dis.findlinestarts(item) if line is not None and line > 0
         )

@@ -254,8 +254,9 @@ without breaking them:
 The groove runtime is an offline read-only adapter over an optional private
 SQLite seed (`mode=ro&immutable=1`) plus a host-selected local artifact store
 for derived values. No seed is packaged: the corpus is configured explicitly at
-`%LOCALAPPDATA%\AbletonMCPServer\groove-seed`, or through the
-`ABLETON_GROOVE_SEED_BUNDLE` override, and nothing is downloaded
+`%LOCALAPPDATA%\AbletonMCPServer\groove-seed` on Windows and at
+`~/Library/Application Support/AbletonMCPServer/groove-seed` on macOS, or
+through the `ABLETON_GROOVE_SEED_BUNDLE` override, and nothing is downloaded
 automatically. The server starts and serves its full tool surface without a
 seed; the corpus-backed reads then report that no corpus is configured. Its four MCP tools expose
 bounded cards, evidence, deterministic generation, and comparison only. They do not resolve a request-provided path,

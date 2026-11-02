@@ -14,8 +14,10 @@ provider receives corpus paths, raw MIDI, notes, SQL, credentials, or network
 access. See [the provider laboratory contract](docs/groove_intelligence/provider-lab.md).
 The curated corpus no longer ships inside the wheel or any other distributed
 package. An optional private seed is read from
-`%LOCALAPPDATA%\AbletonMCPServer\groove-seed`, or from the path given in
-`ABLETON_GROOVE_SEED_BUNDLE`, while derived artifacts stay in LocalAppData.
+`%LOCALAPPDATA%\AbletonMCPServer\groove-seed` (on macOS from
+`~/Library/Application Support/AbletonMCPServer/groove-seed`), or from the
+path given in `ABLETON_GROOVE_SEED_BUNDLE`, while derived artifacts stay in
+the same per-user folder.
 Groove retrieval, evidence, comparison, and deterministic generation are
 portable and do not depend on the private source library. A generation request can use one
 primary groove plus up to seven references; incompatible PPQ, meter, or rights
@@ -170,14 +172,22 @@ corpus-backed operations need one.
 
 When you have a licensed local copy, point the server at it with either:
 
-- `%LOCALAPPDATA%\AbletonMCPServer\groove-seed` — the default location.
+- `%LOCALAPPDATA%\AbletonMCPServer\groove-seed` — the default location on
+  Windows.
+- `~/Library/Application Support/AbletonMCPServer/groove-seed` — the default
+  location on macOS.
 - `ABLETON_GROOVE_SEED_BUNDLE` — an explicit path that overrides the default
   location.
 
 Without a configured seed the corpus operations (`groove_search`,
 `groove_evidence`, `groove_compare`, and `groove_generate` from a corpus
-source) answer with an explicit "no corpus configured" error instead of
-fetching anything.
+source) answer with an explicit error instead of fetching anything. The two
+messages are literal:
+
+```text
+No groove corpus configured: no seed bundle at <bundle>. Set ABLETON_GROOVE_SEED_BUNDLE, or place a licensed seed there.
+Invalid groove seed at <bundle>: <cause>. Set ABLETON_GROOVE_SEED_BUNDLE to a valid seed bundle.
+```
 
 ---
 
