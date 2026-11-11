@@ -25,6 +25,76 @@ are rejected explicitly. Within the Groove Intelligence surface, the only Live
 mutation is guarded `groove_apply`, which must be previewed against an explicit
 target and empty slot before one commit.
 
+## Evidence
+
+Measured on 2026-11-11 with Live 12.4.25b1, on a disposable Set reopened from
+disk before each run. Data and commands are in [`docs/reports/`](docs/reports/).
+
+**Writes read back from Live.** `ableton-mcp acceptance` drove the 97 catalogued
+tools: 70 `live_passed`, 17 `offline_passed`, none `failed`. The run's own gate
+still reported `release_ready: false` and exit code 1, because
+`get_device_chains` needs a Rack in the Set and is not on the list of rows
+allowed to be unavailable. Of the 70, 30 are
+mutations the runner read back from the Set after the write (for example
+`create_cue_point`, then `get_locators` for that name and time), 2 are
+mutations certified by their own reply (`run_batch`, `create_clip_automation`),
+3 are mutations that pass when the call returns without error, with no check of
+the reply or the Set (`create_clip_automation_curve`, `add_notes_pattern`,
+`set_arrangement_clip_properties`), and 35 are reads that returned a valid
+answer. The `groove_apply` row among the 17 offline ones checks the preview
+contract only (`acceptance/probes/groove_apply.py`), not a tool call. The other
+10 rows: 5 track move and group operations that Live does not
+expose, refused with `CAPABILITY_UNAVAILABLE`; 3 that need a plugin or a Rack in
+the Set; `save_set` and `quit_ableton`, which need the owner. The per-tool list,
+with how each mutation was certified, is in
+[`2026-11-acceptance-readback.json`](docs/reports/2026-11-acceptance-readback.json);
+the probe function that backs each row is named in
+[`scripts/summarize_acceptance.py`](scripts/summarize_acceptance.py). The runner
+records the same fixed evidence string for every row that passes through its
+common recorder, so the report does not carry the values read back.
+To rerun: `ableton-mcp acceptance --confirm-project-name <Set> --track-index <midi>
+--clip-index <empty slot> --audio-track-index <audio> --audio-clip-index <clip>
+--fire-clip --json > raw.json`, then `python scripts/summarize_acceptance.py raw.json
+--live-version <version> --set-name <Set> --date <date> --out report.json`.
+
+**Batch cost.** One scenario, the same end state in Live: 8 MIDI tracks created and
+renamed, a 4-beat clip with 16 notes on each, 8 cue points, one scene launch.
+
+| Variant | Tool calls | Argument chars | Result chars | Context chars | Tokens (estimate) |
+|---|---|---|---|---|---|
+| One call per operation | 42 | 9,433 | 7,360 | 2,708,741 | 677,185 |
+| `run_batch` and `bulk_create_cue_points` | 4 | 10,626 | 8,205 | 275,207 | 68,801 |
+
+Each tool call is one agent turn. The context figures assume a client that sends
+the full tool list (here 64,094 characters) with every model turn, which is the
+common setup; a client that caches or trims the list pays less, and the call
+count holds either way. Context chars are `calls x 64,094 + argument chars +
+result chars`; tokens are that divided by 4, an estimate, while the call count is
+exact. After the Live run of the batched variant the Set held the 8 cue points
+and the 16 notes on the last created track, written by the batch's last command;
+the script now also fails a Live run whose batch completes fewer commands than
+it sent. The batched variant sends about 12% more argument and result characters in
+total, in far fewer and larger calls, and creates the cue points in one undo step instead of
+8. Details in
+[`2026-11-batch-cost.md`](docs/reports/2026-11-batch-cost.md);
+`python scripts/measure_batch_cost.py` reproduces the call counts without Live.
+
+**No outbound network.** `tests/test_no_outbound_network.py` runs the real bridge
+client against loopback TCP and WebSocket servers and calls `tools/list`, one TCP
+read, one WebSocket read and the offline tools through the MCP layer, while an
+audit hook and the asyncio connection path record every destination. It fails on
+any address other than `127.0.0.1`, `::1` or `localhost`, and also if either
+recorder misses its bridge. Static checks cover the Python packages, the bundled
+Extension sources and the telemetry defaults: no OpenTelemetry SDK is installed
+by default, and the server sets `OTEL_SDK_DISABLED`, `FASTMCP_TELEMETRY_DISABLED`
+and `MCP_TELEMETRY_DISABLED` to `true` unless the user already set them. Not
+covered by the runtime test: `build_extension`, which runs `npm install` and
+reaches the npm registry; the five `groove_*` tools, which need a seed the
+repository does not ship (their package is in the static check); the child
+process of the optional neural provider; and
+`AbletonMCPServer_Extension/groove-brain-gate0/`, a laboratory that is not
+bundled and calls `fetch`.
+
 ---
 
 ## ⚡ What is Model Context Protocol (MCP) & How Agents Use It
