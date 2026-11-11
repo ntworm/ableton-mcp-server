@@ -31,7 +31,10 @@ Measured on 2026-11-11 with Live 12.4.25b1, on a disposable Set reopened from
 disk before each run. Data and commands are in [`docs/reports/`](docs/reports/).
 
 **Writes read back from Live.** `ableton-mcp acceptance` drove the 97 catalogued
-tools: 70 `live_passed`, 17 `offline_passed`, none `failed`. Of the 70, 30 are
+tools: 70 `live_passed`, 17 `offline_passed`, none `failed`. The run's own gate
+still reported `release_ready: false` and exit code 1, because
+`get_device_chains` needs a Rack in the Set and is not on the list of rows
+allowed to be unavailable. Of the 70, 30 are
 mutations the runner read back from the Set after the write (for example
 `create_cue_point`, then `get_locators` for that name and time), 2 are
 mutations certified by their own reply (`run_batch`, `create_clip_automation`),
@@ -70,8 +73,9 @@ result chars`; tokens are that divided by 4, an estimate, while the call count i
 exact. After the Live run of the batched variant the Set held the 8 cue points
 and the 16 notes on the last created track, written by the batch's last command;
 the script now also fails a Live run whose batch completes fewer commands than
-it sent. The batched variant sends slightly more per call and creates the
-cue points in one undo step instead of 8. Details in
+it sent. The batched variant sends about 12% more argument and result characters in
+total, in far fewer and larger calls, and creates the cue points in one undo step instead of
+8. Details in
 [`2026-11-batch-cost.md`](docs/reports/2026-11-batch-cost.md);
 `python scripts/measure_batch_cost.py` reproduces the call counts without Live.
 
