@@ -149,7 +149,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--date", required=True)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
-    raw = json.loads(args.raw.read_text(encoding="utf-8"))
+    raw = json.loads(args.raw.read_text(encoding="utf-8-sig"))
     report = summarize(raw, live_version=args.live_version, set_name=args.set_name, date=args.date)
     args.out.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(json.dumps(report["counts"], indent=2))

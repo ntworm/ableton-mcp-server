@@ -1,0 +1,576 @@
+{
+  "date": "2026-11-11",
+  "set_name": "MCP_PROVAS",
+  "live_version": "12.4.25b1",
+  "counts": {
+    "mutations_read_back": 30,
+    "mutations_certified_by_response": 5,
+    "reads_answered": 35,
+    "status_capability_unavailable": 5,
+    "status_environment_unavailable": 3,
+    "status_live_passed": 70,
+    "status_manual_required": 2,
+    "status_offline_passed": 17
+  },
+  "tools": [
+    {
+      "tool": "get_session_info",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "get_track_list",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "get_track_state",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "get_locators",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "take_snapshot",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "get_control_surfaces",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "get_scenes",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "get_scene_state",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "get_project_metadata",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "get_loop_settings",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "get_selected_context",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "get_clip_summary",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "get_clip_notes",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "get_clip_info",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "get_device_list",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "get_parameter_value",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "get_routing",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "get_browser_categories",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "search_browser",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "get_song_length",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "live_find_track",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "list_device_params",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "get_composition_structure",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "diagnose_midi_clip",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "lifecycle_status",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "diagnose_clip_targets",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "live_find_device",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "live_find_clip",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "get_plugin_presets",
+      "group": "tcp_reads",
+      "status": "environment_unavailable"
+    },
+    {
+      "tool": "get_arrangement_clips",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "get_device_chains",
+      "group": "tcp_reads",
+      "status": "environment_unavailable"
+    },
+    {
+      "tool": "get_midi_chain_report",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "describe_instrument",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "get_clip_automation",
+      "group": "tcp_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "create_cue_point",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "bulk_create_cue_points",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "delete_cue_point",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "set_current_song_time",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "set_tempo",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "start_playback",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "stop_playback",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "set_loop",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "set_loop_start",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "set_loop_length",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "run_batch",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "response",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "add_notes_to_clip",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "fire_clip",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "create_clip",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "delete_clip",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "clear_clip_notes",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "fire_scene",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "set_track_property",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "set_track_color",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "set_clip_color",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "set_clip_properties",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "create_clip_automation",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "response",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "create_midi_track",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "create_audio_track",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "rename_track",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "set_parameter_value",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "set_plugin_preset",
+      "group": "mutations",
+      "status": "environment_unavailable",
+      "certified_by": "response",
+      "evidence": "no plugin exposing presets found in current Set"
+    },
+    {
+      "tool": "duplicate_session_clip_to_arrangement",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "delete_arrangement_clip",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "move_arrangement_clip",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "create_clip_automation_curve",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "response",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "add_notes_pattern",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "response",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "set_arrangement_clip_properties",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "response",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "move_track",
+      "group": "capability",
+      "status": "capability_unavailable"
+    },
+    {
+      "tool": "reorder_tracks",
+      "group": "capability",
+      "status": "capability_unavailable"
+    },
+    {
+      "tool": "move_track_to_group",
+      "group": "capability",
+      "status": "capability_unavailable"
+    },
+    {
+      "tool": "ungroup_track",
+      "group": "capability",
+      "status": "capability_unavailable"
+    },
+    {
+      "tool": "merge_groups",
+      "group": "capability",
+      "status": "capability_unavailable"
+    },
+    {
+      "tool": "save_set",
+      "group": "mutations",
+      "status": "manual_required",
+      "certified_by": "response",
+      "evidence": "Host does not expose Song.save API (save_set requires GUI workflow or manual save)"
+    },
+    {
+      "tool": "quit_ableton",
+      "group": "quit",
+      "status": "manual_required"
+    },
+    {
+      "tool": "live_fade",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "get_warp_state",
+      "group": "websocket_reads",
+      "status": "live_passed"
+    },
+    {
+      "tool": "set_warp_state",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "load_device_to_track",
+      "group": "mutations",
+      "status": "live_passed",
+      "certified_by": "read_back",
+      "evidence": "call and readback completed"
+    },
+    {
+      "tool": "get_session_overview",
+      "group": "composed",
+      "status": "live_passed"
+    },
+    {
+      "tool": "get_bridge_status",
+      "group": "composed",
+      "status": "live_passed"
+    },
+    {
+      "tool": "get_ableton_logs",
+      "group": "offline",
+      "status": "offline_passed"
+    },
+    {
+      "tool": "diff_snapshots_tool",
+      "group": "offline",
+      "status": "offline_passed"
+    },
+    {
+      "tool": "analyze_audio",
+      "group": "offline",
+      "status": "offline_passed"
+    },
+    {
+      "tool": "find_frequency_masking",
+      "group": "offline",
+      "status": "offline_passed"
+    },
+    {
+      "tool": "analyze_mix",
+      "group": "offline",
+      "status": "offline_passed"
+    },
+    {
+      "tool": "extract_single_cycle",
+      "group": "offline",
+      "status": "offline_passed"
+    },
+    {
+      "tool": "scaffold_extension",
+      "group": "offline",
+      "status": "offline_passed"
+    },
+    {
+      "tool": "build_extension",
+      "group": "offline",
+      "status": "offline_passed"
+    },
+    {
+      "tool": "music_generate_drum_groove",
+      "group": "offline",
+      "status": "offline_passed"
+    },
+    {
+      "tool": "music_generate_bass",
+      "group": "offline",
+      "status": "offline_passed"
+    },
+    {
+      "tool": "music_plan_production",
+      "group": "offline",
+      "status": "offline_passed"
+    },
+    {
+      "tool": "groove_search",
+      "group": "offline",
+      "status": "offline_passed"
+    },
+    {
+      "tool": "groove_evidence",
+      "group": "offline",
+      "status": "offline_passed"
+    },
+    {
+      "tool": "groove_generate",
+      "group": "offline",
+      "status": "offline_passed"
+    },
+    {
+      "tool": "groove_compare",
+      "group": "offline",
+      "status": "offline_passed"
+    },
+    {
+      "tool": "groove_apply",
+      "group": "offline",
+      "status": "offline_passed"
+    },
+    {
+      "tool": "plan_user_journey",
+      "group": "offline",
+      "status": "offline_passed"
+    }
+  ]
+}

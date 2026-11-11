@@ -173,6 +173,8 @@ async def measure(variant: str, target: str, project: str | None = None) -> dict
         base = base_index(rows if isinstance(rows, list) else [])
         for name, arguments in plan_variant(variant, base, cue_times(song_length, locators)):
             await meter.call(name, arguments)
+        # Not counted: stop the scene the scenario launched.
+        await client.call_tool("stop_playback", {}, raise_on_error=False)
     return _figures(variant, target, meter, tools_chars)
 
 
