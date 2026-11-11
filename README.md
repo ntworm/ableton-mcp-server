@@ -33,9 +33,10 @@ disk before each run. Data and commands are in [`docs/reports/`](docs/reports/).
 **Writes read back from Live.** `ableton-mcp acceptance` drove the 97 catalogued
 tools: 70 `live_passed`, 17 `offline_passed`, none `failed`. Of the 70, 30 are
 mutations the runner read back from the Set after the write (for example
-`create_cue_point`, then `get_locators` for that name and time), 5 are
-mutations certified by their own reply (`run_batch`, `create_clip_automation`,
-`create_clip_automation_curve`, `add_notes_pattern`,
+`create_cue_point`, then `get_locators` for that name and time), 2 are
+mutations certified by their own reply (`run_batch`, `create_clip_automation`),
+3 are mutations that pass when the call returns without error, with no check of
+the reply or the Set (`create_clip_automation_curve`, `add_notes_pattern`,
 `set_arrangement_clip_properties`), and 35 are reads that returned a valid
 answer. The `groove_apply` row among the 17 offline ones checks the preview
 contract only (`acceptance/probes/groove_apply.py`), not a tool call. The other
@@ -46,8 +47,8 @@ with how each mutation was certified, is in
 [`2026-11-acceptance-readback.json`](docs/reports/2026-11-acceptance-readback.json);
 the read that backs each `read_back` row is cited by runner line in
 [`scripts/summarize_acceptance.py`](scripts/summarize_acceptance.py). The runner
-records one fixed evidence string per row, so the report does not carry the
-values read back.
+records the same fixed evidence string for every row that passes through its
+common recorder, so the report does not carry the values read back.
 To rerun: `ableton-mcp acceptance --confirm-project-name <Set> --track-index <midi>
 --clip-index <empty slot> --audio-track-index <audio> --audio-clip-index <clip>
 --fire-clip --json > raw.json`, then `python scripts/summarize_acceptance.py raw.json

@@ -6,9 +6,11 @@ tool, the group (from ``BASELINE_PROBE_GROUPS``), the status, and for
 
 * ``read_back``: the probe reads the Set again after the write and compares
   (for example ``create_cue_point`` then ``get_locators``,
-  ``ableton_mcp_server/acceptance/runner.py:1255-1264``);
-* ``response``: the probe checks only the command's own reply, or nothing
-  (``run_batch`` checks its returned payload, ``runner.py:1550-1580``).
+  ``ableton_mcp_server/acceptance/runner.py:1255-1266``);
+* ``response``: the probe checks only the command's own reply
+  (``run_batch`` checks its returned payload, ``runner.py:1550-1580``);
+* ``no_check``: the probe passes when the call returns without error; it reads
+  neither the reply nor the Set (``add_notes_pattern``, ``runner.py:1841-1861``).
 
 Read rows are counted as "reads answered": the runner marks them
 ``live_passed`` when the call returns (``runner.py:672-687``). The evidence
@@ -75,16 +77,21 @@ READ_BACK = frozenset(
         "load_device_to_track",  # get_device_list, probes/load_device.py:66-80
     }
 )
-# Certified by the command's own reply, or by no check at all.
+# Certified by the command's own reply.
 RESPONSE_ONLY = frozenset(
     {
         "run_batch",  # returned completed/aborted_at, 1550-1580
         "create_clip_automation",  # returned points_written, 1500-1528
-        "create_clip_automation_curve",  # no check, 1863-1884
-        "add_notes_pattern",  # no check, 1841-1861
-        "set_arrangement_clip_properties",  # no check, 1886-1904
         "set_plugin_preset",  # returned selected_preset_index, 2127-2150
         "save_set",  # returned saved plus get_project_metadata, 1180-1233
+    }
+)
+# Passed when the call returned without error: no reply or Set check.
+NO_CHECK = frozenset(
+    {
+        "create_clip_automation_curve",  # 1863-1884
+        "add_notes_pattern",  # 1841-1861
+        "set_arrangement_clip_properties",  # 1886-1904
     }
 )
 
@@ -96,7 +103,9 @@ def group_of() -> dict[str, str]:
 def certification_of(tool: str, group: str) -> str | None:
     if group != "mutations":
         return None
-    return "read_back" if tool in READ_BACK else "response"
+    if tool in READ_BACK:
+        return "read_back"
+    return "no_check" if tool in NO_CHECK else "response"
 
 
 def _rows(raw: dict[str, Any]) -> list[dict[str, Any]]:
@@ -119,6 +128,7 @@ def counts(rows: list[dict[str, Any]]) -> dict[str, int]:
     return {
         "mutations_read_back": sum(r.get("certified_by") == "read_back" for r in live),
         "mutations_certified_by_response": sum(r.get("certified_by") == "response" for r in live),
+        "mutations_without_check": sum(r.get("certified_by") == "no_check" for r in live),
         "reads_answered": sum(
             r["group"] in ("tcp_reads", "websocket_reads", "composed") for r in live
         ),

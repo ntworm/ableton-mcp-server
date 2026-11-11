@@ -8,8 +8,10 @@ actually did. The runner is intentionally paranoid:
 - ``release_ready`` is **only** ``True`` when the baseline profile completes
   end-to-end with no failed tool. Partial profiles and the ``quit``
   profile never claim ``release_ready``.
-- Every mutation is followed by a readback *before* the verification row
-  is recorded. Readback mismatches flip the row to ``failed``.
+- Most mutations are followed by a readback *before* the verification row
+  is recorded, and readback mismatches flip the row to ``failed``. A few are
+  certified by their own reply or only by returning without error;
+  ``scripts/summarize_acceptance.py`` lists which.
 - The disposable Set preserves and restores the original track names,
   mixer state, and clip contents. Track creation happens last so we can
   restore everything else from the original three-track layout.
