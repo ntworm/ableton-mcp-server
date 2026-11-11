@@ -396,9 +396,11 @@ async def run_live_acceptance(
 ) -> dict[str, Any]:
     """Exercise the real bridge after exact disposable-project confirmation.
 
-    The runner records a Certification row for every selected tool. Rows
-    are only marked ``live_passed`` after a successful send **and** a
-    readback that proves the mutation took effect. ``failed`` rows
+    The runner records a Certification row for every selected tool. A read
+    row is marked ``live_passed`` when the call returns a valid answer. Most
+    mutation rows are marked ``live_passed`` only after a later read of the
+    Set proves the write took effect; a few are certified by the command's
+    own reply (``scripts/summarize_acceptance.py`` lists which). ``failed`` rows
     propagate to ``release_ready=False`` and to a non-zero CLI exit code.
     """
     expanded = _expand_profiles(profiles)
