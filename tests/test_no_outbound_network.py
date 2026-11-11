@@ -336,12 +336,16 @@ def _banned_in(names: set[str]) -> set[str]:
     return {b for b in _BANNED_PYTHON for n in names if n == b or n.startswith(b + ".")}
 
 
+_DOTTED_USE = re.compile(r"(urllib\.request|http\.client)")
+
+
 def test_python_sources_import_no_network_client() -> None:
     offenders: list[str] = []
     for root in ("ableton_mcp_server", "AbletonMCPServer_RemoteScript"):
         for path in sorted((REPO / root).rglob("*.py")):
             relative = path.relative_to(REPO).as_posix()
             banned = _banned_in(_imported_modules(path))
+            banned.update(_DOTTED_USE.findall(path.read_text(encoding="utf-8")))
             if relative in _SUBPROCESS_ALLOWED:
                 banned.discard("subprocess")
             if banned:

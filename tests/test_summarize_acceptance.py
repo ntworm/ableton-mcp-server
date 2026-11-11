@@ -40,7 +40,7 @@ def test_every_mutation_tool_is_classified_once() -> None:
     assert mutations == set().union(*sets)
 
 
-def test_counts_keep_read_back_response_and_reads_apart() -> None:
+def _report() -> dict[str, object]:
     raw = _raw(
         ("create_cue_point", "live_passed", "name=Probe time=8.0"),
         ("run_batch", "live_passed", "completed=2 aborted_at=2"),
@@ -48,16 +48,25 @@ def test_counts_keep_read_back_response_and_reads_apart() -> None:
         ("get_track_list", "live_passed", "call and readback completed"),
         ("fire_clip", "environment_unavailable", "fire_clip requires --fire-clip flag"),
     )
-    report = summary.summarize(raw, live_version="12.4", set_name="TESTE", date="2026-11-12")
-    assert report["counts"]["mutations_read_back"] == 1
-    assert report["counts"]["mutations_certified_by_response"] == 1
-    assert report["counts"]["mutations_without_check"] == 1
-    assert report["counts"]["reads_answered"] == 1
-    by_tool = {row["tool"]: row for row in report["tools"]}
+    return summary.summarize(raw, live_version="12.4", set_name="TESTE", date="2026-11-12")
+
+
+def test_counts_keep_the_four_kinds_apart() -> None:
+    counts = _report()["counts"]
+    assert counts["mutations_read_back"] == 1
+    assert counts["mutations_certified_by_response"] == 1
+    assert counts["mutations_without_check"] == 1
+    assert counts["reads_answered"] == 1
+
+
+def test_rows_carry_evidence_only_where_it_means_something() -> None:
+    by_tool = {row["tool"]: row for row in _report()["tools"]}
     assert by_tool["create_cue_point"]["evidence"] == "name=Probe time=8.0"
     assert by_tool["run_batch"]["certified_by"] == "response"
-    assert "evidence" not in by_tool["get_track_list"]
+    assert by_tool["add_notes_pattern"]["certified_by"] == "no_check"
+    assert "evidence" not in by_tool["add_notes_pattern"], "fixed string would claim a readback"
     assert set(by_tool["get_track_list"]) == {"tool", "group", "status"}
+    assert summary.certification_of("not_a_tool", "mutations") == "unclassified"
 
 
 def test_a_local_path_in_evidence_is_refused() -> None:

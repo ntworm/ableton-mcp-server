@@ -5,17 +5,19 @@ tool, the group (from ``BASELINE_PROBE_GROUPS``), the status, and for
 ``mutations`` rows how the runner certified the write:
 
 * ``read_back``: the probe reads the Set again after the write and compares
-  (for example ``create_cue_point`` then ``get_locators``,
-  ``ableton_mcp_server/acceptance/runner.py:1255-1266``);
+  (for example ``create_cue_point``, then ``get_locators`` in ``run_create_cue``
+  of ``ableton_mcp_server/acceptance/runner.py``);
 * ``response``: the probe checks only the command's own reply
-  (``run_batch`` checks its returned payload, ``runner.py:1550-1580``);
+  (``run_batch`` checks its returned payload in ``run_run_batch``);
 * ``no_check``: the probe passes when the call returns without error; it reads
-  neither the reply nor the Set (``add_notes_pattern``, ``runner.py:1841-1861``).
+  neither the reply nor the Set (``add_notes_pattern`` in ``run_add_notes_pattern``).
 
 Read rows are counted as "reads answered": the runner marks them
-``live_passed`` when the call returns (``runner.py:672-687``). The evidence
-string is kept only for ``mutations`` rows. The Live version is not in the
-runner output; ``--live-version`` takes it from Live's About box.
+``live_passed`` when the call returns. The evidence string is kept for
+``read_back`` and ``response`` rows; ``no_check`` rows drop it, because the
+runner's common recorder writes "call and readback completed" there too.
+The Live version is not in the runner output; ``--live-version`` takes it from
+Live's About box.
 
 Usage::
 
@@ -42,56 +44,57 @@ from report_privacy import require_public  # noqa: E402
 
 from ableton_mcp_server.acceptance.probes import BASELINE_PROBE_GROUPS  # noqa: E402
 
-# Each line: the probe that reads the Set after the write (runner.py lines).
+# Each line: the read after the write, then the probe function in acceptance/runner.py.
 READ_BACK = frozenset(
     {
-        "create_cue_point",  # get_locators, 1255-1264
-        "bulk_create_cue_points",  # get_locators, 1272-1280
-        "delete_cue_point",  # get_locators, 1284-1299
-        "set_tempo",  # get_session_info, 1306-1311
-        "set_current_song_time",  # get_session_info, 1315-1322
-        "set_loop_start",  # get_loop_settings, 1326-1331
-        "set_loop_length",  # get_loop_settings, 1335-1340
-        "set_loop",  # get_loop_settings, 1344-1349
-        "create_clip",  # get_clip_info, 1354-1372
-        "add_notes_to_clip",  # get_clip_notes, 1390-1422
-        "clear_clip_notes",  # get_clip_notes, 1436-1453
-        "set_clip_properties",  # get_clip_info, 1467-1486
-        "start_playback",  # get_session_info, 1531-1536
-        "stop_playback",  # get_session_info, 1540-1545
-        "fire_clip",  # get_session_info is_playing, 1597-1612
-        "fire_scene",  # get_session_info is_playing, 1621-1630
-        "set_track_property",  # get_track_state, 1639-1651
-        "set_track_color",  # get_track_state, 1678-1693
-        "set_clip_color",  # get_clip_info, 1722-1746
-        "rename_track",  # get_track_list, 1751-1768
-        "duplicate_session_clip_to_arrangement",  # get_arrangement_clips, 1818-1833
-        "move_arrangement_clip",  # get_arrangement_clips, 1906-1924
-        "delete_arrangement_clip",  # get_arrangement_clips, 1932-1945
-        "delete_clip",  # get_clip_info, 1964-1981
-        "set_parameter_value",  # get_parameter_value, 1996-2090
-        "live_fade",  # get_track_state, 2150-2210
-        "set_warp_state",  # get_warp_state, 2212-2232
-        "create_midi_track",  # get_track_list before and after, 2243-2348
-        "create_audio_track",  # get_track_list before and after, 2243-2348
-        "load_device_to_track",  # get_device_list, probes/load_device.py:66-80
+        "create_cue_point",  # get_locators; run_create_cue
+        "bulk_create_cue_points",  # get_locators; run_bulk_cue
+        "delete_cue_point",  # get_locators; run_delete_cue
+        "set_tempo",  # get_session_info; run_set_tempo
+        "set_current_song_time",  # get_session_info; run_set_time
+        "set_loop_start",  # get_loop_settings; run_set_loop_start
+        "set_loop_length",  # get_loop_settings; run_set_loop_length
+        "set_loop",  # get_loop_settings; run_set_loop
+        "create_clip",  # get_clip_info; run_create_clip
+        "add_notes_to_clip",  # get_clip_notes; run_add_notes
+        "clear_clip_notes",  # get_clip_notes; run_clear_notes
+        "set_clip_properties",  # get_clip_info; run_set_clip_props
+        "start_playback",  # get_session_info; run_start_playback
+        "stop_playback",  # get_session_info; run_stop_playback
+        "fire_clip",  # get_session_info is_playing; run_fire_clip
+        "fire_scene",  # get_session_info is_playing; run_fire_scene
+        "set_track_property",  # get_track_state; run_set_track_prop
+        "set_track_color",  # get_track_state; run_set_track_color
+        "set_clip_color",  # get_clip_info; run_set_clip_color
+        "rename_track",  # get_track_list; run_rename_track
+        # get_arrangement_clips; run_duplicate_to_arrangement
+        "duplicate_session_clip_to_arrangement",
+        "move_arrangement_clip",  # get_arrangement_clips; run_move_arrangement_clip
+        "delete_arrangement_clip",  # get_arrangement_clips; run_delete_arrangement_clip
+        "delete_clip",  # get_clip_info; run_delete_clip
+        "set_parameter_value",  # get_parameter_value; run_set_parameter_value
+        "live_fade",  # get_track_state; run_live_fade
+        "set_warp_state",  # get_warp_state; run_set_warp_state
+        "create_midi_track",  # get_track_list before and after; _run_track_creation
+        "create_audio_track",  # get_track_list before and after; _run_track_creation
+        "load_device_to_track",  # get_device_list; probes/load_device.py::_load_and_verify
+        "save_set",  # get_project_metadata after a save; run_save_set
     }
 )
 # Certified by the command's own reply.
 RESPONSE_ONLY = frozenset(
     {
-        "run_batch",  # returned completed/aborted_at, 1550-1580
-        "create_clip_automation",  # returned points_written, 1500-1528
-        "set_plugin_preset",  # returned selected_preset_index, 2127-2150
-        "save_set",  # returned saved plus get_project_metadata, 1180-1233
+        "run_batch",  # returned completed/aborted_at; run_run_batch
+        "create_clip_automation",  # returned points_written; run_clip_automation
+        "set_plugin_preset",  # returned selected_preset_index; run_set_plugin_preset
     }
 )
 # Passed when the call returned without error: no reply or Set check.
 NO_CHECK = frozenset(
     {
-        "create_clip_automation_curve",  # 1863-1884
-        "add_notes_pattern",  # 1841-1861
-        "set_arrangement_clip_properties",  # 1886-1904
+        "create_clip_automation_curve",  # run_create_clip_automation_curve
+        "add_notes_pattern",  # run_add_notes_pattern
+        "set_arrangement_clip_properties",  # run_set_arrangement_clip_properties
     }
 )
 
@@ -103,9 +106,14 @@ def group_of() -> dict[str, str]:
 def certification_of(tool: str, group: str) -> str | None:
     if group != "mutations":
         return None
-    if tool in READ_BACK:
-        return "read_back"
-    return "no_check" if tool in NO_CHECK else "response"
+    for name, tools in (
+        ("read_back", READ_BACK),
+        ("response", RESPONSE_ONLY),
+        ("no_check", NO_CHECK),
+    ):
+        if tool in tools:
+            return name
+    return "unclassified"
 
 
 def _rows(raw: dict[str, Any]) -> list[dict[str, Any]]:
@@ -117,7 +125,8 @@ def _rows(raw: dict[str, Any]) -> list[dict[str, Any]]:
         how = certification_of(tool, group)
         if how:
             row["certified_by"] = how
-            row["evidence"] = str(item.get("evidence", ""))
+            if how != "no_check":
+                row["evidence"] = str(item.get("evidence", ""))
         rows.append(row)
     return rows
 

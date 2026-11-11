@@ -45,7 +45,7 @@ expose, refused with `CAPABILITY_UNAVAILABLE`; 3 that need a plugin or a Rack in
 the Set; `save_set` and `quit_ableton`, which need the owner. The per-tool list,
 with how each mutation was certified, is in
 [`2026-11-acceptance-readback.json`](docs/reports/2026-11-acceptance-readback.json);
-the read that backs each `read_back` row is cited by runner line in
+the probe function that backs each row is named in
 [`scripts/summarize_acceptance.py`](scripts/summarize_acceptance.py). The runner
 records the same fixed evidence string for every row that passes through its
 common recorder, so the report does not carry the values read back.

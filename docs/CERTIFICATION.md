@@ -16,7 +16,7 @@ Every tool records exactly one of these statuses in the
 
 | Status                | Meaning                                                                                          |
 | --------------------- | ------------------------------------------------------------------------------------------------ |
-| ``live_passed``       | The call ran against Live. For a read, it returned a valid answer. For most mutations, a later read of the Set proved the write took effect; a few mutations are certified by their own reply (`scripts/summarize_acceptance.py` lists which). |
+| ``live_passed``       | The call ran against Live. For a read, it returned a valid answer. For most mutations, a later read of the Set proved the write took effect; a few mutations are certified by their own reply, and a few only by returning without error (`scripts/summarize_acceptance.py` lists which). |
 | ``offline_passed``    | Pure-Python or local-file probe ran and returned a valid result. Never touched the Live host.    |
 | ``manual_passed``     | Owner manually confirmed the operation ran against Live. Used **only** after an out-of-band check. |
 | ``manual_required``   | The runner did **not** execute the operation; an out-of-band owner confirmation is required before the row can flip to ``manual_passed``. |
