@@ -42,8 +42,12 @@ contract only (`acceptance/probes/groove_apply.py`), not a tool call. The other
 10 rows: 5 track move and group operations that Live does not
 expose, refused with `CAPABILITY_UNAVAILABLE`; 3 that need a plugin or a Rack in
 the Set; `save_set` and `quit_ableton`, which need the owner. The per-tool list,
-with the read-back evidence of each mutation, is in
-[`2026-11-acceptance-readback.json`](docs/reports/2026-11-acceptance-readback.json).
+with how each mutation was certified, is in
+[`2026-11-acceptance-readback.json`](docs/reports/2026-11-acceptance-readback.json);
+the read that backs each `read_back` row is cited by runner line in
+[`scripts/summarize_acceptance.py`](scripts/summarize_acceptance.py). The runner
+records one fixed evidence string per row, so the report does not carry the
+values read back.
 To rerun: `ableton-mcp acceptance --confirm-project-name <Set> --track-index <midi>
 --clip-index <empty slot> --audio-track-index <audio> --audio-clip-index <clip>
 --fire-clip --json > raw.json`, then `python scripts/summarize_acceptance.py raw.json
