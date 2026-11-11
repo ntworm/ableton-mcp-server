@@ -172,10 +172,22 @@ async def measure(variant: str, target: str, project: str | None = None) -> dict
         rows = await meter.call("get_track_list", {})
         base = base_index(rows if isinstance(rows, list) else [])
         for name, arguments in plan_variant(variant, base, cue_times(song_length, locators)):
-            await meter.call(name, arguments)
+            answer = await meter.call(name, arguments)
+            if target == "live":
+                _check_batch(meter, name, arguments, answer)
         # Not counted: stop the scene the scenario launched.
         await client.call_tool("stop_playback", {}, raise_on_error=False)
     return _figures(variant, target, meter, tools_chars)
+
+
+def _check_batch(meter: Meter, name: str, arguments: dict[str, Any], answer: Any) -> None:
+    """In Live, a batch that stopped early is an error, not the same end state."""
+    if name != "run_batch":
+        return
+    expected = len(arguments["commands"])
+    completed = answer.get("completed") if isinstance(answer, dict) else None
+    if completed != expected:
+        meter.errors.append(f"run_batch completed={completed!r}, expected {expected}")
 
 
 def _figures(variant: str, target: str, meter: Meter, tools_chars: int) -> dict[str, Any]:

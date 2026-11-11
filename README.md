@@ -61,10 +61,15 @@ renamed, a 4-beat clip with 16 notes on each, 8 cue points, one scene launch.
 | One call per operation | 42 | 9,433 | 7,360 | 2,708,741 | 677,185 |
 | `run_batch` and `bulk_create_cue_points` | 4 | 10,626 | 8,205 | 275,207 | 68,801 |
 
-Each tool call is one agent turn, and an MCP client resends the tool list with
-every turn: here 64,094 characters. Context chars are `calls x 64,094 + argument
-chars + result chars`; tokens are that divided by 4, an estimate, while the call
-count is exact. The batched variant sends slightly more per call and creates the
+Each tool call is one agent turn. The context figures assume a client that sends
+the full tool list (here 64,094 characters) with every model turn, which is the
+common setup; a client that caches or trims the list pays less, and the call
+count holds either way. Context chars are `calls x 64,094 + argument chars +
+result chars`; tokens are that divided by 4, an estimate, while the call count is
+exact. After the Live run of the batched variant the Set held the 8 cue points
+and the 16 notes on the last created track, written by the batch's last command;
+the script now also fails a Live run whose batch completes fewer commands than
+it sent. The batched variant sends slightly more per call and creates the
 cue points in one undo step instead of 8. Details in
 [`2026-11-batch-cost.md`](docs/reports/2026-11-batch-cost.md);
 `python scripts/measure_batch_cost.py` reproduces the call counts without Live.

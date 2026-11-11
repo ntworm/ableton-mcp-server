@@ -266,7 +266,19 @@ def _failure(name: str, result: Any) -> str | None:
         name == "get_ableton_logs" and "could not be resolved" in text
     ):
         return f"{name}: {text[:200]}"
+    payload = _json_or_none(text)
+    if isinstance(payload, dict) and (
+        payload.get("ok") is False or payload.get("status") == "error"
+    ):
+        return f"{name}: error payload ({text[:200]})"
     return None
+
+
+def _json_or_none(text: str) -> Any:
+    try:
+        return json.loads(text)
+    except ValueError:
+        return None
 
 
 async def _run_calls(calls: list[tuple[str, dict[str, Any]]]) -> list[str]:
