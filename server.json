@@ -8,13 +8,13 @@
     "source": "github"
   },
   "websiteUrl": "https://ntworm.github.io/ableton-mcp-server/",
-  "version": "0.8.1-rc1",
+  "version": "0.8.1",
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/ntworm/ableton-mcp-server/releases/download/v0.8.1-rc1/ableton-mcp-server-0.8.1.mcpb",
-      "version": "0.8.1-rc1",
-      "fileSha256": "3d79104141a14d116436cdbd67d6e3b0f3a621d5ab35238e62a0f12f432d3c47",
+      "identifier": "https://github.com/ntworm/ableton-mcp-server/releases/download/v0.8.1/ableton-mcp-server-0.8.1.mcpb",
+      "version": "0.8.1",
+      "fileSha256": "64eed840cc0317f6af9e97f090c52d1d4441d7ada03c946cd1f2d39f2c2d3b41",
       "transport": {
         "type": "stdio"
       }

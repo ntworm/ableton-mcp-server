@@ -17,8 +17,8 @@ acceptance with `release_ready=true`.
 ### Added
 
 - `server.json` describes the server for the official MCP Registry. It points at
-  the `ableton-mcp-server-0.8.1.mcpb` asset of the `v0.8.1-rc1` pre-release and
-  pins its SHA-256.
+  the `ableton-mcp-server-0.8.1.mcpb` asset of the `v0.8.1` release and pins its
+  SHA-256.
 - `scripts/build_smithery_bundle.py` builds and verifies the Smithery variant of
   the MCP bundle: a Python bootstrap that installs the pinned release wheel into
   a bundle-local environment, with hash-checked dependencies.
