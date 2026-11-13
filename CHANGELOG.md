@@ -8,6 +8,12 @@ The canonical certification policy that governs the promotion decision
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-13
+
+The `v0.8.1-rc1` pre-release of 2026-10-31 packaged the section below without
+the changes in this one. This release carries both and passed the guarded Live
+acceptance with `release_ready=true`.
+
 ### Added
 
 - `server.json` describes the server for the official MCP Registry. It points at
@@ -35,7 +41,7 @@ The canonical certification policy that governs the promotion decision
   seed bundle path is resolved when it is used, not when the module is
   imported.
 
-## [0.8.1] - 2026-10-31
+## [0.8.1-rc1] - 2026-10-31
 
 ### Changed
 

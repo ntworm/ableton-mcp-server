@@ -105,7 +105,8 @@ def test_current_guidance_and_changelog_name_the_current_surface() -> None:
     assert "current v0.8.1 release ships 97 tools" in readme
     expected_changelog = (
         "## [Unreleased]",
-        "## [0.8.1] - 2026-10-31",
+        "## [0.8.1] - 2026-11-13",
+        "## [0.8.1-rc1] - 2026-10-31",
         "## [0.8.0] - 2026-10-30",
         "## [0.7.0] - 2026-09-17",
         "## [0.6.0] - 2026-08-24",
