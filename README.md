@@ -282,6 +282,29 @@ The 97 MCP tools are grouped into operational domains <!-- TOOL_COUNT: active_to
 
 ---
 
+## 🤝 Custom Integration Work
+
+I build AI integrations for music and post-production: MCP servers that let an
+agent read and edit a DAW session, and tools that move sessions between DAWs.
+Besides this server, that work covers Pro Tools automation through PTSL and AAF
+export from Live with [aafton](https://github.com/ntworm/aafton). I also work as
+a sound editor and mixer for film and TV, so the integrations are built against
+real post-production sessions.
+
+Open to contract work, for example:
+
+- connecting an agent or an in-house tool to Ableton Live or Pro Tools;
+- adding a session conversion step (Live to AAF, markers, stems) to a post
+  pipeline;
+- extending this server with tools for your Sets, with the same read-back
+  checks described in [Evidence](#evidence).
+
+To start, open an [issue](https://github.com/ntworm/ableton-mcp-server/issues)
+that describes the job, the DAW and the deadline. Portfolio:
+[ntworm.github.io](https://ntworm.github.io/).
+
+---
+
 ## 💡 Inspiration & Prior Art
 
 This project builds on design insights from seminal open-source projects:
