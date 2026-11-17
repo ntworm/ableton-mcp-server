@@ -1,4 +1,8 @@
-import { initialize, type ActivationContext } from '@ableton-extensions/sdk';
+import {
+  initialize,
+  type ActivationContext,
+  type ExtensionContext,
+} from '@ableton-extensions/sdk';
 import fs from 'node:fs';
 import nodePath from 'node:path';
 import { performance as nodePerformance } from 'node:perf_hooks';
@@ -56,6 +60,37 @@ function loadKitProfile(resourceRoot: string): KitProfile {
   return JSON.parse(fs.readFileSync(path, 'utf8')) as KitProfile;
 }
 
+async function runGate0Command(
+  context: ExtensionContext<'1.0.0'>,
+  argument: unknown,
+  resourceRoot: string,
+  state: Lifecycle,
+): Promise<void> {
+  const { result, helper } = await openGate0Modal(
+    context,
+    argument,
+    resourceRoot,
+  );
+  if (result.action === 'cancel' || !helper || !state.active) return;
+
+  // Live is usable from here: the modal is closed and the panel is on the
+  // phone. Nothing below opens a window.
+  await serveSession({
+    helper,
+    song: context.application.song as never,
+    profile: loadKitProfile(resourceRoot),
+    stillActive: () => state.active,
+    onFailure: (error) => {
+      console.error(`[groove-brain] session: ${sanitizeErrorMessage(error)}`);
+    },
+    onReceipt: (receipt) => {
+      console.log(`[groove-brain] ${receipt.status} ${receipt.code} `
+        + `${receipt.trackName ?? '?'} slot ${receipt.slotIndex + 1} `
+        + `${receipt.noteCount} notas`);
+    },
+  });
+}
+
 function activate(activation: ActivationContext): void {
   if (lifecycle?.active) {
     console.log('[groove-brain-gate0] activate() ignored while already active');
@@ -76,29 +111,7 @@ function activate(activation: ActivationContext): void {
     if (!state.active || state.operation) return;
     const operation = (async (): Promise<void> => {
       try {
-        const { result, helper } = await openGate0Modal(
-          context,
-          argument,
-          resourceRoot,
-        );
-        if (result.action === 'cancel' || !helper || !state.active) return;
-
-        // Live is usable from here: the modal is closed and the panel is on the
-        // phone. Nothing below opens a window.
-        await serveSession({
-          helper,
-          song: context.application.song as never,
-          profile: loadKitProfile(resourceRoot),
-          stillActive: () => state.active,
-          onFailure: (error) => {
-            console.error(`[groove-brain] session: ${sanitizeErrorMessage(error)}`);
-          },
-          onReceipt: (receipt) => {
-            console.log(`[groove-brain] ${receipt.status} ${receipt.code} `
-              + `${receipt.trackName ?? '?'} slot ${receipt.slotIndex + 1} `
-              + `${receipt.noteCount} notas`);
-          },
-        });
+        await runGate0Command(context, argument, resourceRoot, state);
       } catch (error: unknown) {
         console.error(`[groove-brain-gate0] ${sanitizeErrorMessage(error)}`);
       } finally {

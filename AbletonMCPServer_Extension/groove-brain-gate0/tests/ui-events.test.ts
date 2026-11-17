@@ -57,14 +57,15 @@ interface Harness {
   ticks: (() => void)[];
 }
 
-async function runPage(
-  file: string,
-  selectors: string[],
-  options: {
-    bridgeThrows?: boolean; searchStatus?: number; emptySearch?: boolean;
-    session?: number | (() => number);
-  } = {},
-): Promise<Harness> {
+interface PageOptions {
+  bridgeThrows?: boolean; searchStatus?: number; emptySearch?: boolean;
+  session?: number | (() => number);
+}
+
+function buildNodes(selectors: string[]): {
+  nodes: Record<string, FakeNode>;
+  bySelector: Map<string, FakeNode>;
+} {
   const nodes: Record<string, FakeNode> = {};
   const bySelector = new Map<string, FakeNode>();
   for (const name of selectors) {
@@ -73,6 +74,67 @@ async function runPage(
     bySelector.set(`#${name}`, node);
   }
   nodes.controls.hidden = true;
+  return { nodes, bySelector };
+}
+
+function createDocument(bySelector: Map<string, FakeNode>) {
+  return {
+    querySelector(selector: string) {
+      const node = bySelector.get(selector);
+      if (!node) throw new Error(`UNKNOWN_SELECTOR:${selector}`);
+      return node;
+    },
+    createElement() {
+      return new FakeNode();
+    },
+  };
+}
+
+function createFetch(
+  options: PageOptions,
+  requests: { path: string; body: unknown }[],
+) {
+  return async (target: string, init: { body?: string }) => {
+    requests.push({ path: target, body: init.body ? JSON.parse(init.body) : undefined });
+    if (target === '/api/health') {
+      const session = typeof options.session === 'function' ? options.session() : (options.session ?? 1);
+      return { ok: true, status: 200, async json() { return { status: 'ok', protocol: 1, session }; } };
+    }
+    if (target === '/api/panel') {
+      return { ok: true, status: 200, async json() { return PANEL_PAYLOAD; } };
+    }
+    if (target === '/api/snapshot') {
+      return { ok: true, status: 200, async json() { return SNAPSHOT; } };
+    }
+    if (target === '/api/command') {
+      return { ok: true, status: 200, async json() { return { status: 'queued' }; } };
+    }
+    const status = options.searchStatus ?? 200;
+    const payload = options.emptySearch ? { total: 0, returned: 0, items: [] } : SEARCH_PAYLOAD;
+    return { ok: status === 200, status, async json() { return payload; } };
+  };
+}
+
+function createWindow(messages: unknown[], options: PageOptions, token: string) {
+  return {
+    chrome: {
+      webview: {
+        postMessage(message: unknown) {
+          if (options.bridgeThrows) throw new Error('BRIDGE_FAILED');
+          messages.push(message);
+        },
+      },
+    },
+    location: { hash: `#${token}`, pathname: '/' },
+  };
+}
+
+async function runPage(
+  file: string,
+  selectors: string[],
+  options: PageOptions = {},
+): Promise<Harness> {
+  const { nodes, bySelector } = buildNodes(selectors);
 
   const messages: unknown[] = [];
   const ticks: (() => void)[] = [];
@@ -92,47 +154,10 @@ async function runPage(
       ticks.push(fn);
       return 0;
     },
-    document: {
-      querySelector(selector: string) {
-        const node = bySelector.get(selector);
-        if (!node) throw new Error(`UNKNOWN_SELECTOR:${selector}`);
-        return node;
-      },
-      createElement() {
-        return new FakeNode();
-      },
-    },
-    fetch: async (target: string, init: { body?: string }) => {
-      requests.push({ path: target, body: init.body ? JSON.parse(init.body) : undefined });
-      if (target === '/api/health') {
-        const session = typeof options.session === 'function' ? options.session() : (options.session ?? 1);
-        return { ok: true, status: 200, async json() { return { status: 'ok', protocol: 1, session }; } };
-      }
-      if (target === '/api/panel') {
-        return { ok: true, status: 200, async json() { return PANEL_PAYLOAD; } };
-      }
-      if (target === '/api/snapshot') {
-        return { ok: true, status: 200, async json() { return SNAPSHOT; } };
-      }
-      if (target === '/api/command') {
-        return { ok: true, status: 200, async json() { return { status: 'queued' }; } };
-      }
-      const status = options.searchStatus ?? 200;
-      const payload = options.emptySearch ? { total: 0, returned: 0, items: [] } : SEARCH_PAYLOAD;
-      return { ok: status === 200, status, async json() { return payload; } };
-    },
+    document: createDocument(bySelector),
+    fetch: createFetch(options, requests),
     history: { replaceState() {} },
-    window: {
-      chrome: {
-        webview: {
-          postMessage(message: unknown) {
-            if (options.bridgeThrows) throw new Error('BRIDGE_FAILED');
-            messages.push(message);
-          },
-        },
-      },
-      location: { hash: `#${token}`, pathname: '/' },
-    },
+    window: createWindow(messages, options, token),
   });
   vm.runInContext(source, context, { filename: file });
   await settle();

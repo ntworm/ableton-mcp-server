@@ -63,32 +63,19 @@ function validate(transforms: Transforms): void {
   }
 }
 
-export function applyTransforms(
-  notes: ClipNote[],
-  transforms: Transforms,
-  seed: number,
-  beatsPerBar = 4,
-): ClipNote[] {
-  validate(transforms);
-  const random = mulberry32(seed);
-  let result = notes.map((note) => ({ ...note }));
-  if (result.length === 0) return result;
+function axisValue(transforms: Transforms, axis: TransformAxis): number {
+  return transforms[axis] ?? 0;
+}
 
-  // A deliberate divergence from the Python reference, which nudges velocity
-  // from the seed unconditionally. There, every call is generating a derived
-  // artifact; here, all knobs at zero means "insert this performance", and
-  // preserving velocity and microtiming untouched is an explicit product goal.
-  const touched = TRANSFORM_AXES.some((axis) => (transforms[axis] ?? 0) !== 0);
-  if (!touched) return result;
-
-  // With any knob turned, the seed also nudges velocity, so two seeds never
-  // produce the same clip from the same source.
+function applySeedVariation(result: ClipNote[], seed: number): ClipNote[] {
   const seedVariation = (seed % 5) - 2;
   if (seedVariation !== 0) {
-    result = result.map((n) => ({ ...n, velocity: clampVelocity(n.velocity + seedVariation) }));
+    return result.map((n) => ({ ...n, velocity: clampVelocity(n.velocity + seedVariation) }));
   }
+  return result;
+}
 
-  const density = transforms.density ?? 0;
+function applyDensity(result: ClipNote[], density: number, random: () => number): ClipNote[] {
   if (density > 0) {
     const extra = Math.max(1, Math.round(result.length * 0.5 * density));
     const source = [...result];
@@ -121,85 +108,120 @@ export function applyTransforms(
       };
     });
   }
+  return result;
+}
 
-  const energy = transforms.energy ?? 0;
-  if (energy !== 0) {
-    const delta = Math.max(1, Math.round(Math.abs(energy) * 16));
-    const direction = energy > 0 ? 1 : -1;
-    result = result.map((note) => {
-      const wanted = note.velocity + direction * delta;
-      const velocity = wanted < 1 || wanted > 127 ? note.velocity - direction * delta : wanted;
-      return { ...note, velocity: clampVelocity(velocity) };
-    });
-  }
+function applyEnergy(result: ClipNote[], energy: number): ClipNote[] {
+  if (energy === 0) return result;
+  const delta = Math.max(1, Math.round(Math.abs(energy) * 16));
+  const direction = energy > 0 ? 1 : -1;
+  return result.map((note) => {
+    const wanted = note.velocity + direction * delta;
+    const velocity = wanted < 1 || wanted > 127 ? note.velocity - direction * delta : wanted;
+    return { ...note, velocity: clampVelocity(velocity) };
+  });
+}
 
-  const microtiming = transforms.microtiming ?? 0;
-  if (microtiming !== 0) {
-    const amount = Math.max(1 / 128, Math.abs(microtiming) / 32);
-    const direction = microtiming > 0 ? 1 : -1;
-    result = result.map((note) => ({
+function applyMicrotiming(result: ClipNote[], microtiming: number): ClipNote[] {
+  if (microtiming === 0) return result;
+  const amount = Math.max(1 / 128, Math.abs(microtiming) / 32);
+  const direction = microtiming > 0 ? 1 : -1;
+  return result.map((note) => ({
+    ...note,
+    startTime: Math.max(0, note.startTime + amount * direction),
+  }));
+}
+
+function applySwing(result: ClipNote[], swing: number): ClipNote[] {
+  if (swing === 0) return result;
+  const amount = Math.max(1 / 128, Math.abs(swing) / 16);
+  const direction = swing > 0 ? 1 : -1;
+  return result.map((note) => {
+    // Off-beat eighths move; downbeats hold, which is what makes it swing
+    // rather than shift the whole part.
+    const offBeat = Math.floor(note.startTime / 0.5) % 2 !== 0;
+    const moves = offBeat || (note.startTime === 0 && direction > 0);
+    return {
       ...note,
-      startTime: Math.max(0, note.startTime + amount * direction),
-    }));
-  }
+      startTime: moves ? Math.max(0, note.startTime + amount * direction) : note.startTime,
+    };
+  });
+}
 
-  const swing = transforms.swing ?? 0;
-  if (swing !== 0) {
-    const amount = Math.max(1 / 128, Math.abs(swing) / 16);
-    const direction = swing > 0 ? 1 : -1;
-    result = result.map((note) => {
-      // Off-beat eighths move; downbeats hold, which is what makes it swing
-      // rather than shift the whole part.
-      const offBeat = Math.floor(note.startTime / 0.5) % 2 !== 0;
-      const moves = offBeat || (note.startTime === 0 && direction > 0);
-      return {
-        ...note,
-        startTime: moves ? Math.max(0, note.startTime + amount * direction) : note.startTime,
-      };
-    });
-  }
-
-  const syncopation = transforms.syncopation ?? 0;
-  if (syncopation !== 0) {
-    const amount = Math.max(1 / 128, Math.abs(syncopation) / 8);
-    const direction = syncopation > 0 ? 1 : -1;
-    result = result.map((note) => {
-      const onBar = note.startTime % beatsPerBar === 0;
-      return {
-        ...note,
-        startTime: onBar ? Math.max(0, note.startTime + amount * direction) : note.startTime,
-      };
-    });
-  }
-
-  const polyrhythm = transforms.polyrhythm ?? 0;
-  if (polyrhythm !== 0) {
-    // A 3-over-4 feel: accents move onto the triplet grid while the rest hold
-    // the straight one, which is what makes both grids audible at once.
-    const shift = (1 / 3) * (polyrhythm > 0 ? 1 : -1);
-    const polyRandom = mulberry32(seed ^ 0x504f4c59);
-    result = result.map((note) => ({
+function applySyncopation(
+  result: ClipNote[],
+  syncopation: number,
+  beatsPerBar: number,
+): ClipNote[] {
+  if (syncopation === 0) return result;
+  const amount = Math.max(1 / 128, Math.abs(syncopation) / 8);
+  const direction = syncopation > 0 ? 1 : -1;
+  return result.map((note) => {
+    const onBar = note.startTime % beatsPerBar === 0;
+    return {
       ...note,
-      startTime:
-        note.velocity > ACCENT_VELOCITY && polyRandom() < Math.abs(polyrhythm)
-          ? Math.max(0, note.startTime + shift)
-          : note.startTime,
-    }));
-  }
+      startTime: onBar ? Math.max(0, note.startTime + amount * direction) : note.startTime,
+    };
+  });
+}
 
-  const complexity = transforms.complexity ?? 0;
-  if (complexity !== 0) {
-    const step = complexity > 0 ? 1 : -1;
-    const durationDelta = Math.max(1 / 128, Math.abs(complexity) / 16);
-    result = result.map((note) => {
-      const shifted = note.pitch + step;
-      return {
-        ...note,
-        pitch: shifted > 0 && shifted < 127 ? shifted : note.pitch - step,
-        duration: Math.max(MIN_DURATION_BEATS, note.duration + durationDelta * step),
-      };
-    });
-  }
+function applyPolyrhythm(result: ClipNote[], polyrhythm: number, seed: number): ClipNote[] {
+  if (polyrhythm === 0) return result;
+  // A 3-over-4 feel: accents move onto the triplet grid while the rest hold
+  // the straight one, which is what makes both grids audible at once.
+  const shift = (1 / 3) * (polyrhythm > 0 ? 1 : -1);
+  const polyRandom = mulberry32(seed ^ 0x504f4c59);
+  return result.map((note) => ({
+    ...note,
+    startTime:
+      note.velocity > ACCENT_VELOCITY && polyRandom() < Math.abs(polyrhythm)
+        ? Math.max(0, note.startTime + shift)
+        : note.startTime,
+  }));
+}
+
+function applyComplexity(result: ClipNote[], complexity: number): ClipNote[] {
+  if (complexity === 0) return result;
+  const step = complexity > 0 ? 1 : -1;
+  const durationDelta = Math.max(1 / 128, Math.abs(complexity) / 16);
+  return result.map((note) => {
+    const shifted = note.pitch + step;
+    return {
+      ...note,
+      pitch: shifted > 0 && shifted < 127 ? shifted : note.pitch - step,
+      duration: Math.max(MIN_DURATION_BEATS, note.duration + durationDelta * step),
+    };
+  });
+}
+
+export function applyTransforms(
+  notes: ClipNote[],
+  transforms: Transforms,
+  seed: number,
+  beatsPerBar = 4,
+): ClipNote[] {
+  validate(transforms);
+  const random = mulberry32(seed);
+  let result = notes.map((note) => ({ ...note }));
+  if (result.length === 0) return result;
+
+  // A deliberate divergence from the Python reference, which nudges velocity
+  // from the seed unconditionally. There, every call is generating a derived
+  // artifact; here, all knobs at zero means "insert this performance", and
+  // preserving velocity and microtiming untouched is an explicit product goal.
+  const touched = TRANSFORM_AXES.some((axis) => axisValue(transforms, axis) !== 0);
+  if (!touched) return result;
+
+  // With any knob turned, the seed also nudges velocity, so two seeds never
+  // produce the same clip from the same source.
+  result = applySeedVariation(result, seed);
+  result = applyDensity(result, axisValue(transforms, 'density'), random);
+  result = applyEnergy(result, axisValue(transforms, 'energy'));
+  result = applyMicrotiming(result, axisValue(transforms, 'microtiming'));
+  result = applySwing(result, axisValue(transforms, 'swing'));
+  result = applySyncopation(result, axisValue(transforms, 'syncopation'), beatsPerBar);
+  result = applyPolyrhythm(result, axisValue(transforms, 'polyrhythm'), seed);
+  result = applyComplexity(result, axisValue(transforms, 'complexity'));
 
   return result;
 }

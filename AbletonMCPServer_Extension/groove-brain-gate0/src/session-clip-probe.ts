@@ -82,20 +82,24 @@ function elapsedMs(options: ProbeOptions, startedMono: number): number {
   return Math.max(0, options.nowMonotonicMs() - startedMono);
 }
 
-export async function runSessionClipProbe(
-  slot: SlotPort,
+interface ProbeBase {
+  receiptId: string;
+  extensionVersion: string;
+  startedAtEpochMs: number;
+  slotHandle: string;
+  intendedCount: number;
+  intendedHash: string;
+  retryAttempted: false;
+  rollbackClaimed: false;
+}
+
+function probeBase(
   options: ProbeOptions,
-): Promise<ProbeReceipt> {
-  const startedAtEpochMs = options.nowEpochMs();
-  const startedMono = options.nowMonotonicMs();
-  if (!/^\d+\.\d+\.\d+$/u.test(options.extensionVersion)) {
-    throw new Error('INVALID_EXTENSION_VERSION');
-  }
-  // The probe still verifies whatever it wrote by reading it back and
-  // comparing hashes; only the notes it writes are now the caller's.
-  const notes = options.notes ?? NOTES;
-  const lengthBeats = options.lengthBeats ?? 4;
-  const base = {
+  slot: SlotPort,
+  notes: Gate0Note[],
+  startedAtEpochMs: number,
+): ProbeBase {
+  return {
     receiptId: randomUUID(),
     extensionVersion: options.extensionVersion,
     startedAtEpochMs,
@@ -105,31 +109,62 @@ export async function runSessionClipProbe(
     retryAttempted: false as const,
     rollbackClaimed: false as const,
   };
+}
 
+function emptyReceipt(
+  base: ProbeBase,
+  options: ProbeOptions,
+  startedMono: number,
+  status: 'blocked' | 'failed',
+  code: string,
+): ProbeReceipt {
+  return {
+    ...base,
+    status,
+    code,
+    durationMs: elapsedMs(options, startedMono),
+    clipHandle: null,
+    readbackCount: 0,
+    readbackHash: null,
+  };
+}
+
+function safeReadback(clip: ClipPort | null): Gate0Note[] | null {
+  if (!clip) return null;
   try {
-    if (slot.getClip() !== null) {
-      return {
-        ...base,
-        status: 'blocked',
-        code: 'SLOT_OCCUPIED',
-        durationMs: elapsedMs(options, startedMono),
-        clipHandle: null,
-        readbackCount: 0,
-        readbackHash: null,
-      };
-    }
+    return canonical(clip.notes);
   } catch {
-    return {
-      ...base,
-      status: 'failed',
-      code: 'SLOT_INSPECTION_FAILED',
-      durationMs: elapsedMs(options, startedMono),
-      clipHandle: null,
-      readbackCount: 0,
-      readbackHash: null,
-    };
+    return null;
   }
+}
 
+function failureReceipt(
+  base: ProbeBase,
+  options: ProbeOptions,
+  startedMono: number,
+  clip: ClipPort | null,
+  error: unknown,
+): ProbeReceipt {
+  const readback = safeReadback(clip);
+  return {
+    ...base,
+    status: clip ? 'partial' : 'failed',
+    code: safeErrorCode(error),
+    durationMs: elapsedMs(options, startedMono),
+    clipHandle: clip?.handleId ?? null,
+    readbackCount: readback?.length ?? 0,
+    readbackHash: readback ? hashNotes(readback) : null,
+  };
+}
+
+async function writeAndReadBack(
+  slot: SlotPort,
+  options: ProbeOptions,
+  notes: Gate0Note[],
+  lengthBeats: number,
+  base: ProbeBase,
+  startedMono: number,
+): Promise<ProbeReceipt> {
   let clip: ClipPort | null = null;
   try {
     clip = await slot.createMidiClip(lengthBeats);
@@ -151,22 +186,32 @@ export async function runSessionClipProbe(
       readbackHash,
     };
   } catch (error) {
-    let readback: Gate0Note[] | null = null;
-    if (clip) {
-      try {
-        readback = canonical(clip.notes);
-      } catch {
-        readback = null;
-      }
-    }
-    return {
-      ...base,
-      status: clip ? 'partial' : 'failed',
-      code: safeErrorCode(error),
-      durationMs: elapsedMs(options, startedMono),
-      clipHandle: clip?.handleId ?? null,
-      readbackCount: readback?.length ?? 0,
-      readbackHash: readback ? hashNotes(readback) : null,
-    };
+    return failureReceipt(base, options, startedMono, clip, error);
   }
+}
+
+export async function runSessionClipProbe(
+  slot: SlotPort,
+  options: ProbeOptions,
+): Promise<ProbeReceipt> {
+  const startedAtEpochMs = options.nowEpochMs();
+  const startedMono = options.nowMonotonicMs();
+  if (!/^\d+\.\d+\.\d+$/u.test(options.extensionVersion)) {
+    throw new Error('INVALID_EXTENSION_VERSION');
+  }
+  // The probe still verifies whatever it wrote by reading it back and
+  // comparing hashes; only the notes it writes are now the caller's.
+  const notes = options.notes ?? NOTES;
+  const lengthBeats = options.lengthBeats ?? 4;
+  const base = probeBase(options, slot, notes, startedAtEpochMs);
+
+  try {
+    if (slot.getClip() !== null) {
+      return emptyReceipt(base, options, startedMono, 'blocked', 'SLOT_OCCUPIED');
+    }
+  } catch {
+    return emptyReceipt(base, options, startedMono, 'failed', 'SLOT_INSPECTION_FAILED');
+  }
+
+  return writeAndReadBack(slot, options, notes, lengthBeats, base, startedMono);
 }

@@ -145,19 +145,38 @@ export function normalizeStageMetadata(buildRoot: string, stage: string): void {
   fs.utimesSync(normalizedStage, ZIP_SAFE_TIMESTAMP, ZIP_SAFE_TIMESTAMP);
 }
 
+function assertPackagePathsSafe(buildRoot: string, temporary: string, output: string): void {
+  if (
+    !isStrictDescendant(buildRoot, temporary)
+    || !isStrictDescendant(buildRoot, output)
+    || normalizedPathKey(temporary) === normalizedPathKey(output)
+    || path.extname(temporary).toLowerCase() !== '.ablx'
+    || path.extname(output).toLowerCase() !== '.ablx'
+  ) {
+    throw new Error('UNSAFE_PACKAGE_PATH');
+  }
+}
+
+function assertRealPathsSafe(buildRoot: string, temporary: string, output: string): void {
+  const realBuildRoot = fs.realpathSync.native(buildRoot);
+  const realTemporary = fs.realpathSync.native(temporary);
+  const realOutputParent = fs.realpathSync.native(path.dirname(output));
+  if (
+    !isStrictDescendant(realBuildRoot, realTemporary)
+    || (
+      normalizedPathKey(realOutputParent) !== normalizedPathKey(realBuildRoot)
+      && !isStrictDescendant(realBuildRoot, realOutputParent)
+    )
+  ) {
+    throw new Error('UNSAFE_PACKAGE_PATH');
+  }
+}
+
 export function promotePackage(buildRoot: string, temporary: string, output: string): void {
   const normalizedBuildRoot = path.normalize(path.resolve(buildRoot));
   const normalizedTemporary = path.normalize(path.resolve(temporary));
   const normalizedOutput = path.normalize(path.resolve(output));
-  if (
-    !isStrictDescendant(normalizedBuildRoot, normalizedTemporary)
-    || !isStrictDescendant(normalizedBuildRoot, normalizedOutput)
-    || normalizedPathKey(normalizedTemporary) === normalizedPathKey(normalizedOutput)
-    || path.extname(normalizedTemporary).toLowerCase() !== '.ablx'
-    || path.extname(normalizedOutput).toLowerCase() !== '.ablx'
-  ) {
-    throw new Error('UNSAFE_PACKAGE_PATH');
-  }
+  assertPackagePathsSafe(normalizedBuildRoot, normalizedTemporary, normalizedOutput);
   if (lstatIfPresent(normalizedOutput)) throw new Error('OUTPUT_ALREADY_EXISTS');
 
   assertExistingPathComponentsSafe(normalizedBuildRoot);
@@ -168,18 +187,7 @@ export function promotePackage(buildRoot: string, temporary: string, output: str
     throw new Error('PACKAGE_TEMP_INCOMPLETE');
   }
 
-  const realBuildRoot = fs.realpathSync.native(normalizedBuildRoot);
-  const realTemporary = fs.realpathSync.native(normalizedTemporary);
-  const realOutputParent = fs.realpathSync.native(path.dirname(normalizedOutput));
-  if (
-    !isStrictDescendant(realBuildRoot, realTemporary)
-    || (
-      normalizedPathKey(realOutputParent) !== normalizedPathKey(realBuildRoot)
-      && !isStrictDescendant(realBuildRoot, realOutputParent)
-    )
-  ) {
-    throw new Error('UNSAFE_PACKAGE_PATH');
-  }
+  assertRealPathsSafe(normalizedBuildRoot, normalizedTemporary, normalizedOutput);
 
   fs.renameSync(normalizedTemporary, normalizedOutput);
 }
@@ -215,8 +223,15 @@ function isMainModule(moduleUrl: string, entryPath = process.argv[1]): boolean {
   return normalizedPathKey(fileURLToPath(moduleUrl)) === normalizedPathKey(entryPath);
 }
 
-function main(): void {
-  validateBuildEnvironment(process.platform, process.arch, process.version);
+interface BuildPaths {
+  sourceRoot: string;
+  extensionRoot: string;
+  buildRoot: string;
+  stage: string;
+  version: string;
+}
+
+function resolveBuildPaths(): BuildPaths {
   const sourceRoot = path.dirname(fileURLToPath(import.meta.url));
   const extensionRoot = path.resolve(sourceRoot, '..');
   const versionIndex = process.argv.indexOf('--version');
@@ -225,10 +240,17 @@ function main(): void {
     throw new Error('VERSION_REQUIRED');
   }
   const buildRoot = path.join(extensionRoot, 'build', 'groove-brain-gate0');
-  const cargoTarget = path.join(buildRoot, 'cargo-target');
   const stage = path.join(buildRoot, 'staging', version);
-  prepareStage(buildRoot, stage);
+  return { sourceRoot, extensionRoot, buildRoot, stage, version };
+}
 
+function buildHelper(
+  sourceRoot: string,
+  buildRoot: string,
+  stage: string,
+  version: string,
+): string {
+  const cargoTarget = path.join(buildRoot, 'cargo-target');
   const cargo = spawnSync(
     'cargo',
     [
@@ -260,7 +282,10 @@ function main(): void {
     }, null, 2) + '\n',
     'utf8',
   );
+  return helperSha256;
+}
 
+function copySeedAndProfile(sourceRoot: string, stage: string): void {
   // The exported seed. Named rather than copied wholesale so a stray file in
   // data/ cannot ride along into the package.
   const exportSource = path.join(sourceRoot, 'data', 'grooves.json');
@@ -283,14 +308,22 @@ function main(): void {
   fs.mkdirSync(path.join(stage, 'data'), { recursive: true });
   fs.copyFileSync(exportSource, path.join(stage, 'data', 'grooves.json'));
   fs.copyFileSync(profileSource, path.join(stage, 'data', 'kit-profile.json'));
+}
 
+function copyUiAndManifest(sourceRoot: string, stage: string, version: string): void {
   fs.cpSync(path.join(sourceRoot, 'ui'), path.join(stage, 'ui'), { recursive: true });
   fs.copyFileSync(path.join(sourceRoot, 'dist', 'extension.js'), path.join(stage, 'dist', 'extension.js'));
   const manifest = JSON.parse(fs.readFileSync(path.join(sourceRoot, 'manifest.json'), 'utf8')) as Record<string, unknown>;
   manifest.version = version;
   fs.writeFileSync(path.join(stage, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n', 'utf8');
-  normalizeStageMetadata(buildRoot, stage);
+}
 
+function packageStage(
+  extensionRoot: string,
+  buildRoot: string,
+  stage: string,
+  version: string,
+): string {
   const output = path.join(buildRoot, `Groove-Brain-Gate-0-${version}.ablx`);
   if (lstatIfPresent(output)) throw new Error('OUTPUT_ALREADY_EXISTS');
   const temporaryOutput = path.join(
@@ -314,6 +347,20 @@ function main(): void {
       fs.unlinkSync(temporaryOutput);
     }
   }
+  return output;
+}
+
+function main(): void {
+  validateBuildEnvironment(process.platform, process.arch, process.version);
+  const { sourceRoot, extensionRoot, buildRoot, stage, version } = resolveBuildPaths();
+  prepareStage(buildRoot, stage);
+
+  const helperSha256 = buildHelper(sourceRoot, buildRoot, stage, version);
+  copySeedAndProfile(sourceRoot, stage);
+  copyUiAndManifest(sourceRoot, stage, version);
+  normalizeStageMetadata(buildRoot, stage);
+
+  const output = packageStage(extensionRoot, buildRoot, stage, version);
   console.log(JSON.stringify({ output, stage, helperSha256, node: process.version }));
 }
 

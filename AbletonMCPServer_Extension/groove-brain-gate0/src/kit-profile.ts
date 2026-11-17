@@ -28,6 +28,27 @@ export type Resolution =
   | { status: 'silent'; pitch: null }
   | { status: 'unknown'; pitch: number };
 
+function opennessDistance(openness: number | undefined, candidate: ProfileNote): number {
+  return openness !== undefined && candidate.openness !== undefined
+    ? Math.abs(openness - candidate.openness)
+    : Number.POSITIVE_INFINITY;
+}
+
+function nearestPlayable(
+  profile: KitProfile,
+  piece: string,
+  openness: number | undefined,
+): number | null {
+  let best: { pitch: number; distance: number } | null = null;
+  for (const [key, candidate] of Object.entries(profile.notes)) {
+    if (candidate.loaded !== true || candidate.piece !== piece) continue;
+    const distance = opennessDistance(openness, candidate);
+    if (best === null || distance < best.distance) best = { pitch: Number(key), distance };
+  }
+  if (best === null || !Number.isFinite(best.distance)) return null;
+  return best.pitch;
+}
+
 export function resolveNote(profile: KitProfile, pitch: number): Resolution {
   const entry = profile.notes[String(pitch)];
   if (!entry || entry.loaded === null) return { status: 'unknown', pitch };
@@ -36,16 +57,9 @@ export function resolveNote(profile: KitProfile, pitch: number): Resolution {
   // Nearest playable relative: the same piece, and for a hi-hat the closest
   // openness, because openness is what the part is made of while the strike
   // zone is a colour on top of it.
-  let best: { pitch: number; distance: number } | null = null;
-  for (const [key, candidate] of Object.entries(profile.notes)) {
-    if (candidate.loaded !== true || candidate.piece !== entry.piece) continue;
-    const distance = entry.openness !== undefined && candidate.openness !== undefined
-      ? Math.abs(entry.openness - candidate.openness)
-      : Number.POSITIVE_INFINITY;
-    if (best === null || distance < best.distance) best = { pitch: Number(key), distance };
-  }
-  if (best === null || !Number.isFinite(best.distance)) return { status: 'silent', pitch: null };
-  return { status: 'substituted', pitch: best.pitch };
+  const substituted = nearestPlayable(profile, entry.piece, entry.openness);
+  if (substituted === null) return { status: 'silent', pitch: null };
+  return { status: 'substituted', pitch: substituted };
 }
 
 export interface Coverage {

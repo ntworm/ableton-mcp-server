@@ -30,6 +30,16 @@ function wholeNumber(value: unknown, field: string): number {
   return value;
 }
 
+function parseTransformAxis(axis: string, raw: unknown): number {
+  if (!(TRANSFORM_AXES as readonly string[]).includes(axis)) {
+    throw new Error(`${CODE}:transforms.${axis}`);
+  }
+  if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < -1 || raw > 1) {
+    throw new Error(`${CODE}:transforms.${axis}`);
+  }
+  return raw;
+}
+
 function parseTransforms(value: unknown): Transforms {
   if (value === undefined) return {};
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -37,15 +47,29 @@ function parseTransforms(value: unknown): Transforms {
   }
   const out: Transforms = {};
   for (const [axis, raw] of Object.entries(value as Record<string, unknown>)) {
-    if (!(TRANSFORM_AXES as readonly string[]).includes(axis)) {
-      throw new Error(`${CODE}:transforms.${axis}`);
-    }
-    if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < -1 || raw > 1) {
-      throw new Error(`${CODE}:transforms.${axis}`);
-    }
-    out[axis as (typeof TRANSFORM_AXES)[number]] = raw;
+    out[axis as (typeof TRANSFORM_AXES)[number]] = parseTransformAxis(axis, raw);
   }
   return out;
+}
+
+function parseOp(value: unknown): CommandOp {
+  if (value !== 'write' && value !== 'clear') throw new Error(`${CODE}:op`);
+  return value as CommandOp;
+}
+
+function parseGrooveId(op: CommandOp, value: unknown): string | null {
+  const grooveId: unknown = value ?? null;
+  if (op === 'write' && (typeof grooveId !== 'string' || grooveId.length === 0)) {
+    throw new Error(`${CODE}:grooveId`);
+  }
+  if (grooveId !== null && typeof grooveId !== 'string') throw new Error(`${CODE}:grooveId`);
+  return grooveId as string | null;
+}
+
+function parseSeed(value: unknown): number {
+  const seed: unknown = value ?? 0;
+  if (typeof seed !== 'number' || !Number.isInteger(seed)) throw new Error(`${CODE}:seed`);
+  return seed;
 }
 
 export function parseCommand(raw: string): Command {
@@ -58,17 +82,9 @@ export function parseCommand(raw: string): Command {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${CODE}:shape`);
   const candidate = value as Record<string, unknown>;
 
-  const op = candidate.op;
-  if (op !== 'write' && op !== 'clear') throw new Error(`${CODE}:op`);
-
-  const grooveId = candidate.grooveId ?? null;
-  if (op === 'write' && (typeof grooveId !== 'string' || grooveId.length === 0)) {
-    throw new Error(`${CODE}:grooveId`);
-  }
-  if (grooveId !== null && typeof grooveId !== 'string') throw new Error(`${CODE}:grooveId`);
-
-  const seed = candidate.seed ?? 0;
-  if (typeof seed !== 'number' || !Number.isInteger(seed)) throw new Error(`${CODE}:seed`);
+  const op = parseOp(candidate.op);
+  const grooveId = parseGrooveId(op, candidate.grooveId);
+  const seed = parseSeed(candidate.seed);
 
   return {
     op,
