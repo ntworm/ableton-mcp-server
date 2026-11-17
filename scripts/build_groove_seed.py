@@ -24,6 +24,26 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _declared_entry(input_root: Path, entry: Any) -> BuildInput:
+    """Turn one manifest file entry into the build input it declares."""
+    if isinstance(entry, str):
+        relative_path = entry
+        metadata: dict[str, Any] = {}
+    elif isinstance(entry, dict) and isinstance(entry.get("path"), str):
+        relative_path = entry["path"]
+        metadata = entry
+    else:
+        raise GrooveBuildError("pilot manifest contains an invalid file entry")
+    if Path(relative_path).is_absolute():
+        raise GrooveBuildError("pilot manifest paths must be relative")
+    return BuildInput(
+        path=input_root / relative_path,
+        source_kind=str(metadata.get("source_kind", "author")),
+        license_id=str(metadata.get("license_id", "pilot-private")),
+        redistribution=str(metadata.get("redistribution", "full")),  # type: ignore[arg-type]
+    )
+
+
 def _declared_inputs(input_root: Path, manifest_path: Path) -> list[BuildInput]:
     try:
         document = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -36,24 +56,7 @@ def _declared_inputs(input_root: Path, manifest_path: Path) -> list[BuildInput]:
         raise GrooveBuildError("pilot limit of 5000 files exceeded")
     declared: list[BuildInput] = []
     for entry in files:
-        if isinstance(entry, str):
-            relative_path = entry
-            metadata: dict[str, Any] = {}
-        elif isinstance(entry, dict) and isinstance(entry.get("path"), str):
-            relative_path = entry["path"]
-            metadata = entry
-        else:
-            raise GrooveBuildError("pilot manifest contains an invalid file entry")
-        if Path(relative_path).is_absolute():
-            raise GrooveBuildError("pilot manifest paths must be relative")
-        declared.append(
-            BuildInput(
-                path=input_root / relative_path,
-                source_kind=str(metadata.get("source_kind", "author")),
-                license_id=str(metadata.get("license_id", "pilot-private")),
-                redistribution=str(metadata.get("redistribution", "full")),  # type: ignore[arg-type]
-            )
-        )
+        declared.append(_declared_entry(input_root, entry))
     return declared
 
 

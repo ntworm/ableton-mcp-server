@@ -105,6 +105,10 @@ class RealtimeUDPServer(threading.Thread):
             return
         self.last_seq = seq
 
+        self._apply_move(payload)
+
+    def _apply_move(self, payload):
+        """Turn one accepted packet into the control moves it carries."""
         op = payload.get("op")
         if op == "parameter.set":
             ref = payload.get("ref")

@@ -117,17 +117,9 @@ class _OfflineClient:
         raise ConnectionError("offline capability export")
 
 
-def generate_markdown(status: dict[str, Any] | None = None) -> str:
-    capability_status = bridge_status(_OfflineClient()) if status is None else status
-    tools_payload = capability_status["tools"]
-    snapshot = build_tool_count_snapshot()
-    counts = {
-        **capability_status["capability_counts"],
-        "public_tools": snapshot.active_total,
-        "live_required_tools": snapshot.live_required_total,
-    }
-    public_tool_names = {str(tool["name"]) for tool in tools_payload}
-    lines = [
+def _overview_lines(counts: dict[str, Any]) -> list[str]:
+    """The title and the overview block of the matrix."""
+    return [
         "# API Capability Matrix",
         "",
         "> This document is automatically generated. Do not edit manually.",
@@ -149,6 +141,19 @@ def generate_markdown(status: dict[str, Any] | None = None) -> str:
         "## Categories",
         "",
     ]
+
+
+def generate_markdown(status: dict[str, Any] | None = None) -> str:
+    capability_status = bridge_status(_OfflineClient()) if status is None else status
+    tools_payload = capability_status["tools"]
+    snapshot = build_tool_count_snapshot()
+    counts = {
+        **capability_status["capability_counts"],
+        "public_tools": snapshot.active_total,
+        "live_required_tools": snapshot.live_required_total,
+    }
+    public_tool_names = {str(tool["name"]) for tool in tools_payload}
+    lines = _overview_lines(counts)
 
     all_categorized = {tool for tools in CATEGORIES.values() for tool in tools}
     categories = list(CATEGORIES.items())
