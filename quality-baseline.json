@@ -1,17 +1,8 @@
 {
   "files": {
-    "ableton_mcp_server/acceptance/runner.py": 2966,
-    "tests/_strict_fake.py": 1157,
-    "tests/remote_fakes.py": 630,
-    "tests/test_acceptance_audit_p0p1.py": 893,
-    "tests/test_acceptance_runner_integration.py": 1355,
-    "tests/test_build_release_candidates.py": 752,
-    "tests/test_track_hierarchy_and_color_v053.py": 524
+    "ableton_mcp_server/acceptance/runner.py": 2966
   },
   "functions": {
-    "AbletonMCPServer_RemoteScript/realtime_server.py::RealtimeUDPServer._handle_packet": {
-      "complexity": 13
-    },
     "ableton_mcp_server/acceptance/runner.py::run_live_acceptance": {
       "complexity": 165,
       "function_lines": 2580
@@ -39,66 +30,12 @@
     "contracts.py::_request_work_units": {
       "complexity": 15
     },
-    "scripts/build_articulation_map.py::_classify_band": {
-      "complexity": 11
-    },
-    "scripts/build_groove_seed.py::_declared_inputs": {
-      "complexity": 11
-    },
-    "scripts/build_mcpb.py::build_manifest": {
-      "function_lines": 73
-    },
-    "scripts/gate0/verify_groove_brain_ablx.py::verify_ablx": {
-      "complexity": 22,
-      "function_lines": 72
-    },
-    "scripts/generate_capability_matrix.py::generate_markdown": {
-      "function_lines": 62
-    },
-    "scripts/ingest_private_corpus.py::main": {
-      "function_lines": 107
-    },
-    "scripts/measurement.py::_process_chunk": {
-      "complexity": 12
-    },
-    "scripts/regenerate_seed.py::main": {
-      "function_lines": 89
-    },
-    "tests/_strict_fake.py::StrictFakeBridge._initial_state": {
-      "function_lines": 87
-    },
-    "tests/_strict_fake.py::_strict_tcp_dispatch": {
-      "complexity": 139,
-      "function_lines": 644
-    },
-    "tests/_strict_fake.py::_validate_hierarchy": {
-      "complexity": 13
-    },
-    "tests/_strict_fake.py::_validate_tcp": {
-      "complexity": 24
-    },
     "tests/fixtures/groove_bridge.py::NewBridgeFixture.dispatch": {
       "complexity": 23,
       "function_lines": 85
     },
     "tests/fixtures/groove_mcp_wire.py::assert_client_schema_constraints": {
       "complexity": 13
-    },
-    "tests/test_acceptance_audit_p0p1.py::test_p0_1_build_extension_contract_accepts_top_level_artifacts": {
-      "complexity": 11,
-      "function_lines": 63
-    },
-    "tests/test_acceptance_audit_p0p1.py::test_p0_2_baseline_does_not_read_mixer_state_from_get_track_list": {
-      "function_lines": 100
-    },
-    "tests/test_acceptance_audit_p0p1.py::test_p0_3_live_fade_readback_uses_track_state_mixer_volume": {
-      "function_lines": 62
-    },
-    "tests/test_acceptance_audit_p0p1.py::test_p1_5_jsonl_socket_dispatch_round_trip": {
-      "function_lines": 139
-    },
-    "tests/test_acceptance_audit_p0p1.py::test_p1_6_set_tempo_readback_fails_only_during_restore": {
-      "complexity": 14
     },
     "tests/test_acceptance_baseline.py::TestDiscoverBaseline._make_client._FakeClient.call": {
       "complexity": 12
@@ -111,12 +48,6 @@
     },
     "tests/test_build_mcpb.py::test_manifest_stays_inside_the_strict_mcpb_schema": {
       "complexity": 12
-    },
-    "tests/test_build_release_candidates.py::fake_project": {
-      "function_lines": 96
-    },
-    "tests/test_build_release_candidates.py::test_builder_invokes_npm_with_list_argv": {
-      "complexity": 11
     },
     "tests/test_clip_color_and_hierarchy_ops_v053.py::test_new_tools_are_registered_across_every_source_of_truth": {
       "complexity": 12
@@ -152,9 +83,6 @@
       "complexity": 11
     },
     "tests/test_packaging.py::test_baseline_docs_match_current_state": {
-      "complexity": 11
-    },
-    "tests/test_track_hierarchy_and_color_v053.py::test_hierarchy_commands_refuse_well_formed_requests": {
       "complexity": 11
     },
     "tests/test_transaction.py::test_batch_advances_deferred_children_with_one_outer_undo": {
