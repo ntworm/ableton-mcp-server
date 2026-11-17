@@ -73,16 +73,26 @@ def test_promotion_requires_canonical_identity_signature_and_thresholds(tmp_path
     assert promotion_allowed(report.model_copy(update={"signature": "00" * 32}), signer) is False
 
 
-def test_threshold_defaults_are_published_and_stable() -> None:
-    thresholds = GateThresholdsV1()
+def _assert_contract_thresholds(thresholds: GateThresholdsV1) -> None:
+    """Check the published contract and fallback thresholds."""
     assert thresholds.contract_invalid_max == 0
     assert thresholds.fallback_pass_rate_min == 1.0
     assert thresholds.reproducibility_match_rate_min == 1.0
     assert thresholds.quality_hvo_f1_min == 0.90
     assert thresholds.quality_feature_mae_max == 0.05
+
+
+def _assert_privacy_and_budget_thresholds(thresholds: GateThresholdsV1) -> None:
+    """Check the published privacy, latency and payload thresholds."""
     assert thresholds.privacy_path_leaks_max == 0
     assert thresholds.blocked_lineage_max == 0
     assert thresholds.p95_latency_seconds_max == 5.0
     assert thresholds.peak_memory_mib_max == 512
     assert thresholds.response_bytes_max == 262144
     assert thresholds.candidate_events_max == 2048
+
+
+def test_threshold_defaults_are_published_and_stable() -> None:
+    thresholds = GateThresholdsV1()
+    _assert_contract_thresholds(thresholds)
+    _assert_privacy_and_budget_thresholds(thresholds)

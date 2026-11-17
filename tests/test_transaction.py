@@ -102,6 +102,41 @@ def test_batch_closes_undo_step_when_unexpected_handler_error_occurs() -> None:
     assert (app.begin_count, app.end_count) == (1, 1)
 
 
+def _drain_until_answered(
+    processor: RequestProcessor,
+    response_queue: queue.Queue[dict[str, object]],
+    app: FakeApplication,
+    song: FakeSong,
+) -> None:
+    """Advance the processor one request at a time until the batch answers."""
+    for _tick in range(12):
+        processor.process_pending(max_requests=1)
+        if not response_queue.empty():
+            break
+        assert (app.begin_count, app.end_count) == (1, 0)
+        song.tick()
+
+
+def _assert_deferred_batch_result(result: object) -> None:
+    """Check the outcome the deferred batch reports."""
+    assert result["completed"] == 3  # type: ignore[index]
+    assert result["aborted_at"] == 3  # type: ignore[index]
+    assert result["rolled_back"] is False  # type: ignore[index]
+    assert result["results"][0]["result"] == {  # type: ignore[index]
+        "tempo": 128.0,
+        "resolved": {"kind": "tempo", "tempo": 128.0},
+    }
+    assert result["results"][1]["result"] == {"loop": True}  # type: ignore[index]
+
+
+def _assert_deferred_batch_state(song: FakeSong, app: FakeApplication) -> None:
+    """Check the Set state the deferred batch left behind."""
+    assert song.tempo == 128.0
+    assert song.loop is True
+    assert song.tracks[0].clip_slots[0].has_clip is True
+    assert (app.begin_count, app.end_count) == (1, 1)
+
+
 def test_batch_advances_deferred_children_with_one_outer_undo() -> None:
     song = FakeSong(deferred_writes=True)
     song.tracks[0].clip_slots = [FakeClipSlot()]
@@ -130,28 +165,12 @@ def test_batch_advances_deferred_children_with_one_outer_undo() -> None:
         )
     )
 
-    for _tick in range(12):
-        processor.process_pending(max_requests=1)
-        if not response_queue.empty():
-            break
-        assert (app.begin_count, app.end_count) == (1, 0)
-        song.tick()
+    _drain_until_answered(processor, response_queue, app, song)
 
     response = response_queue.get_nowait()
     assert response["status"] == "ok"
-    result = response["result"]
-    assert result["completed"] == 3  # type: ignore[index]
-    assert result["aborted_at"] == 3  # type: ignore[index]
-    assert result["rolled_back"] is False  # type: ignore[index]
-    assert result["results"][0]["result"] == {  # type: ignore[index]
-        "tempo": 128.0,
-        "resolved": {"kind": "tempo", "tempo": 128.0},
-    }
-    assert result["results"][1]["result"] == {"loop": True}  # type: ignore[index]
-    assert song.tempo == 128.0
-    assert song.loop is True
-    assert song.tracks[0].clip_slots[0].has_clip is True
-    assert (app.begin_count, app.end_count) == (1, 1)
+    _assert_deferred_batch_result(response["result"])
+    _assert_deferred_batch_state(song, app)
 
 
 class _LiveUndoHistory:

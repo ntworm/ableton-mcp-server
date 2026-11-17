@@ -12,6 +12,7 @@ from ableton_mcp_server.groove_intelligence.fallback import (
     generate_with_provider,
     validate_provider_candidate,
 )
+from ableton_mcp_server.groove_intelligence.mcp_models import GenerationResponseV1
 from ableton_mcp_server.groove_intelligence.provider import (
     ProviderArtifactCandidate,
     ProviderFailure,
@@ -20,6 +21,8 @@ from ableton_mcp_server.groove_intelligence.provider import (
     ProviderIdentityV1,
     ProviderLimitsV1,
 )
+from ableton_mcp_server.groove_intelligence.runtime import GrooveRuntime
+from ableton_mcp_server.groove_intelligence.schema import MidiArtifactV1
 from tests.fixtures.groove_provider_payloads import (
     make_candidate,
     make_deterministic_request,
@@ -47,6 +50,40 @@ def _valid_candidate(tmp_path: Path) -> ProviderArtifactCandidate:
             },
         }
     )
+
+
+def _malicious_artifact(valid_artifact: MidiArtifactV1) -> MidiArtifactV1:
+    """Return an artifact that smuggles private paths into summary and lineage."""
+    return valid_artifact.model_copy(
+        update={
+            "provenance": {
+                **valid_artifact.provenance,
+                "summary": {
+                    "meter": "4/4",
+                    "source_path": "C:/private/source.mid",
+                    "nested": {"notes": ["do-not-expose"], "safe": "drop"},
+                },
+            },
+            "lineage": {
+                **valid_artifact.lineage,
+                "private_path": "C:/private/lineage",
+                "nested": {"payload": "do-not-expose"},
+            },
+        }
+    )
+
+
+def _assert_stored_artifact_is_public(
+    runtime: GrooveRuntime, result: GenerationResponseV1
+) -> None:
+    """Check that the stored artifact carries no private path."""
+    stored = runtime.store.get(str(result.artifact.artifact_id))
+    stored_json = canonical_json(
+        {"provenance": stored.provenance, "lineage": stored.lineage}
+    ).decode("utf-8")
+    assert "source_path" not in stored_json
+    assert "private_path" not in stored_json
+    assert "do-not-expose" not in stored_json
 
 
 @pytest.mark.parametrize("failure", list(ProviderFailureCode))
@@ -219,23 +256,7 @@ def test_provider_summary_and_lineage_are_recursively_public(tmp_path: Path) -> 
         request,
     )
     valid_artifact = runtime.store.get(str(generated.artifact.artifact_id))
-    malicious_artifact = valid_artifact.model_copy(
-        update={
-            "provenance": {
-                **valid_artifact.provenance,
-                "summary": {
-                    "meter": "4/4",
-                    "source_path": "C:/private/source.mid",
-                    "nested": {"notes": ["do-not-expose"], "safe": "drop"},
-                },
-            },
-            "lineage": {
-                **valid_artifact.lineage,
-                "private_path": "C:/private/lineage",
-                "nested": {"payload": "do-not-expose"},
-            },
-        }
-    )
+    malicious_artifact = _malicious_artifact(valid_artifact)
     base = make_candidate(tmp_path / "candidate", valid=True)
     candidate = base.model_copy(
         update={
@@ -273,13 +294,7 @@ def test_provider_summary_and_lineage_are_recursively_public(tmp_path: Path) -> 
     assert result.artifact.summary["meter"] == "4/4"
     assert result.artifact.summary["bars"] == 4
     assert "private_path" not in result.artifact.lineage
-    stored = runtime.store.get(str(result.artifact.artifact_id))
-    stored_json = canonical_json(
-        {"provenance": stored.provenance, "lineage": stored.lineage}
-    ).decode("utf-8")
-    assert "source_path" not in stored_json
-    assert "private_path" not in stored_json
-    assert "do-not-expose" not in stored_json
+    _assert_stored_artifact_is_public(runtime, result)
 
 
 def test_provider_id_mismatch_fails_closed_to_deterministic(
