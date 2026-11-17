@@ -1,0 +1,66 @@
+{
+  "groove-brain-gate0/package.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "groove-brain-gate0/src/command.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "groove-brain-gate0/src/extension.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "groove-brain-gate0/src/helper-process.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "groove-brain-gate0/src/kit-profile.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "groove-brain-gate0/src/session-clip-probe.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "groove-brain-gate0/src/session-loop.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "groove-brain-gate0/src/session-writer.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "groove-brain-gate0/src/transforms.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "groove-brain-gate0/tests/ui-events.test.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/index.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  }
+}
