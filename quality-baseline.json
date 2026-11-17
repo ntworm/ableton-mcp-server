@@ -1,8 +1,6 @@
 {
   "files": {
     "ableton_mcp_server/acceptance/runner.py": 2966,
-    "scripts/build_release_candidates.py": 613,
-    "scripts/mock_remote_script.py": 650,
     "tests/_strict_fake.py": 1157,
     "tests/remote_fakes.py": 630,
     "tests/test_acceptance_audit_p0p1.py": 893,
@@ -13,26 +11,6 @@
   "functions": {
     "AbletonMCPServer_RemoteScript/realtime_server.py::RealtimeUDPServer._handle_packet": {
       "complexity": 13
-    },
-    "ableton_mcp_server/acceptance/baseline.py::discover_baseline": {
-      "complexity": 11,
-      "function_lines": 86
-    },
-    "ableton_mcp_server/acceptance/helpers.py::_acceptance_safe_cue_times": {
-      "complexity": 14
-    },
-    "ableton_mcp_server/acceptance/probes/offline.py::run": {
-      "function_lines": 229
-    },
-    "ableton_mcp_server/acceptance/probes/offline.py::run.build_ext": {
-      "complexity": 16
-    },
-    "ableton_mcp_server/acceptance/probes/tcp_reads.py::_discover_first_enabled_device_parameter": {
-      "complexity": 21,
-      "function_lines": 75
-    },
-    "ableton_mcp_server/acceptance/probes/tcp_reads.py::run": {
-      "function_lines": 244
     },
     "ableton_mcp_server/acceptance/runner.py::run_live_acceptance": {
       "complexity": 165,
@@ -58,24 +36,6 @@
     "ableton_mcp_server/acceptance/runner.py::run_offline_probes.groove_phase2": {
       "function_lines": 77
     },
-    "ableton_mcp_server/cli.py::main": {
-      "complexity": 15
-    },
-    "ableton_mcp_server/client.py::Client.call": {
-      "complexity": 17
-    },
-    "ableton_mcp_server/diagnostics.py::bridge_status": {
-      "function_lines": 114
-    },
-    "ableton_mcp_server/diff.py::diff_snapshots.walk": {
-      "complexity": 15
-    },
-    "ableton_mcp_server/protocol.py::decode_response": {
-      "complexity": 12
-    },
-    "ableton_mcp_server/server.py::_explicit_json_result": {
-      "complexity": 13
-    },
     "contracts.py::_request_work_units": {
       "complexity": 15
     },
@@ -87,17 +47,6 @@
     },
     "scripts/build_mcpb.py::build_manifest": {
       "function_lines": 73
-    },
-    "scripts/build_release_candidates.py::build_release": {
-      "complexity": 16,
-      "function_lines": 142
-    },
-    "scripts/build_vendor_labels.py::_assign_roles": {
-      "complexity": 13
-    },
-    "scripts/build_vendor_labels.py::main": {
-      "complexity": 16,
-      "function_lines": 130
     },
     "scripts/gate0/verify_groove_brain_ablx.py::verify_ablx": {
       "complexity": 22,
@@ -112,23 +61,8 @@
     "scripts/measurement.py::_process_chunk": {
       "complexity": 12
     },
-    "scripts/mock_remote_script.py::MockRemoteScript._handle_mutation": {
-      "complexity": 46,
-      "function_lines": 215
-    },
-    "scripts/mock_remote_script.py::MockRemoteScript._handle_read": {
-      "complexity": 41,
-      "function_lines": 177
-    },
-    "scripts/mock_remote_script.py::default_snapshot": {
-      "function_lines": 73
-    },
     "scripts/regenerate_seed.py::main": {
       "function_lines": 89
-    },
-    "scripts/report.py::main": {
-      "complexity": 13,
-      "function_lines": 92
     },
     "tests/_strict_fake.py::StrictFakeBridge._initial_state": {
       "function_lines": 87
