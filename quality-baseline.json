@@ -1,33 +1,6 @@
 {
-  "files": {
-    "ableton_mcp_server/acceptance/runner.py": 2966
-  },
-  "functions": {
-    "ableton_mcp_server/acceptance/runner.py::run_live_acceptance": {
-      "complexity": 165,
-      "function_lines": 2580
-    },
-    "ableton_mcp_server/acceptance/runner.py::run_live_acceptance._run_track_creation": {
-      "complexity": 25,
-      "function_lines": 106
-    },
-    "ableton_mcp_server/acceptance/runner.py::run_live_acceptance.run_save_set": {
-      "complexity": 12
-    },
-    "ableton_mcp_server/acceptance/runner.py::run_live_acceptance.run_set_parameter_value": {
-      "complexity": 17,
-      "function_lines": 91
-    },
-    "ableton_mcp_server/acceptance/runner.py::run_offline_probes": {
-      "function_lines": 301
-    },
-    "ableton_mcp_server/acceptance/runner.py::run_offline_probes.build_ext": {
-      "complexity": 16
-    },
-    "ableton_mcp_server/acceptance/runner.py::run_offline_probes.groove_phase2": {
-      "function_lines": 77
-    }
-  },
+  "files": {},
+  "functions": {},
   "limits": {
     "complexity": 10,
     "file_lines": 500,
