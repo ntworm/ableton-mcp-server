@@ -24,7 +24,12 @@ import time
 from pathlib import Path
 
 from ableton_mcp_server.groove_intelligence.constants import MAX_CURATED_REPRESENTATIVES
-from ableton_mcp_server.groove_intelligence.corpus import CorpusCatalog, build_curated_bundle
+from ableton_mcp_server.groove_intelligence.corpus import (
+    CorpusCatalog,
+    CuratedBuildResult,
+    InventoryStats,
+    build_curated_bundle,
+)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from regenerate_seed import _coverage, _report  # noqa: E402 - needs the path above
@@ -57,7 +62,8 @@ def _promote(staging: Path, destination: Path) -> None:
     print(f"[*] promoted to {destination}")
 
 
-def main() -> int:
+def _parser() -> argparse.ArgumentParser:
+    """The command line of the ingestion."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--input-root", type=Path, default=DEFAULT_CORPUS_ROOT,
@@ -83,8 +89,11 @@ def main() -> int:
         "--promote", action="store_true",
         help="After a successful build, copy over the packaged seed. Backs it up first.",
     )
-    args = parser.parse_args()
+    return parser
 
+
+def _reject_impossible_request(args: argparse.Namespace) -> bool:
+    """Refuse a request the builder could not satisfy, before the scan starts."""
     if not 1 <= args.max_files <= MAX_CURATED_REPRESENTATIVES:
         # Said here rather than surfaced as a ValueError from deep inside the
         # builder after a scan that can take an hour.
@@ -93,54 +102,53 @@ def main() -> int:
             f"got {args.max_files}",
             file=sys.stderr,
         )
-        return 2
+        return True
 
     if args.out.resolve() == PACKAGED_SEED.resolve():
         print(
             "[!] --out cannot be the packaged seed. Build to staging and pass --promote.",
             file=sys.stderr,
         )
-        return 2
+        return True
+    return False
 
-    started = time.perf_counter()
-    catalog_db = args.catalog_root / "catalog_v3.sqlite"
-    report_path = args.catalog_root / "ingestion-report.json"
-    print(f"[*] corpus: {args.input_root}")
-    print(f"[*] catalog: {catalog_db}")
 
-    try:
-        with CorpusCatalog(catalog_db, args.input_root) as catalog:
-            print("[*] scanning the directory tree, which takes a while on a full library")
-            stats = catalog.scan(retry_errors=True)
-            print(
-                f"[*] scanned {stats.discovered} files: "
-                f"{stats.valid} valid, {stats.failed} failed"
-            )
-            print("[*] building the path-free deterministic bundle")
-            result = build_curated_bundle(
-                catalog,
-                args.out,
-                max_files=args.max_files,
-                max_bundle_bytes=BUNDLE_BYTE_CAP,
-            )
-    except Exception as error:  # noqa: BLE001 - the operator wants the reason, not a traceback
-        print(f"[!] ingestion failed: {error}", file=sys.stderr)
-        return 1
+def _build_bundle(
+    args: argparse.Namespace, catalog_db: Path
+) -> tuple[InventoryStats, CuratedBuildResult]:
+    """Scan the corpus and build the path-free deterministic bundle from it."""
+    with CorpusCatalog(catalog_db, args.input_root) as catalog:
+        print("[*] scanning the directory tree, which takes a while on a full library")
+        stats = catalog.scan(retry_errors=True)
+        print(
+            f"[*] scanned {stats.discovered} files: "
+            f"{stats.valid} valid, {stats.failed} failed"
+        )
+        print("[*] building the path-free deterministic bundle")
+        result = build_curated_bundle(
+            catalog,
+            args.out,
+            max_files=args.max_files,
+            max_bundle_bytes=BUNDLE_BYTE_CAP,
+        )
+    return stats, result
 
-    print(f"[*] bundle: {args.out} ({result.bundle_bytes} bytes)")
-    print(f"[*] manifest digest: {result.first_digest}")
-    if result.reduction_attempts:
-        print(f"[!] selection was shrunk {result.reduction_attempts} time(s) to fit the byte cap")
 
-    coverage = _coverage(args.out / "index.sqlite")
-    _report(coverage, args.max_files)
-
+def _write_report(
+    report_path: Path,
+    *,
+    stats: InventoryStats,
+    result: CuratedBuildResult,
+    max_files: int,
+    started: float,
+) -> None:
+    """Write the machine readable ingestion report."""
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(
         json.dumps(
             {
                 "schema": "groove.corpus.v3",
-                "requested_representatives": args.max_files,
+                "requested_representatives": max_files,
                 "ingested_count": result.selected_count,
                 "bundle_size_bytes": result.bundle_bytes,
                 "manifest_digest": result.first_digest,
@@ -156,6 +164,40 @@ def main() -> int:
             indent=2,
         ),
         encoding="utf-8",
+    )
+
+
+def main() -> int:
+    args = _parser().parse_args()
+    if _reject_impossible_request(args):
+        return 2
+
+    started = time.perf_counter()
+    catalog_db = args.catalog_root / "catalog_v3.sqlite"
+    report_path = args.catalog_root / "ingestion-report.json"
+    print(f"[*] corpus: {args.input_root}")
+    print(f"[*] catalog: {catalog_db}")
+
+    try:
+        stats, result = _build_bundle(args, catalog_db)
+    except Exception as error:  # noqa: BLE001 - the operator wants the reason, not a traceback
+        print(f"[!] ingestion failed: {error}", file=sys.stderr)
+        return 1
+
+    print(f"[*] bundle: {args.out} ({result.bundle_bytes} bytes)")
+    print(f"[*] manifest digest: {result.first_digest}")
+    if result.reduction_attempts:
+        print(f"[!] selection was shrunk {result.reduction_attempts} time(s) to fit the byte cap")
+
+    coverage = _coverage(args.out / "index.sqlite")
+    _report(coverage, args.max_files)
+
+    _write_report(
+        report_path,
+        stats=stats,
+        result=result,
+        max_files=args.max_files,
+        started=started,
     )
     print(f"[*] report: {report_path}")
 

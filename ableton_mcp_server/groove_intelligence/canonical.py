@@ -47,35 +47,40 @@ def _normalize(value: object, *, key: str | None = None) -> object:
     if value is None:
         return None
     if isinstance(value, Mapping):
-        normalized: dict[str, object] = {}
-        for raw_key, raw_value in value.items():
-            if not isinstance(raw_key, str):
-                raise TypeError("canonical object keys must be strings")
-            normalized_key = unicodedata.normalize("NFC", raw_key)
-            if normalized_key in normalized:
-                raise ValueError("canonical object has duplicate normalized keys")
-            normalized[normalized_key] = _normalize(raw_value, key=normalized_key)
-        for set_key in ("facets", "required_projection_ids"):
-            set_values = normalized.get(set_key)
-            if isinstance(set_values, list):
-                serialized_set = sorted(
-                    {
-                        json.dumps(item, ensure_ascii=False, separators=(",", ":"))
-                        for item in set_values
-                    }
-                )
-                normalized[set_key] = [json.loads(item) for item in serialized_set]
-        if "feature_constraints" in normalized and isinstance(
-            normalized["feature_constraints"], list
-        ):
-            normalized["feature_constraints"] = sorted(
-                normalized["feature_constraints"],
-                key=lambda item: _encode(item),
-            )
-        return normalized
+        return _normalize_mapping(value)
     if isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):
         return [_normalize(item) for item in value]
     raise TypeError(f"unsupported canonical value: {type(value).__name__}")
+
+
+def _normalize_mapping(value: Mapping[object, object]) -> dict[str, object]:
+    """Normalize an object's keys and values and sort its set-like members."""
+    normalized: dict[str, object] = {}
+    for raw_key, raw_value in value.items():
+        if not isinstance(raw_key, str):
+            raise TypeError("canonical object keys must be strings")
+        normalized_key = unicodedata.normalize("NFC", raw_key)
+        if normalized_key in normalized:
+            raise ValueError("canonical object has duplicate normalized keys")
+        normalized[normalized_key] = _normalize(raw_value, key=normalized_key)
+    for set_key in ("facets", "required_projection_ids"):
+        set_values = normalized.get(set_key)
+        if isinstance(set_values, list):
+            serialized_set = sorted(
+                {
+                    json.dumps(item, ensure_ascii=False, separators=(",", ":"))
+                    for item in set_values
+                }
+            )
+            normalized[set_key] = [json.loads(item) for item in serialized_set]
+    if "feature_constraints" in normalized and isinstance(
+        normalized["feature_constraints"], list
+    ):
+        normalized["feature_constraints"] = sorted(
+            normalized["feature_constraints"],
+            key=lambda item: _encode(item),
+        )
+    return normalized
 
 
 def _encode(value: object) -> bytes:

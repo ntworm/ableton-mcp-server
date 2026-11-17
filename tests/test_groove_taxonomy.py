@@ -20,9 +20,23 @@ from ableton_mcp_server.groove_intelligence.projections import derive_features, 
 from ableton_mcp_server.groove_intelligence.runtime import GrooveRuntime
 from ableton_mcp_server.groove_intelligence.schema import BuildInput
 from ableton_mcp_server.groove_intelligence.search import search
-from ableton_mcp_server.groove_intelligence.taxonomy import classify_facets, classify_path_facets
+from ableton_mcp_server.groove_intelligence.taxonomy import (
+    FacetSetV1,
+    classify_facets,
+    classify_path_facets,
+)
 from tests.fixtures.groove_runtime import MemoryArtifactStore
 from tests.fixtures.groove_smf import MINIMAL_TYPE1_SMF
+
+
+def _assert_unknown_genres_are_not_guessed(facets: FacetSetV1) -> None:
+    """Check that an unknown path yields no genre or subgenre facets."""
+    assert "genre" not in facets.values
+    assert "subgenre" not in facets.values
+    assert set(facets.values["source_category"]) >= {
+        "mystery_shelf",
+        "unsorted_groove",
+    }
 
 
 def test_relative_path_taxonomy_is_versioned_bounded_and_does_not_guess_unknown_genres() -> None:
@@ -43,12 +57,7 @@ def test_relative_path_taxonomy_is_versioned_bounded_and_does_not_guess_unknown_
     )
 
     unknown = classify_path_facets("My Pack/Mystery Shelf/Unsorted Groove/kit.mid")
-    assert "genre" not in unknown.values
-    assert "subgenre" not in unknown.values
-    assert set(unknown.values["source_category"]) >= {
-        "mystery_shelf",
-        "unsorted_groove",
-    }
+    _assert_unknown_genres_are_not_guessed(unknown)
 
 
 def test_superior_drummer_components_produce_musical_facets() -> None:

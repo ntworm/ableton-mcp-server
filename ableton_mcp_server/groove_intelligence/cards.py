@@ -66,21 +66,7 @@ def _sanitize_public_value(
     if depth > 4:
         return _DROP
     if isinstance(value, Mapping):
-        result: dict[str, object] = {}
-        for index, (raw_key, raw_value) in enumerate(value.items()):
-            if index >= 64:
-                break
-            key = str(raw_key)
-            if key not in allowed_keys or _is_private_card_key(key):
-                continue
-            sanitized = _sanitize_public_value(
-                raw_value,
-                allowed_keys=allowed_keys,
-                depth=depth + 1,
-            )
-            if sanitized is not _DROP:
-                result[key] = sanitized
-        return result
+        return _sanitize_public_dict(value, allowed_keys=allowed_keys, depth=depth)
     if isinstance(value, (list, tuple)):
         items: list[object] = []
         for item in value[:32]:
@@ -92,6 +78,32 @@ def _sanitize_public_value(
             if sanitized is not _DROP:
                 items.append(sanitized)
         return items
+    return _sanitize_public_scalar(value)
+
+
+def _sanitize_public_dict(
+    value: Mapping[Any, Any], *, allowed_keys: frozenset[str], depth: int
+) -> dict[str, object]:
+    """Keep the first 64 public keys of a mapping, sanitized one level deeper."""
+    result: dict[str, object] = {}
+    for index, (raw_key, raw_value) in enumerate(value.items()):
+        if index >= 64:
+            break
+        key = str(raw_key)
+        if key not in allowed_keys or _is_private_card_key(key):
+            continue
+        sanitized = _sanitize_public_value(
+            raw_value,
+            allowed_keys=allowed_keys,
+            depth=depth + 1,
+        )
+        if sanitized is not _DROP:
+            result[key] = sanitized
+    return result
+
+
+def _sanitize_public_scalar(value: object) -> object:
+    """Keep a short string without a path, a bounded number, a bool or None."""
     if isinstance(value, str):
         if re.search(r"(?i)(?:[a-z]:[\\/]|^[/\\]|\\\\)", value):
             return _DROP
@@ -246,34 +258,11 @@ def artifact_card_from_artifact(artifact: MidiArtifactV1) -> ArtifactCardV1:
     rights = str(metadata.get("redistribution", "derived_only"))
     if rights not in {"full", "derived_only", "blocked"}:
         rights = "derived_only"
-    raw_facets = metadata.get("facets", {})
-    facets: dict[str, list[str]] = {}
-    if isinstance(raw_facets, Mapping):
-        for raw_axis, values in sorted(
-            raw_facets.items(), key=lambda item: str(item[0])
-        )[:16]:
-            axis = str(raw_axis)
-            if isinstance(values, (list, tuple)):
-                facets[axis] = sorted({str(value) for value in values})[:32]
-    raw_features = metadata.get("features", {})
-    features: dict[str, float | int | str | None] = {}
-    if isinstance(raw_features, Mapping):
-        for name, value in sorted(raw_features.items(), key=lambda item: str(item[0])):
-            if len(features) >= 64:
-                break
-            if isinstance(value, (str, int, float)) or value is None:
-                features[str(name)] = value
     raw_summary = metadata.get("summary", {})
     summary = _sanitize_public_mapping(raw_summary, allowed_keys=_PUBLIC_SUMMARY_KEYS)
     capability_values = metadata.get("capabilities", {})
     capabilities = capability_values if isinstance(capability_values, Mapping) else {}
-    raw_rights_level = metadata.get(
-        "rights_level", {"blocked": 0, "derived_only": 1, "full": 2}[rights]
-    )
-    try:
-        rights_level = max(0, min(2, int(raw_rights_level)))
-    except (TypeError, ValueError):
-        rights_level = {"blocked": 0, "derived_only": 1, "full": 2}[rights]
+    rights_level = _bounded_rights_level(metadata, rights)
     # The card is the public surface and exposes only the v2 projections the MCP
     # contract names.  ``hvo_v3`` is stored on the artifact and drives the facets,
     # but no client can request it, so listing it here would advertise a
@@ -284,20 +273,12 @@ def artifact_card_from_artifact(artifact: MidiArtifactV1) -> ArtifactCardV1:
         for reference in artifact.projections
         if reference.name in PUBLIC_PROJECTION_NAMES
     }
-    public_provenance: dict[str, Any] = {}
-    for key in ("corpus_id", "build_id", "license_id", "license_ids", "provenance_digest"):
-        if key not in metadata:
-            continue
-        value = metadata[key]
-        if key == "license_ids" and isinstance(value, (list, tuple)):
-            value = [str(item) for item in value[:8]]
-        public_provenance[key] = value
     return ArtifactCardV1(
         artifact_id=artifact.artifact_id,
         kind=artifact.kind,
         summary=summary,
-        facets=facets,
-        features=features,
+        facets=_bounded_facets(metadata.get("facets", {})),
+        features=_bounded_features(metadata.get("features", {})),
         projections=projection_map,
         rights_level=rights,  # type: ignore[arg-type]
         capabilities=CapabilitiesV1(
@@ -307,9 +288,58 @@ def artifact_card_from_artifact(artifact: MidiArtifactV1) -> ArtifactCardV1:
                 allowed=bool(capabilities.get("apply", rights_level >= 2)) and rights_level >= 2
             ),
         ),
-        provenance=public_provenance,
+        provenance=_public_card_provenance(metadata),
         lineage=_sanitize_public_mapping(artifact.lineage, allowed_keys=_PUBLIC_LINEAGE_KEYS),
     )
+
+
+def _bounded_facets(raw_facets: object) -> dict[str, list[str]]:
+    """At most 16 facet axes with at most 32 sorted values each."""
+    facets: dict[str, list[str]] = {}
+    if isinstance(raw_facets, Mapping):
+        for raw_axis, values in sorted(
+            raw_facets.items(), key=lambda item: str(item[0])
+        )[:16]:
+            axis = str(raw_axis)
+            if isinstance(values, (list, tuple)):
+                facets[axis] = sorted({str(value) for value in values})[:32]
+    return facets
+
+
+def _bounded_features(raw_features: object) -> dict[str, float | int | str | None]:
+    """At most 64 scalar features, in name order."""
+    features: dict[str, float | int | str | None] = {}
+    if isinstance(raw_features, Mapping):
+        for name, value in sorted(raw_features.items(), key=lambda item: str(item[0])):
+            if len(features) >= 64:
+                break
+            if isinstance(value, (str, int, float)) or value is None:
+                features[str(name)] = value
+    return features
+
+
+def _bounded_rights_level(metadata: Mapping[str, Any], rights: str) -> int:
+    """The stored rights level clamped to 0..2, or the one the rights imply."""
+    raw_rights_level = metadata.get(
+        "rights_level", {"blocked": 0, "derived_only": 1, "full": 2}[rights]
+    )
+    try:
+        return max(0, min(2, int(raw_rights_level)))
+    except (TypeError, ValueError):
+        return {"blocked": 0, "derived_only": 1, "full": 2}[rights]
+
+
+def _public_card_provenance(metadata: Mapping[str, Any]) -> dict[str, Any]:
+    """The public provenance keys of the metadata, license IDs bounded to 8."""
+    public_provenance: dict[str, Any] = {}
+    for key in ("corpus_id", "build_id", "license_id", "license_ids", "provenance_digest"):
+        if key not in metadata:
+            continue
+        value = metadata[key]
+        if key == "license_ids" and isinstance(value, (list, tuple)):
+            value = [str(item) for item in value[:8]]
+        public_provenance[key] = value
+    return public_provenance
 
 
 class CompareCardV1(GrooveModel):

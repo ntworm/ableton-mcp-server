@@ -20,7 +20,7 @@ import pytest
 from ableton_mcp_server import __version__
 from ableton_mcp_server.catalog import TOOL_CATALOG, Route
 from ableton_mcp_server.server import PUBLIC_TOOL_FUNCTIONS
-from ableton_mcp_server.tool_counts import build_tool_count_snapshot
+from ableton_mcp_server.tool_counts import ToolCountSnapshotV1, build_tool_count_snapshot
 from scripts.build_mcpb import (
     DEPENDENCY_CUTOFF,
     LAUNCHER,
@@ -89,14 +89,19 @@ def test_manifest_stays_inside_the_strict_mcpb_schema() -> None:
     assert set(manifest["author"]) <= {"name", "email", "url"}
     assert manifest["author"]["name"]
     assert set(manifest["repository"]) == {"type", "url"}
+    _assert_server_and_compatibility_blocks(manifest)
+    assert "icon" not in manifest
+    json.dumps(manifest)
+
+
+def _assert_server_and_compatibility_blocks(manifest: dict[str, object]) -> None:
+    """Assert the server and compatibility blocks of the manifest."""
     server = manifest["server"]
     assert set(server) == {"type", "entry_point", "mcp_config"}
     assert set(server["mcp_config"]) <= {"command", "args", "env", "platform_overrides"}
     assert set(manifest["compatibility"]) <= {"claude_desktop", "platforms", "runtimes"}
     assert set(manifest["compatibility"]["runtimes"]) <= {"python", "node"}
     assert all(set(tool) <= {"name", "description"} for tool in manifest["tools"])
-    assert "icon" not in manifest
-    json.dumps(manifest)
 
 
 def test_manifest_lists_exactly_the_catalog_and_derives_every_count() -> None:
@@ -110,6 +115,13 @@ def test_manifest_lists_exactly_the_catalog_and_derives_every_count() -> None:
     assert manifest["version"] == __version__
     assert f"{snapshot.active_total} tools" in manifest["description"]
     assert f"{snapshot.headless_total} of them usable without Live" in manifest["description"]
+    _assert_long_description_lists_every_local_tool(manifest, snapshot)
+
+
+def _assert_long_description_lists_every_local_tool(
+    manifest: dict[str, object], snapshot: ToolCountSnapshotV1
+) -> None:
+    """Assert the long description names every local tool of the catalog."""
     long_description = manifest["long_description"]
     assert f"for the {snapshot.live_required_total} tools that may require" in long_description
     assert f"The {snapshot.headless_total} local/headless tools" in long_description

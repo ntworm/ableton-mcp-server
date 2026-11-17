@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from typing import cast
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any, cast
 
 from . import GrooveIndexInvalid
 from .canonical import canonical_json, sha256_hex
@@ -92,6 +92,19 @@ def _projection(
 
 
 def _generated_projection(artifact: MidiArtifactV1, projection_id: str) -> object:
+    raw_projection = _generated_projection_value(artifact, projection_id)
+    try:
+        if projection_id == HVO_SCHEMA_VERSION:
+            return HvoProjectionV1.model_validate(raw_projection)
+        if projection_id == FEATURES_SCHEMA_VERSION:
+            return FeaturesProjectionV1.model_validate(raw_projection)
+        return GrammarProjectionV1.model_validate(raw_projection)
+    except ValueError as error:
+        raise GrooveIndexInvalid("generated projection is invalid") from error
+
+
+def _generated_projection_value(artifact: MidiArtifactV1, projection_id: str) -> Mapping[str, Any]:
+    """The stored value of a generated projection, checked against its reference."""
     raw_values = artifact.provenance.get("_projection_values")
     if not isinstance(raw_values, Mapping):
         raise GrooveIndexInvalid("generated projection values are missing")
@@ -108,14 +121,7 @@ def _generated_projection(artifact: MidiArtifactV1, projection_id: str) -> objec
         raise GrooveIndexInvalid("generated projection schema version mismatch")
     if sha256_hex(canonical_json(raw_projection)) != reference.digest:
         raise GrooveIndexInvalid("generated projection digest mismatch")
-    try:
-        if projection_id == HVO_SCHEMA_VERSION:
-            return HvoProjectionV1.model_validate(raw_projection)
-        if projection_id == FEATURES_SCHEMA_VERSION:
-            return FeaturesProjectionV1.model_validate(raw_projection)
-        return GrammarProjectionV1.model_validate(raw_projection)
-    except ValueError as error:
-        raise GrooveIndexInvalid("generated projection is invalid") from error
+    return raw_projection
 
 
 def _projection_compatibility(
@@ -175,59 +181,14 @@ def compare(runtime: GrooveRuntime, request: CompareRequestV1) -> CompareRespons
             if left_index == right_index or left.artifact_id == right.artifact_id:
                 row.append(0.0)
                 continue
-            distances: list[float] = []
-            if "facets" in request.metrics:
-                axes = sorted(set(left.facets) | set(right.facets))
-                distances.append(
-                    0.0
-                    if not axes
-                    else sum(
-                        0.0
-                        if set(left.facets.get(axis, [])) == set(right.facets.get(axis, []))
-                        else 1.0
-                        for axis in axes
-                    )
-                    / len(axes)
-                )
-            if "features" in request.metrics:
-                left_features = get_projection(left_index, "features")
-                right_features = get_projection(right_index, "features")
-                distances.append(
-                    1.0
-                    if left_features is None or right_features is None
-                    else feature_distance(left_features, right_features)
-                )
-            if "hvo" in request.metrics:
-                left_hvo = get_projection(left_index, "hvo")
-                right_hvo = get_projection(right_index, "hvo")
-                distances.append(
-                    1.0
-                    if left_hvo is None or right_hvo is None
-                    else hvo_distance(left_hvo, right_hvo)
-                )
-            if "grammar" in request.metrics:
-                left_grammar = get_projection(left_index, "grammar")
-                right_grammar = get_projection(right_index, "grammar")
-                distances.append(
-                    1.0
-                    if left_grammar is None or right_grammar is None
-                    else grammar_distance(left_grammar, right_grammar)
-                )
-            row.append(round(sum(distances) / len(distances), 9) if distances else 0.0)
+            row.append(
+                _pair_distance(request.metrics, cards, get_projection, left_index, right_index)
+            )
         matrices.append(row)
     common = sorted(
         set(cards[0].projections).intersection(*(set(card.projections) for card in cards[1:]))
     )
-    compatibility = {
-        "ppq": (
-            "unavailable"
-            if any(card.features.get("ppq") is None for card in cards)
-            else "compatible"
-        ),
-        "meter": _feature_compatibility(cards, "meter"),
-    }
-    for projection_name in ("features", "grammar", "hvo"):
-        compatibility[projection_name] = _projection_compatibility(cards, projection_name)
+    compatibility = _compare_compatibility(cards)
     compare_card = CompareCardV1(
         artifact_ids=[ArtifactId(str(item)) for item in request.artifact_ids],
         metric_schema=list(request.metrics),
@@ -242,6 +203,66 @@ def compare(runtime: GrooveRuntime, request: CompareRequestV1) -> CompareRespons
         card=compare_card,
         provenance={"seed_bundle_id": runtime.index.manifest.seed_bundle_id},
     )
+
+
+def _pair_distance(
+    metrics: Sequence[str],
+    cards: Sequence[ArtifactCardV1],
+    get_projection: Callable[[int, str], object | None],
+    left_index: int,
+    right_index: int,
+) -> float:
+    """Mean of the requested metric distances between two cards."""
+    left, right = cards[left_index], cards[right_index]
+    distances: list[float] = []
+    if "facets" in metrics:
+        distances.append(_facet_distance(left, right))
+    measures: tuple[tuple[str, Callable[[object | None, object | None], float]], ...] = (
+        ("features", feature_distance),
+        ("hvo", hvo_distance),
+        ("grammar", grammar_distance),
+    )
+    for name, distance in measures:
+        if name in metrics:
+            left_value = get_projection(left_index, name)
+            right_value = get_projection(right_index, name)
+            distances.append(
+                1.0
+                if left_value is None or right_value is None
+                else distance(left_value, right_value)
+            )
+    return round(sum(distances) / len(distances), 9) if distances else 0.0
+
+
+def _facet_distance(left: ArtifactCardV1, right: ArtifactCardV1) -> float:
+    """Share of facet axes whose value sets differ between two cards."""
+    axes = sorted(set(left.facets) | set(right.facets))
+    return (
+        0.0
+        if not axes
+        else sum(
+            0.0
+            if set(left.facets.get(axis, [])) == set(right.facets.get(axis, []))
+            else 1.0
+            for axis in axes
+        )
+        / len(axes)
+    )
+
+
+def _compare_compatibility(cards: Sequence[ArtifactCardV1]) -> dict[str, str]:
+    """Compatibility of the compared cards for PPQ, meter and each projection."""
+    compatibility = {
+        "ppq": (
+            "unavailable"
+            if any(card.features.get("ppq") is None for card in cards)
+            else "compatible"
+        ),
+        "meter": _feature_compatibility(cards, "meter"),
+    }
+    for projection_name in ("features", "grammar", "hvo"):
+        compatibility[projection_name] = _projection_compatibility(cards, projection_name)
+    return compatibility
 
 
 __all__ = ["compare", "evidence"]

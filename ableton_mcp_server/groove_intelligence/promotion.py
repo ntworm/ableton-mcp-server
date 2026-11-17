@@ -61,28 +61,8 @@ def promotion_allowed(report: object, signer: HmacPromotionSigner) -> bool:
 
     try:
         model: Any = report
-        if model.schema_version != "groove.provider-gate.v1":
-            return False
-        if not bool(model.registry_opt_in):
-            return False
-        if model.thresholds != GateThresholdsV1():
-            return False
-        gates = model.gates
-        if not isinstance(gates, Mapping) or set(gates) != {
-            "contract",
-            "fallback",
-            "reproducibility",
-            "quality",
-            "privacy_license",
-            "cost_latency",
-        }:
-            return False
-        failed = tuple(
-            sorted(name for name, gate in gates.items() if gate.status != "passed")
-        )
-        if tuple(model.failed_gates) != failed:
-            return False
-        if bool(model.promotion_allowed) != (not failed):
+        failed = _verified_failed_gates(model)
+        if failed is None:
             return False
         digest = model.payload_digest
         signature = model.signature
@@ -93,6 +73,34 @@ def promotion_allowed(report: object, signer: HmacPromotionSigner) -> bool:
         return not failed
     except (AttributeError, TypeError, ValueError, KeyError):
         return False
+
+
+def _verified_failed_gates(model: Any) -> tuple[str, ...] | None:
+    """The failed gate names when the report facts are consistent, otherwise None."""
+    if model.schema_version != "groove.provider-gate.v1":
+        return None
+    if not bool(model.registry_opt_in):
+        return None
+    if model.thresholds != GateThresholdsV1():
+        return None
+    gates = model.gates
+    if not isinstance(gates, Mapping) or set(gates) != {
+        "contract",
+        "fallback",
+        "reproducibility",
+        "quality",
+        "privacy_license",
+        "cost_latency",
+    }:
+        return None
+    failed = tuple(
+        sorted(name for name, gate in gates.items() if gate.status != "passed")
+    )
+    if tuple(model.failed_gates) != failed:
+        return None
+    if bool(model.promotion_allowed) != (not failed):
+        return None
+    return failed
 
 
 __all__ = [

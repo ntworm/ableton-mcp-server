@@ -41,6 +41,14 @@ def _make_snapshot(**overrides: Any) -> BaselineSnapshot:
     return BaselineSnapshot(**base)
 
 
+def _assert_track_snapshot(snap: BaselineSnapshot) -> None:
+    """Assert the track names, types, mutes and volumes of a snapshot."""
+    assert snap.track_names == {0: "Bass", 1: "Lead"}
+    assert snap.track_types == {0: "midi", 1: "audio"}
+    assert snap.track_mutes == {0: False, 1: False}
+    assert snap.track_volumes == {0: 0.85, 1: 0.85}
+
+
 class TestBaselineSnapshot:
     def test_frozen_dataclass(self) -> None:
         snap = _make_snapshot()
@@ -114,14 +122,7 @@ class TestDiscoverBaseline:
                         ]
                     )
                 if command == "get_track_state":
-                    idx = params["track_index"]
-                    default = {
-                        "mute": False,
-                        "solo": False,
-                        "arm": False,
-                        "volume": 0.85,
-                    }
-                    return (track_state or {}).get(idx, default)
+                    return self._track_state(params)
                 if command == "get_session_info":
                     return {"tempo": 120.0, "current_song_time": 4.0}
                 if command == "get_loop_settings":
@@ -129,10 +130,25 @@ class TestDiscoverBaseline:
                 if command == "get_locators":
                     return []
                 if command == "get_song_length":
-                    if isinstance(song_length, Exception):
-                        raise song_length
-                    return {"song_length": song_length}
+                    return self._song_length()
                 raise AssertionError(f"unexpected command: {command}")
+
+            def _track_state(self, params: dict[str, Any] | None) -> Any:
+                """Return the fake state of the requested track."""
+                idx = params["track_index"]
+                default = {
+                    "mute": False,
+                    "solo": False,
+                    "arm": False,
+                    "volume": 0.85,
+                }
+                return (track_state or {}).get(idx, default)
+
+            def _song_length(self) -> Any:
+                """Return the fake song length, raising the given exception."""
+                if isinstance(song_length, Exception):
+                    raise song_length
+                return {"song_length": song_length}
 
         return _FakeClient()
 
@@ -143,10 +159,7 @@ class TestDiscoverBaseline:
         assert snap.song_name == "TESTE_CODEX"
         assert snap.tempo == 120.0
         assert snap.song_length == 232.0
-        assert snap.track_names == {0: "Bass", 1: "Lead"}
-        assert snap.track_types == {0: "midi", 1: "audio"}
-        assert snap.track_mutes == {0: False, 1: False}
-        assert snap.track_volumes == {0: 0.85, 1: 0.85}
+        _assert_track_snapshot(snap)
         assert snap.track_count == 2
         # Dict-style compat works.
         assert snap["tempo"] == 120.0

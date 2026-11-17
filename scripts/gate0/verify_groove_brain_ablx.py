@@ -54,6 +54,62 @@ def _read_json(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
     return value
 
 
+def _check_entries(infos: list[zipfile.ZipInfo]) -> None:
+    """Reject duplicated, unsafe, encrypted and symlinked archive entries."""
+    names = [info.filename for info in infos]
+    if len(names) != len(set(names)):
+        raise ValueError("DUPLICATE_ENTRY")
+
+    for info in infos:
+        _validate_name(info.filename)
+        if info.flag_bits & 0x1:
+            raise ValueError(f"ENCRYPTED_ENTRY:{info.filename}")
+        unix_type = (info.external_attr >> 16) & 0o170000
+        if unix_type == 0o120000:
+            raise ValueError(f"SYMLINK_ENTRY:{info.filename}")
+
+
+def _check_layout(infos: list[zipfile.ZipInfo]) -> tuple[list[zipfile.ZipInfo], set[str]]:
+    """Check the directories and the files against the expected package."""
+    directories = {info.filename for info in infos if info.is_dir()}
+    unexpected_directories = sorted(directories - ALLOWED_DIRECTORIES)
+    if unexpected_directories:
+        raise ValueError(f"UNEXPECTED_DIRECTORIES:{','.join(unexpected_directories)}")
+
+    file_infos = [info for info in infos if not info.is_dir()]
+    files = {info.filename for info in file_infos}
+    missing = sorted(REQUIRED_FILES - files)
+    if missing:
+        raise ValueError(f"MISSING_ENTRIES:{','.join(missing)}")
+    unexpected = sorted(files - REQUIRED_FILES)
+    if unexpected:
+        raise ValueError(f"UNEXPECTED_ENTRIES:{','.join(unexpected)}")
+    return file_infos, files
+
+
+def _check_manifest(archive: zipfile.ZipFile) -> tuple[str, str]:
+    """Check the extension manifest and the runtime manifest against each other."""
+    manifest = _read_json(archive, "manifest.json")
+    if manifest.get("entry") != "dist/extension.js":
+        raise ValueError("INVALID_EXTENSION_ENTRY")
+    extension_version = manifest.get("version")
+    if not isinstance(extension_version, str) or not SEMVER.fullmatch(extension_version):
+        raise ValueError("INVALID_EXTENSION_VERSION")
+
+    runtime = _read_json(archive, "runtime/manifest.json")
+    if runtime.get("protocol") != 1 or runtime.get("platform") != "win32-x64":
+        raise ValueError("INVALID_RUNTIME_CONTRACT")
+    if runtime.get("version") != extension_version:
+        raise ValueError("VERSION_MISMATCH")
+    if runtime.get("helper") != EXPECTED_HELPER:
+        raise ValueError("INVALID_RUNTIME_HELPER")
+    helper_path = f"runtime/{EXPECTED_HELPER}"
+    helper_hash = _sha256(archive.read(helper_path))
+    if helper_hash != runtime.get("sha256"):
+        raise ValueError("HELPER_HASH_MISMATCH")
+    return extension_version, helper_hash
+
+
 def verify_ablx(path: Path) -> dict[str, Any]:
     artifact = path.resolve(strict=True)
     compressed_bytes = artifact.stat().st_size
@@ -63,54 +119,14 @@ def verify_ablx(path: Path) -> dict[str, Any]:
     try:
         with zipfile.ZipFile(artifact) as archive:
             infos = archive.infolist()
-            names = [info.filename for info in infos]
-            if len(names) != len(set(names)):
-                raise ValueError("DUPLICATE_ENTRY")
-
-            for info in infos:
-                _validate_name(info.filename)
-                if info.flag_bits & 0x1:
-                    raise ValueError(f"ENCRYPTED_ENTRY:{info.filename}")
-                unix_type = (info.external_attr >> 16) & 0o170000
-                if unix_type == 0o120000:
-                    raise ValueError(f"SYMLINK_ENTRY:{info.filename}")
-
-            directories = {info.filename for info in infos if info.is_dir()}
-            unexpected_directories = sorted(directories - ALLOWED_DIRECTORIES)
-            if unexpected_directories:
-                raise ValueError(f"UNEXPECTED_DIRECTORIES:{','.join(unexpected_directories)}")
-
-            file_infos = [info for info in infos if not info.is_dir()]
-            files = {info.filename for info in file_infos}
-            missing = sorted(REQUIRED_FILES - files)
-            if missing:
-                raise ValueError(f"MISSING_ENTRIES:{','.join(missing)}")
-            unexpected = sorted(files - REQUIRED_FILES)
-            if unexpected:
-                raise ValueError(f"UNEXPECTED_ENTRIES:{','.join(unexpected)}")
+            _check_entries(infos)
+            file_infos, files = _check_layout(infos)
 
             installed_bytes = sum(info.file_size for info in file_infos)
             if installed_bytes > MAX_INSTALLED_BYTES:
                 raise ValueError("INSTALLED_PACKAGE_TOO_LARGE")
 
-            manifest = _read_json(archive, "manifest.json")
-            if manifest.get("entry") != "dist/extension.js":
-                raise ValueError("INVALID_EXTENSION_ENTRY")
-            extension_version = manifest.get("version")
-            if not isinstance(extension_version, str) or not SEMVER.fullmatch(extension_version):
-                raise ValueError("INVALID_EXTENSION_VERSION")
-
-            runtime = _read_json(archive, "runtime/manifest.json")
-            if runtime.get("protocol") != 1 or runtime.get("platform") != "win32-x64":
-                raise ValueError("INVALID_RUNTIME_CONTRACT")
-            if runtime.get("version") != extension_version:
-                raise ValueError("VERSION_MISMATCH")
-            if runtime.get("helper") != EXPECTED_HELPER:
-                raise ValueError("INVALID_RUNTIME_HELPER")
-            helper_path = f"runtime/{EXPECTED_HELPER}"
-            helper_hash = _sha256(archive.read(helper_path))
-            if helper_hash != runtime.get("sha256"):
-                raise ValueError("HELPER_HASH_MISMATCH")
+            extension_version, helper_hash = _check_manifest(archive)
     except zipfile.BadZipFile as error:
         raise ValueError("INVALID_ZIP") from error
 

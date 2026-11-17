@@ -10,7 +10,7 @@
  * gives up.
  */
 
-import { parseCommand } from './command.js';
+import { parseCommand, type Command } from './command.js';
 import { parseGrooveResponse } from './groove-client.js';
 import { clipLengthBeats, toClipNotes } from './groove-writer.js';
 import type { KitProfile } from './kit-profile.js';
@@ -42,6 +42,44 @@ export interface SessionDeps {
   sleep?: (ms: number) => Promise<void>;
 }
 
+async function publishIfChanged(
+  helper: SessionHelper,
+  song: ReadableSong,
+  published: string,
+): Promise<string> {
+  // Republished only when it changed. The panel polls on its own clock and
+  // a snapshot that is identical is noise on the wire.
+  const snapshot = snapshotSession(song);
+  const serialised = JSON.stringify(snapshot);
+  if (serialised !== published) {
+    await helper.publishSnapshot(snapshot);
+    return serialised;
+  }
+  return published;
+}
+
+async function notesForCommand(
+  helper: SessionHelper,
+  command: Command,
+): Promise<{ notes: ReturnType<typeof toClipNotes>; lengthBeats: number }> {
+  let notes: ReturnType<typeof toClipNotes> = [];
+  let lengthBeats = 0;
+  if (command.op === 'write' && command.grooveId) {
+    const groove = parseGrooveResponse(await helper.fetchGroove(command.grooveId));
+    notes = applyTransforms(toClipNotes(groove), command.transforms, command.seed);
+    lengthBeats = clipLengthBeats(groove);
+  }
+  return { notes, lengthBeats };
+}
+
+function reportFailure(deps: SessionDeps, error: unknown, failures: number): void {
+  // A command that cannot be parsed or applied must not end the session:
+  // the user is holding the panel and would see it die for one bad tap.
+  // The first failure is reported, because a loop that swallows every
+  // error leaves a dead session with nothing to diagnose it by.
+  if (failures === 0) deps.onFailure?.(error);
+}
+
 export async function serveSession(deps: SessionDeps): Promise<void> {
   const {
     helper, song, profile, stillActive, onReceipt,
@@ -55,14 +93,7 @@ export async function serveSession(deps: SessionDeps): Promise<void> {
 
   while (stillActive() && nowMs() < deadline && failures < MAX_CONSECUTIVE_FAILURES) {
     try {
-      // Republished only when it changed. The panel polls on its own clock and
-      // a snapshot that is identical is noise on the wire.
-      const snapshot = snapshotSession(song);
-      const serialised = JSON.stringify(snapshot);
-      if (serialised !== published) {
-        await helper.publishSnapshot(snapshot);
-        published = serialised;
-      }
+      published = await publishIfChanged(helper, song, published);
 
       const raw = await helper.takeCommand();
       failures = 0;
@@ -72,23 +103,13 @@ export async function serveSession(deps: SessionDeps): Promise<void> {
       }
 
       const command = parseCommand(raw);
-      let notes: ReturnType<typeof toClipNotes> = [];
-      let lengthBeats = 0;
-      if (command.op === 'write' && command.grooveId) {
-        const groove = parseGrooveResponse(await helper.fetchGroove(command.grooveId));
-        notes = applyTransforms(toClipNotes(groove), command.transforms, command.seed);
-        lengthBeats = clipLengthBeats(groove);
-      }
+      const { notes, lengthBeats } = await notesForCommand(helper, command);
       const receipt = await applyCommand(song, command, notes, lengthBeats, profile);
       onReceipt?.(receipt);
       // Forces a republish on the next turn so the panel sees the new clip.
       published = '';
     } catch (error) {
-      // A command that cannot be parsed or applied must not end the session:
-      // the user is holding the panel and would see it die for one bad tap.
-      // The first failure is reported, because a loop that swallows every
-      // error leaves a dead session with nothing to diagnose it by.
-      if (failures === 0) deps.onFailure?.(error);
+      reportFailure(deps, error, failures);
       failures += 1;
       await sleep(POLL_MS);
     }

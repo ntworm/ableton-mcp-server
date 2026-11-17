@@ -44,39 +44,33 @@ function refuse(code: string, command: Command, trackName: string | null = null)
   return { status: 'refused', code, trackName, slotIndex: command.slotIndex, noteCount: 0 };
 }
 
-export async function applyCommand(
-  song: WritableSong,
-  command: Command,
-  notes: ClipNote[],
-  lengthBeats: number,
-  profile: KitProfile,
-): Promise<Receipt> {
-  const track = song.tracks[command.trackIndex];
-  const slot = track?.clipSlots?.[command.slotIndex];
-  if (!track || !slot) return refuse('INDEX_OUT_OF_RANGE', command, track?.name ?? null);
-
-  if (command.op === 'clear') {
-    if (!slot.clip) return refuse('SLOT_ALREADY_EMPTY', command, track.name);
-    await slot.deleteClip();
-    return { status: 'ok', code: 'CLEARED', trackName: track.name, slotIndex: command.slotIndex, noteCount: 0 };
-  }
-
-  if (slot.clip && !command.replace) return refuse('SLOT_NOT_EMPTY', command, track.name);
-
-  // Resolved before anything is created. A note the kit cannot play is dropped
-  // rather than written: an inaudible note in the clip is one the user will
-  // move around wondering why it makes no sound.
-  const coverage = summariseCoverage(profile, notes.map((note) => note.pitch));
+function audibleNotes(profile: KitProfile, notes: ClipNote[]): ClipNote[] {
   const audible: ClipNote[] = [];
   for (const note of notes) {
     const resolved = resolveNote(profile, note.pitch);
     if (resolved.status === 'silent') continue;
     audible.push({ ...note, pitch: resolved.pitch });
   }
-  if (audible.length === 0) {
-    return { ...refuse('NOTHING_AUDIBLE', command, track.name), coverage };
-  }
+  return audible;
+}
 
+async function clearSlot(
+  slot: WritableSlot,
+  command: Command,
+  trackName: string,
+): Promise<Receipt> {
+  if (!slot.clip) return refuse('SLOT_ALREADY_EMPTY', command, trackName);
+  await slot.deleteClip();
+  return { status: 'ok', code: 'CLEARED', trackName, slotIndex: command.slotIndex, noteCount: 0 };
+}
+
+async function writeSlot(
+  slot: WritableSlot,
+  command: Command,
+  audible: ClipNote[],
+  lengthBeats: number,
+  trackName: string,
+): Promise<Receipt> {
   // Captured before the delete, which clears it: reading it afterwards
   // would report every replace as a fresh create.
   const replaced = slot.clip !== null;
@@ -88,9 +82,45 @@ export async function applyCommand(
   return {
     status: 'ok',
     code: replaced ? 'REPLACED' : 'CREATED',
-    trackName: track.name,
+    trackName,
     slotIndex: command.slotIndex,
     noteCount: audible.length,
-    coverage,
   };
+}
+
+function slotAt(track: WritableTrack | undefined, index: number): WritableSlot | undefined {
+  return track?.clipSlots?.[index];
+}
+
+function trackName(track: WritableTrack | undefined): string | null {
+  return track?.name ?? null;
+}
+
+export async function applyCommand(
+  song: WritableSong,
+  command: Command,
+  notes: ClipNote[],
+  lengthBeats: number,
+  profile: KitProfile,
+): Promise<Receipt> {
+  const track = song.tracks[command.trackIndex];
+  const slot = slotAt(track, command.slotIndex);
+  if (!track || !slot) return refuse('INDEX_OUT_OF_RANGE', command, trackName(track));
+
+  if (command.op === 'clear') {
+    return clearSlot(slot, command, track.name);
+  }
+
+  if (slot.clip && !command.replace) return refuse('SLOT_NOT_EMPTY', command, track.name);
+
+  // Resolved before anything is created. A note the kit cannot play is dropped
+  // rather than written: an inaudible note in the clip is one the user will
+  // move around wondering why it makes no sound.
+  const coverage = summariseCoverage(profile, notes.map((note) => note.pitch));
+  const audible = audibleNotes(profile, notes);
+  if (audible.length === 0) {
+    return { ...refuse('NOTHING_AUDIBLE', command, track.name), coverage };
+  }
+
+  return { ...(await writeSlot(slot, command, audible, lengthBeats, track.name)), coverage };
 }

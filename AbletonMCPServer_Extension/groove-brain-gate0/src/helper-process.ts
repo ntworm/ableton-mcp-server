@@ -28,6 +28,20 @@ function sha256(pathname: string): string {
   return createHash('sha256').update(fs.readFileSync(pathname)).digest('hex');
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isRuntimeManifest(candidate: Record<string, unknown>): boolean {
+  return candidate.protocol === GATE0_PROTOCOL
+    && candidate.platform === 'win32-x64'
+    && typeof candidate.version === 'string'
+    && /^\d+\.\d+\.\d+$/.test(candidate.version)
+    && typeof candidate.helper === 'string'
+    && typeof candidate.sha256 === 'string'
+    && /^[0-9a-f]{64}$/.test(candidate.sha256);
+}
+
 function parseRuntimeManifest(raw: string): RuntimeManifest {
   let value: unknown;
   try {
@@ -35,19 +49,11 @@ function parseRuntimeManifest(raw: string): RuntimeManifest {
   } catch {
     throw new Error('INVALID_RUNTIME_MANIFEST');
   }
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw new Error('INVALID_RUNTIME_MANIFEST');
   }
-  const candidate = value as Record<string, unknown>;
-  if (
-    candidate.protocol !== GATE0_PROTOCOL
-    || candidate.platform !== 'win32-x64'
-    || typeof candidate.version !== 'string'
-    || !/^\d+\.\d+\.\d+$/.test(candidate.version)
-    || typeof candidate.helper !== 'string'
-    || typeof candidate.sha256 !== 'string'
-    || !/^[0-9a-f]{64}$/.test(candidate.sha256)
-  ) {
+  const candidate = value;
+  if (!isRuntimeManifest(candidate)) {
     throw new Error('INVALID_RUNTIME_MANIFEST');
   }
   return candidate as unknown as RuntimeManifest;
@@ -70,39 +76,55 @@ function parseExtensionVersion(raw: string): string {
   return version;
 }
 
+function resolveHelperPath(runtimeRoot: string, manifest: RuntimeManifest): string {
+  const executable = path.resolve(runtimeRoot, ...manifest.helper.split('/'));
+  if (!isStrictDescendant(runtimeRoot, executable)) {
+    throw new Error('INVALID_HELPER_PATH');
+  }
+  const stats = fs.lstatSync(executable);
+  if (!stats.isFile() || stats.isSymbolicLink()) {
+    throw new Error('INVALID_HELPER_PATH');
+  }
+  return executable;
+}
+
+function resolveRealHelper(runtimeRoot: string, executable: string): string {
+  const realRuntimeRoot = fs.realpathSync.native(runtimeRoot);
+  const realExecutable = fs.realpathSync.native(executable);
+  if (!isStrictDescendant(realRuntimeRoot, realExecutable)) {
+    throw new Error('INVALID_HELPER_PATH');
+  }
+  return realExecutable;
+}
+
+function resolveRuntime(
+  resourceRoot: string,
+): { executable: string; manifest: RuntimeManifest } {
+  const runtimeRoot = path.resolve(resourceRoot, 'runtime');
+  const manifestPath = path.join(runtimeRoot, 'manifest.json');
+  const manifest = parseRuntimeManifest(fs.readFileSync(manifestPath, 'utf8'));
+  const extensionVersion = parseExtensionVersion(
+    fs.readFileSync(path.join(resourceRoot, 'manifest.json'), 'utf8'),
+  );
+  if (manifest.version !== extensionVersion) {
+    throw new Error('RUNTIME_VERSION_MISMATCH');
+  }
+  if (manifest.helper !== HELPER_RELATIVE_PATH) {
+    throw new Error('INVALID_HELPER_PATH');
+  }
+  const executable = resolveHelperPath(runtimeRoot, manifest);
+  const realExecutable = resolveRealHelper(runtimeRoot, executable);
+  if (sha256(realExecutable) !== manifest.sha256) {
+    throw new Error('HELPER_HASH_MISMATCH');
+  }
+  return { executable: realExecutable, manifest };
+}
+
 export function loadRuntime(
   resourceRoot: string,
 ): { executable: string; manifest: RuntimeManifest } {
   try {
-    const runtimeRoot = path.resolve(resourceRoot, 'runtime');
-    const manifestPath = path.join(runtimeRoot, 'manifest.json');
-    const manifest = parseRuntimeManifest(fs.readFileSync(manifestPath, 'utf8'));
-    const extensionVersion = parseExtensionVersion(
-      fs.readFileSync(path.join(resourceRoot, 'manifest.json'), 'utf8'),
-    );
-    if (manifest.version !== extensionVersion) {
-      throw new Error('RUNTIME_VERSION_MISMATCH');
-    }
-    if (manifest.helper !== HELPER_RELATIVE_PATH) {
-      throw new Error('INVALID_HELPER_PATH');
-    }
-    const executable = path.resolve(runtimeRoot, ...manifest.helper.split('/'));
-    if (!isStrictDescendant(runtimeRoot, executable)) {
-      throw new Error('INVALID_HELPER_PATH');
-    }
-    const stats = fs.lstatSync(executable);
-    if (!stats.isFile() || stats.isSymbolicLink()) {
-      throw new Error('INVALID_HELPER_PATH');
-    }
-    const realRuntimeRoot = fs.realpathSync.native(runtimeRoot);
-    const realExecutable = fs.realpathSync.native(executable);
-    if (!isStrictDescendant(realRuntimeRoot, realExecutable)) {
-      throw new Error('INVALID_HELPER_PATH');
-    }
-    if (sha256(realExecutable) !== manifest.sha256) {
-      throw new Error('HELPER_HASH_MISMATCH');
-    }
-    return { executable: realExecutable, manifest };
+    return resolveRuntime(resourceRoot);
   } catch (error) {
     if (
       error instanceof Error

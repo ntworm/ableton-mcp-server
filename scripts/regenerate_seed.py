@@ -28,7 +28,11 @@ from ableton_mcp_server.groove_intelligence.constants import (
     HVO_SCHEMA_VERSION_V3,
     MAX_CURATED_REPRESENTATIVES,
 )
-from ableton_mcp_server.groove_intelligence.corpus import CorpusCatalog, build_curated_bundle
+from ableton_mcp_server.groove_intelligence.corpus import (
+    CorpusCatalog,
+    CuratedBuildResult,
+    build_curated_bundle,
+)
 from ableton_mcp_server.groove_intelligence.vendor_labels import DEFAULT_SIDECAR, VendorLabels
 
 DEFAULT_CORPUS_ROOT = Path(
@@ -126,7 +130,8 @@ def _report(coverage: Coverage, requested: int) -> None:
             print(f"      {value}: {count}")
 
 
-def main() -> int:
+def _parser() -> argparse.ArgumentParser:
+    """The command line of the regeneration."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input-root", type=Path, default=DEFAULT_CORPUS_ROOT)
     parser.add_argument("--catalog-root", type=Path, default=DEFAULT_CATALOG_ROOT)
@@ -138,15 +143,22 @@ def main() -> int:
         action="store_true",
         help="Re-derive every catalog row instead of reusing unchanged ones.",
     )
-    args = parser.parse_args()
+    return parser
 
+
+def _reject_impossible_request(args: argparse.Namespace) -> bool:
+    """Refuse a request the builder could not satisfy, before the scan starts."""
     if not 1 <= args.representatives <= MAX_CURATED_REPRESENTATIVES:
         print(
             f"[!] --representatives must be between 1 and {MAX_CURATED_REPRESENTATIVES}",
             file=sys.stderr,
         )
-        return 2
+        return True
+    return False
 
+
+def _vendor_labels() -> VendorLabels:
+    """Load the vendor labels and say what their absence costs."""
     labels = VendorLabels.load()
     if labels.by_path:
         print(f"[*] vendor labels: {len(labels.by_path)} paths from {DEFAULT_SIDECAR}")
@@ -155,44 +167,41 @@ def main() -> int:
         # out loud rather than discovered in the coverage summary.
         print(f"[!] vendor label sidecar is absent at {DEFAULT_SIDECAR}")
         print("[!] the seed will build without the genre and bpm facets")
+    return labels
 
-    started = time.perf_counter()
-    catalog_db = args.catalog_root / "catalog_v3.sqlite"
-    print(f"[*] catalog: {catalog_db}")
-    print(f"[*] corpus: {args.input_root}")
 
-    try:
-        with CorpusCatalog(catalog_db, args.input_root) as catalog:
-            stats = catalog.scan(retry_errors=args.rescan)
-            print(
-                f"[*] scanned {stats.discovered} files: "
-                f"{stats.valid} valid, {stats.failed} failed"
-            )
-            result = build_curated_bundle(
-                catalog,
-                args.out,
-                max_files=args.representatives,
-                max_bundle_bytes=args.max_bundle_bytes,
-            )
-    except Exception as error:  # noqa: BLE001 - the caller wants the reason, not a traceback
-        print(f"[!] regeneration failed: {error}", file=sys.stderr)
-        return 1
+def _build_bundle(args: argparse.Namespace, catalog_db: Path) -> CuratedBuildResult:
+    """Scan the corpus and build the curated bundle from it."""
+    with CorpusCatalog(catalog_db, args.input_root) as catalog:
+        stats = catalog.scan(retry_errors=args.rescan)
+        print(
+            f"[*] scanned {stats.discovered} files: "
+            f"{stats.valid} valid, {stats.failed} failed"
+        )
+        result = build_curated_bundle(
+            catalog,
+            args.out,
+            max_files=args.representatives,
+            max_bundle_bytes=args.max_bundle_bytes,
+        )
+    return result
 
-    print(f"[*] bundle: {args.out} ({result.bundle_bytes} bytes)")
-    print(f"[*] manifest digest: {result.first_digest}")
-    print(f"[*] logical index digest: {result.logical_index_digest}")
-    if result.reduction_attempts:
-        print(f"[!] selection was shrunk {result.reduction_attempts} time(s) to fit the byte cap")
 
-    coverage = _coverage(args.out / "index.sqlite")
-    _report(coverage, args.representatives)
-
-    report_path = args.catalog_root / "regeneration-report.json"
+def _write_report(
+    report_path: Path,
+    *,
+    coverage: Coverage,
+    result: CuratedBuildResult,
+    labels: VendorLabels,
+    representatives: int,
+    started: float,
+) -> None:
+    """Write the machine readable regeneration report."""
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(
         json.dumps(
             {
-                "requested_representatives": args.representatives,
+                "requested_representatives": representatives,
                 "selected_count": result.selected_count,
                 "bundle_bytes": result.bundle_bytes,
                 "manifest_digest": result.first_digest,
@@ -211,6 +220,44 @@ def main() -> int:
             indent=2,
         ),
         encoding="utf-8",
+    )
+
+
+def main() -> int:
+    args = _parser().parse_args()
+    if _reject_impossible_request(args):
+        return 2
+
+    labels = _vendor_labels()
+
+    started = time.perf_counter()
+    catalog_db = args.catalog_root / "catalog_v3.sqlite"
+    print(f"[*] catalog: {catalog_db}")
+    print(f"[*] corpus: {args.input_root}")
+
+    try:
+        result = _build_bundle(args, catalog_db)
+    except Exception as error:  # noqa: BLE001 - the caller wants the reason, not a traceback
+        print(f"[!] regeneration failed: {error}", file=sys.stderr)
+        return 1
+
+    print(f"[*] bundle: {args.out} ({result.bundle_bytes} bytes)")
+    print(f"[*] manifest digest: {result.first_digest}")
+    print(f"[*] logical index digest: {result.logical_index_digest}")
+    if result.reduction_attempts:
+        print(f"[!] selection was shrunk {result.reduction_attempts} time(s) to fit the byte cap")
+
+    coverage = _coverage(args.out / "index.sqlite")
+    _report(coverage, args.representatives)
+
+    report_path = args.catalog_root / "regeneration-report.json"
+    _write_report(
+        report_path,
+        coverage=coverage,
+        result=result,
+        labels=labels,
+        representatives=args.representatives,
+        started=started,
     )
     print(f"[*] report: {report_path}")
     print("[*] staging only. Promote by copying index.sqlite and manifest.json by hand.")

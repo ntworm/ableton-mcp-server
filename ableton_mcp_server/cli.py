@@ -98,55 +98,59 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
-    if args.command == "doctor":
-        host = os.environ.get("ABLETON_MCP_SERVER_HOST", DEFAULT_HOST)
-        port = int(os.environ.get("ABLETON_MCP_SERVER_PORT", str(DEFAULT_PORT)))
-        from .tool_counts import build_tool_count_snapshot
+def _run_doctor(args: argparse.Namespace) -> int:
+    """Probe the MCP-to-Live bridge and report the result."""
+    host = os.environ.get("ABLETON_MCP_SERVER_HOST", DEFAULT_HOST)
+    port = int(os.environ.get("ABLETON_MCP_SERVER_PORT", str(DEFAULT_PORT)))
+    from .tool_counts import build_tool_count_snapshot
 
-        result = bridge_status(
+    result = bridge_status(
+        _client_type()(host=host, port=port, reconnect=False),
+        tool_count=build_tool_count_snapshot().active_total,
+    )
+
+    _emit(result, as_json=bool(args.json))
+    return 0 if result["bridge_available"] else 1
+
+
+def _run_acceptance(args: argparse.Namespace) -> int:
+    """Run the guarded read/write checks against a disposable Live Set."""
+    host = os.environ.get("ABLETON_MCP_SERVER_HOST", DEFAULT_HOST)
+    port = int(os.environ.get("ABLETON_MCP_SERVER_PORT", str(DEFAULT_PORT)))
+    profiles = tuple(args.profile) if args.profile else ("baseline",)
+    result = asyncio.run(
+        run_live_acceptance(
             _client_type()(host=host, port=port, reconnect=False),
-            tool_count=build_tool_count_snapshot().active_total,
+            confirm_project_name=str(args.confirm_project_name),
+            track_index=int(args.track_index),
+            clip_index=int(args.clip_index),
+            audio_track_index=(
+                int(args.audio_track_index)
+                if args.audio_track_index is not None
+                else int(args.track_index)
+            ),
+            audio_clip_index=(
+                int(args.audio_clip_index)
+                if args.audio_clip_index is not None
+                else int(args.clip_index)
+            ),
+            profiles=profiles,
+            fire_clip=bool(args.fire_clip),
         )
+    )
+    _emit(result, as_json=bool(args.json))
+    cert = result.get("certification") or {}
+    release_ready = bool(cert.get("release_ready", False))
+    # Only the legacy success path (no certification attached) accepts
+    # ``status == "ok"`` as a green light. When a certification is
+    # present it owns the gate.
+    if cert:
+        return 0 if release_ready else 1
+    return 0 if result.get("status") == "ok" else 1
 
-        _emit(result, as_json=bool(args.json))
-        return 0 if result["bridge_available"] else 1
 
-    if args.command == "acceptance":
-        host = os.environ.get("ABLETON_MCP_SERVER_HOST", DEFAULT_HOST)
-        port = int(os.environ.get("ABLETON_MCP_SERVER_PORT", str(DEFAULT_PORT)))
-        profiles = tuple(args.profile) if args.profile else ("baseline",)
-        result = asyncio.run(
-            run_live_acceptance(
-                _client_type()(host=host, port=port, reconnect=False),
-                confirm_project_name=str(args.confirm_project_name),
-                track_index=int(args.track_index),
-                clip_index=int(args.clip_index),
-                audio_track_index=(
-                    int(args.audio_track_index)
-                    if args.audio_track_index is not None
-                    else int(args.track_index)
-                ),
-                audio_clip_index=(
-                    int(args.audio_clip_index)
-                    if args.audio_clip_index is not None
-                    else int(args.clip_index)
-                ),
-                profiles=profiles,
-                fire_clip=bool(args.fire_clip),
-            )
-        )
-        _emit(result, as_json=bool(args.json))
-        cert = result.get("certification") or {}
-        release_ready = bool(cert.get("release_ready", False))
-        # Only the legacy success path (no certification attached) accepts
-        # ``status == "ok"`` as a green light. When a certification is
-        # present it owns the gate.
-        if cert:
-            return 0 if release_ready else 1
-        return 0 if result.get("status") == "ok" else 1
-
+def _run_install(args: argparse.Namespace) -> int:
+    """Install the bundled MIDI Remote Script or compare the installed copy."""
     source = bundled_remote_script_path() if args.source is None else args.source
     destination = default_remote_scripts_root() if args.destination is None else args.destination
     if args.command == "install-script":
@@ -156,6 +160,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     result = remote_script_status(source, destination)
     _emit(result, as_json=bool(args.json))
     return 0 if result["status"] == "current" else 1
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run the ableton-mcp command line."""
+    args = _parser().parse_args(argv)
+    if args.command == "doctor":
+        return _run_doctor(args)
+    if args.command == "acceptance":
+        return _run_acceptance(args)
+    return _run_install(args)
 
 
 if __name__ == "__main__":

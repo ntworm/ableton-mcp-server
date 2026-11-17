@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import math
-from typing import Annotated, Any, Literal
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from contracts import (
-    ALLOWED_MUTATIONS,
     TRACK_COLOR_INDEX_MAX,
     TRACK_COLOR_INDEX_MIN,
     TRACK_COLOR_RGB_MAX,
@@ -42,1035 +40,122 @@ class EmptyRequest(RequestModel):
     pass
 
 
-class GetSessionInfoRequest(EmptyRequest):
-    pass
-
-
-class GetBridgeStatusRequest(EmptyRequest):
-    pass
-
-
-class GetTrackListRequest(EmptyRequest):
-    pass
-
-
-class GetTrackStateRequest(RequestModel):
-    track_index: NonNegativeInt
-
-
-class GetLocatorsRequest(EmptyRequest):
-    pass
-
-
-class TakeSnapshotRequest(EmptyRequest):
-    pass
-
-
-class GetAbletonLogsRequest(RequestModel):
-    lines: Annotated[int, Field(ge=1, le=5000)] = 100
-
-
-class GetControlSurfacesRequest(EmptyRequest):
-    pass
-
-
-class GetScenesRequest(EmptyRequest):
-    pass
-
-
-class GetSceneStateRequest(RequestModel):
-    scene_index: NonNegativeInt
-
-
-class GetProjectMetadataRequest(EmptyRequest):
-    pass
-
-
-class GetLoopSettingsRequest(EmptyRequest):
-    pass
-
-
-class GetSelectedContextRequest(EmptyRequest):
-    pass
-
-
-class GetClipSummaryRequest(RequestModel):
-    track_index: NonNegativeInt
-
-
-class GetClipNotesRequest(RequestModel):
-    track_index: NonNegativeInt
-    clip_index: NonNegativeInt
-
-
-class GetClipInfoRequest(GetClipNotesRequest):
-    pass
-
-
-class GetSessionOverviewRequest(EmptyRequest):
-    pass
-
-
-class DeleteClipRequest(GetClipNotesRequest):
-    pass
-
-
-class ClearClipNotesRequest(GetClipNotesRequest):
-    pass
-
-
-class FireSceneRequest(RequestModel):
-    scene_index: NonNegativeInt
-
-
-class SetTrackPropertyRequest(RequestModel):
-    track_index: NonNegativeInt
-    property: Literal["mute", "solo", "arm"]
-    value: bool
-
-
-class SetTrackColorRequest(RequestModel):
-    """Exactly one of ``color_index`` (palette slot) or ``color`` (packed RGB).
-
-    ``color_index`` addresses Live's 70-swatch colour palette; ``color`` is the
-    ``0x00rrggbb`` value documented for ``Track.color``. Requiring exactly one
-    keeps the write single-valued, so the readback has one unambiguous target.
-    """
-
-    track_index: NonNegativeInt
-    color_index: PaletteIndex | None = None
-    color: PackedRgb | None = None
-
-    @model_validator(mode="after")
-    def exactly_one_colour_source(self) -> SetTrackColorRequest:
-        provided = [value for value in (self.color_index, self.color) if value is not None]
-        if len(provided) != 1:
-            raise ValueError("provide exactly one of color_index or color")
-        return self
-
-
-class SetClipColorRequest(RequestModel):
-    """Colour one Session or Arrangement clip.
-
-    ``scope`` selects the lane. Session clips are addressed by clip-slot
-    index; Arrangement clips by their position in ``Track.arrangement_clips``.
-    Run ``diagnose_clip_targets`` first if you are unsure which clips the
-    connected Live host exposes.
-    """
-
-    track_index: NonNegativeInt
-    clip_index: NonNegativeInt
-    scope: Literal["session", "arrangement"] = "session"
-    color_index: PaletteIndex | None = None
-    color: PackedRgb | None = None
-
-    @model_validator(mode="after")
-    def exactly_one_colour_source(self) -> SetClipColorRequest:
-        provided = [value for value in (self.color_index, self.color) if value is not None]
-        if len(provided) != 1:
-            raise ValueError("provide exactly one of color_index or color")
-        return self
-
-
-class DiagnoseClipTargetsRequest(RequestModel):
-    """``track_index`` omitted means every track in the Set."""
-
-    track_index: NonNegativeInt | None = None
-
-
-# ---------------------------------------------------------------------------
-# Track hierarchy requests
-#
-# These are fully validated even though Live's public API cannot perform any
-# of them: a caller must be able to tell "my request was malformed" from "no
-# API can do this". The bridge answers a well-formed request with a typed
-# CAPABILITY_UNAVAILABLE carrying the evidence, and never mutates the Set.
-# ---------------------------------------------------------------------------
-
-
-class MoveTrackRequest(RequestModel):
-    track_index: NonNegativeInt
-    destination_index: NonNegativeInt
-
-
-class ReorderTracksRequest(RequestModel):
-    order: list[NonNegativeInt] = Field(min_length=1, max_length=512)
-
-    @model_validator(mode="after")
-    def order_has_no_duplicates(self) -> ReorderTracksRequest:
-        if len(set(self.order)) != len(self.order):
-            raise ValueError("order must not repeat a track index")
-        return self
-
-
-class MoveTrackToGroupRequest(RequestModel):
-    track_index: NonNegativeInt
-    group_track_index: NonNegativeInt
-
-    @model_validator(mode="after")
-    def group_is_not_itself(self) -> MoveTrackToGroupRequest:
-        if self.track_index == self.group_track_index:
-            raise ValueError("a track cannot be moved into itself")
-        return self
-
-
-class UngroupTrackRequest(RequestModel):
-    track_index: NonNegativeInt
-
-
-class MergeGroupsRequest(RequestModel):
-    source_group_index: NonNegativeInt
-    destination_group_index: NonNegativeInt
-    # Deleting the emptied source is never performed by this bridge; the flag
-    # exists so an explicit request for it is rejected loudly instead of being
-    # silently ignored.
-    delete_empty_source: bool = False
-
-    @model_validator(mode="after")
-    def groups_differ(self) -> MergeGroupsRequest:
-        if self.source_group_index == self.destination_group_index:
-            raise ValueError("source and destination groups must differ")
-        return self
-
-
-class SetClipPropertiesRequest(GetClipNotesRequest):
-    loop_start: NonNegativeBeat | None = None
-    loop_end: NonNegativeBeat | None = None
-    name: Annotated[str, Field(min_length=1, max_length=256)] | None = None
-
-    @field_validator("name")
-    @classmethod
-    def strip_clip_name(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        value = value.strip()
-        if not value:
-            raise ValueError("name must be non-empty")
-        return value
-
-    @model_validator(mode="after")
-    def validate_requested_changes(self) -> SetClipPropertiesRequest:
-        if self.loop_start is None and self.loop_end is None and self.name is None:
-            raise ValueError("at least one clip property must be provided")
-        if (
-            self.loop_start is not None
-            and self.loop_end is not None
-            and self.loop_start >= self.loop_end
-        ):
-            raise ValueError("loop_start must be less than loop_end")
-        return self
-
-
-class AutomationPoint(RequestModel):
-    time: NonNegativeBeat
-    value: float
-
-    @field_validator("value")
-    @classmethod
-    def finite_automation_value(cls, value: float) -> float:
-        if not math.isfinite(value):
-            raise ValueError("automation value must be finite")
-        return value
-
-
-class CreateClipAutomationRequest(GetClipNotesRequest):
-    parameter_name: Annotated[str, Field(min_length=1, max_length=256)]
-    automation_points: Annotated[list[AutomationPoint], Field(min_length=1, max_length=500)]
-    # A track can carry the same parameter name on several devices — every rack
-    # has a "Macro 1". Without this the bridge refuses with AMBIGUOUS_MATCH
-    # instead of guessing which device the caller meant.
-    device_index: NonNegativeInt | None = None
-
-    @field_validator("parameter_name")
-    @classmethod
-    def strip_automation_parameter(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            raise ValueError("parameter_name must be non-empty")
-        return value
-
-    # Live nests the controls that matter. ``chain_index`` selects a rack chain;
-    # add ``chain_device_index`` for a device inside it, or leave it out to
-    # address the chain's own mixer (``volume`` / ``panning``).
-    chain_index: NonNegativeInt | None = None
-    chain_device_index: NonNegativeInt | None = None
-
-
-class GetDeviceListRequest(RequestModel):
-    track_index: NonNegativeInt
-
-
-class GetParameterValueRequest(RequestModel):
-    track_index: NonNegativeInt
-    device_index: NonNegativeInt
-    parameter_name: Annotated[str, Field(min_length=1, max_length=256)]
-
-    @field_validator("parameter_name")
-    @classmethod
-    def strip_parameter_name(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            raise ValueError("parameter_name must be non-empty")
-        return value
-
-    # Live nests the controls that matter. ``chain_index`` selects a rack chain;
-    # add ``chain_device_index`` for a device inside it, or leave it out to
-    # address the chain's own mixer (``volume`` / ``panning``).
-    chain_index: NonNegativeInt | None = None
-    chain_device_index: NonNegativeInt | None = None
-
-
-class SetParameterValueRequest(GetParameterValueRequest):
-    value: float
-
-    @field_validator("value")
-    @classmethod
-    def finite_value(cls, value: float) -> float:
-        if not math.isfinite(value):
-            raise ValueError("value must be finite")
-        return value
-
-    # Live nests the controls that matter. ``chain_index`` selects a rack chain;
-    # add ``chain_device_index`` for a device inside it, or leave it out to
-    # address the chain's own mixer (``volume`` / ``panning``).
-    chain_index: NonNegativeInt | None = None
-    chain_device_index: NonNegativeInt | None = None
-
-
-class GetPluginPresetsRequest(RequestModel):
-    track_index: NonNegativeInt
-    device_index: NonNegativeInt
-
-
-class SetPluginPresetRequest(GetPluginPresetsRequest):
-    """Select one plugin preset by index or by exact name.
-
-    Requiring exactly one selector keeps the write single-valued, so the
-    readback has one unambiguous target — the same rule the colour writes use.
-    """
-
-    preset_index: NonNegativeInt | None = None
-    preset_name: Annotated[str, Field(min_length=1, max_length=256)] | None = None
-
-    @field_validator("preset_name")
-    @classmethod
-    def strip_preset_name(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        value = value.strip()
-        if not value:
-            raise ValueError("preset_name must be non-empty")
-        return value
-
-    @model_validator(mode="after")
-    def exactly_one_selector(self) -> SetPluginPresetRequest:
-        provided = [self.preset_index is not None, self.preset_name is not None]
-        if sum(provided) != 1:
-            raise ValueError("provide exactly one of preset_index or preset_name")
-        return self
-
-
-class GetRoutingRequest(RequestModel):
-    track_index: NonNegativeInt
-
-
-class GetBrowserCategoriesRequest(EmptyRequest):
-    pass
-
-
-class SearchBrowserRequest(RequestModel):
-    query: Annotated[str, Field(min_length=1, max_length=256)]
-    category_type: Annotated[str, Field(min_length=1, max_length=64)] | None = None
-    limit: Annotated[int, Field(ge=1, le=200)] = 50
-
-    @field_validator("query", "category_type")
-    @classmethod
-    def strip_browser_text(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        value = value.strip()
-        if not value:
-            raise ValueError("browser text fields must be non-empty")
-        return value
-
-
-class DiffSnapshotsRequest(RequestModel):
-    snap_a: dict[str, Any]
-    snap_b: dict[str, Any]
-
-
-class GetSongLengthRequest(EmptyRequest):
-    pass
-
-
-class LiveFindTrackRequest(RequestModel):
-    query: Annotated[str, Field(min_length=1, max_length=256)]
-
-    @field_validator("query")
-    @classmethod
-    def strip_query(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            raise ValueError("query must be non-empty")
-        return value
-
-
-class LiveFindDeviceRequest(RequestModel):
-    track_index: NonNegativeInt
-    query: Annotated[str, Field(min_length=1, max_length=256)]
-
-    @field_validator("query")
-    @classmethod
-    def strip_query(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            raise ValueError("query must be non-empty")
-        return value
-
-
-class LiveFindClipRequest(RequestModel):
-    track_index: NonNegativeInt
-    query: Annotated[str, Field(min_length=1, max_length=256)]
-
-    @field_validator("query")
-    @classmethod
-    def strip_query(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            raise ValueError("query must be non-empty")
-        return value
-
-
-class ListDeviceParamsRequest(RequestModel):
-    track_id: Annotated[str, Field(pattern=r"^track:\d+$")]
-
-
-class CuePointSpec(RequestModel):
-    name: Annotated[str, Field(min_length=1, max_length=256)]
-    time: NonNegativeBeat
-
-    @field_validator("name")
-    @classmethod
-    def strip_name(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            raise ValueError("name must be non-empty")
-        return value
-
-    @field_validator("time")
-    @classmethod
-    def finite_time(cls, value: float) -> float:
-        if not math.isfinite(value):
-            raise ValueError("time must be finite")
-        return value
-
-
-class CreateCuePointRequest(CuePointSpec):
-    pass
-
-
-class BulkCuePointsRequest(RequestModel):
-    items: Annotated[list[CuePointSpec], Field(min_length=1, max_length=500)]
-
-
-class DeleteCuePointRequest(RequestModel):
-    time: NonNegativeBeat
-
-
-class SetCurrentSongTimeRequest(RequestModel):
-    time: NonNegativeBeat
-
-
-class SetTempoRequest(RequestModel):
-    tempo: Annotated[float, Field(ge=20, le=999)]
-    dry_run: bool = False
-
-    @field_validator("tempo")
-    @classmethod
-    def finite_tempo(cls, value: float) -> float:
-        if not math.isfinite(value):
-            raise ValueError("tempo must be finite")
-        return value
-
-
-class StartPlaybackRequest(EmptyRequest):
-    pass
-
-
-class StopPlaybackRequest(EmptyRequest):
-    pass
-
-
-class SetLoopRequest(RequestModel):
-    enabled: bool
-
-
-class SetLoopStartRequest(RequestModel):
-    start_beat: NonNegativeBeat
-
-
-class SetLoopLengthRequest(RequestModel):
-    length_beats: PositiveBeat
-
-
-class CommandSpec(RequestModel):
-    type: Annotated[str, Field(min_length=1, max_length=128)]
-    params: dict[str, Any] = Field(default_factory=dict)
-
-
-class SlotEmptyParams(RequestModel):
-    track_index: NonNegativeInt
-    clip_index: NonNegativeInt
-
-
-class PreconditionSpec(RequestModel):
-    type: Literal["slot_empty"]
-    version: Literal["v1"]
-    params: SlotEmptyParams
-
-
-class RunBatchRequest(RequestModel):
-    commands: Annotated[list[CommandSpec], Field(min_length=1, max_length=100)]
-    preconditions: Annotated[list[PreconditionSpec], Field(max_length=16)] = Field(
-        default_factory=list
-    )
-
-    @model_validator(mode="after")
-    def validate_commands(self) -> RunBatchRequest:
-        for command in self.commands:
-            if command.type == "run_batch":
-                raise ValueError("run_batch cannot contain run_batch")
-            if command.type not in ALLOWED_MUTATIONS:
-                raise ValueError(f"{command.type!r} is not an allowed mutation")
-        keys = [
-            (item.type, item.version, item.params.track_index, item.params.clip_index)
-            for item in self.preconditions
-        ]
-        if len(keys) != len(set(keys)):
-            raise ValueError("preconditions must not contain duplicates")
-        return self
-
-
-class NoteSpec(RequestModel):
-    pitch: Annotated[int, Field(ge=0, le=127)]
-    start_time: NonNegativeBeat
-    duration: PositiveBeat
-    velocity: Annotated[int, Field(ge=1, le=127)] = 100
-    mute: bool = False
-    probability: Annotated[float, Field(ge=0, le=1)] | None = None
-    release_velocity: Annotated[float, Field(ge=0, le=127)] | None = None
-    velocity_deviation: Annotated[float, Field(ge=-127, le=127)] | None = None
-
-
-class AddNotesToClipRequest(RequestModel):
-    track_index: NonNegativeInt
-    clip_index: NonNegativeInt
-    notes: Annotated[list[NoteSpec], Field(min_length=1, max_length=2048)]
-
-
-class FireClipRequest(RequestModel):
-    track_index: NonNegativeInt
-    clip_index: NonNegativeInt
-
-
-class CreateClipRequest(RequestModel):
-    track_index: NonNegativeInt
-    clip_index: NonNegativeInt
-    length_beats: PositiveBeat
-    dry_run: bool = False
-
-
-# ---------------------------------------------------------------------------
-# v0.5.5 — Arrangement timeline
-# ---------------------------------------------------------------------------
-
-
-class GetArrangementClipsRequest(RequestModel):
-    track_index: NonNegativeInt
-
-
-class DuplicateSessionClipToArrangementRequest(RequestModel):
-    """Place a Session clip on the timeline at ``time``, in beats from bar 1."""
-
-    track_index: NonNegativeInt
-    clip_index: NonNegativeInt
-    time: NonNegativeBeat
-
-
-class DeleteArrangementClipRequest(RequestModel):
-    """``clip_index`` indexes ``Track.arrangement_clips``, not a Session slot."""
-
-    track_index: NonNegativeInt
-    clip_index: NonNegativeInt
-
-
-class MoveArrangementClipRequest(DeleteArrangementClipRequest):
-    time: NonNegativeBeat
-
-
-class SetArrangementClipPropertiesRequest(DeleteArrangementClipRequest):
-    """At least one of ``name`` or ``muted`` must be present."""
-
-    name: str | None = None
-    muted: bool | None = None
-
-
-# ---------------------------------------------------------------------------
-# v0.5.6 — Instrument comprehension and authoring shorthands
-# ---------------------------------------------------------------------------
-
-
-class GetDeviceChainsRequest(RequestModel):
-    track_index: NonNegativeInt
-    device_index: NonNegativeInt
-
-
-class GetMidiChainReportRequest(RequestModel):
-    track_index: NonNegativeInt
-
-
-class DescribeInstrumentRequest(RequestModel):
-    track_index: NonNegativeInt
-
-
-class GetClipAutomationRequest(RequestModel):
-    """``device_index`` disambiguates a parameter name shared by several devices."""
-
-    track_index: NonNegativeInt
-    clip_index: NonNegativeInt
-    parameter_name: str
-    device_index: NonNegativeInt | None = None
-    resolution: Annotated[float, Field(gt=0, le=16)] = 0.25
-    # Live nests the controls that matter. ``chain_index`` selects a rack chain;
-    # add ``chain_device_index`` for a device inside it, or leave it out to
-    # address the chain's own mixer (``volume`` / ``panning``).
-    chain_index: NonNegativeInt | None = None
-    chain_device_index: NonNegativeInt | None = None
-
-
-class CurveControlPoint(RequestModel):
-    time: NonNegativeBeat
-    value: float
-
-
-class CreateClipAutomationCurveRequest(RequestModel):
-    """Few control points in, a dense step envelope out.
-
-    Live's clip envelopes are stepped, so a smooth ramp needs many steps. The
-    expansion happens on the server: the caller sends the shape, not its
-    hundreds of breakpoints.
-    """
-
-    track_index: NonNegativeInt
-    clip_index: NonNegativeInt
-    parameter_name: str
-    control_points: Annotated[list[CurveControlPoint], Field(min_length=2, max_length=200)]
-    shape: Literal["linear", "exp", "log", "hold"] = "linear"
-    resolution: Annotated[float, Field(gt=0, le=16)] = 0.25
-    device_index: NonNegativeInt | None = None
-    # Live nests the controls that matter. ``chain_index`` selects a rack chain;
-    # add ``chain_device_index`` for a device inside it, or leave it out to
-    # address the chain's own mixer (``volume`` / ``panning``).
-    chain_index: NonNegativeInt | None = None
-    chain_device_index: NonNegativeInt | None = None
-
-
-class PatternNote(RequestModel):
-    pitch: Annotated[int, Field(ge=0, le=127)]
-    start_time: NonNegativeBeat
-    duration: PositiveBeat
-    velocity: Annotated[int, Field(ge=1, le=127)] = 100
-    mute: bool = False
-
-
-class AddNotesPatternRequest(RequestModel):
-    """One cell, repeated, so the payload stays the size of the idea."""
-
-    track_index: NonNegativeInt
-    clip_index: NonNegativeInt
-    cell: Annotated[list[PatternNote], Field(min_length=1, max_length=256)]
-    cell_length: PositiveBeat
-    repeats: Annotated[int, Field(ge=1, le=128)]
-    transpose_per_repeat: Annotated[int, Field(ge=-48, le=48)] = 0
-    velocity_scale_per_repeat: Annotated[float, Field(gt=0, le=4)] = 1.0
-
-
-# ---------------------------------------------------------------------------
-# v0.3.0 — Composition Diagnostics
-# ---------------------------------------------------------------------------
-
-
-class GetCompositionStructureRequest(EmptyRequest):
-    pass
-
-
-class DiagnoseMidiClipRequest(RequestModel):
-    track_index: NonNegativeInt
-    clip_index: NonNegativeInt
-    scale_root: Annotated[str, Field(max_length=3)] | None = None
-    scale_type: Annotated[str, Field(max_length=32)] | None = None
-
-    @field_validator("scale_root")
-    @classmethod
-    def normalize_scale_root(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        value = value.strip().upper()
-        if value not in (
-            "C",
-            "C#",
-            "Db",
-            "D",
-            "D#",
-            "Eb",
-            "E",
-            "F",
-            "F#",
-            "Gb",
-            "G",
-            "G#",
-            "Ab",
-            "A",
-            "A#",
-            "Bb",
-            "B",
-        ):
-            raise ValueError(f"Invalid scale root: {value!r}")
-        return value
-
-    @field_validator("scale_type")
-    @classmethod
-    def normalize_scale_type(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        value = value.strip().lower()
-        if value not in (
-            "major",
-            "minor",
-            "dorian",
-            "phrygian",
-            "lydian",
-            "mixolydian",
-            "aeolian",
-            "locrian",
-            "harmonic_minor",
-            "melodic_minor",
-            "pentatonic_major",
-            "pentatonic_minor",
-            "blues",
-            "chromatic",
-        ):
-            raise ValueError(f"Invalid scale type: {value!r}")
-        return value
-
-
-# ---------------------------------------------------------------------------
-# v0.3.0 — Guarded Creative Mutations
-# ---------------------------------------------------------------------------
-
-
-class CreateMidiTrackRequest(RequestModel):
-    name: Annotated[str, Field(min_length=1, max_length=128)] = "MIDI Track"
-    index: int | None = None
-
-    @field_validator("name")
-    @classmethod
-    def strip_name(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            raise ValueError("name must be non-empty")
-        return value
-
-
-# v0.5.0 — audio-track mirror of CreateMidiTrackRequest. Naming differs:
-# `name` is optional (no default) because callers usually want Live's default
-# "Audio" track name; only override when explicitly provided. `index` defaults
-# to ``-1`` to match Live's LOM "append" semantics.
-class CreateAudioTrackRequest(RequestModel):
-    index: int = -1
-    name: str | None = Field(default=None, max_length=120)
-
-
-class RenameTrackRequest(RequestModel):
-    track_index: NonNegativeInt
-    new_name: Annotated[str, Field(min_length=1, max_length=128)]
-
-    @field_validator("new_name")
-    @classmethod
-    def strip_new_name(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            raise ValueError("new_name must be non-empty")
-        return value
-
-
-# ---------------------------------------------------------------------------
-# v0.3.0 — WebSocket Bridge (Warp & Devices)
-# ---------------------------------------------------------------------------
-
-
-class GetWarpStateRequest(RequestModel):
-    track_index: NonNegativeInt
-    clip_index: NonNegativeInt
-
-
-class SetWarpStateRequest(RequestModel):
-    track_index: NonNegativeInt
-    clip_index: NonNegativeInt
-    warping: bool | None = None
-    warp_mode: Annotated[str, Field(max_length=32)] | None = None
-
-    @field_validator("warp_mode")
-    @classmethod
-    def validate_warp_mode(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        valid = ("beats", "tones", "texture", "re-pitch", "complex", "complex_pro")
-        normalized = value.strip().lower().replace(" ", "_")
-        if normalized not in valid:
-            raise ValueError(f"Invalid warp mode: {value!r}. Valid: {valid}")
-        return normalized
-
-    @model_validator(mode="after")
-    def require_change(self) -> SetWarpStateRequest:
-        if self.warping is None and self.warp_mode is None:
-            raise ValueError("provide warping or warp_mode")
-        return self
-
-
-class LoadDeviceToTrackRequest(RequestModel):
-    track_index: NonNegativeInt
-    device_name: Annotated[str, Field(min_length=1, max_length=128)] | None = None
-    device_uri: Annotated[str, Field(min_length=1, max_length=512)] | None = None
-
-    @model_validator(mode="after")
-    def exactly_one_name(self) -> LoadDeviceToTrackRequest:
-        values = [value for value in (self.device_name, self.device_uri) if value is not None]
-        if len(values) != 1:
-            raise ValueError("provide exactly one of device_name or deprecated device_uri")
-        resolved = values[0].strip()
-        if not resolved:
-            raise ValueError("device name must be non-empty after trimming")
-        self.device_name = resolved
-        return self
-
-    @property
-    def resolved_name(self) -> str:
-        assert self.device_name is not None
-        return self.device_name
-
-
-# ---------------------------------------------------------------------------
-# v0.3.0 — Extension Scaffolding
-# ---------------------------------------------------------------------------
-
-
-class ScaffoldExtensionRequest(RequestModel):
-    name: Annotated[str, Field(min_length=1, max_length=128)]
-    author: Annotated[str, Field(min_length=1, max_length=128)] = "ntworm"
-    output_directory: Annotated[str, Field(min_length=1, max_length=1024)]
-
-
-class BuildExtensionRequest(RequestModel):
-    project_path: Annotated[str, Field(min_length=1, max_length=1024)]
-
-
-# ---------------------------------------------------------------------------
-# v0.5.0 — Set lifecycle
-# ---------------------------------------------------------------------------
-
-
-class GetLifecycleStatusRequest(EmptyRequest):
-    pass
-
-
-class SaveSetRequest(RequestModel):
-    """Request payload for ``save_set``.
-
-    ``require_api`` is ``False`` by default — when the Live host hides
-    ``Song.save`` the handler returns a structured GUI-workflow response
-    instead of raising. Set ``require_api=True`` to fail fast with a
-    ``BAD_INPUT`` error in that case.
-    """
-
-    require_api: bool = False
-
-
-class QuitAbletonRequest(RequestModel):
-    save: bool = True
-    force_without_save: bool = False
-    quit_delay_ticks: Annotated[int, Field(ge=1, le=120)] = 2
-
-
-class LiveFadeRequest(RequestModel):
-    """Request payload for ``live_fade``.
-
-    The handler interpolates one track's mixer volume over ``duration``
-    seconds in ``steps`` increments. Provide exactly one of ``target_percent``
-    or ``target_value`` — ``target_percent`` is the user-facing fader value
-    (100 = unity ≈ 0.85 on the LOM parameter) and ``target_value`` is the raw
-    LOM value. ``duration`` is bounded at 60 seconds and ``steps`` is the
-    interpolation resolution, both enforced on the MCP layer as well as on the
-    Remote Script handler.
-    """
-
-    track_index: NonNegativeInt
-    target_percent: Annotated[float, Field(ge=0, le=200)] | None = None
-    target_value: Annotated[float, Field(ge=0, le=1)] | None = None
-    duration: Annotated[float, Field(ge=0, le=60.0)] = 10.0
-    steps: Annotated[int, Field(ge=1, le=500)] = 40
-    curve: Literal["smoothstep", "linear"] = "smoothstep"
-    allow_over_unity: bool = False
-
-    @model_validator(mode="after")
-    def _exactly_one_target(self) -> LiveFadeRequest:
-        if (self.target_percent is None) == (self.target_value is None):
-            raise ValueError("Provide exactly one of target_percent or target_value")
-        return self
-
-
-# ---------------------------------------------------------------------------
-# v0.5.0 — Mix analysis (offline, no Live bridge)
-# ---------------------------------------------------------------------------
-
-
-class AnalyzeAudioRequest(RequestModel):
-    """Request payload for ``analyze_audio``.
-
-    Reads a local audio file from disk and returns LUFS-I, true-peak, RMS,
-    and per-band energy summary. ``path`` must point at a file readable by
-    ``soundfile``; unsupported encodings surface a structured error.
-    """
-
-    path: str = Field(min_length=1)
-
-
-class FindFrequencyMaskingRequest(RequestModel):
-    """Request payload for ``find_frequency_masking``.
-
-    Compares two files sample-rate-aligned: every octave band whose ``target``
-    energy exceeds the ``reference`` by ``threshold_db`` dB or more is
-    reported. ``target_path`` and ``reference_path`` must point at distinct
-    files.
-    """
-
-    target_path: str = Field(min_length=1)
-    reference_path: str = Field(min_length=1)
-    threshold_db: float = 6.0
-
-    @model_validator(mode="after")
-    def _paths_differ(self) -> FindFrequencyMaskingRequest:
-        if self.target_path == self.reference_path:
-            raise ValueError("target_path and reference_path must differ")
-        return self
-
-
-class AnalyzeMixRequest(RequestModel):
-    """Request payload for ``analyze_mix``.
-
-    ``stems`` is the ordered list of local audio files (1..16) to analyze
-    individually and then compare pair-wise for masking. The cap mirrors the
-    ``MAX_STEMS`` policy enforced in ``ableton_mcp_server.analysis.audio``.
-    """
-
-    stems: Annotated[list[str], Field(min_length=1, max_length=16)]
-
-
-class ExtractSingleCycleRequest(RequestModel):
-    """Request payload for ``extract_single_cycle``.
-
-    Searches the first 5 seconds of ``path`` for a candidate single-cycle
-    waveform starting at a low-energy zero-crossing. ``frame_size`` is the
-    analysis FFT window; the default of 2048 is tuned for bass-range
-    material but valid in 64..65536 inclusive.
-    """
-
-    path: str = Field(min_length=1)
-    frame_size: Annotated[int, Field(ge=64, le=65536)] = 2048
-
-
-# ---------------------------------------------------------------------------
-# v0.6.0 — Offline music generation
-# ---------------------------------------------------------------------------
-
-
-class MusicTraits(RequestModel):
-    """Trait vector for generation: four axes, each owning exactly one verb.
-
-    ``electro`` builds the grid — it sets the subdivision and opens the hat
-    palette. ``space`` subtracts from it, dropping events and lengthening the
-    survivors. ``weirdness`` deviates what is left through ghost notes, timing
-    jitter and octave leaps, all bounded. ``groove`` displaces in time and
-    accents the backbeat without adding or removing a single note.
-
-    No axis does two jobs, which is what keeps a combination predictable. They
-    are applied in that fixed order, and the response names the axes that
-    actually changed the output under ``traits_applied``.
-    """
-
-    groove: Annotated[float, Field(ge=0, le=1)] = 0.0
-    electro: Annotated[float, Field(ge=0, le=1)] = 0.0
-    weirdness: Annotated[float, Field(ge=0, le=1)] = 0.0
-    space: Annotated[float, Field(ge=0, le=1)] = 0.0
-
-
-class MusicGenerateDrumGrooveRequest(RequestModel):
-    """Request payload for ``music_generate_drum_groove``.
-
-    Generation is pure and keyed on ``seed``: the same ``bars``/``seed`` pair
-    returns the same notes forever. ``apply`` is the only part that reaches
-    Live, and it requires an explicit empty Session slot.
-    """
-
-    bars: Annotated[int, Field(ge=1, le=64)] = 4
-    seed: int = 1
-    traits: MusicTraits | None = None
-    apply: bool = False
-    track_index: NonNegativeInt | None = None
-    clip_index: NonNegativeInt | None = None
-
-    @model_validator(mode="after")
-    def validate_apply_target(self) -> MusicGenerateDrumGrooveRequest:
-        if self.apply and (self.track_index is None or self.clip_index is None):
-            raise ValueError("track_index and clip_index are required when apply is True")
-        return self
-
-
-class MusicGenerateBassRequest(MusicGenerateDrumGrooveRequest):
-    """Request payload for ``music_generate_bass``.
-
-    Every generated note is ``root_midi`` in some octave, so the line cannot
-    imply a harmony the caller did not ask for.
-    """
-
-    root_midi: Annotated[int, Field(ge=0, le=127)] = 36
-
-
-class MusicPlanProductionRequest(RequestModel):
-    """Request payload for ``music_plan_production``.
-
-    There is no language model behind this tool. It reads what the prompt
-    states literally, lays a conventional section grid over ``bars``, and names
-    what it could not resolve.
-    """
-
-    prompt: Annotated[str, Field(min_length=3, max_length=4000)]
-    bars: Annotated[int, Field(ge=1, le=512)] | None = None
-    bpm: Annotated[float, Field(ge=40, le=300)] | None = None
-
-
-class PlanUserJourneyRequest(RequestModel):
-    """Request payload for ``plan_user_journey``.
-
-    ``journey_type`` is closed because the plan is a fixed stage grid per
-    journey, not a generated one. ``traits`` is free text that the tool only
-    inspects and echoes; nothing downstream executes it.
-    """
-
-    journey_type: Literal[
-        "sequence_drums", "compose_melody", "compose_harmony", "design_sound"
-    ]
-    traits: Annotated[str, Field(max_length=2000)]
+# isort: off
+# The request models live in these modules, in the order they had in this file.
+from . import models_read  # noqa: E402,F401
+from . import models_devices  # noqa: E402,F401
+from . import models_arrangement  # noqa: E402,F401
+from . import models_offline  # noqa: E402,F401
+from .models_read import (  # noqa: E402
+    AutomationPoint as AutomationPoint,
+    ClearClipNotesRequest as ClearClipNotesRequest,
+    CreateClipAutomationRequest as CreateClipAutomationRequest,
+    DeleteClipRequest as DeleteClipRequest,
+    DiagnoseClipTargetsRequest as DiagnoseClipTargetsRequest,
+    FireSceneRequest as FireSceneRequest,
+    GetAbletonLogsRequest as GetAbletonLogsRequest,
+    GetBridgeStatusRequest as GetBridgeStatusRequest,
+    GetClipInfoRequest as GetClipInfoRequest,
+    GetClipNotesRequest as GetClipNotesRequest,
+    GetClipSummaryRequest as GetClipSummaryRequest,
+    GetControlSurfacesRequest as GetControlSurfacesRequest,
+    GetLocatorsRequest as GetLocatorsRequest,
+    GetLoopSettingsRequest as GetLoopSettingsRequest,
+    GetProjectMetadataRequest as GetProjectMetadataRequest,
+    GetSceneStateRequest as GetSceneStateRequest,
+    GetScenesRequest as GetScenesRequest,
+    GetSelectedContextRequest as GetSelectedContextRequest,
+    GetSessionInfoRequest as GetSessionInfoRequest,
+    GetSessionOverviewRequest as GetSessionOverviewRequest,
+    GetTrackListRequest as GetTrackListRequest,
+    GetTrackStateRequest as GetTrackStateRequest,
+    MergeGroupsRequest as MergeGroupsRequest,
+    MoveTrackRequest as MoveTrackRequest,
+    MoveTrackToGroupRequest as MoveTrackToGroupRequest,
+    ReorderTracksRequest as ReorderTracksRequest,
+    SetClipColorRequest as SetClipColorRequest,
+    SetClipPropertiesRequest as SetClipPropertiesRequest,
+    SetTrackColorRequest as SetTrackColorRequest,
+    SetTrackPropertyRequest as SetTrackPropertyRequest,
+    TakeSnapshotRequest as TakeSnapshotRequest,
+    UngroupTrackRequest as UngroupTrackRequest,
+)
+from .models_devices import (  # noqa: E402
+    AddNotesToClipRequest as AddNotesToClipRequest,
+    BulkCuePointsRequest as BulkCuePointsRequest,
+    CommandSpec as CommandSpec,
+    CreateClipRequest as CreateClipRequest,
+    CreateCuePointRequest as CreateCuePointRequest,
+    CuePointSpec as CuePointSpec,
+    DeleteCuePointRequest as DeleteCuePointRequest,
+    DiffSnapshotsRequest as DiffSnapshotsRequest,
+    FireClipRequest as FireClipRequest,
+    GetBrowserCategoriesRequest as GetBrowserCategoriesRequest,
+    GetDeviceListRequest as GetDeviceListRequest,
+    GetParameterValueRequest as GetParameterValueRequest,
+    GetPluginPresetsRequest as GetPluginPresetsRequest,
+    GetRoutingRequest as GetRoutingRequest,
+    GetSongLengthRequest as GetSongLengthRequest,
+    ListDeviceParamsRequest as ListDeviceParamsRequest,
+    LiveFindClipRequest as LiveFindClipRequest,
+    LiveFindDeviceRequest as LiveFindDeviceRequest,
+    LiveFindTrackRequest as LiveFindTrackRequest,
+    NoteSpec as NoteSpec,
+    PreconditionSpec as PreconditionSpec,
+    RunBatchRequest as RunBatchRequest,
+    SearchBrowserRequest as SearchBrowserRequest,
+    SetCurrentSongTimeRequest as SetCurrentSongTimeRequest,
+    SetLoopLengthRequest as SetLoopLengthRequest,
+    SetLoopRequest as SetLoopRequest,
+    SetLoopStartRequest as SetLoopStartRequest,
+    SetParameterValueRequest as SetParameterValueRequest,
+    SetPluginPresetRequest as SetPluginPresetRequest,
+    SetTempoRequest as SetTempoRequest,
+    SlotEmptyParams as SlotEmptyParams,
+    StartPlaybackRequest as StartPlaybackRequest,
+    StopPlaybackRequest as StopPlaybackRequest,
+)
+from .models_arrangement import (  # noqa: E402
+    AddNotesPatternRequest as AddNotesPatternRequest,
+    CreateAudioTrackRequest as CreateAudioTrackRequest,
+    CreateClipAutomationCurveRequest as CreateClipAutomationCurveRequest,
+    CreateMidiTrackRequest as CreateMidiTrackRequest,
+    CurveControlPoint as CurveControlPoint,
+    DeleteArrangementClipRequest as DeleteArrangementClipRequest,
+    DescribeInstrumentRequest as DescribeInstrumentRequest,
+    DiagnoseMidiClipRequest as DiagnoseMidiClipRequest,
+    DuplicateSessionClipToArrangementRequest as DuplicateSessionClipToArrangementRequest,
+    GetArrangementClipsRequest as GetArrangementClipsRequest,
+    GetClipAutomationRequest as GetClipAutomationRequest,
+    GetCompositionStructureRequest as GetCompositionStructureRequest,
+    GetDeviceChainsRequest as GetDeviceChainsRequest,
+    GetMidiChainReportRequest as GetMidiChainReportRequest,
+    MoveArrangementClipRequest as MoveArrangementClipRequest,
+    PatternNote as PatternNote,
+    RenameTrackRequest as RenameTrackRequest,
+    SetArrangementClipPropertiesRequest as SetArrangementClipPropertiesRequest,
+)
+from .models_offline import (  # noqa: E402
+    AnalyzeAudioRequest as AnalyzeAudioRequest,
+    AnalyzeMixRequest as AnalyzeMixRequest,
+    BuildExtensionRequest as BuildExtensionRequest,
+    ExtractSingleCycleRequest as ExtractSingleCycleRequest,
+    FindFrequencyMaskingRequest as FindFrequencyMaskingRequest,
+    GetLifecycleStatusRequest as GetLifecycleStatusRequest,
+    GetWarpStateRequest as GetWarpStateRequest,
+    LiveFadeRequest as LiveFadeRequest,
+    LoadDeviceToTrackRequest as LoadDeviceToTrackRequest,
+    MusicGenerateBassRequest as MusicGenerateBassRequest,
+    MusicGenerateDrumGrooveRequest as MusicGenerateDrumGrooveRequest,
+    MusicPlanProductionRequest as MusicPlanProductionRequest,
+    MusicTraits as MusicTraits,
+    PlanUserJourneyRequest as PlanUserJourneyRequest,
+    QuitAbletonRequest as QuitAbletonRequest,
+    SaveSetRequest as SaveSetRequest,
+    ScaffoldExtensionRequest as ScaffoldExtensionRequest,
+    SetWarpStateRequest as SetWarpStateRequest,
+)
+# isort: on
 
 
 TOOL_REQUEST_MODELS: dict[str, type[RequestModel]] = {

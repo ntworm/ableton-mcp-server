@@ -54,39 +54,56 @@ COMMAND_TIMEOUT_OVERRIDES = {
 
 
 def _request_work_units(command_name: str, params: object) -> int:
+    """Return the number of work units a request costs on the Live side."""
     if not isinstance(params, dict):
         return 1
     normalized = command_name.strip().lower()
     if normalized == "bulk_create_cue_points":
-        items = params.get("items")
-        return max(1, len(items)) if isinstance(items, list) else 1
+        return _bulk_cue_point_work_units(params.get("items"))
     if normalized == "create_clip_automation":
-        points = params.get("automation_points")
-        return min(10, 1 + len(points)) if isinstance(points, list) else 1
+        return _clip_automation_work_units(params.get("automation_points"))
     if normalized == "set_clip_properties":
         return max(1, sum(name in params for name in ("loop_start", "loop_end", "name")))
     if normalized == "clear_clip_notes":
         return 2
     if normalized == "live_fade":
-        steps = params.get("steps")
-        return min(60, int(steps) + 1) if isinstance(steps, int) else 41
+        return _live_fade_work_units(params.get("steps"))
     if normalized == "run_batch":
-        commands = params.get("commands")
-        if not isinstance(commands, list):
-            return 1
-        units = 0
-        for command in commands:
-            if not isinstance(command, dict):
-                units += 1
-                continue
-            command_type = command.get("type")
-            command_params = command.get("params", {})
-            units += _request_work_units(
-                command_type if isinstance(command_type, str) else "",
-                command_params,
-            )
-        return max(1, units)
+        return _batch_work_units(params.get("commands"))
     return 1
+
+
+def _bulk_cue_point_work_units(items: object) -> int:
+    """Return the work units of a bulk cue point creation."""
+    return max(1, len(items)) if isinstance(items, list) else 1
+
+
+def _clip_automation_work_units(points: object) -> int:
+    """Return the work units of a clip automation creation."""
+    return min(10, 1 + len(points)) if isinstance(points, list) else 1
+
+
+def _live_fade_work_units(steps: object) -> int:
+    """Return the work units of a fade."""
+    return min(60, int(steps) + 1) if isinstance(steps, int) else 41
+
+
+def _batch_work_units(commands: object) -> int:
+    """Return the summed work units of the commands of a batch."""
+    if not isinstance(commands, list):
+        return 1
+    units = 0
+    for command in commands:
+        if not isinstance(command, dict):
+            units += 1
+            continue
+        command_type = command.get("type")
+        command_params = command.get("params", {})
+        units += _request_work_units(
+            command_type if isinstance(command_type, str) else "",
+            command_params,
+        )
+    return max(1, units)
 
 
 def request_timeout_seconds(command_name: str, params: object) -> float:

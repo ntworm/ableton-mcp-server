@@ -15,7 +15,9 @@
     "gate0:test": "tsx --test groove-brain-gate0/tests/*.test.ts",
     "gate0:build": "npm run gate0:typecheck && tsx groove-brain-gate0/build.ts",
     "gate0:export": "../.venv/Scripts/python.exe ../scripts/export_groove_index.py",
-    "gate0:package": "npm run gate0:build && tsx groove-brain-gate0/package.ts --version 0.5.0"
+    "gate0:package": "npm run gate0:build && tsx groove-brain-gate0/package.ts --version 0.5.0",
+    "lint": "eslint .",
+    "lint:prune": "eslint . --prune-suppressions"
   },
   "dependencies": {
     "@ableton-extensions/sdk": "file:./vendor/ableton-extensions-sdk-1.0.0-beta.0.tgz",
@@ -25,7 +27,9 @@
     "@ableton-extensions/cli": "file:./vendor/ableton-extensions-cli-1.0.0-beta.0.tgz",
     "@types/node": "^24.1.0",
     "@types/ws": "^8.5.13",
+    "@typescript-eslint/parser": "8.73.0",
     "esbuild": "0.28.1",
+    "eslint": "10.15.0",
     "tsx": "^4.19.0",
     "typescript": "^5.9.3"
   }

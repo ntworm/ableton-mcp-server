@@ -193,22 +193,7 @@ class Client:
         with self._lock:
             while True:
                 try:
-                    if not self._connected:
-                        self._connect_socket()
-                    if self._socket is None:
-                        raise ConnectionError("Socket is not connected")
-                    self._socket.sendall(encode_request(command_type, request_params))
-                    response = decode_response(self._read_line(effective_timeout))
-                    if response.status == "ok":
-                        return response.result
-                    assert response.code is not None
-                    assert response.message is not None
-                    raise error_from_envelope(
-                        response.code,
-                        response.message,
-                        response.hint,
-                        response.details,
-                    )
+                    return self._exchange_locked(command_type, request_params, effective_timeout)
                 except TimeoutError as exc:
                     self._close_locked(increment=True)
                     raise BridgeTimeoutError(
@@ -217,20 +202,55 @@ class Client:
                     ) from exc
                 except (ConnectionError, OSError) as exc:
                     self._close_locked(increment=True)
-                    if may_retry and self.reconnect and retries < self.max_retries:
+                    if self._retry_allowed(may_retry, retries):
                         retries += 1
-                        if self.backoff_factor:
-                            time.sleep(self.backoff_factor * (2 ** (retries - 1)))
+                        self._wait_before_retry(retries)
                         continue
-                    hint = (
-                        "Verify that Live is running and AbletonMCPServer is enabled."
-                        if may_retry
-                        else "For mutations, inspect current Live state before retrying."
-                    )
-                    raise LiveUnavailableError(
-                        f"Command {command_type!r} failed at {self.host}:{self.port}: {exc}",
-                        hint,
-                    ) from exc
+                    raise self._unavailable_error(command_type, may_retry, exc) from exc
+
+    def _retry_allowed(self, may_retry: bool, retries: int) -> bool:
+        """Return True when a failed connection may be retried."""
+        return may_retry and self.reconnect and retries < self.max_retries
+
+    def _wait_before_retry(self, retries: int) -> None:
+        """Wait for the exponential backoff delay before the next attempt."""
+        if self.backoff_factor:
+            time.sleep(self.backoff_factor * (2 ** (retries - 1)))
+
+    def _exchange_locked(
+        self, command_type: str, request_params: dict[str, Any], effective_timeout: float
+    ) -> Any:
+        """Send one request on the held connection and return its result or raise its error."""
+        if not self._connected:
+            self._connect_socket()
+        if self._socket is None:
+            raise ConnectionError("Socket is not connected")
+        self._socket.sendall(encode_request(command_type, request_params))
+        response = decode_response(self._read_line(effective_timeout))
+        if response.status == "ok":
+            return response.result
+        assert response.code is not None
+        assert response.message is not None
+        raise error_from_envelope(
+            response.code,
+            response.message,
+            response.hint,
+            response.details,
+        )
+
+    def _unavailable_error(
+        self, command_type: str, may_retry: bool, exc: BaseException
+    ) -> LiveUnavailableError:
+        """The error for a command whose connection failed and will not be retried."""
+        hint = (
+            "Verify that Live is running and AbletonMCPServer is enabled."
+            if may_retry
+            else "For mutations, inspect current Live state before retrying."
+        )
+        return LiveUnavailableError(
+            f"Command {command_type!r} failed at {self.host}:{self.port}: {exc}",
+            hint,
+        )
 
     def call_at_epoch(
         self,

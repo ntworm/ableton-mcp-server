@@ -9,7 +9,7 @@ from collections.abc import Mapping, Sequence
 from contextlib import suppress
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from contracts import (
     ALLOWED_MUTATIONS,
@@ -24,6 +24,9 @@ from contracts import (
 
 from . import __version__
 from .catalog import TOOL_CATALOG
+
+if TYPE_CHECKING:
+    from .tool_counts import ToolCountSnapshotV1
 
 
 @dataclass(frozen=True)
@@ -118,12 +121,66 @@ def bridge_status(
     tool_count: int = 0,
     session_info: Any | None = None,
 ) -> dict[str, Any]:
+    """Probe the Live bridge and report the runtime, the tools and the bridge."""
     info = detect_runtime() if runtime is None else runtime
     from .tool_counts import build_tool_count_snapshot
 
     count_snapshot = build_tool_count_snapshot()
     bundled = bundled_remote_script_source()
-    base: dict[str, Any] = {
+    base = _bridge_status_base(client, info, count_snapshot, bundled)
+    try:
+        live = (
+            session_info
+            if session_info is not None
+            else client.call("get_session_info", {}, timeout=timeout)
+        )
+    except Exception as error:
+        return {
+            **base,
+            "status": "error",
+            "bridge_available": False,
+            "live": None,
+            "error": str(error),
+            "hint": _bridge_unavailable_hint(info),
+        }
+    contract, contract_error = _bridge_contract(live)
+    if contract_error is not None:
+        return {
+            **base,
+            "status": "error",
+            "bridge_available": False,
+            "live": live,
+            "error": {"code": "CAPABILITY_INVALID", "message": contract_error},
+            "hint": "Reconnect to a compatible AbletonMCPServer Remote Script.",
+        }
+    if contract is None:
+        return {
+            **base,
+            "status": "ok",
+            "bridge_available": True,
+            "live": live,
+            "error": None,
+            "hint": None,
+        }
+    return {
+        **base,
+        "status": "ok",
+        "bridge_available": True,
+        "live": live,
+        "bridge_contract": contract.model_dump(mode="json"),
+        "error": None,
+        "hint": None,
+    }
+
+
+def _bridge_status_base(
+    client: BridgeClient,
+    info: RuntimeInfo,
+    count_snapshot: ToolCountSnapshotV1,
+    bundled: BundledSource,
+) -> dict[str, Any]:
+    """The parts of the bridge status that do not depend on the Live probe."""
+    return {
         "endpoint": {"host": client.host, "port": client.port},
         "runtime": asdict(info),
         "server_version": __version__,
@@ -165,65 +222,37 @@ def bridge_status(
         "capability_source": _capability_source(),
         "capability_gaps": capability_gaps(),
     }
-    try:
-        live = (
-            session_info
-            if session_info is not None
-            else client.call("get_session_info", {}, timeout=timeout)
-        )
-    except Exception as error:
-        if info.is_wsl:
-            hint = (
-                "Run the Windows Python ableton-mcp-server.exe from WSL so the MCP process "
-                "shares Live's Windows loopback network."
-            )
-        else:
-            hint = (
-                "Confirm Ableton Live is open, AbletonMCPServer is enabled as a Control "
-                "Surface, and TCP 127.0.0.1:9888 is listening."
-            )
-        return {
-            **base,
-            "status": "error",
-            "bridge_available": False,
-            "live": None,
-            "error": str(error),
-            "hint": hint,
-        }
-    contract_value = live.get("bridge_contract") if isinstance(live, Mapping) else None
-    if contract_value is not None:
-        try:
-            from .client import BridgeContractV1
 
-            contract = BridgeContractV1.model_validate(contract_value)
-            if contract.capabilities.get("run_batch_preconditions") != "v1":
-                raise ValueError("run_batch_preconditions capability is missing")
-        except Exception as error:
-            return {
-                **base,
-                "status": "error",
-                "bridge_available": False,
-                "live": live,
-                "error": {"code": "CAPABILITY_INVALID", "message": str(error)},
-                "hint": "Reconnect to a compatible AbletonMCPServer Remote Script.",
-            }
-        return {
-            **base,
-            "status": "ok",
-            "bridge_available": True,
-            "live": live,
-            "bridge_contract": contract.model_dump(mode="json"),
-            "error": None,
-            "hint": None,
-        }
-    return {
-        **base,
-        "status": "ok",
-        "bridge_available": True,
-        "live": live,
-        "error": None,
-        "hint": None,
-    }
+
+def _bridge_unavailable_hint(info: RuntimeInfo) -> str:
+    """The hint for a Live bridge that did not answer."""
+    if info.is_wsl:
+        hint = (
+            "Run the Windows Python ableton-mcp-server.exe from WSL so the MCP process "
+            "shares Live's Windows loopback network."
+        )
+    else:
+        hint = (
+            "Confirm Ableton Live is open, AbletonMCPServer is enabled as a Control "
+            "Surface, and TCP 127.0.0.1:9888 is listening."
+        )
+    return hint
+
+
+def _bridge_contract(live: Any) -> tuple[Any | None, str | None]:
+    """Validate the bridge contract of Live and return it with its error."""
+    contract_value = live.get("bridge_contract") if isinstance(live, Mapping) else None
+    if contract_value is None:
+        return None, None
+    try:
+        from .client import BridgeContractV1
+
+        contract = BridgeContractV1.model_validate(contract_value)
+        if contract.capabilities.get("run_batch_preconditions") != "v1":
+            raise ValueError("run_batch_preconditions capability is missing")
+    except Exception as error:
+        return None, str(error)
+    return contract, None
 
 
 def _capability_counts() -> dict[str, int]:

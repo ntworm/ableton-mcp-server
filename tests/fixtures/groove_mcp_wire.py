@@ -63,40 +63,47 @@ def assert_client_schema_constraints(schema: Mapping[str, object], model: type[B
     assert set(actual["required"]) == set(declared["required"])
     for field_name, declared_field in declared["properties"].items():
         actual_field = actual["properties"][field_name]
-        for key in (
-            "minimum",
-            "maximum",
-            "exclusiveMinimum",
-            "exclusiveMaximum",
-            "minLength",
-            "maxLength",
-            "minItems",
-            "maxItems",
-            "enum",
-            "pattern",
-        ):
-            declared_value = declared_field.get(key)
-            actual_value = actual_field.get(key)
-            if declared_value is None:
-                declared_value = next(
-                    (
-                        branch.get(key)
-                        for branch in declared_field.get("anyOf", [])
-                        if isinstance(branch, dict) and key in branch
-                    ),
-                    None,
-                )
-            if actual_value is None:
-                actual_value = next(
-                    (
-                        branch.get(key)
-                        for branch in actual_field.get("anyOf", [])
-                        if isinstance(branch, dict) and key in branch
-                    ),
-                    None,
-                )
-            if declared_value is not None:
-                assert actual_value == declared_value, (field_name, key)
+        _assert_field_constraints(field_name, declared_field, actual_field)
+
+
+def _assert_field_constraints(
+    field_name: str,
+    declared_field: Any,
+    actual_field: Any,
+) -> None:
+    """Compare the declared constraints of one field with the wire schema."""
+    for key in (
+        "minimum",
+        "maximum",
+        "exclusiveMinimum",
+        "exclusiveMaximum",
+        "minLength",
+        "maxLength",
+        "minItems",
+        "maxItems",
+        "enum",
+        "pattern",
+    ):
+        declared_value = declared_field.get(key)
+        actual_value = actual_field.get(key)
+        if declared_value is None:
+            declared_value = _branch_constraint(declared_field.get("anyOf", []), key)
+        if actual_value is None:
+            actual_value = _branch_constraint(actual_field.get("anyOf", []), key)
+        if declared_value is not None:
+            assert actual_value == declared_value, (field_name, key)
+
+
+def _branch_constraint(branches: Any, key: str) -> object:
+    """Return the constraint the first anyOf branch that declares it carries."""
+    return next(
+        (
+            branch.get(key)
+            for branch in branches
+            if isinstance(branch, dict) and key in branch
+        ),
+        None,
+    )
 
 
 def schema_constraint(schema: Mapping[str, object], field_name: str, key: str) -> object:

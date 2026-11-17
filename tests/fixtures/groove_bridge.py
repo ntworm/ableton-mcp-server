@@ -121,14 +121,18 @@ class NewBridgeFixture:
             return {"code": "PRECONDITION_UNSUPPORTED", "message": "capability required"}
         if not isinstance(preconditions, list):
             return {"code": "PRECONDITION_INVALID", "message": "preconditions must be a list"}
+        first_failure = self._check_preconditions(preconditions)
+        if first_failure is not None:
+            return first_failure
+        self.begin_undo_calls += 1
+        return self._run_commands(commands)
+
+    def _check_preconditions(self, preconditions: list[Any]) -> dict[str, object] | None:
+        """Return the first precondition failure, or None when they all hold."""
         self.last_preconditions = [item for item in preconditions if isinstance(item, dict)]
         first_failure: dict[str, object] | None = None
         for index, item in enumerate(preconditions):
-            if (
-                not isinstance(item, dict)
-                or item.get("type") != "slot_empty"
-                or item.get("version") != "v1"
-            ):
+            if not self._is_slot_empty_precondition(item):
                 first_failure = {
                     "code": "PRECONDITION_INVALID",
                     "message": "invalid precondition",
@@ -156,9 +160,18 @@ class NewBridgeFixture:
                     "bridge_stage": "precondition",
                     "index": index,
                 }
-        if first_failure is not None:
-            return first_failure
-        self.begin_undo_calls += 1
+        return first_failure
+
+    def _is_slot_empty_precondition(self, item: Any) -> bool:
+        """Return True when the item is a well formed slot_empty precondition."""
+        return (
+            isinstance(item, dict)
+            and item.get("type") == "slot_empty"
+            and item.get("version") == "v1"
+        )
+
+    def _run_commands(self, commands: list[object]) -> dict[str, object]:
+        """Run the commands of a batch and return the batch result."""
         results: list[dict[str, object]] = []
         for index, command in enumerate(commands):
             if not isinstance(command, dict):

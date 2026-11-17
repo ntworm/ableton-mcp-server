@@ -138,6 +138,9 @@ def terminate_process_tree(process: subprocess.Popen[bytes]) -> None:
             process.kill()
 
 
+_ErrorTypes = type[Exception] | tuple[type[Exception], ...]
+
+
 class NeuralSubprocessProvider:
     def __init__(
         self,
@@ -231,76 +234,104 @@ class NeuralSubprocessProvider:
             )
             enforcer = self.enforcer or select_resource_enforcer()
             handle = enforcer.enforce(process, limits)
-            self._send(
-                process,
-                {
-                    "method": "hello",
-                    "schema_version": "groove.provider.hello.v1",
-                    "provider_id": self.provider_id,
-                },
-            )
-            hello = self._read_with_timeout(process.stdout, limits.startup_seconds)  # type: ignore[arg-type]
-            self._validate_method(hello, "hello")
-            if hello.get("status") != "ok":
-                return self._failure(
-                    ProviderFailureCode.protocol_violation, "provider hello failed"
-                )
-            self._send(
-                process,
-                {
-                    "method": "generate",
-                    "schema_version": "groove.provider.generate.v1",
-                    "condition_card": condition_card.model_dump(mode="json"),
-                    "parent_artifact_ids": list(parent_artifact_ids),
-                    "seed": seed,
-                    "limits": limits.model_dump(mode="json"),
-                },
-            )
-            response = self._read_with_timeout(process.stdout, limits.generation_seconds)  # type: ignore[arg-type]
-            self._validate_method(response, "generate")
-            if response.get("status") != "ok":
-                code = response.get("code")
-                if isinstance(code, str) and code in {item.value for item in ProviderFailureCode}:
-                    return self._failure(ProviderFailureCode(code), "provider rejected generation")
-                return self._failure(
-                    ProviderFailureCode.output_invalid, "provider rejected generation"
-                )
-            candidate = response.get("candidate")
-            if not isinstance(candidate, Mapping):
-                raise ValueError("provider candidate is missing")
-            value = ProviderArtifactCandidate.model_validate(candidate)
-            self._send(
-                process,
-                {"method": "shutdown", "schema_version": "groove.provider.shutdown.v1"},
-            )
-            self._read_with_timeout(process.stdout, limits.shutdown_seconds)  # type: ignore[arg-type]
-            return value
-        except FileNotFoundError as error:
-            return self._failure(ProviderFailureCode.not_installed, str(error))
-        except PermissionError as error:
-            return self._failure(ProviderFailureCode.launch_denied, str(error))
-        except ResourceLimitUnavailable as error:
-            return self._failure(ProviderFailureCode.resource_limit, str(error))
-        except TimeoutError as error:
-            return self._failure(ProviderFailureCode.timeout, str(error))
-        except ProviderProtocolError as error:
-            return self._failure(ProviderFailureCode.protocol_violation, str(error))
-        except (ValueError, TypeError) as error:
-            return self._failure(ProviderFailureCode.output_invalid, str(error))
-        except OSError as error:
-            return self._failure(ProviderFailureCode.launch_denied, str(error))
-        except Exception as error:  # pragma: no cover - defensive process boundary
-            return self._failure(ProviderFailureCode.internal, type(error).__name__)
+            return self._converse(process, condition_card, parent_artifact_ids, seed, limits)
+        except Exception as error:  # mapped per type; the default is defensive
+            return self._failure_for_exception(error)
         finally:
-            if process is not None:
-                if handle is not None and self.enforcer is not None:
-                    self.enforcer.terminate(handle)
-                elif handle is not None:
-                    (self.enforcer or select_resource_enforcer()).terminate(handle)
-                else:
-                    terminate_process_tree(process)
-            with suppress(OSError):
-                temp_dir.rmdir()
+            self._release(process, handle, temp_dir)
+
+    def _converse(
+        self,
+        process: subprocess.Popen[bytes],
+        condition_card: ProviderConditionCardV1,
+        parent_artifact_ids: tuple[str, ...],
+        seed: int,
+        limits: ProviderLimitsV1,
+    ) -> ProviderArtifactCandidate | ProviderFailure:
+        """Run the hello, generate and shutdown exchange with a started provider."""
+        self._send(
+            process,
+            {
+                "method": "hello",
+                "schema_version": "groove.provider.hello.v1",
+                "provider_id": self.provider_id,
+            },
+        )
+        hello = self._read_with_timeout(process.stdout, limits.startup_seconds)  # type: ignore[arg-type]
+        self._validate_method(hello, "hello")
+        if hello.get("status") != "ok":
+            return self._failure(
+                ProviderFailureCode.protocol_violation, "provider hello failed"
+            )
+        self._send(
+            process,
+            {
+                "method": "generate",
+                "schema_version": "groove.provider.generate.v1",
+                "condition_card": condition_card.model_dump(mode="json"),
+                "parent_artifact_ids": list(parent_artifact_ids),
+                "seed": seed,
+                "limits": limits.model_dump(mode="json"),
+            },
+        )
+        response = self._read_with_timeout(process.stdout, limits.generation_seconds)  # type: ignore[arg-type]
+        self._validate_method(response, "generate")
+        if response.get("status") != "ok":
+            return self._rejected_generation(response)
+        candidate = response.get("candidate")
+        if not isinstance(candidate, Mapping):
+            raise ValueError("provider candidate is missing")
+        value = ProviderArtifactCandidate.model_validate(candidate)
+        self._send(
+            process,
+            {"method": "shutdown", "schema_version": "groove.provider.shutdown.v1"},
+        )
+        self._read_with_timeout(process.stdout, limits.shutdown_seconds)  # type: ignore[arg-type]
+        return value
+
+    def _rejected_generation(self, response: Mapping[str, object]) -> ProviderFailure:
+        """The failure for a provider that answered generate with an error status."""
+        code = response.get("code")
+        if isinstance(code, str) and code in {item.value for item in ProviderFailureCode}:
+            return self._failure(ProviderFailureCode(code), "provider rejected generation")
+        return self._failure(
+            ProviderFailureCode.output_invalid, "provider rejected generation"
+        )
+
+    def _failure_for_exception(self, error: Exception) -> ProviderFailure:
+        """Map an error raised while running the provider to its failure code."""
+        mapping: tuple[tuple[_ErrorTypes, ProviderFailureCode], ...] = (
+            (FileNotFoundError, ProviderFailureCode.not_installed),
+            (PermissionError, ProviderFailureCode.launch_denied),
+            (ResourceLimitUnavailable, ProviderFailureCode.resource_limit),
+            (TimeoutError, ProviderFailureCode.timeout),
+            (ProviderProtocolError, ProviderFailureCode.protocol_violation),
+            ((ValueError, TypeError), ProviderFailureCode.output_invalid),
+            (OSError, ProviderFailureCode.launch_denied),
+        )
+        for error_types, code in mapping:
+            if isinstance(error, error_types):
+                return self._failure(code, str(error))
+        return self._failure(  # pragma: no cover - defensive process boundary
+            ProviderFailureCode.internal, type(error).__name__
+        )
+
+    def _release(
+        self,
+        process: subprocess.Popen[bytes] | None,
+        handle: ResourceHandle | None,
+        temp_dir: Path,
+    ) -> None:
+        """Stop the provider process tree and remove its empty working folder."""
+        if process is not None:
+            if handle is not None and self.enforcer is not None:
+                self.enforcer.terminate(handle)
+            elif handle is not None:
+                (self.enforcer or select_resource_enforcer()).terminate(handle)
+            else:
+                terminate_process_tree(process)
+        with suppress(OSError):
+            temp_dir.rmdir()
 
 
 __all__ = [

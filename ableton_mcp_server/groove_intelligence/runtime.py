@@ -100,6 +100,89 @@ def build_budgeted_json(value: object, budget: ResponseBudget) -> str:
     return text
 
 
+def _mapping_or_empty(value: object) -> Mapping[str, Any]:
+    """Return VALUE when it is a mapping, otherwise an empty mapping."""
+    return value if isinstance(value, Mapping) else {}
+
+
+def _card_rights(value: object) -> str:
+    """Normalize a stored redistribution value to one of the three card rights."""
+    rights = str(value)
+    if rights not in {"full", "derived_only", "blocked"}:
+        rights = "derived_only"
+    return rights
+
+
+def _metadata_facets(metadata: Mapping[str, Any]) -> dict[str, list[str]]:
+    """Facet lists of an artifact's provenance metadata, as strings."""
+    return {
+        str(axis): [str(item) for item in values]
+        for axis, values in (
+            metadata.get("facets", {})
+            if isinstance(metadata.get("facets", {}), Mapping)
+            else {}
+        ).items()
+        if isinstance(values, (list, tuple))
+    }
+
+
+def _metadata_features(metadata: Mapping[str, Any]) -> dict[str, float | int | str | None]:
+    """Scalar features of an artifact's provenance metadata."""
+    return {
+        str(name): value
+        for name, value in (
+            metadata.get("features", {})
+            if isinstance(metadata.get("features", {}), Mapping)
+            else {}
+        ).items()
+        if isinstance(value, (str, int, float)) or value is None
+    }
+
+
+def _row_facets(raw_facets: object) -> dict[str, list[str]]:
+    """Facet lists of an indexed search row."""
+    facets: dict[str, list[str]] = {}
+    if isinstance(raw_facets, (list, tuple)):
+        for item in raw_facets:
+            if isinstance(item, Mapping):
+                axis = str(item.get("axis", ""))
+                value = str(item.get("value", ""))
+                if axis and value:
+                    facets.setdefault(axis, []).append(value)
+    return facets
+
+
+def _row_features(raw_features: object) -> dict[str, float | int | str | None]:
+    """Available scalar features of an indexed search row."""
+    features: dict[str, float | int | str | None] = {}
+    if isinstance(raw_features, (list, tuple)):
+        for item in raw_features:
+            if isinstance(item, Mapping):
+                name = str(item.get("name", ""))
+                if name and item.get("status") == "available":
+                    feature_value = item.get("value")
+                    if isinstance(feature_value, (str, int, float)) or feature_value is None:
+                        features[name] = feature_value
+    return features
+
+
+def _row_projections(raw_projections: object) -> dict[str, str]:
+    """Projection versions of an indexed search row, checked against the contract."""
+    projections: dict[str, str] = {}
+    if isinstance(raw_projections, (list, tuple)):
+        for item in raw_projections:
+            if isinstance(item, Mapping):
+                name = str(item.get("name", ""))
+                version = str(item.get("version", ""))
+                if name and version:
+                    if _PROJECTION_VERSIONS.get(name) != version:
+                        raise GrooveIndexInvalid(
+                            "search row contains an unsupported projection reference"
+                        )
+                    projections[name] = version
+    return projections
+
+
 class GrooveRuntime:
     def __init__(
         self,
@@ -117,36 +200,9 @@ class GrooveRuntime:
     def card(self, artifact_id: str) -> ArtifactCardV1:
         artifact = self.store.get(artifact_id)
         metadata = artifact.provenance
-        projection_map: dict[str, str] = {}
-        projection_values = metadata.get("_projection_values", {})
-        if not isinstance(projection_values, Mapping):
-            projection_values = {}
-        # Every stored reference is validated, so a corrupt one is caught, but only
-        # the publicly named projections reach the card: ``hvo_v3`` drives the
-        # facets and has no MCP identifier a client could ask for.  The bound is
-        # the size of the contract rather than a literal, which is what silently
-        # dropped the grammar reference when a fourth projection was added.
-        for reference in artifact.projections[: len(_PROJECTION_VERSIONS)]:
-            expected_version = _PROJECTION_VERSIONS.get(reference.name)
-            if expected_version is None or reference.version != expected_version:
-                raise GrooveIndexInvalid("artifact contains an unsupported projection reference")
-            projection_id = reference.version
-            if reference.name not in PUBLIC_PROJECTION_NAMES:
-                # Nothing on the card reads it, and search builds a card per
-                # candidate row, so decompressing the training projection here
-                # would be paid on the hot path for a value no caller sees.  Its
-                # integrity is already checked when the index is opened.
-                continue
-            projection_map[reference.name] = projection_id
-            # Materialize bounded validated projections through the adapter.
-            if projection_id not in projection_values:
-                self.index.load_projection(artifact_id, projection_id)
-        rights = str(metadata.get("redistribution", "derived_only"))
-        if rights not in {"full", "derived_only", "blocked"}:
-            rights = "derived_only"
-        capability_values = metadata.get("capabilities", {})
-        if not isinstance(capability_values, Mapping):
-            capability_values = {}
+        projection_map = self._public_projection_map(artifact, artifact_id)
+        rights = _card_rights(metadata.get("redistribution", "derived_only"))
+        capability_values = _mapping_or_empty(metadata.get("capabilities", {}))
         rights_level = int(
             metadata.get("rights_level", {"blocked": 0, "derived_only": 1, "full": 2}[rights])
         )
@@ -159,24 +215,8 @@ class GrooveRuntime:
             summary=dict(metadata.get("summary", {}))
             if isinstance(metadata.get("summary", {}), Mapping)
             else {},
-            facets={
-                str(axis): [str(item) for item in values]
-                for axis, values in (
-                    metadata.get("facets", {})
-                    if isinstance(metadata.get("facets", {}), Mapping)
-                    else {}
-                ).items()
-                if isinstance(values, (list, tuple))
-            },
-            features={
-                str(name): value
-                for name, value in (
-                    metadata.get("features", {})
-                    if isinstance(metadata.get("features", {}), Mapping)
-                    else {}
-                ).items()
-                if isinstance(value, (str, int, float)) or value is None
-            },
+            facets=_metadata_facets(metadata),
+            features=_metadata_features(metadata),
             projections=projection_map,
             rights_level=rights,  # type: ignore[arg-type]
             capabilities=CapabilitiesV1(
@@ -198,44 +238,38 @@ class GrooveRuntime:
             raise GrooveResponseBudgetExceeded("artifact card exceeds 6 KiB")
         return card
 
+    def _public_projection_map(self, artifact: MidiArtifactV1, artifact_id: str) -> dict[str, str]:
+        """Validate the stored projection references and map the public ones."""
+        projection_map: dict[str, str] = {}
+        projection_values = _mapping_or_empty(
+            artifact.provenance.get("_projection_values", {})
+        )
+        # Every stored reference is validated, so a corrupt one is caught, but only
+        # the publicly named projections reach the card: ``hvo_v3`` drives the
+        # facets and has no MCP identifier a client could ask for.  The bound is
+        # the size of the contract rather than a literal, which is what silently
+        # dropped the grammar reference when a fourth projection was added.
+        for reference in artifact.projections[: len(_PROJECTION_VERSIONS)]:
+            expected_version = _PROJECTION_VERSIONS.get(reference.name)
+            if expected_version is None or reference.version != expected_version:
+                raise GrooveIndexInvalid("artifact contains an unsupported projection reference")
+            projection_id = reference.version
+            if reference.name not in PUBLIC_PROJECTION_NAMES:
+                # Nothing on the card reads it, and search builds a card per
+                # candidate row, so decompressing the training projection here
+                # would be paid on the hot path for a value no caller sees.  Its
+                # integrity is already checked when the index is opened.
+                continue
+            projection_map[reference.name] = projection_id
+            # Materialize bounded validated projections through the adapter.
+            if projection_id not in projection_values:
+                self.index.load_projection(artifact_id, projection_id)
+        return projection_map
+
     def card_from_search_row(self, row: Mapping[str, object]) -> ArtifactCardV1:
         """Project an indexed search row without loading projection BLOBs."""
 
-        raw_facets = row.get("facets", ())
-        facets: dict[str, list[str]] = {}
-        if isinstance(raw_facets, (list, tuple)):
-            for item in raw_facets:
-                if isinstance(item, Mapping):
-                    axis = str(item.get("axis", ""))
-                    value = str(item.get("value", ""))
-                    if axis and value:
-                        facets.setdefault(axis, []).append(value)
-        raw_features = row.get("features", ())
-        features: dict[str, float | int | str | None] = {}
-        if isinstance(raw_features, (list, tuple)):
-            for item in raw_features:
-                if isinstance(item, Mapping):
-                    name = str(item.get("name", ""))
-                    if name and item.get("status") == "available":
-                        feature_value = item.get("value")
-                        if isinstance(feature_value, (str, int, float)) or feature_value is None:
-                            features[name] = feature_value
-        raw_projections = row.get("projections", ())
-        projections: dict[str, str] = {}
-        if isinstance(raw_projections, (list, tuple)):
-            for item in raw_projections:
-                if isinstance(item, Mapping):
-                    name = str(item.get("name", ""))
-                    version = str(item.get("version", ""))
-                    if name and version:
-                        if _PROJECTION_VERSIONS.get(name) != version:
-                            raise GrooveIndexInvalid(
-                                "search row contains an unsupported projection reference"
-                            )
-                        projections[name] = version
-        rights = str(row.get("redistribution", "derived_only"))
-        if rights not in {"full", "derived_only", "blocked"}:
-            rights = "derived_only"
+        rights = _card_rights(row.get("redistribution", "derived_only"))
         capabilities_raw = row.get("capabilities", {})
         capabilities: Mapping[str, object] = (
             capabilities_raw if isinstance(capabilities_raw, Mapping) else {}
@@ -252,9 +286,9 @@ class GrooveRuntime:
             artifact_id=ArtifactId(str(row["artifact_id"])),
             kind=str(row.get("kind", "source")),  # type: ignore[arg-type]
             summary=summary,
-            facets=facets,
-            features=features,
-            projections=projections,
+            facets=_row_facets(row.get("facets", ())),
+            features=_row_features(row.get("features", ())),
+            projections=_row_projections(row.get("projections", ())),
             rights_level=rights,  # type: ignore[arg-type]
             capabilities=CapabilitiesV1(
                 evidence=CapabilityV1(allowed=bool(capabilities.get("evidence", True))),

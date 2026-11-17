@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 from ableton_mcp_server.groove_intelligence.articulation import (
     collection_confidence,
@@ -56,6 +57,11 @@ BAND_AND_SNARE_SMF = _chunk(b"MThd", b"\x00\x01\x00\x01\x01\xe0") + _chunk(
 
 def _roles(projection: HvoProjectionV1) -> set[str]:
     return {cell.role for cell in projection.cells}
+
+
+def _snare_cells(projection: HvoProjectionV1) -> list[dict[str, Any]]:
+    """Return the dumped cells of a projection whose role is the snare."""
+    return [cell.model_dump() for cell in projection.cells if cell.role == "snare"]
 
 
 def test_map_is_keyed_per_collection_with_real_evidence() -> None:
@@ -170,8 +176,8 @@ def test_v3_is_stamped_and_differs_only_where_the_map_says() -> None:
     assert "other_percussion" not in _roles(v3)
     assert _roles(v3) - {"snare"} <= HAT_ROLES
 
-    v2_snare = [cell.model_dump() for cell in v2.cells if cell.role == "snare"]
-    v3_snare = [cell.model_dump() for cell in v3.cells if cell.role == "snare"]
+    v2_snare = _snare_cells(v2)
+    v3_snare = _snare_cells(v3)
     assert v2_snare == v3_snare
 
 

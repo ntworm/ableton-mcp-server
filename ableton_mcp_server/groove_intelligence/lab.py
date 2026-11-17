@@ -156,28 +156,13 @@ def run_provider_gates(
         and quality_mae <= thresholds.quality_feature_mae_max
     )
     quality = _passed(quality_ok, detail="published quality metrics", measured=quality_hvo)
-    privacy_ok = (
-        contract_ok
-        and not _private_content(candidate)
-        and str(candidate.rights.get("redistribution", "derived_only")) != "blocked"
-        and int(candidate.rights.get("blocked_lineage", fixture_set.blocked_lineage))
-        <= thresholds.blocked_lineage_max
-        and fixture_set.privacy_path_leaks <= thresholds.privacy_path_leaks_max
-    )
     privacy = _passed(
-        privacy_ok,
+        contract_ok and _privacy_ok(candidate, fixture_set, thresholds),
         detail="privacy and rights checks",
         measured=fixture_set.privacy_path_leaks,
     )
-    cost_ok = (
-        fixture_set.p95_latency_seconds <= thresholds.p95_latency_seconds_max
-        and fixture_set.peak_memory_mib <= thresholds.peak_memory_mib_max
-        and fixture_set.response_bytes <= thresholds.response_bytes_max
-        and sum(track.event_count for track in candidate.artifact.tracks)
-        <= thresholds.candidate_events_max
-    )
     cost = _passed(
-        cost_ok,
+        _cost_ok(candidate, fixture_set, thresholds),
         detail="bounded provider resources",
         measured=fixture_set.p95_latency_seconds,
     )
@@ -193,6 +178,36 @@ def run_provider_gates(
         thresholds=thresholds,
         registry_opt_in=fixture_set.registry_opt_in,
         signer=signer,
+    )
+
+
+def _privacy_ok(
+    candidate: ProviderArtifactCandidate,
+    fixture_set: ProviderFixtureSet,
+    thresholds: GateThresholdsV1,
+) -> bool:
+    """No private content, no blocked rights and leaks within the thresholds."""
+    return (
+        not _private_content(candidate)
+        and str(candidate.rights.get("redistribution", "derived_only")) != "blocked"
+        and int(candidate.rights.get("blocked_lineage", fixture_set.blocked_lineage))
+        <= thresholds.blocked_lineage_max
+        and fixture_set.privacy_path_leaks <= thresholds.privacy_path_leaks_max
+    )
+
+
+def _cost_ok(
+    candidate: ProviderArtifactCandidate,
+    fixture_set: ProviderFixtureSet,
+    thresholds: GateThresholdsV1,
+) -> bool:
+    """Latency, memory, response size and event count within the thresholds."""
+    return (
+        fixture_set.p95_latency_seconds <= thresholds.p95_latency_seconds_max
+        and fixture_set.peak_memory_mib <= thresholds.peak_memory_mib_max
+        and fixture_set.response_bytes <= thresholds.response_bytes_max
+        and sum(track.event_count for track in candidate.artifact.tracks)
+        <= thresholds.candidate_events_max
     )
 
 

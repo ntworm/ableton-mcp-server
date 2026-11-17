@@ -149,6 +149,19 @@ def test_scenario_set_is_shaped_as_the_acceptance_case_requires() -> None:
     assert by_name["> PIANO"]["is_grouped"] is False
 
 
+def _assert_move_into_pads_is_refused(song: FakeSong, child_index: int) -> None:
+    """Check that moving one child of '@ PADS 2' into '@ PADS' is refused."""
+    with pytest.raises(RemoteError) as error:
+        call(
+            song,
+            "move_track_to_group",
+            {"track_index": child_index, "group_track_index": 0},
+        )
+    assert error.value.code == "CAPABILITY_UNAVAILABLE"
+    assert error.value.details is not None
+    assert error.value.details["applied"] is False
+
+
 def test_moving_pads_2_children_into_pads_is_refused_and_changes_nothing() -> None:
     """Steps 1-3 and 5-7 of the acceptance case."""
 
@@ -157,15 +170,7 @@ def test_moving_pads_2_children_into_pads_is_refused_and_changes_nothing() -> No
     before_list = call(song, "get_track_list")
 
     for child_index in (2, 3):
-        with pytest.raises(RemoteError) as error:
-            call(
-                song,
-                "move_track_to_group",
-                {"track_index": child_index, "group_track_index": 0},
-            )
-        assert error.value.code == "CAPABILITY_UNAVAILABLE"
-        assert error.value.details is not None
-        assert error.value.details["applied"] is False
+        _assert_move_into_pads_is_refused(song, child_index)
 
     # Step 2: @ PADS 2 still exists — nothing is ever deleted.
     assert [track.name for track in song.tracks].count("@ PADS 2") == 1

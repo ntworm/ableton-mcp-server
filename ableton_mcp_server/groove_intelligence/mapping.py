@@ -133,28 +133,23 @@ def _resolve_pitch(
     return None, "unmapped"
 
 
-def map_artifact(
-    artifact: MidiArtifactV1,
+def _resolve_scope(
     profile_id: str,
-    *,
-    on_unmapped: Literal["reject", "skip"] = "reject",
-    source_track_index: int | None = None,
-    source_channel: int | None = None,
-) -> MappingPlanV1:
-    if (source_track_index is None) != (source_channel is None):
-        return MappingPlanV1(
-            profile_id=profile_id,
-            allowed=False,
-            warning_codes=["scope_required"],
-        )
-    profile = _default_profile(profile_id)
-    note_events = _source_note_events(artifact)
-    note_tracks = {event.track_index for event in note_events}
-    note_channels = {event.channel for event in note_events}
-    warnings: list[str] = []
-    allowed = True
-    if source_track_index is None and (len(note_tracks) > 1 or len(note_channels) > 1):
-        return MappingPlanV1(profile_id=profile_id, allowed=False, warning_codes=["scope_required"])
+    note_events: list[NoteEventV1],
+    source_track_index: int | None,
+    source_channel: int | None,
+) -> tuple[list[NoteEventV1], MappingPlanV1 | None]:
+    """Return the selected events and the refusal plan of the requested scope."""
+
+    if source_track_index is None:
+        note_tracks = {event.track_index for event in note_events}
+        note_channels = {event.channel for event in note_events}
+        if len(note_tracks) > 1 or len(note_channels) > 1:
+            return [], MappingPlanV1(
+                profile_id=profile_id,
+                allowed=False,
+                warning_codes=["scope_required"],
+            )
     selected = [
         event
         for event in note_events
@@ -162,13 +157,28 @@ def map_artifact(
         or (event.track_index == source_track_index and event.channel == source_channel)
     ]
     if source_track_index is not None and not selected:
-        return MappingPlanV1(
+        return [], MappingPlanV1(
             profile_id=profile_id,
             selected_track_index=source_track_index,
             selected_channel=source_channel,
             allowed=False,
             warning_codes=["scope_invalid"],
         )
+    return selected, None
+
+
+def _map_events(
+    artifact: MidiArtifactV1,
+    selected: list[NoteEventV1],
+    profile: KitMappingProfileV1,
+    profile_id: str,
+    *,
+    on_unmapped: Literal["reject", "skip"],
+) -> tuple[list[CanonicalApplyEventV1], tuple[int, int, int, int], Fraction, bool, list[str]]:
+    """Return the emitted events, the counters, the length, the flag and the warnings."""
+
+    warnings: list[str] = []
+    allowed = True
     if profile_id == "gm-drums-v1" and any(event.channel != 9 for event in selected):
         allowed = False
         warnings.append("unsupported_channel")
@@ -212,25 +222,77 @@ def map_artifact(
                 note=note,
             )
         )
+    return emitted, (exact, fallback, unmapped, skipped), length, allowed, warnings
+
+
+def _rights_allow_apply(artifact: MidiArtifactV1) -> bool:
+    """Report whether the provenance of the artifact permits an apply operation."""
+
+    redistribution = str(artifact.provenance.get("redistribution", "derived_only"))
+    rights_level = int(artifact.provenance.get("rights_level", 1))
+    capabilities = artifact.provenance.get("capabilities", {})
+    return (
+        redistribution == "full"
+        and rights_level >= 2
+        and isinstance(capabilities, Mapping)
+        and bool(capabilities.get("apply", False))
+    )
+
+
+def _evaluate_mapping(
+    artifact: MidiArtifactV1,
+    selected: list[NoteEventV1],
+    emitted: list[CanonicalApplyEventV1],
+    length: Fraction,
+    allowed: bool,
+    warnings: list[str],
+) -> tuple[bool, list[str]]:
+    """Return the allowed flag and the warning codes of one mapping."""
+
     if len(selected) > 2048:
         allowed = False
         warnings.append("note_limit")
     if length > CREATE_CLIP_MAX_LENGTH_BEATS:
         allowed = False
         warnings.append("loop_length_limit")
-    redistribution = str(artifact.provenance.get("redistribution", "derived_only"))
-    rights_level = int(artifact.provenance.get("rights_level", 1))
-    capabilities = artifact.provenance.get("capabilities", {})
-    if (
-        redistribution != "full"
-        or rights_level < 2
-        or not isinstance(capabilities, Mapping)
-        or not bool(capabilities.get("apply", False))
-    ):
+    if not _rights_allow_apply(artifact):
         allowed = False
         warnings.append("rights")
     if not emitted and selected:
         allowed = False
+    return allowed, warnings
+
+
+def map_artifact(
+    artifact: MidiArtifactV1,
+    profile_id: str,
+    *,
+    on_unmapped: Literal["reject", "skip"] = "reject",
+    source_track_index: int | None = None,
+    source_channel: int | None = None,
+) -> MappingPlanV1:
+    """Map one artifact onto a kit profile with bounded, rights-aware output."""
+
+    if (source_track_index is None) != (source_channel is None):
+        return MappingPlanV1(
+            profile_id=profile_id,
+            allowed=False,
+            warning_codes=["scope_required"],
+        )
+    profile = _default_profile(profile_id)
+    note_events = _source_note_events(artifact)
+    selected, refusal = _resolve_scope(
+        profile_id, note_events, source_track_index, source_channel
+    )
+    if refusal is not None:
+        return refusal
+    emitted, counts, length, allowed, warnings = _map_events(
+        artifact, selected, profile, profile_id, on_unmapped=on_unmapped
+    )
+    exact, fallback, unmapped, skipped = counts
+    allowed, warnings = _evaluate_mapping(
+        artifact, selected, emitted, length, allowed, warnings
+    )
     if warnings:
         warnings = list(dict.fromkeys(warnings))
     return MappingPlanV1(

@@ -89,6 +89,108 @@ def _optional_int(value: Any) -> int | None:
     return int(value)
 
 
+def _read_track_state(
+    client: AcceptanceClient, idx: int
+) -> tuple[bool, bool, bool, float, int | None, int | None]:
+    """Read the mutable state of one track and refuse an unusable payload.
+
+    Returns ``(mute, solo, arm, volume, color, color_index)``.
+    """
+    state = client.call("get_track_state", {"track_index": idx})
+    if not isinstance(state, dict):
+        raise AcceptanceSafetyError(f"get_track_state({idx}) returned non-dict: {state!r}")
+    if "mute" not in state or "solo" not in state or "arm" not in state:
+        raise AcceptanceSafetyError(
+            f"get_track_state({idx}) missing mute/solo/arm; "
+            "the disposable Set must expose the full track state"
+        )
+    if "volume" not in state:
+        raise AcceptanceSafetyError(
+            f"get_track_state({idx}) missing volume; the disposable "
+            "Set must expose the mixer volume"
+        )
+    # Colour is captured leniently: a Remote Script older than the
+    # set_track_color change does not report it, and that must degrade to
+    # "no colour restore for this track" rather than aborting the run or
+    # writing a fabricated default back into the Set.
+    return (
+        bool(state["mute"]),
+        bool(state["solo"]),
+        bool(state["arm"]),
+        float(state["volume"]),
+        _optional_int(state.get("color")),
+        _optional_int(state.get("color_index")),
+    )
+
+
+def _capture_track_fields(
+    client: AcceptanceClient,
+    tracks: Any,
+) -> tuple[
+    dict[int, str],
+    dict[int, str],
+    dict[int, bool],
+    dict[int, bool],
+    dict[int, bool],
+    dict[int, float],
+    dict[int, int | None],
+    dict[int, int | None],
+]:
+    """Capture the per-track fields the restore step has to round-trip.
+
+    Returns the track names, types, mutes, solos, arms, volumes, colours
+    and colour indexes, in that order.
+    """
+    track_names: dict[int, str] = {}
+    track_types: dict[int, str] = {}
+    track_mutes: dict[int, bool] = {}
+    track_solos: dict[int, bool] = {}
+    track_arms: dict[int, bool] = {}
+    track_volumes: dict[int, float] = {}
+    track_colors: dict[int, int | None] = {}
+    track_color_indexes: dict[int, int | None] = {}
+    for track in tracks:
+        idx = int(track.get("index", -1))
+        track_names[idx] = str(track.get("name", ""))
+        track_types[idx] = str(track.get("type", ""))
+        (
+            track_mutes[idx],
+            track_solos[idx],
+            track_arms[idx],
+            track_volumes[idx],
+            track_colors[idx],
+            track_color_indexes[idx],
+        ) = _read_track_state(client, idx)
+    return (
+        track_names,
+        track_types,
+        track_mutes,
+        track_solos,
+        track_arms,
+        track_volumes,
+        track_colors,
+        track_color_indexes,
+    )
+
+
+def _read_song_length(client: AcceptanceClient) -> float:
+    """Read the song length and refuse a payload the restore cannot use."""
+    song_length_payload = client.call("get_song_length")
+    if not isinstance(song_length_payload, dict):
+        raise AcceptanceSafetyError(f"get_song_length returned non-dict: {song_length_payload!r}")
+    song_length_value = song_length_payload.get("song_length")
+    if not isinstance(song_length_value, (int, float)) or isinstance(song_length_value, bool):
+        raise AcceptanceSafetyError(
+            f"get_song_length.song_length must be a positive number, got {song_length_value!r}"
+        )
+    song_length_f = float(song_length_value)
+    if song_length_f <= 0.0:
+        raise AcceptanceSafetyError(
+            f"get_song_length.song_length must be positive, got {song_length_f}"
+        )
+    return song_length_f
+
+
 def discover_baseline(client: AcceptanceClient) -> BaselineSnapshot:
     """Capture the disposable Set baseline that the runner must restore.
 
@@ -105,57 +207,20 @@ def discover_baseline(client: AcceptanceClient) -> BaselineSnapshot:
     metadata = client.call("get_project_metadata")
     song_name = str(metadata.get("song_name", ""))
     tracks = client.call("get_track_list")
-    track_names: dict[int, str] = {}
-    track_types: dict[int, str] = {}
-    track_mutes: dict[int, bool] = {}
-    track_solos: dict[int, bool] = {}
-    track_arms: dict[int, bool] = {}
-    track_volumes: dict[int, float] = {}
-    track_colors: dict[int, int | None] = {}
-    track_color_indexes: dict[int, int | None] = {}
-    for track in tracks:
-        idx = int(track.get("index", -1))
-        track_names[idx] = str(track.get("name", ""))
-        track_types[idx] = str(track.get("type", ""))
-        state = client.call("get_track_state", {"track_index": idx})
-        if not isinstance(state, dict):
-            raise AcceptanceSafetyError(f"get_track_state({idx}) returned non-dict: {state!r}")
-        if "mute" not in state or "solo" not in state or "arm" not in state:
-            raise AcceptanceSafetyError(
-                f"get_track_state({idx}) missing mute/solo/arm; "
-                "the disposable Set must expose the full track state"
-            )
-        if "volume" not in state:
-            raise AcceptanceSafetyError(
-                f"get_track_state({idx}) missing volume; the disposable "
-                "Set must expose the mixer volume"
-            )
-        track_mutes[idx] = bool(state["mute"])
-        track_solos[idx] = bool(state["solo"])
-        track_arms[idx] = bool(state["arm"])
-        track_volumes[idx] = float(state["volume"])
-        # Colour is captured leniently: a Remote Script older than the
-        # set_track_color change does not report it, and that must degrade to
-        # "no colour restore for this track" rather than aborting the run or
-        # writing a fabricated default back into the Set.
-        track_colors[idx] = _optional_int(state.get("color"))
-        track_color_indexes[idx] = _optional_int(state.get("color_index"))
+    (
+        track_names,
+        track_types,
+        track_mutes,
+        track_solos,
+        track_arms,
+        track_volumes,
+        track_colors,
+        track_color_indexes,
+    ) = _capture_track_fields(client, tracks)
     session = client.call("get_session_info")
     loop = client.call("get_loop_settings")
     locators = client.call("get_locators")
-    song_length_payload = client.call("get_song_length")
-    if not isinstance(song_length_payload, dict):
-        raise AcceptanceSafetyError(f"get_song_length returned non-dict: {song_length_payload!r}")
-    song_length_value = song_length_payload.get("song_length")
-    if not isinstance(song_length_value, (int, float)) or isinstance(song_length_value, bool):
-        raise AcceptanceSafetyError(
-            f"get_song_length.song_length must be a positive number, got {song_length_value!r}"
-        )
-    song_length_f = float(song_length_value)
-    if song_length_f <= 0.0:
-        raise AcceptanceSafetyError(
-            f"get_song_length.song_length must be positive, got {song_length_f}"
-        )
+    song_length_f = _read_song_length(client)
     return BaselineSnapshot(
         song_name=song_name,
         song_length=song_length_f,

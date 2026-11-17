@@ -44,6 +44,22 @@ def test_runtime_dependencies_cover_imported_analysis_and_fastmcp_websockets() -
     assert '"soundfile>=0.13,<1"' in pyproject
 
 
+def _assert_documented_contracts(
+    readme: str, architecture: str, tool_reference: str
+) -> None:
+    """Check the contracts the public documents must state."""
+    assert "device_name" in readme, "README must document device_name primary"
+    assert "warp_markers" in tool_reference or "warp_markers are read-only" in tool_reference, (
+        "TOOL_REFERENCE must mention warp markers are read-only"
+    )
+    assert "CAPABILITY_UNAVAILABLE" in architecture or "CAPABILITY_UNAVAILABLE" in readme, (
+        "docs must surface the new CAPABILITY_UNAVAILABLE error code"
+    )
+    assert "verify_clean_install" in readme or "verify_clean_install" in architecture, (
+        "docs must surface the clean-install command"
+    )
+
+
 def test_baseline_docs_match_current_state() -> None:
     """Slice 1 Task 10: public docs must reflect the certified 65-tool
     baseline, the primary ``device_name`` contract, read-only warp markers,
@@ -68,16 +84,7 @@ def test_baseline_docs_match_current_state() -> None:
             f"{label} still references the stale 37-tool count"
         )
 
-    assert "device_name" in readme, "README must document device_name primary"
-    assert "warp_markers" in tool_reference or "warp_markers are read-only" in tool_reference, (
-        "TOOL_REFERENCE must mention warp markers are read-only"
-    )
-    assert "CAPABILITY_UNAVAILABLE" in architecture or "CAPABILITY_UNAVAILABLE" in readme, (
-        "docs must surface the new CAPABILITY_UNAVAILABLE error code"
-    )
-    assert "verify_clean_install" in readme or "verify_clean_install" in architecture, (
-        "docs must surface the clean-install command"
-    )
+    _assert_documented_contracts(readme, architecture, tool_reference)
 
 
 def test_v040_public_docs_cover_tools_and_attribution() -> None:

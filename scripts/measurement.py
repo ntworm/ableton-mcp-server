@@ -51,6 +51,17 @@ def _blank_profile() -> dict[str, Any]:
     return {"files": 0, "notes": 0, "gaps": collections.Counter(), "steps": collections.Counter()}
 
 
+def _count_pairs(by_tick: dict[int, list[int]], pairs: PairCounter, collection: str) -> None:
+    """Count the same-tick co-occurrence pairs of one collection."""
+    for group in by_tick.values():
+        if len(group) < 2:
+            continue
+        unique = sorted(set(group))
+        for i, first in enumerate(unique):
+            for second in unique[i + 1 :]:
+                pairs[collection][(first, second)] += 1
+
+
 def _process_chunk(
     rows: list[tuple[str, str]],
 ) -> tuple[dict[str, dict[int, int]], dict[str, dict[str, int]], ProfileAccumulator, int]:
@@ -72,13 +83,7 @@ def _process_chunk(
             positions[note.pitch].append(bar * STEPS_PER_BAR + step)
             by_tick[note.start_ticks].append(note.pitch)
 
-        for group in by_tick.values():
-            if len(group) < 2:
-                continue
-            unique = sorted(set(group))
-            for i, first in enumerate(unique):
-                for second in unique[i + 1 :]:
-                    pairs[collection][(first, second)] += 1
+        _count_pairs(by_tick, pairs, collection)
 
         for pitch, steps in positions.items():
             steps.sort()

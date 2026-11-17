@@ -27,11 +27,10 @@ _DRIVE_LETTER = re.compile(r"[A-Za-z]:")
 
 
 class ConfigError(Exception):
-    """The configuration file is missing or invalid."""
+    """The gate cannot verify these inputs."""
 
 
 class Config(NamedTuple):
-    """Paths to measure and paths to exclude, read from the configuration."""
 
     paths: tuple[str, ...]
     exclude: tuple[str, ...]
@@ -53,7 +52,6 @@ def _path_entry(entry: object, kind: str) -> str:
 
 
 def _read_config_file(path: Path) -> dict:
-    """Reads the configuration file and returns its JSON object."""
     try:
         raw = path.read_text(encoding="utf-8-sig")
     except FileNotFoundError:
@@ -70,7 +68,6 @@ def _read_config_file(path: Path) -> dict:
 
 
 def load_config(root: Path) -> Config:
-    """Reads and validates the configuration file of the repository."""
     root = Path(root)
     data = _read_config_file(root / CONFIG_NAME)
     for key in ("paths", "exclude"):
@@ -96,17 +93,13 @@ def load_config(root: Path) -> Config:
 
 
 def _read_text(path: Path) -> str:
-    """Reads a text file; invalid bytes become replacement characters."""
-    return path.read_text(encoding="utf-8-sig", errors="replace")
+    return path.read_text(encoding="utf-8-sig")
 
 
-def _parse_tree(path: Path) -> ast.Module | None:
-    """Parses the file; returns None when there is a syntax error."""
-    try:
-        return ast.parse(_read_text(path), filename=str(path))
-    except SyntaxError as exc:
-        print(f"quality_gate: file ignored (syntax error): {path}: {exc}", file=sys.stderr)
-        return None
+def _parse_tree(path: Path) -> ast.Module:
+    tree = ast.parse(_read_text(path), filename=str(path))
+    compile(tree, str(path), "exec")
+    return tree
 
 
 class _FunctionCollector(ast.NodeVisitor):
@@ -132,7 +125,6 @@ class _FunctionCollector(ast.NodeVisitor):
 
 
 def _complexity_node(node: ast.AST) -> int:
-    """Counts the decision points of a node without entering defs or classes."""
     if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
         return 0
     total = 0
@@ -150,7 +142,6 @@ def _complexity_node(node: ast.AST) -> int:
 
 
 def _function_metrics(node: ast.AST) -> dict[str, int]:
-    """Complexity and number of lines of one function."""
     complexity = 1
     for statement in node.body:
         complexity += _complexity_node(statement)
@@ -158,17 +149,20 @@ def _function_metrics(node: ast.AST) -> dict[str, int]:
 
 
 def _tracked_files(root: Path, config: Config) -> set[str] | None:
-    """Files git tracks under the config paths; None outside git or when git lists none."""
-    command = ["git", "ls-files", "-z", "--", *config.paths]
+    """Tracked and non-ignored new files; None when Git is unavailable."""
+    command = ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", *config.paths]
     try:
-        result = subprocess.run(command, cwd=root, capture_output=True, check=True)
-    except (OSError, subprocess.CalledProcessError):
+        result = subprocess.run(command, cwd=root, capture_output=True, check=True, env={**os.environ, "LC_ALL": "C"})
+    except FileNotFoundError:
         return None
-    return {name for name in result.stdout.decode("utf-8", "replace").split("\0") if name} or None
+    except subprocess.CalledProcessError as exc:
+        if b"not a git repository" in exc.stderr:
+            return None
+        raise ConfigError("git could not list source files") from exc
+    return {name for name in result.stdout.decode("utf-8").split("\0") if name}
 
 
 def _iter_source_files(root: Path, config: Config) -> list[Path]:
-    """Lists the files to measure, without duplicates and excluded paths."""
     tracked = _tracked_files(root, config)
     found: dict[str, Path] = {}
     for entry in config.paths:
@@ -180,6 +174,10 @@ def _iter_source_files(root: Path, config: Config) -> list[Path]:
                 continue
             if any(relative == item or relative.startswith(item + "/") for item in config.exclude):
                 continue
+            try:
+                path.resolve().relative_to(root.resolve())
+            except ValueError:
+                raise ConfigError(f"source outside the root: {relative}") from None
             found[relative] = path
     return [found[key] for key in sorted(found)]
 
@@ -199,8 +197,6 @@ def measure(root: Path, config: Config | None = None) -> dict:
         key = path.relative_to(root).as_posix()
         files[key] = len(_read_text(path).splitlines())
         tree = _parse_tree(path)
-        if tree is None:
-            continue
         collector = _FunctionCollector()
         collector.visit(tree)
         for qualname, node in collector.found:
@@ -213,36 +209,45 @@ def measure(root: Path, config: Config | None = None) -> dict:
 
 
 def _section(baseline: dict, name: str) -> dict:
-    """Section of the baseline; an empty dictionary when it is missing."""
     section = baseline.get(name)
     return section if isinstance(section, dict) else {}
 
 
 def _metrics(entry: object) -> dict[str, int]:
-    """Normalizes a baseline entry into a dictionary of metrics."""
     if isinstance(entry, dict):
         return {name: int(value) for name, value in entry.items()}
     return {"file_lines": int(entry)}
 
 
-def _load_baseline(root: Path) -> dict | None:
-    """Reads the baseline from disk; None when the file is not a JSON object."""
-    path = root / BASELINE_NAME
-    if not path.is_file():
-        return {}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        print(f"quality_gate: invalid {BASELINE_NAME}: {exc}", file=sys.stderr)
-        return None
-    if not isinstance(data, dict):
-        print(f"quality_gate: invalid {BASELINE_NAME}: not a JSON object", file=sys.stderr)
-        return None
+def _valid_baseline_entry(key: str, metrics: object, names: tuple) -> bool:
+    return (isinstance(key, str) and bool(key) and isinstance(metrics, dict)
+            and bool(metrics) and all(metric in names and type(value) is int and value >= 0
+                                      for metric, value in metrics.items()))
+
+
+def _validate_baseline(data: object) -> dict:
+    if not isinstance(data, dict) or type(data.get("version")) is not int or data.get("version") != 1 or data.get("limits") != LIMITS:
+        raise ConfigError("invalid baseline version or limits")
+    for section, names in (("functions", FUNCTION_METRICS), ("files", ("file_lines",))):
+        entries = data.get(section)
+        if not isinstance(entries, dict):
+            raise ConfigError(f"invalid baseline section: {section}")
+        for key, entry in entries.items():
+            metrics = entry if section == "functions" else {"file_lines": entry}
+            if not _valid_baseline_entry(key, metrics, names):
+                raise ConfigError(f"invalid baseline entry: {section} {key}")
     return data
 
 
+def _load_baseline(root: Path) -> dict:
+    path = root / BASELINE_NAME
+    try:
+        return _validate_baseline(_read_config_file(path)) if path.exists() else {}
+    except ConfigError as exc:
+        raise ConfigError(f"{BASELINE_NAME}: {exc}") from exc
+
+
 def _baseline_payload(measured: dict) -> dict:
-    """Builds the baseline with only the metrics above the limit."""
     functions = {}
     for key, metrics in measured["functions"].items():
         stored = {name: metrics[name] for name in FUNCTION_METRICS if metrics[name] > LIMITS[name]}
@@ -261,7 +266,6 @@ def _write_baseline(root: Path, payload: dict) -> None:
 
 
 def _allowed(metric: str, stored: object) -> tuple[int, bool]:
-    """Allowed value of a metric and whether it came from the baseline."""
     if isinstance(stored, dict) and metric in stored:
         return int(stored[metric]), True
     if metric == "file_lines" and isinstance(stored, int):
@@ -270,7 +274,6 @@ def _allowed(metric: str, stored: object) -> tuple[int, bool]:
 
 
 def _violations(measured: dict, baseline: dict) -> list[Violation]:
-    """Compares the measurement with the baseline and lists the violations."""
     base_functions = _section(baseline, "functions")
     base_files = _section(baseline, "files")
     found: list[Violation] = []
@@ -289,16 +292,16 @@ def _violations(measured: dict, baseline: dict) -> list[Violation]:
 
 
 def _format_violation(violation: Violation) -> str:
-    """Builds the line of one violation."""
     key, metric, value, allowed, from_baseline = violation
     line = f"{key} {metric} {value} > {allowed}"
     return line + " (baseline)" if from_baseline else line
 
 
 def _mode_default(root: Path, config: Config) -> int:
-    """Measures the code and compares it with the baseline."""
     measured = measure(root, config)
-    violations = _violations(measured, _load_baseline(root) or {})
+    if not measured["files"]:
+        raise ConfigError("no Python source files measured")
+    violations = _violations(measured, _load_baseline(root))
     for violation in violations:
         print(_format_violation(violation))
     if violations:
@@ -308,7 +311,6 @@ def _mode_default(root: Path, config: Config) -> int:
 
 
 def _strict_keys(root: Path, targets: list[str], measured: dict) -> list[str] | None:
-    """Normalizes the targets of the strict mode; None when one does not fit."""
     keys = []
     for target in targets:
         path = Path(target)
@@ -327,7 +329,6 @@ def _strict_keys(root: Path, targets: list[str], measured: dict) -> list[str] | 
 
 
 def _strict_violations(measured: dict, keys: list[str]) -> list[Violation]:
-    """Lists the violations of the strict mode, without the baseline."""
     prefixes = tuple(f"{key}::" for key in keys)
     source = measured["functions"]
     functions = {name: metrics for name, metrics in source.items() if name.startswith(prefixes)}
@@ -336,7 +337,6 @@ def _strict_violations(measured: dict, keys: list[str]) -> list[Violation]:
 
 
 def _mode_strict(root: Path, config: Config, targets: list[str]) -> int:
-    """Applies the limits, without baseline, to the given files only."""
     measured = measure(root, config)
     keys = _strict_keys(root, targets, measured)
     if keys is None:
@@ -351,7 +351,6 @@ def _mode_strict(root: Path, config: Config, targets: list[str]) -> int:
 
 
 def _mode_init(root: Path, config: Config) -> int:
-    """Creates the baseline with the current measurement."""
     if (root / BASELINE_NAME).exists():
         print(f"quality_gate: --init does not overwrite the existing {BASELINE_NAME}")
         return 1
@@ -361,7 +360,6 @@ def _mode_init(root: Path, config: Config) -> int:
 
 
 def _baseline_changes(old: dict, new: dict) -> list[str]:
-    """Lines of change between the old baseline and the new one."""
     lines = []
     for section in ("functions", "files"):
         old_section = _section(old, section)
@@ -382,9 +380,10 @@ def _baseline_changes(old: dict, new: dict) -> list[str]:
 
 
 def _mode_update(root: Path, config: Config) -> int:
-    """Lowers the baseline; it never raises a value nor creates an entry."""
-    baseline = _load_baseline(root) or {}
+    baseline = _load_baseline(root)
     measured = measure(root, config)
+    if not measured["files"]:
+        raise ConfigError("no Python source files measured")
     violations = _violations(measured, baseline)
     for violation in violations:
         print(_format_violation(violation))
@@ -400,7 +399,8 @@ def _mode_update(root: Path, config: Config) -> int:
 
 
 def _read_ref_baseline(root: Path, ref: str) -> dict | None:
-    """Reads the baseline at the git ref; None when git really fails."""
+    if not ref.strip():
+        raise ConfigError("ratchet ref must not be blank")
     command = ["git", "show", f"{ref}:{BASELINE_NAME}"]
     try:
         result = subprocess.run(command, cwd=root, capture_output=True, env={**os.environ, "LC_ALL": "C"})
@@ -414,20 +414,20 @@ def _read_ref_baseline(root: Path, ref: str) -> dict | None:
         print(f"quality_gate: git error: {message.strip()}", file=sys.stderr)
         return None
     text = result.stdout.decode("utf-8", "replace").strip()
-    if not text:
-        return {}
     try:
         data = json.loads(text)
     except ValueError as exc:
         print(f"quality_gate: invalid baseline at the ref: {exc}", file=sys.stderr)
         return None
-    return data if isinstance(data, dict) else None
+    try:
+        return _validate_baseline(data)
+    except ConfigError as exc:
+        raise ConfigError(f"{BASELINE_NAME} at ref {ref}: {exc}") from exc
 
 
 def _ratchet_lines(tree: dict, ref: dict) -> list[str]:
-    """Lines of the baseline of the tree that grew against the baseline of the ref."""
     lines = []
-    ref_limits = _section(ref, "limits")
+    ref_limits = _section(ref, "limits") or LIMITS
     for metric, value in sorted(_section(tree, "limits").items()):
         ref_value = ref_limits.get(metric, 0)
         if value > ref_value:
@@ -448,8 +448,7 @@ def _ratchet_lines(tree: dict, ref: dict) -> list[str]:
     return lines
 
 
-def _mode_ratchet(root: Path, ref: str) -> int:
-    """Compares the baseline of the tree with the baseline of the git ref."""
+def _mode_ratchet(root: Path, ref: str, config: Config) -> int:
     ref_payload = _read_ref_baseline(root, ref)
     tree = _load_baseline(root)
     if ref_payload is None or tree is None:
@@ -459,12 +458,14 @@ def _mode_ratchet(root: Path, ref: str) -> int:
         print(line)
     if lines:
         return 1
+    checked = _mode_default(root, config)
+    if checked:
+        return checked
     print(f"quality_gate: ratchet ok (ref {ref})")
     return 0
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    """Builds the command line parser."""
     parser = argparse.ArgumentParser(prog="quality_gate", description="Structure gate for Python code.")
     parser.add_argument("--root", default=None, help="root of the measured repository")
     modes = parser.add_mutually_exclusive_group()
@@ -476,23 +477,23 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Entry point of the command line."""
     args = _build_parser().parse_args(argv)
     root = Path(args.root).resolve() if args.root else Path.cwd().resolve()
     try:
         config = load_config(root)
-    except ConfigError as exc:
-        print(f"quality_gate: invalid config {root / CONFIG_NAME}: {exc}", file=sys.stderr)
+        if args.ratchet_ref is not None:
+            return _mode_ratchet(root, args.ratchet_ref, config)
+        if args.init:
+            return _mode_init(root, config)
+        if args.update:
+            return _mode_update(root, config)
+        if args.strict:
+            return _mode_strict(root, config, args.strict)
+        return _mode_default(root, config)
+    except (ConfigError, OSError, SyntaxError, ValueError, RecursionError) as exc:
+        print(f"quality_gate: invalid config or input ({root / CONFIG_NAME}): {exc}", file=sys.stderr)
         return 2
-    if args.ratchet_ref:
-        return _mode_ratchet(root, args.ratchet_ref)
-    if args.init:
-        return _mode_init(root, config)
-    if args.update:
-        return _mode_update(root, config)
-    if args.strict:
-        return _mode_strict(root, config, args.strict)
-    return _mode_default(root, config)
+
 
 
 if __name__ == "__main__":

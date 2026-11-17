@@ -110,6 +110,21 @@ def _rank(
     return sorted((_distance(vector, ref), pitch) for pitch, ref in references.items())
 
 
+def _votes(
+    measurement: dict[str, dict[str, Any]],
+    pitch: int,
+    references: dict[int, tuple[float, ...]],
+) -> Counter[str]:
+    """Count the collections that independently reach the lane of one pitch."""
+    votes: Counter[str] = Counter()
+    for record in measurement.values():
+        profile = record.get("pitch_profiles", {}).get(str(pitch))
+        if profile is None or int(profile["notes"]) < VOTE_MIN_NOTES:
+            continue
+        votes[REFERENCE_PITCHES[_rank(_shape(profile), references)[0][1]]] += 1
+    return votes
+
+
 def _classify_band(
     measurement: dict[str, dict[str, Any]],
     aggregate: dict[int, dict[str, float]],
@@ -128,12 +143,7 @@ def _classify_band(
             continue
         margin = ranked[1][0] - distance
 
-        votes: Counter[str] = Counter()
-        for record in measurement.values():
-            profile = record.get("pitch_profiles", {}).get(str(pitch))
-            if profile is None or int(profile["notes"]) < VOTE_MIN_NOTES:
-                continue
-            votes[REFERENCE_PITCHES[_rank(_shape(profile), references)[0][1]]] += 1
+        votes = _votes(measurement, pitch, references)
         total_votes = sum(votes.values())
         role = REFERENCE_PITCHES[nearest]
         agreement = votes[role] / total_votes if total_votes else 0.0

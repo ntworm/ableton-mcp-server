@@ -37,6 +37,28 @@ python scripts/coverage_check.py
 A pull request should keep **all four green** and stay above the 85% coverage
 floor declared in `scripts/coverage_check.py`.
 
+### Structure gate
+
+The structure gate holds every function to complexity 10 and 60 lines, and
+every file to 500 lines. The Python gate is `scripts/quality_gate.py`; it reads
+`quality-gate.json` and compares the tree with `quality-baseline.json`. The
+pytest suite runs it in `tests/test_quality_gate.py`. The Extension gate is
+ESLint, configured in `AbletonMCPServer_Extension/eslint.config.mjs`, with the
+recorded debt in `AbletonMCPServer_Extension/eslint-suppressions.json`:
+
+```bash
+python scripts/quality_gate.py
+cd AbletonMCPServer_Extension && npm run lint
+```
+
+Recorded debt only goes down. After a change makes code smaller, lower it with
+`python scripts/quality_gate.py --update` and `npm run lint:prune`; never raise a
+value or add an entry by hand.
+
+`scripts/hooks/pre-commit` runs the Python gate and Ruff before each commit, and
+the Extension lint when the commit touches `AbletonMCPServer_Extension/`. Enable
+it once per clone with `git config core.hooksPath scripts/hooks`.
+
 ## Coupled-change rules
 
 These are required by `AGENTS.md` and are enforced by the test suite:

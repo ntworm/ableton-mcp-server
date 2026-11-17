@@ -1,0 +1,18 @@
+#!/bin/sh
+# Structure gate before each commit. Enable once per clone with:
+#   git config core.hooksPath scripts/hooks
+set -e
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+if [ -x .venv/Scripts/python.exe ]; then
+    py=.venv/Scripts/python.exe
+elif [ -x .venv/bin/python ]; then
+    py=.venv/bin/python
+else
+    py=python
+fi
+"$py" scripts/quality_gate.py
+"$py" -m ruff check ableton_mcp_server AbletonMCPServer_RemoteScript scripts tests
+if git diff --cached --name-only | grep -q '^AbletonMCPServer_Extension/'; then
+    (cd AbletonMCPServer_Extension && npm run --silent lint)
+fi

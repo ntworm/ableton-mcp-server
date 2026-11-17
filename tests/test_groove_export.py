@@ -7,6 +7,15 @@ import json
 from scripts.export_groove_index import build_export
 
 
+def _assert_note_is_well_formed(note: list[int]) -> None:
+    """Check the pitch, start, duration and velocity of one exported note."""
+    pitch, start, duration, velocity = note
+    assert 0 <= pitch <= 127
+    assert start >= 0
+    assert duration > 0
+    assert 1 <= velocity <= 127
+
+
 def test_export_carries_facets_notes_and_timing(tmp_path) -> None:
     from tests.fixtures.groove_runtime import make_pilot_runtime
 
@@ -19,11 +28,7 @@ def test_export_carries_facets_notes_and_timing(tmp_path) -> None:
     assert set(groove) == {"id", "genre", "bpm", "kit", "bars", "meter", "ppq", "notes"}
     assert isinstance(groove["ppq"], int) and groove["ppq"] > 0
     for note in groove["notes"]:
-        pitch, start, duration, velocity = note
-        assert 0 <= pitch <= 127
-        assert start >= 0
-        assert duration > 0
-        assert 1 <= velocity <= 127
+        _assert_note_is_well_formed(note)
 
 
 def test_export_is_deterministic(tmp_path) -> None:

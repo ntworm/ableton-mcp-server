@@ -112,23 +112,13 @@ def tool_entries() -> list[dict[str, str]]:
     return [{"name": name, "description": summaries[name]} for name in catalog_names]
 
 
-def build_manifest(
-    *,
-    version: str,
-    requires_python: str,
-    tools: Sequence[dict[str, str]],
-    snapshot: ToolCountSnapshotV1,
-) -> dict[str, Any]:
-    """Compose the MCPB manifest; every count comes from ``snapshot``."""
-    if len(tools) != snapshot.active_total:
-        raise BundleError(
-            f"manifest lists {len(tools)} tools but the catalog has {snapshot.active_total}"
-        )
+def _long_description(snapshot: ToolCountSnapshotV1, requires_python: str) -> str:
+    """Describe the bundle and the Live requirements it carries."""
     routes = snapshot.route_counts
     local_tools = ", ".join(
         f"`{spec.name}`" for spec in TOOL_CATALOG if spec.route is Route.LOCAL
     )
-    long_description = "\n".join(
+    return "\n".join(
         (
             f"{snapshot.active_total} MCP tools to inspect, analyze, and safely edit a running "
             "Ableton Live Set. A Python FastMCP server talks to Live only over loopback: "
@@ -152,6 +142,21 @@ def build_manifest(
             f"Extension as described in {REPOSITORY}#readme.",
         )
     )
+
+
+def build_manifest(
+    *,
+    version: str,
+    requires_python: str,
+    tools: Sequence[dict[str, str]],
+    snapshot: ToolCountSnapshotV1,
+) -> dict[str, Any]:
+    """Compose the MCPB manifest; every count comes from ``snapshot``."""
+    if len(tools) != snapshot.active_total:
+        raise BundleError(
+            f"manifest lists {len(tools)} tools but the catalog has {snapshot.active_total}"
+        )
+    long_description = _long_description(snapshot, requires_python)
     return {
         "manifest_version": MANIFEST_VERSION,
         "name": BUNDLE_NAME,

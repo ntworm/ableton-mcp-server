@@ -100,15 +100,126 @@ def _projection_row(
     compressed = compress_bounded(raw, "zlib-raw-json-v1")
     reference = ProjectionRefV1(name=name, version=version, digest=sha256_hex(raw))
     row = {
-        "name": name,
-        "version": version,
-        "digest": reference.digest,
-        "codec": compressed.codec,
-        "blob": compressed.blob,
-        "raw_size": compressed.raw_size,
-        "compressed_size": compressed.compressed_size,
+        "name": name, "version": version, "digest": reference.digest,
+        "codec": compressed.codec, "blob": compressed.blob,
+        "raw_size": compressed.raw_size, "compressed_size": compressed.compressed_size,
     }
     return reference, row
+
+
+def _projection_rows(
+    hvo: Any, hvo_v3: Any, features: Any, grammar: Any,
+) -> tuple[tuple[ProjectionRefV1, ...], tuple[dict[str, Any], ...], dict[str, str]]:
+    """Return the projection references, rows and digests of one artifact."""
+
+    hvo_ref, hvo_row = _projection_row("hvo", HVO_SCHEMA_VERSION, hvo)
+    hvo_v3_ref, hvo_v3_row = _projection_row("hvo_v3", HVO_SCHEMA_VERSION_V3, hvo_v3)
+    features_ref, features_row = _projection_row("features", FEATURES_SCHEMA_VERSION, features)
+    grammar_ref, grammar_row = _projection_row("grammar", GRAMMAR_SCHEMA_VERSION, grammar)
+    digests = {
+        "hvo": hvo_ref.digest,
+        # In the identity by design.  The articulation map is a data file that
+        # can be rebuilt, and a rebuild moves roles.  An identity blind to the
+        # v3 digest would hand two materially different artifacts the same id,
+        # so an index could not tell that its stored content had gone stale.
+        "hvo_v3": hvo_v3_ref.digest,
+        "features": features_ref.digest, "grammar": grammar_ref.digest,
+    }
+    refs = (hvo_ref, hvo_v3_ref, features_ref, grammar_ref)
+    rows = (hvo_row, hvo_v3_row, features_row, grammar_row)
+    return refs, rows, digests
+
+
+def _artifact_identity(
+    parsed: Any, payload: Any, *, provenance_digest: str, lineage_digest: str,
+    projection_digests: dict[str, str],
+) -> dict[str, Any]:
+    """Return the identity record that names one compiled artifact."""
+
+    return {
+        "schema_version": "groove.midi-artifact.v1",
+        "kind": "source",
+        "format": parsed.format.model_dump(mode="json"),
+        "timing": {
+            "length_ticks": parsed.length_ticks,
+            "meters": parsed.meters, "tempos": parsed.tempos,
+        },
+        "tracks": [track.model_dump(mode="json") for track in parsed.tracks],
+        "payload_sha256": payload.sha256,
+        "events_digest": parsed.source_events_digest,
+        "projection_digests": projection_digests,
+        "provenance_digest": provenance_digest,
+        "lineage_digest": lineage_digest,
+    }
+
+
+def _artifact_rows(
+    features: Any, hvo_v3: Any, facet_set: Any,
+) -> tuple[dict[str, Any], tuple[dict[str, Any], ...], tuple[dict[str, Any], ...]]:
+    """Return the summary, the facet rows and the feature rows of one artifact."""
+
+    summary = {
+        "bars": features.values["bars"].value, "meter": features.values["meter"].value,
+        "roles": sorted({cell.role for cell in hvo_v3.cells}),
+        "taxonomy_version": facet_set.version,
+    }
+    facet_rows = tuple(
+        {
+            "axis": axis, "value": value,
+            "source": facet_set.version, "confidence": 1.0,
+        }
+        for axis, values in sorted(facet_set.values.items())
+        for value in values
+    )
+    feature_rows = tuple(
+        {
+            "name": name, "version": FEATURES_SCHEMA_VERSION,
+            "value": item.value, "unit": item.unit, "status": item.status,
+        }
+        for name, item in sorted(features.values.items())
+    )
+    return summary, facet_rows, feature_rows
+
+
+def _compiled_artifact(
+    parsed: Any, payload: Any, identity: dict[str, Any], provenance: dict[str, Any],
+    lineage: dict[str, Any], projection_refs: tuple[ProjectionRefV1, ...],
+    projection_rows: tuple[dict[str, Any], ...], build_input: BuildInput, *,
+    rights_level: int, summary: dict[str, Any],
+    facet_rows: tuple[dict[str, Any], ...], feature_rows: tuple[dict[str, Any], ...],
+    provenance_digest: str,
+) -> CompiledGrooveArtifactV1:
+    """Return the compiled artifact record of one parsed input."""
+
+    artifact = MidiArtifactV1(
+        artifact_id=artifact_id_from_identity(identity),
+        format=parsed.format,
+        timing=identity["timing"],
+        tracks=tuple(parsed.tracks),
+        payload=payload,
+        events_digest=parsed.source_events_digest,
+        provenance=provenance,
+        lineage=lineage,
+        projections=projection_refs,
+    )
+    return CompiledGrooveArtifactV1(
+        artifact=artifact,
+        source_digest=payload.sha256,
+        source_kind=build_input.source_kind,
+        license_id=build_input.license_id,
+        redistribution=build_input.redistribution,
+        rights_level=rights_level,
+        capabilities={
+            "search": True, "evidence": True,
+            "generate": rights_level >= 1, "apply": rights_level == 2,
+        },
+        summary=summary,
+        facets=facet_rows,
+        features=feature_rows,
+        projections=projection_rows,
+        lineage_rows=(),
+        provenance_digest=provenance_digest,
+    )
 
 
 def compile_parsed_artifact(
@@ -119,6 +230,8 @@ def compile_parsed_artifact(
     relative_path: str | None = None,
     vendor_record: Mapping[str, object] | None = None,
 ) -> CompiledGrooveArtifactV1:
+    """Compile one parsed MIDI input into a bounded, rights-aware artifact."""
+
     if not build_input.license_id:
         raise GrooveBuildError("license is required")
     rights_level = _rights_level(build_input.redistribution)
@@ -132,111 +245,30 @@ def compile_parsed_artifact(
     features = derive_features(parsed, hvo)
     grammar = derive_grammar(parsed, hvo)
     facet_set = classify_facets(
-        features,
-        hvo_v3,
-        relative_path=relative_path,
-        redistribution=build_input.redistribution,
-        vendor_record=vendor_record,
+        features, hvo_v3, relative_path=relative_path,
+        redistribution=build_input.redistribution, vendor_record=vendor_record,
     )
     payload = compress_bounded(parsed.raw_bytes, "zlib-raw-midi-v1")
     provenance = {
-        "source_digest": sha256_hex(parsed.raw_bytes),
-        "source_kind": build_input.source_kind,
-        "license_id": build_input.license_id,
-        "redistribution": build_input.redistribution,
-        "importer_id": PARSER_ID,
-        "importer_version": "1",
-        "build_id": build_id,
+        "source_digest": sha256_hex(parsed.raw_bytes), "source_kind": build_input.source_kind,
+        "license_id": build_input.license_id, "redistribution": build_input.redistribution,
+        "importer_id": PARSER_ID, "importer_version": "1", "build_id": build_id,
     }
     provenance_digest = sha256_hex(canonical_json(provenance))
     lineage: dict[str, object] = {"parent_artifact_ids": [], "relations": [], "ordinals": []}
     lineage_digest = sha256_hex(canonical_json(lineage))
-    hvo_ref, hvo_row = _projection_row("hvo", HVO_SCHEMA_VERSION, hvo)
-    hvo_v3_ref, hvo_v3_row = _projection_row("hvo_v3", HVO_SCHEMA_VERSION_V3, hvo_v3)
-    features_ref, features_row = _projection_row("features", FEATURES_SCHEMA_VERSION, features)
-    grammar_ref, grammar_row = _projection_row("grammar", GRAMMAR_SCHEMA_VERSION, grammar)
-    identity = {
-        "schema_version": "groove.midi-artifact.v1",
-        "kind": "source",
-        "format": parsed.format.model_dump(mode="json"),
-        "timing": {
-            "length_ticks": parsed.length_ticks,
-            "meters": parsed.meters,
-            "tempos": parsed.tempos,
-        },
-        "tracks": [track.model_dump(mode="json") for track in parsed.tracks],
-        "payload_sha256": payload.sha256,
-        "events_digest": parsed.source_events_digest,
-        "projection_digests": {
-            "hvo": hvo_ref.digest,
-            # In the identity by design.  The articulation map is a data file that
-            # can be rebuilt, and a rebuild moves roles.  An identity blind to the
-            # v3 digest would hand two materially different artifacts the same id,
-            # so an index could not tell that its stored content had gone stale.
-            "hvo_v3": hvo_v3_ref.digest,
-            "features": features_ref.digest,
-            "grammar": grammar_ref.digest,
-        },
-        "provenance_digest": provenance_digest,
-        "lineage_digest": lineage_digest,
-    }
-    artifact_id = artifact_id_from_identity(identity)
-    artifact = MidiArtifactV1(
-        artifact_id=artifact_id,
-        format=parsed.format,
-        timing=identity["timing"],
-        tracks=tuple(parsed.tracks),
-        payload=payload,
-        events_digest=parsed.source_events_digest,
-        provenance=provenance,
-        lineage=lineage,
-        projections=(hvo_ref, hvo_v3_ref, features_ref, grammar_ref),
+    projection_refs, projection_rows, projection_digests = _projection_rows(
+        hvo, hvo_v3, features, grammar
     )
-    feature_rows = tuple(
-        {
-            "name": name,
-            "version": FEATURES_SCHEMA_VERSION,
-            "value": item.value,
-            "unit": item.unit,
-            "status": item.status,
-        }
-        for name, item in sorted(features.values.items())
+    identity = _artifact_identity(
+        parsed, payload, provenance_digest=provenance_digest,
+        lineage_digest=lineage_digest, projection_digests=projection_digests,
     )
-    facet_rows = tuple(
-        {
-            "axis": axis,
-            "value": value,
-            "source": facet_set.version,
-            "confidence": 1.0,
-        }
-        for axis, values in sorted(facet_set.values.items())
-        for value in values
-    )
-    summary = {
-        "bars": features.values["bars"].value,
-        "meter": features.values["meter"].value,
-        "roles": sorted({cell.role for cell in hvo_v3.cells}),
-        "taxonomy_version": facet_set.version,
-    }
-    return CompiledGrooveArtifactV1(
-        artifact=artifact,
-        source_digest=payload.sha256,
-        source_kind=build_input.source_kind,
-        license_id=build_input.license_id,
-        redistribution=build_input.redistribution,
-        rights_level=rights_level,
-        capabilities={
-            "search": True,
-            "evidence": True,
-            "generate": rights_level >= 1,
-            "apply": rights_level == 2,
-        },
-        summary=summary,
-        facets=facet_rows,
-        features=feature_rows,
-        projections=(hvo_row, hvo_v3_row, features_row, grammar_row),
-        lineage_rows=(),
-        provenance_digest=provenance_digest,
+    summary, facet_rows, feature_rows = _artifact_rows(features, hvo_v3, facet_set)
+    return _compiled_artifact(
+        parsed, payload, identity, provenance, lineage, projection_refs,
+        projection_rows, build_input, rights_level=rights_level, summary=summary,
+        facet_rows=facet_rows, feature_rows=feature_rows, provenance_digest=provenance_digest,
     )
 
 
@@ -315,25 +347,11 @@ def _manifest_digest(manifest: GrooveSeedBundleManifestV1) -> str:
     return sha256_hex(canonical_json(body))
 
 
-def build_seed_bundle(
-    *,
-    input_root: Path,
-    inputs: list[BuildInput] | tuple[BuildInput, ...],
-    output_dir: Path,
-    build_config: dict[str, object],
-) -> GrooveSeedBundleManifestV1:
-    root = input_root.resolve(strict=True)
-    authorized: list[tuple[BuildInput, AuthorizedSource]] = []
-    for declared in inputs:
-        authorized.append(
-            authorize_input(
-                root,
-                declared.path,
-                source_kind=declared.source_kind,
-                license_id=declared.license_id,
-                redistribution=declared.redistribution,
-            )
-        )
+def _deduplicated_inputs(
+    root: Path, authorized: list[tuple[BuildInput, AuthorizedSource]],
+) -> tuple[list[tuple[BuildInput, AuthorizedSource]], dict[str, tuple[str, ...]]]:
+    """Return one input per source digest and the duplicate paths of each."""
+
     groups: dict[str, list[tuple[BuildInput, AuthorizedSource]]] = {}
     for item in authorized:
         groups.setdefault(item[1].source_digest, []).append(item)
@@ -348,35 +366,64 @@ def build_seed_bundle(
         duplicate_paths[source_digest] = tuple(
             item[1].path.relative_to(root).as_posix() for item in group
         )
-    config_identity = {"schema_version": "groove.build.v1", "config": build_config, "inputs": [
-        {
-            "source_digest": token.source_digest,
-            "source_kind": build_input.source_kind,
-            "license_id": build_input.license_id,
-            "redistribution": build_input.redistribution,
-        }
-        for build_input, token in deduped
-    ]}
+    return deduped, duplicate_paths
+
+
+def _build_identities(
+    build_config: dict[str, object],
+    deduped: list[tuple[BuildInput, AuthorizedSource]],
+) -> tuple[str, str]:
+    """Return the build and the corpus identifier of one seed bundle."""
+
+    config_identity = {
+        "schema_version": "groove.build.v1",
+        "config": build_config,
+        "inputs": [
+            {
+                "source_digest": token.source_digest, "source_kind": build_input.source_kind,
+                "license_id": build_input.license_id,
+                "redistribution": build_input.redistribution,
+            }
+            for build_input, token in deduped
+        ],
+    }
     build_id = "gb1_" + sha256_hex(canonical_json(config_identity))
     corpus_id = "gc1_" + sha256_hex(
         canonical_json({"source_digests": [token.source_digest for _input, token in deduped]})
     )
-    vendor_labels = VendorLabels.load()
-    artifacts = [
+    return build_id, corpus_id
+
+
+def _compiled_artifacts(
+    root: Path,
+    deduped: list[tuple[BuildInput, AuthorizedSource]],
+    duplicate_paths: dict[str, tuple[str, ...]],
+    build_id: str,
+    vendor_labels: VendorLabels,
+) -> list[CompiledGrooveArtifactV1]:
+    """Return the compiled artifact of every deduplicated input."""
+
+    return [
         merge_taxonomy_facets(
             compile_one(
                 build_input,
                 build_id=build_id,
                 authorized_source=token,
-                vendor_record=vendor_labels.for_path(
-                    token.path.relative_to(root).as_posix()
-                ),
+                vendor_record=vendor_labels.for_path(token.path.relative_to(root).as_posix()),
             ),
             duplicate_paths[token.source_digest],
         )
         for build_input, token in deduped
     ]
-    manifest_inputs = tuple(
+
+
+def _manifest_inputs(
+    deduped: list[tuple[BuildInput, AuthorizedSource]],
+    artifacts: list[CompiledGrooveArtifactV1],
+) -> tuple[BuildManifestInputV1, ...]:
+    """Return the manifest input rows of one seed bundle."""
+
+    return tuple(
         BuildManifestInputV1(
             source_digest=item.source_digest,
             artifact_id=artifact.artifact_id,
@@ -387,6 +434,31 @@ def build_seed_bundle(
         )
         for (build_input, item), artifact in zip(deduped, artifacts, strict=True)
     )
+
+
+def build_seed_bundle(
+    *,
+    input_root: Path,
+    inputs: list[BuildInput] | tuple[BuildInput, ...],
+    output_dir: Path,
+    build_config: dict[str, object],
+) -> GrooveSeedBundleManifestV1:
+    """Build a deterministic seed bundle from the authorized inputs."""
+
+    root = input_root.resolve(strict=True)
+    authorized: list[tuple[BuildInput, AuthorizedSource]] = []
+    for declared in inputs:
+        authorized.append(
+            authorize_input(
+                root, declared.path, source_kind=declared.source_kind,
+                license_id=declared.license_id, redistribution=declared.redistribution,
+            )
+        )
+    deduped, duplicate_paths = _deduplicated_inputs(root, authorized)
+    build_id, corpus_id = _build_identities(build_config, deduped)
+    vendor_labels = VendorLabels.load()
+    artifacts = _compiled_artifacts(root, deduped, duplicate_paths, build_id, vendor_labels)
+    manifest_inputs = _manifest_inputs(deduped, artifacts)
     artifact_ids = tuple(artifact.artifact_id for artifact in artifacts)
     seed_bundle_id = "gsb1_" + sha256_hex(
         canonical_json({"corpus_id": corpus_id, "build_id": build_id, "artifact_ids": artifact_ids})
@@ -398,10 +470,8 @@ def build_seed_bundle(
         parser_id=PARSER_ID,
         normalizer_id=NORMALIZER_ID,
         projection_versions={
-            "hvo": HVO_SCHEMA_VERSION,
-            "hvo_v3": HVO_SCHEMA_VERSION_V3,
-            "features": FEATURES_SCHEMA_VERSION,
-            "grammar": GRAMMAR_SCHEMA_VERSION,
+            "hvo": HVO_SCHEMA_VERSION, "hvo_v3": HVO_SCHEMA_VERSION_V3,
+            "features": FEATURES_SCHEMA_VERSION, "grammar": GRAMMAR_SCHEMA_VERSION,
             "taxonomy": TAXONOMY_VERSION,
         },
         inputs=manifest_inputs,

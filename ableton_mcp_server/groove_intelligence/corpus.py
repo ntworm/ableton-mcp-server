@@ -2,21 +2,16 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
-import shutil
 import sqlite3
 import time
-from collections import defaultdict
 from collections.abc import Iterator
-from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 
 from . import GrooveMidiError
 from .articulation import collection_of
-from .build import build_seed_bundle
 from .canonical import canonical_json, sha256_hex
 from .constants import (
     CORPUS_SCHEMA_VERSION,
@@ -24,14 +19,21 @@ from .constants import (
     GRAMMAR_SCHEMA_VERSION,
     HVO_SCHEMA_VERSION,
     HVO_SCHEMA_VERSION_V3,
-    MAX_CURATED_REPRESENTATIVES,
-    MAX_INPUT_BYTES,
+    MAX_INPUT_BYTES,  # noqa: F401  (kept importable from this module)
     NORMALIZER_ID,
     PARSER_ID,
 )
-from .midi_lossless import parse_smf
+from .corpus_curate import (
+    CuratedBuildResult,
+    _digest_file,  # noqa: F401  (kept importable from this module)
+    _finalize_scan,
+    _scan_file,
+    _scan_totals,
+    build_curated_bundle,
+    curate_representatives,
+)
+from .midi_lossless import parse_smf  # noqa: F401  (kept importable from this module)
 from .projections import derive_features, derive_grammar, derive_hvo, derive_hvo_v3
-from .schema import BuildInput
 from .taxonomy import TAXONOMY_VERSION, classify_facets
 from .vendor_labels import VendorLabels
 
@@ -95,18 +97,6 @@ class InventoryStats:
     elapsed_seconds: float
 
 
-@dataclass(frozen=True)
-class CuratedBuildResult:
-    selected_count: int
-    selected_source_bytes: int
-    bundle_bytes: int
-    first_digest: str
-    second_digest: str
-    logical_index_digest: str
-    artifact_ids: tuple[str, ...]
-    reduction_attempts: int
-
-
 def _stratum(relative_path: str) -> str:
     # One rule, shared with the articulation map, so a stratum and a collection
     # can never drift apart and silently map a library through the wrong kit.
@@ -115,19 +105,6 @@ def _stratum(relative_path: str) -> str:
         return collection
     parts = Path(relative_path).parts
     return parts[0] if parts else "(root)"
-
-
-def _digest_file(path: Path) -> tuple[str, bytes]:
-    digest = hashlib.sha256()
-    chunks: list[bytes] = []
-    with path.open("rb") as handle:
-        while True:
-            chunk = handle.read(1024 * 1024)
-            if not chunk:
-                break
-            digest.update(chunk)
-            chunks.append(chunk)
-    return digest.hexdigest(), b"".join(chunks)
 
 
 def _error_code(error: BaseException) -> str:
@@ -258,7 +235,7 @@ class CorpusCatalog:
         self._refresh_derivation_state()
         reuse_allowed = not self._derivation_stale
         # Recover an abandoned writer transaction before starting a new scan;
-        # the committed in_progress marker remains the source of truth.
+        # the committed in-progress marker remains the source of truth.
         self._connection.rollback()
         self._connection.execute("BEGIN IMMEDIATE")
         try:
@@ -367,6 +344,8 @@ class CorpusCatalog:
         )
 
     def scan(self, *, retry_errors: bool = False) -> InventoryStats:
+        """Scan the authorized corpus into the catalog and report the totals."""
+
         started = time.perf_counter()
         reuse_allowed = self._prepare_scan()
         discovered = processed = reused = 0
@@ -385,97 +364,21 @@ class CorpusCatalog:
         for relative_path, path in iter_paths_safely():
             discovered += 1
             discovered_paths.add(relative_path)
-            try:
-                resolved = path.resolve(strict=True)
-                if not resolved.is_relative_to(self.input_root):
-                    size = 0
-                    mtime_ns = 0
-                    source_digest = "0" * 64
-                    self._write_error(
-                        relative_path,
-                        file_size=size,
-                        mtime_ns=mtime_ns,
-                        source_digest=source_digest,
-                        error=ValueError("authorized root escape"),
-                    )
-                    processed += 1
-                    continue
-                stat = resolved.stat()
-                size = int(stat.st_size)
-                mtime_ns = int(stat.st_mtime_ns)
-                existing = self._connection.execute(
-                    "SELECT status FROM files WHERE relative_path=?", (relative_path,)
-                ).fetchone()
-                if reuse_allowed and self._existing(relative_path, size, mtime_ns) and not (
-                    retry_errors and existing is not None and existing[0] == "error"
-                ):
-                    reused += 1
-                    continue
-                if size > MAX_INPUT_BYTES:
-                    raise GrooveMidiError("input size limit exceeded")
-                source_digest, raw = _digest_file(resolved)
-                parsed = parse_smf(raw)
-                self._write_success(
-                    relative_path,
-                    file_size=size,
-                    mtime_ns=mtime_ns,
-                    source_digest=source_digest,
-                    parsed=parsed,
-                )
-            except (OSError, ValueError, GrooveMidiError) as error:
-                try:
-                    stat = path.stat()
-                    size = int(stat.st_size)
-                    mtime_ns = int(stat.st_mtime_ns)
-                except OSError:
-                    size = 0
-                    mtime_ns = 0
-                source_digest = "0" * 64
-                with suppress(OSError):
-                    source_digest, _raw = _digest_file(path.resolve(strict=True))
-                self._write_error(
-                    relative_path,
-                    file_size=size,
-                    mtime_ns=mtime_ns,
-                    source_digest=source_digest,
-                    error=error,
-                )
+            status = _scan_file(
+                self,
+                relative_path,
+                path,
+                reuse_allowed=reuse_allowed,
+                retry_errors=retry_errors,
+            )
+            if status == "reused":
+                reused += 1
+                continue
             processed += 1
-            if processed % 256 == 0:
+            if status != "escaped" and processed % 256 == 0:
                 self._connection.commit()
-        if not self._connection.in_transaction:
-            self._connection.execute("BEGIN IMMEDIATE")
-        try:
-            existing_paths = {
-                str(row[0]) for row in self._connection.execute("SELECT relative_path FROM files")
-            }
-            for removed_path in existing_paths - discovered_paths:
-                self._connection.execute(
-                    "DELETE FROM files WHERE relative_path=?", (removed_path,)
-                )
-            self._connection.executemany(
-                "INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)",
-                self._expected_derivation.items(),
-            )
-            self._connection.execute(
-                "INSERT OR REPLACE INTO meta(key,value) VALUES('scan_state','current')"
-            )
-            self._connection.execute(
-                "INSERT OR REPLACE INTO meta(key,value) VALUES('derivation_state','current')"
-            )
-            self._connection.commit()
-        except Exception:
-            self._connection.rollback()
-            raise
-        self._scan_state = "current"
-        self._derivation_stale = False
-        valid, failed, distinct = self._connection.execute(
-            "SELECT SUM(status='ok'), SUM(status='error'), "
-            "COUNT(DISTINCT CASE WHEN status='ok' THEN source_digest END) "
-            "FROM files"
-        ).fetchone()
-        valid_count = int(valid or 0)
-        failed_count = int(failed or 0)
+        _finalize_scan(self, discovered_paths)
+        valid_count, failed_count, distinct_count = _scan_totals(self)
         total_valid = valid_count
         return InventoryStats(
             discovered=discovered,
@@ -483,7 +386,7 @@ class CorpusCatalog:
             reused=reused,
             valid=valid_count,
             failed=failed_count,
-            deduplicated=total_valid - int(distinct or 0),
+            deduplicated=total_valid - distinct_count,
             elapsed_seconds=round(time.perf_counter() - started, 3),
         )
 
@@ -531,172 +434,6 @@ class CorpusCatalog:
                 )
             )
         return tuple(result)
-
-
-def curate_representatives(
-    catalog: CorpusCatalog,
-    *,
-    max_files: int = MAX_CURATED_REPRESENTATIVES,
-    max_source_bytes: int = 24 * 1024 * 1024,
-) -> tuple[InventoryRow, ...]:
-    """Round-robin deterministic strata while respecting a conservative byte cap."""
-
-    if max_files <= 0 or max_source_bytes <= 0:
-        return ()
-    deduped: dict[str, InventoryRow] = {}
-    for row in catalog.rows(status="ok"):
-        previous = deduped.get(row.source_digest)
-        if previous is None or row.relative_path < previous.relative_path:
-            deduped[row.source_digest] = row
-    strata: dict[str, list[InventoryRow]] = defaultdict(list)
-    for row in deduped.values():
-        strata[row.stratum].append(row)
-    for values in strata.values():
-        values.sort(key=lambda item: (item.fingerprint, item.source_digest, item.relative_path))
-    selected: list[InventoryRow] = []
-    total_bytes = 0
-    ordered_strata = sorted(strata)
-    cursors = {stratum: 0 for stratum in ordered_strata}
-    while len(selected) < max_files and ordered_strata:
-        made_progress = False
-        for stratum in ordered_strata:
-            values = strata[stratum]
-            cursor = cursors[stratum]
-            while cursor < len(values):
-                candidate = values[cursor]
-                cursor += 1
-                if total_bytes + candidate.file_size > max_source_bytes:
-                    continue
-                selected.append(candidate)
-                total_bytes += candidate.file_size
-                cursors[stratum] = cursor
-                made_progress = True
-                break
-            else:
-                cursors[stratum] = cursor
-            if len(selected) >= max_files:
-                break
-        if not made_progress:
-            break
-    return tuple(selected)
-
-
-def _directory_bytes(path: Path) -> int:
-    return sum(item.stat().st_size for item in path.rglob("*") if item.is_file())
-
-
-def build_curated_bundle(
-    catalog: CorpusCatalog,
-    output_dir: Path,
-    *,
-    max_files: int = MAX_CURATED_REPRESENTATIVES,
-    max_bundle_bytes: int = 32 * 1024 * 1024,
-) -> CuratedBuildResult:
-    """Build two identical portable bundles, shrinking selection if required."""
-
-    if max_files < 1 or max_files > MAX_CURATED_REPRESENTATIVES:
-        raise ValueError(
-            "curated selection cap must be between one and "
-            f"{MAX_CURATED_REPRESENTATIVES}"
-        )
-    if max_bundle_bytes < 1024:
-        raise ValueError("curated bundle cap is too small")
-    try:
-        output_resolved = output_dir.resolve()
-        if output_resolved.is_relative_to(catalog.input_root):
-            raise ValueError("curated bundle output must be outside source root")
-    except AttributeError:
-        pass
-    source_cap = max_bundle_bytes // 2
-    attempts = 0
-    parent = output_resolved.parent
-    parent.mkdir(parents=True, exist_ok=True)
-    while True:
-        selected = curate_representatives(
-            catalog,
-            max_files=max_files,
-            max_source_bytes=max(1, source_cap),
-        )
-        if not selected:
-            raise ValueError("curated selection has no valid representatives")
-        inputs = [
-            BuildInput(
-                path=catalog.input_root / row.relative_path,
-                source_kind="author",
-                license_id="user-owned",
-                redistribution="full",
-            )
-            for row in selected
-        ]
-        with _temporary_build_dirs(parent) as directories:
-            first_dir, second_dir = directories
-            build_config = {
-                "curation": "groove-curated-v1",
-                "license_id": "user-owned",
-                "source_kind": "author",
-                "redistribution": "full",
-                "selection_cap": max_files,
-            }
-            first = build_seed_bundle(
-                input_root=catalog.input_root,
-                inputs=inputs,
-                output_dir=first_dir,
-                build_config=build_config,
-            )
-            second = build_seed_bundle(
-                input_root=catalog.input_root,
-                inputs=inputs,
-                output_dir=second_dir,
-                build_config=build_config,
-            )
-            first_size = _directory_bytes(first_dir)
-            second_size = _directory_bytes(second_dir)
-            if (
-                first_size <= max_bundle_bytes
-                and second_size <= max_bundle_bytes
-                and first.bundle_manifest_digest == second.bundle_manifest_digest
-                and first.logical_index_digest == second.logical_index_digest
-                and first.artifact_ids == second.artifact_ids
-            ):
-                output_dir.mkdir(parents=True, exist_ok=True)
-                for item in first_dir.iterdir():
-                    target = output_dir / item.name
-                    if item.is_file():
-                        shutil.copy2(item, target)
-                return CuratedBuildResult(
-                    selected_count=len(selected),
-                    selected_source_bytes=sum(item.file_size for item in selected),
-                    bundle_bytes=first_size,
-                    first_digest=first.bundle_manifest_digest,
-                    second_digest=second.bundle_manifest_digest,
-                    logical_index_digest=first.logical_index_digest,
-                    artifact_ids=tuple(str(item) for item in first.artifact_ids),
-                    reduction_attempts=attempts,
-                )
-        attempts += 1
-        next_cap = max(1, int(source_cap * 0.75))
-        if next_cap >= source_cap:
-            raise ValueError("curated bundle exceeds byte cap at minimum selection")
-        source_cap = next_cap
-
-
-class _temporary_build_dirs:
-    def __init__(self, parent: Path) -> None:
-        import tempfile
-
-        self._context = tempfile.TemporaryDirectory(prefix="groove-curation-", dir=parent)
-        self._root: Path | None = None
-
-    def __enter__(self) -> tuple[Path, Path]:
-        self._root = Path(self._context.name)
-        first = self._root / "one"
-        second = self._root / "two"
-        first.mkdir()
-        second.mkdir()
-        return first, second
-
-    def __exit__(self, *_args: object) -> None:
-        self._context.cleanup()
 
 
 __all__ = [

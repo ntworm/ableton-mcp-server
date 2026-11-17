@@ -70,23 +70,28 @@ def decode_response(data: bytes) -> Response:
             raise ProtocolError("Success response is missing 'result'")
         return Response(status="ok", result=value["result"])
     if status == "error":
-        code = value.get("code")
-        message = value.get("message")
-        hint = value.get("hint")
-        details = value.get("details")
-        if not isinstance(code, str) or not code:
-            raise ProtocolError("Error response is missing 'code'")
-        if not isinstance(message, str) or not message:
-            raise ProtocolError("Error response is missing 'message'")
-        if hint is not None and not isinstance(hint, str):
-            raise ProtocolError("Error response 'hint' must be a string")
-        if details is not None and not isinstance(details, dict):
-            raise ProtocolError("Error response 'details' must be an object")
-        return Response(
-            status="error",
-            code=code,
-            message=message,
-            hint=hint,
-            details=details,
-        )
+        return _decode_error_response(value)
     raise ProtocolError("Response 'status' must be 'ok' or 'error'")
+
+
+def _decode_error_response(value: dict[str, Any]) -> Response:
+    """Validate the fields of an error envelope and build its Response."""
+    code = value.get("code")
+    message = value.get("message")
+    hint = value.get("hint")
+    details = value.get("details")
+    if not isinstance(code, str) or not code:
+        raise ProtocolError("Error response is missing 'code'")
+    if not isinstance(message, str) or not message:
+        raise ProtocolError("Error response is missing 'message'")
+    if hint is not None and not isinstance(hint, str):
+        raise ProtocolError("Error response 'hint' must be a string")
+    if details is not None and not isinstance(details, dict):
+        raise ProtocolError("Error response 'details' must be an object")
+    return Response(
+        status="error",
+        code=code,
+        message=message,
+        hint=hint,
+        details=details,
+    )

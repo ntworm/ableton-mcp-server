@@ -1,4 +1,4 @@
-import { WebSocketServer } from 'ws';
+import { WebSocketServer, type WebSocket } from 'ws';
 import { AudioClip, WarpMode } from '@ableton-extensions/sdk';
 import { getExtensionContext } from './context.js';
 
@@ -192,6 +192,50 @@ async function handleLoadDeviceToTrack(params: any) {
   };
 }
 
+async function handleMessage(ws: WebSocket, message: any): Promise<void> {
+  let request: any;
+  try {
+    request = JSON.parse(message.toString());
+  } catch (err) {
+    ws.send(JSON.stringify({
+      jsonrpc: "2.0",
+      error: { code: -32700, message: "Parse error" },
+      id: null
+    }));
+    return;
+  }
+
+  const { method, params, id } = request;
+  console.log(`[Extension WS] Request method: ${method}, id: ${id}`);
+
+  try {
+    let result: any;
+    if (method === 'get_warp_state') {
+      result = await handleGetWarpState(params);
+    } else if (method === 'set_warp_state') {
+      result = await handleSetWarpState(params);
+    } else if (method === 'load_device_to_track') {
+      result = await handleLoadDeviceToTrack(params);
+    } else {
+      ws.send(JSON.stringify({
+        jsonrpc: "2.0",
+        error: { code: -32601, message: "Method not found" },
+        id
+      }));
+      return;
+    }
+
+    ws.send(JSON.stringify({
+      jsonrpc: "2.0",
+      result,
+      id
+    }));
+  } catch (err: any) {
+    console.error(`[Extension WS] Error executing method ${method}:`, err);
+    ws.send(JSON.stringify(rpcError(err, id)));
+  }
+}
+
 export function startServer(): void {
   if (wss) return;
 
@@ -204,47 +248,7 @@ export function startServer(): void {
     console.log('[Extension WS] Client connected');
 
     ws.on('message', async (message) => {
-      let request: any;
-      try {
-        request = JSON.parse(message.toString());
-      } catch (err) {
-        ws.send(JSON.stringify({
-          jsonrpc: "2.0",
-          error: { code: -32700, message: "Parse error" },
-          id: null
-        }));
-        return;
-      }
-
-      const { method, params, id } = request;
-      console.log(`[Extension WS] Request method: ${method}, id: ${id}`);
-
-      try {
-        let result: any;
-        if (method === 'get_warp_state') {
-          result = await handleGetWarpState(params);
-        } else if (method === 'set_warp_state') {
-          result = await handleSetWarpState(params);
-        } else if (method === 'load_device_to_track') {
-          result = await handleLoadDeviceToTrack(params);
-        } else {
-          ws.send(JSON.stringify({
-            jsonrpc: "2.0",
-            error: { code: -32601, message: "Method not found" },
-            id
-          }));
-          return;
-        }
-
-        ws.send(JSON.stringify({
-          jsonrpc: "2.0",
-          result,
-          id
-        }));
-      } catch (err: any) {
-        console.error(`[Extension WS] Error executing method ${method}:`, err);
-        ws.send(JSON.stringify(rpcError(err, id)));
-      }
+      await handleMessage(ws, message);
     });
 
     ws.on('close', () => {

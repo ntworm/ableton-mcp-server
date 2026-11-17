@@ -21,6 +21,20 @@ from tests.fixtures.groove_bundle import build_pilot_bundle
 from tests.fixtures.groove_smf import MINIMAL_TYPE1_SMF, MULTI_TRACK_SMF
 
 
+def _error_codes(rows: tuple[InventoryRow, ...]) -> set[str | None]:
+    """Return the error codes of the inventory rows that failed."""
+    return {row.error_code for row in rows if row.status == "error"}
+
+
+def _notes_table_count(db_path: Path) -> int:
+    """Return how many 'notes' tables the catalog database holds."""
+    with sqlite3.connect(db_path) as connection:
+        row = connection.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE name='notes'"
+        ).fetchone()
+    return int(row[0])
+
+
 def test_inventory_is_relative_streaming_and_restartable(tmp_path: Path) -> None:
     root = tmp_path / "corpus"
     root.mkdir()
@@ -36,11 +50,8 @@ def test_inventory_is_relative_streaming_and_restartable(tmp_path: Path) -> None
     assert second.reused == 3 and second.processed == 0
     rows = catalog.rows()
     assert all(not Path(row.relative_path).is_absolute() for row in rows)
-    assert {row.error_code for row in rows if row.status == "error"} == {"groove_midi_error"}
-    with sqlite3.connect(tmp_path / "catalog.sqlite") as connection:
-        assert connection.execute(
-            "SELECT COUNT(*) FROM sqlite_master WHERE name='notes'"
-        ).fetchone() == (0,)
+    assert _error_codes(rows) == {"groove_midi_error"}
+    assert _notes_table_count(tmp_path / "catalog.sqlite") == 0
 
 
 def test_inventory_rejects_root_escape_and_retries_changed_file(tmp_path: Path) -> None:

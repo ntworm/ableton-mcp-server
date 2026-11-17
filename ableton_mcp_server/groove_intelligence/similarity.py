@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from math import isfinite
-from typing import Any, cast
+from typing import Any, TypeGuard, cast
 
 CANONICAL_GRID_TICKS = 120
 _TECHNICAL_FEATURE_NAMES = {"ppq", "ticks_per_quarter"}
@@ -209,30 +209,53 @@ def feature_distance(left: object | None, right: object | None) -> float:
         return 0.0
     distances: list[float] = []
     for name in names:
-        left_value, left_unit = left_values.get(name, (None, ""))
-        right_value, right_unit = right_values.get(name, (None, ""))
-        if (
-            name.casefold() in _TECHNICAL_FEATURE_NAMES
-            or left_unit == "ticks_per_quarter"
-            or right_unit == "ticks_per_quarter"
-        ):
-            continue
-        if left_value is None or right_value is None:
-            distances.append(0.0 if left_value is None and right_value is None else 1.0)
-        elif (
-            isinstance(left_value, (int, float))
-            and not isinstance(left_value, bool)
-            and isinstance(right_value, (int, float))
-            and not isinstance(right_value, bool)
-        ):
-            unit = min((item for item in (left_unit, right_unit) if item), default="")
-            if unit in {"normalized_velocity", "normalized_offset"}:
-                distances.append(_bounded(abs(float(left_value) - float(right_value))))
-            else:
-                distances.append(_relative_distance(float(left_value), float(right_value)))
-        else:
-            distances.append(0.0 if left_value == right_value else 1.0)
+        distance = _one_feature_distance(
+            name, left_values.get(name, (None, "")), right_values.get(name, (None, ""))
+        )
+        if distance is not None:
+            distances.append(distance)
     return round(_bounded(sum(distances) / len(distances)), 9) if distances else 0.0
+
+
+def _is_number(value: object) -> TypeGuard[int | float]:
+    """An int or float that is not a bool."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _one_feature_distance(
+    name: str, left: tuple[object, str], right: tuple[object, str]
+) -> float | None:
+    """Distance of one named feature, or None for a technical feature that is skipped."""
+    left_value, left_unit = left
+    right_value, right_unit = right
+    if _is_technical_feature(name, left_unit, right_unit):
+        return None
+    if left_value is None or right_value is None:
+        return 0.0 if left_value is None and right_value is None else 1.0
+    if _is_number(left_value) and _is_number(right_value):
+        return _numeric_feature_distance(
+            float(left_value), float(right_value), left_unit, right_unit
+        )
+    return 0.0 if left_value == right_value else 1.0
+
+
+def _is_technical_feature(name: str, left_unit: str, right_unit: str) -> bool:
+    """Encoding features such as PPQ are not musical and are left out."""
+    return (
+        name.casefold() in _TECHNICAL_FEATURE_NAMES
+        or left_unit == "ticks_per_quarter"
+        or right_unit == "ticks_per_quarter"
+    )
+
+
+def _numeric_feature_distance(
+    left_value: float, right_value: float, left_unit: str, right_unit: str
+) -> float:
+    """Absolute distance for normalized units, relative distance otherwise."""
+    unit = min((item for item in (left_unit, right_unit) if item), default="")
+    if unit in {"normalized_velocity", "normalized_offset"}:
+        return _bounded(abs(left_value - right_value))
+    return _relative_distance(left_value, right_value)
 
 
 __all__ = ["feature_distance", "grammar_distance", "hvo_distance"]
