@@ -167,23 +167,7 @@ def _extract_result(
 def _receipt_from_bridge(result: Any, plan: MappingPlanV1, artifact_id: str) -> ApplyReceiptV1:
     payload, code, details = _extract_result(result)
     if code is not None:
-        stage = str(
-            (details or {}).get(
-                "bridge_stage", "precondition" if code.startswith("PRECONDITION") else "batch"
-            )
-        )
-        state: Literal["rejected", "unknown"] = "rejected"
-        return _base(
-            plan,
-            artifact_id,
-            state=state,
-            bridge_stage=stage,
-            error=ApplyErrorV1(
-                code=code,
-                message=str((details or {}).get("message", code)),
-                details=dict(details or {}),
-            ),
-        )
+        return _receipt_for_error_code(plan, artifact_id, code, details)
     if payload is None:
         return _base(
             plan,
@@ -197,27 +181,13 @@ def _receipt_from_bridge(result: Any, plan: MappingPlanV1, artifact_id: str) -> 
     clip_ref = payload.get("clip_ref")
     if not isinstance(clip_ref, str):
         clip_ref = None
-    if (
-        state_value == "partial"
-        or payload.get("aborted_at") == 1
-        or (
-            isinstance(payload.get("results"), list)
-            and len(payload["results"]) >= 2
-            and payload["results"][0].get("status") == "ok"
-            and payload["results"][1].get("status") == "error"
-        )
-    ):
-        if clip_ref is None and isinstance(payload.get("results"), list):
-            first = payload["results"][0] if payload["results"] else {}
-            if isinstance(first, Mapping) and isinstance(first.get("result"), Mapping):
-                candidate = first["result"].get("clip_ref")
-                clip_ref = candidate if isinstance(candidate, str) else None
+    if _is_partial_batch(payload, state_value):
         return _base(
             plan,
             artifact_id,
             state="partial",
             bridge_stage="batch",
-            clip_ref=clip_ref,
+            clip_ref=_partial_clip_ref(payload, clip_ref),
             recovery_action="inspect_clip_and_remove_or_complete_notes",
         )
     if state_value == "rejected" or payload.get("code", "").startswith("PRECONDITION"):
@@ -236,6 +206,56 @@ def _receipt_from_bridge(result: Any, plan: MappingPlanV1, artifact_id: str) -> 
     return _base(plan, artifact_id, state="committed", bridge_stage="batch", clip_ref=clip_ref)
 
 
+def _receipt_for_error_code(
+    plan: MappingPlanV1,
+    artifact_id: str,
+    code: str,
+    details: Mapping[str, Any] | None,
+) -> ApplyReceiptV1:
+    """A rejected receipt for a structured bridge error response."""
+    stage = str(
+        (details or {}).get(
+            "bridge_stage", "precondition" if code.startswith("PRECONDITION") else "batch"
+        )
+    )
+    state: Literal["rejected", "unknown"] = "rejected"
+    return _base(
+        plan,
+        artifact_id,
+        state=state,
+        bridge_stage=stage,
+        error=ApplyErrorV1(
+            code=code,
+            message=str((details or {}).get("message", code)),
+            details=dict(details or {}),
+        ),
+    )
+
+
+def _is_partial_batch(payload: Mapping[str, Any], state_value: str) -> bool:
+    """The clip was created but adding its notes failed."""
+    return (
+        state_value == "partial"
+        or payload.get("aborted_at") == 1
+        or (
+            isinstance(payload.get("results"), list)
+            and len(payload["results"]) >= 2
+            and payload["results"][0].get("status") == "ok"
+            and payload["results"][1].get("status") == "error"
+        )
+    )
+
+
+def _partial_clip_ref(payload: Mapping[str, Any], clip_ref: str | None) -> str | None:
+    """The clip reference of a partial batch, read from its first result if needed."""
+    if clip_ref is None and isinstance(payload.get("results"), list):
+        first = payload["results"][0] if payload["results"] else {}
+        if isinstance(first, Mapping) and isinstance(first.get("result"), Mapping):
+            candidate = first["result"].get("clip_ref")
+            clip_ref = candidate if isinstance(candidate, str) else None
+    return clip_ref
+
+
 def apply_artifact(runtime: GrooveRuntime, request: ApplyRequestV1) -> ApplyReceiptV1:
     try:
         artifact, plan = _resolve_plan(runtime, request)
@@ -249,30 +269,10 @@ def apply_artifact(runtime: GrooveRuntime, request: ApplyRequestV1) -> ApplyRece
                 code="GROOVE_ARTIFACT_NOT_FOUND", message="artifact is not available"
             ),
         )
-    early = _note_limit_or_empty(plan, str(artifact.artifact_id))
+    early = _apply_preflight(runtime, request, plan, str(artifact.artifact_id))
     if early is not None:
         return early
-    if not request.expected_empty_slot:
-        return _base(
-            plan,
-            str(artifact.artifact_id),
-            state="rejected",
-            error=ApplyErrorV1(
-                code="GROOVE_APPLY_EMPTY_SLOT_REQUIRED", message="expected_empty_slot must be true"
-            ),
-        )
-    if request.mode == "preview":
-        return _base(plan, str(artifact.artifact_id), state="preview")
-    if runtime.client is None:
-        return _base(
-            plan,
-            str(artifact.artifact_id),
-            state="rejected",
-            bridge_stage="capability",
-            error=ApplyErrorV1(
-                code="GROOVE_PRECONDITION_UNSUPPORTED", message="bridge client is unavailable"
-            ),
-        )
+    assert runtime.client is not None
     try:
         snapshot = require_fresh_preconditions_capability(runtime.client)
     except BridgeCapabilityRequired as error:
@@ -283,7 +283,64 @@ def apply_artifact(runtime: GrooveRuntime, request: ApplyRequestV1) -> ApplyRece
             bridge_stage="capability",
             error=ApplyErrorV1(code=error.code, message=str(error)),
         )
-    batch = {
+    batch = _apply_batch(request, plan, artifact)
+    try:
+        result = runtime.client.call_at_epoch(snapshot.connection_epoch, "run_batch", batch)
+    except BridgeTransportAmbiguousError:
+        return _base(
+            plan,
+            str(artifact.artifact_id),
+            state="unknown",
+            bridge_stage="transport_after_send",
+            recovery_action="inspect_live_and_do_not_retry",
+        )
+    except BridgeEpochMismatchError as error:
+        return _base(
+            plan,
+            str(artifact.artifact_id),
+            state="rejected",
+            bridge_stage="epoch",
+            error=ApplyErrorV1(code=error.code, message=str(error)),
+        )
+    return _receipt_from_bridge(result, plan, str(artifact.artifact_id))
+
+
+def _apply_preflight(
+    runtime: GrooveRuntime, request: ApplyRequestV1, plan: MappingPlanV1, artifact_id: str
+) -> ApplyReceiptV1 | None:
+    """The receipt that ends an apply before the bridge is asked, or None."""
+    early = _note_limit_or_empty(plan, artifact_id)
+    if early is not None:
+        return early
+    if not request.expected_empty_slot:
+        return _base(
+            plan,
+            artifact_id,
+            state="rejected",
+            error=ApplyErrorV1(
+                code="GROOVE_APPLY_EMPTY_SLOT_REQUIRED", message="expected_empty_slot must be true"
+            ),
+        )
+    if request.mode == "preview":
+        return _base(plan, artifact_id, state="preview")
+    if runtime.client is None:
+        return _base(
+            plan,
+            artifact_id,
+            state="rejected",
+            bridge_stage="capability",
+            error=ApplyErrorV1(
+                code="GROOVE_PRECONDITION_UNSUPPORTED", message="bridge client is unavailable"
+            ),
+        )
+    return None
+
+
+def _apply_batch(
+    request: ApplyRequestV1, plan: MappingPlanV1, artifact: MidiArtifactV1
+) -> dict[str, Any]:
+    """The guarded run_batch payload that creates the clip and adds its notes."""
+    return {
         "preconditions": [
             {
                 "type": "slot_empty",
@@ -312,25 +369,6 @@ def apply_artifact(runtime: GrooveRuntime, request: ApplyRequestV1) -> ApplyRece
             },
         ],
     }
-    try:
-        result = runtime.client.call_at_epoch(snapshot.connection_epoch, "run_batch", batch)
-    except BridgeTransportAmbiguousError:
-        return _base(
-            plan,
-            str(artifact.artifact_id),
-            state="unknown",
-            bridge_stage="transport_after_send",
-            recovery_action="inspect_live_and_do_not_retry",
-        )
-    except BridgeEpochMismatchError as error:
-        return _base(
-            plan,
-            str(artifact.artifact_id),
-            state="rejected",
-            bridge_stage="epoch",
-            error=ApplyErrorV1(code=error.code, message=str(error)),
-        )
-    return _receipt_from_bridge(result, plan, str(artifact.artifact_id))
 
 
 __all__ = [
