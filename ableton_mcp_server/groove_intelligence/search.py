@@ -101,58 +101,82 @@ def _constraint_matches(features: Mapping[str, object], constraint: Mapping[str,
     operation = str(constraint.get("op", "eq"))
     requested = constraint.get("value")
     try:
-        if operation in {"eq", "equals"}:
-            return math.isclose(observed, _as_float(requested), rel_tol=0.0, abs_tol=1e-9)
-        if operation == "gte":
-            return observed >= _as_float(requested)
-        if operation == "lte":
-            return observed <= _as_float(requested)
-        if operation == "gt":
-            return observed > _as_float(requested)
-        if operation == "lt":
-            return observed < _as_float(requested)
-        if operation == "between" and isinstance(requested, (list, tuple)) and len(requested) == 2:
-            return _as_float(requested[0]) <= observed <= _as_float(requested[1])
+        return _compare_constraint(observed, operation, requested)
     except (TypeError, ValueError):
         return False
+
+
+def _compare_constraint(observed: float, operation: str, requested: object) -> bool:
+    """Apply one feature constraint operation to an observed numeric value."""
+    if operation in {"eq", "equals"}:
+        return math.isclose(observed, _as_float(requested), rel_tol=0.0, abs_tol=1e-9)
+    if operation == "gte":
+        return observed >= _as_float(requested)
+    if operation == "lte":
+        return observed <= _as_float(requested)
+    if operation == "gt":
+        return observed > _as_float(requested)
+    if operation == "lt":
+        return observed < _as_float(requested)
+    if operation == "between" and isinstance(requested, (list, tuple)) and len(requested) == 2:
+        return _as_float(requested[0]) <= observed <= _as_float(requested[1])
     return False
 
 
 def _matches(card: ArtifactCardV1, request: SearchRequestV1) -> bool:
-    if request.facets:
-        for axis, facet_values in request.facets.items():
-            available = set(card.facets.get(axis, []))
-            try:
-                requested = {normalize_facet_value(axis, value) for value in facet_values}
-            except ValueError:
-                return False
-            if not available.intersection(requested):
-                return False
-    if request.feature_constraints:
-        features = _feature_map(card)
-        if not all(
-            _constraint_matches(features, constraint) for constraint in request.feature_constraints
-        ):
-            return False
-    if request.bpm is not None:
-        try:
-            minimum = _as_float(card.features.get("tempo_min"))
-            maximum = _as_float(card.features.get("tempo_max"))
-        except (TypeError, ValueError):
-            return False
-        if maximum < request.bpm[0] or minimum > request.bpm[1]:
-            return False
     if request.meter is not None and card.summary.get("meter") != request.meter:
         return False
-    if request.required_projection_ids:
-        available = set(card.projections.values()) | set(card.projections.keys())
-        projection_wanted = set(request.required_projection_ids)
-        if request.projection_operator == "all":
-            if not projection_wanted.issubset(available):
-                return False
-        elif not projection_wanted.intersection(available):
+    checks = (
+        (bool(request.facets), _facets_match),
+        (bool(request.feature_constraints), _features_match),
+        (request.bpm is not None, _bpm_matches),
+        (bool(request.required_projection_ids), _projections_match),
+    )
+    return all(check(card, request) for active, check in checks if active)
+
+
+def _facets_match(card: ArtifactCardV1, request: SearchRequestV1) -> bool:
+    """Every requested facet axis shares at least one normalized value with the card."""
+    for axis, facet_values in (request.facets or {}).items():
+        available = set(card.facets.get(axis, []))
+        try:
+            requested = {normalize_facet_value(axis, value) for value in facet_values}
+        except ValueError:
+            return False
+        if not available.intersection(requested):
             return False
     return True
+
+
+def _features_match(card: ArtifactCardV1, request: SearchRequestV1) -> bool:
+    """Every requested feature constraint holds on the card features."""
+    features = _feature_map(card)
+    return all(
+        _constraint_matches(features, constraint)
+        for constraint in request.feature_constraints or ()
+    )
+
+
+def _bpm_matches(card: ArtifactCardV1, request: SearchRequestV1) -> bool:
+    """The card tempo range overlaps the requested BPM range."""
+    bpm = request.bpm
+    if bpm is None:
+        return True
+    try:
+        minimum = _as_float(card.features.get("tempo_min"))
+        maximum = _as_float(card.features.get("tempo_max"))
+    except (TypeError, ValueError):
+        return False
+    return not (maximum < bpm[0] or minimum > bpm[1])
+
+
+def _projections_match(card: ArtifactCardV1, request: SearchRequestV1) -> bool:
+    """The card carries all (or any) of the required projection IDs."""
+    available = set(card.projections.values()) | set(card.projections.keys())
+    projection_wanted = set(request.required_projection_ids or ())
+    if request.projection_operator == "all":
+        return projection_wanted.issubset(available)
+    return bool(projection_wanted.intersection(available))
 
 
 def rank_candidate(card: ArtifactCardV1, request: SearchRequestV1) -> RankedCandidateV1:
@@ -163,18 +187,7 @@ def rank_candidate(card: ArtifactCardV1, request: SearchRequestV1) -> RankedCand
         if query_tokens and card_tokens
         else 0.0
     )
-    if request.facets:
-        requested = sum(len(values) for values in request.facets.values())
-        matched = 0
-        for axis, values in request.facets.items():
-            try:
-                normalized_values = {normalize_facet_value(axis, value) for value in values}
-            except ValueError:
-                normalized_values = set()
-            matched += len(set(card.facets.get(axis, [])) & normalized_values)
-        facets_score = matched / requested if requested else 0.0
-    else:
-        facets_score = 0.0
+    facets_score = _facets_score(card, request)
     if request.feature_constraints:
         matches = sum(
             _constraint_matches(card.features, constraint)
@@ -207,6 +220,21 @@ def rank_candidate(card: ArtifactCardV1, request: SearchRequestV1) -> RankedCand
     )
 
 
+def _facets_score(card: ArtifactCardV1, request: SearchRequestV1) -> float:
+    """Share of the requested facet values the card carries."""
+    if not request.facets:
+        return 0.0
+    requested = sum(len(values) for values in request.facets.values())
+    matched = 0
+    for axis, values in request.facets.items():
+        try:
+            normalized_values = {normalize_facet_value(axis, value) for value in values}
+        except ValueError:
+            normalized_values = set()
+        matched += len(set(card.facets.get(axis, [])) & normalized_values)
+    return matched / requested if requested else 0.0
+
+
 def encode_cursor(cursor: SearchCursorV1) -> str:
     payload = canonical_json(cursor.model_dump(exclude_none=True))
     checksum = hashlib.sha256(_CURSOR_DOMAIN + payload).digest()
@@ -220,23 +248,28 @@ def decode_cursor(token: str) -> SearchCursorV1:
     if not isinstance(token, str) or not token or len(token) > 4096 or "=" in token:
         raise GrooveCursorInvalid("cursor encoding is not canonical")
     try:
-        raw = base64.urlsafe_b64decode(token + "=" * ((4 - len(token) % 4) % 4))
-        canonical_token = base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
-        if not hmac.compare_digest(token, canonical_token) or len(raw) <= 32:
-            raise GrooveCursorInvalid("cursor encoding is invalid")
-        payload, checksum = raw[:-32], raw[-32:]
-        expected = hashlib.sha256(_CURSOR_DOMAIN + payload).digest()
-        if not hmac.compare_digest(checksum, expected):
-            raise GrooveCursorInvalid("cursor checksum mismatch")
-        decoded = payload.decode("utf-8")
-        parsed = json.loads(decoded)
-        if not isinstance(parsed, dict) or canonical_json(parsed) != payload:
-            raise GrooveCursorInvalid("cursor payload is not canonical")
-        return SearchCursorV1.model_validate(parsed)
+        return SearchCursorV1.model_validate(_decode_cursor_payload(token))
     except GrooveCursorInvalid:
         raise
     except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise GrooveCursorInvalid("cursor is invalid") from error
+
+
+def _decode_cursor_payload(token: str) -> dict[str, Any]:
+    """Check the encoding and checksum of a cursor token and return its payload."""
+    raw = base64.urlsafe_b64decode(token + "=" * ((4 - len(token) % 4) % 4))
+    canonical_token = base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+    if not hmac.compare_digest(token, canonical_token) or len(raw) <= 32:
+        raise GrooveCursorInvalid("cursor encoding is invalid")
+    payload, checksum = raw[:-32], raw[-32:]
+    expected = hashlib.sha256(_CURSOR_DOMAIN + payload).digest()
+    if not hmac.compare_digest(checksum, expected):
+        raise GrooveCursorInvalid("cursor checksum mismatch")
+    decoded = payload.decode("utf-8")
+    parsed = json.loads(decoded)
+    if not isinstance(parsed, dict) or canonical_json(parsed) != payload:
+        raise GrooveCursorInvalid("cursor payload is not canonical")
+    return parsed
 
 
 def _request_hash(request: SearchRequestV1) -> str:
@@ -244,34 +277,11 @@ def _request_hash(request: SearchRequestV1) -> str:
 
 
 def search(runtime: Any, request: SearchRequestV1) -> SearchResponseV1:
-    if (
-        runtime.index.manifest.ranker_id != RANKER_ID
-        or runtime.index.manifest.ranker_manifest_digest != RANKER_MANIFEST_DIGEST
-    ):
-        raise GrooveCursorRankerMismatch("runtime ranker does not match current contract")
-    if (
-        request.seed_bundle_id is not None
-        and request.seed_bundle_id != runtime.index.manifest.seed_bundle_id
-    ):
-        raise GrooveCursorBundleMismatch("seed bundle does not match runtime")
+    _check_runtime_identity(runtime, request)
     current_request_hash = _request_hash(request)
     cursor = decode_cursor(request.cursor) if request.cursor else None
     if cursor is not None:
-        if cursor.request_hash != current_request_hash:
-            raise GrooveCursorQueryMismatch("cursor query does not match request")
-        if (
-            cursor.seed_bundle_id != runtime.index.manifest.seed_bundle_id
-            or cursor.logical_index_digest != runtime.index.manifest.logical_index_digest
-        ):
-            raise GrooveCursorBundleMismatch("cursor bundle does not match runtime")
-        if (
-            cursor.ranker_id != RANKER_ID
-            or cursor.ranker_schema != RANKER_SCHEMA
-            or cursor.ranker_manifest_digest != RANKER_MANIFEST_DIGEST
-        ):
-            raise GrooveCursorRankerMismatch("cursor ranker does not match runtime")
-        if cursor.limit != request.limit:
-            raise GrooveCursorQueryMismatch("cursor limit does not match request")
+        _check_cursor(runtime, request, cursor, current_request_hash)
     candidates: list[RankedCandidateV1] = []
     for row in runtime.index.search_rows(request):
         artifact_id = str(row["artifact_id"])
@@ -292,31 +302,8 @@ def search(runtime: Any, request: SearchRequestV1) -> SearchResponseV1:
             )
         ]
     page = candidates[: request.limit]
-    next_cursor: str | None = None
-    if len(candidates) > len(page) and page:
-        last = page[-1]
-        next_cursor = encode_cursor(
-            SearchCursorV1(
-                seed_bundle_id=runtime.index.manifest.seed_bundle_id,
-                logical_index_digest=runtime.index.manifest.logical_index_digest,
-                ranker_id=RANKER_ID,
-                ranker_manifest_digest=RANKER_MANIFEST_DIGEST,
-                ranker_schema=RANKER_SCHEMA,
-                request_hash=current_request_hash,
-                limit=request.limit,
-                last_score=last.score,
-                last_artifact_id=last.artifact_id,
-            )
-        )
+    next_cursor = _next_cursor(runtime, request, candidates, page, current_request_hash)
     cards = [runtime.card(candidate.artifact_id) for candidate in page]
-    # The public ranker contract always declares all four named components.
-    public_weights = dict(_WEIGHTS)
-    if not request.required_projection_ids:
-        public_weights = {
-            "text": _NO_PROJECTION_WEIGHTS["text"],
-            "facets": _NO_PROJECTION_WEIGHTS["facets"],
-            "features": _NO_PROJECTION_WEIGHTS["features"],
-        }
     return SearchResponseV1(
         items=cards,
         total_hint=total_candidates,
@@ -326,7 +313,7 @@ def search(runtime: Any, request: SearchRequestV1) -> SearchResponseV1:
         next_cursor=next_cursor,
         ranking=RankingV1(
             ranker_id=RANKER_ID,
-            weights=public_weights,
+            weights=_public_weights(request),
             projection_coverage_active=bool(request.required_projection_ids),
         ),
         provenance={
@@ -334,6 +321,80 @@ def search(runtime: Any, request: SearchRequestV1) -> SearchResponseV1:
             "logical_index_digest": runtime.index.manifest.logical_index_digest,
         },
     )
+
+
+def _check_runtime_identity(runtime: Any, request: SearchRequestV1) -> None:
+    """Refuse a runtime whose ranker or seed bundle does not match the request."""
+    if (
+        runtime.index.manifest.ranker_id != RANKER_ID
+        or runtime.index.manifest.ranker_manifest_digest != RANKER_MANIFEST_DIGEST
+    ):
+        raise GrooveCursorRankerMismatch("runtime ranker does not match current contract")
+    if (
+        request.seed_bundle_id is not None
+        and request.seed_bundle_id != runtime.index.manifest.seed_bundle_id
+    ):
+        raise GrooveCursorBundleMismatch("seed bundle does not match runtime")
+
+
+def _check_cursor(
+    runtime: Any, request: SearchRequestV1, cursor: SearchCursorV1, current_request_hash: str
+) -> None:
+    """Refuse a cursor issued for another query, bundle, ranker or page size."""
+    if cursor.request_hash != current_request_hash:
+        raise GrooveCursorQueryMismatch("cursor query does not match request")
+    if (
+        cursor.seed_bundle_id != runtime.index.manifest.seed_bundle_id
+        or cursor.logical_index_digest != runtime.index.manifest.logical_index_digest
+    ):
+        raise GrooveCursorBundleMismatch("cursor bundle does not match runtime")
+    if (
+        cursor.ranker_id != RANKER_ID
+        or cursor.ranker_schema != RANKER_SCHEMA
+        or cursor.ranker_manifest_digest != RANKER_MANIFEST_DIGEST
+    ):
+        raise GrooveCursorRankerMismatch("cursor ranker does not match runtime")
+    if cursor.limit != request.limit:
+        raise GrooveCursorQueryMismatch("cursor limit does not match request")
+
+
+def _next_cursor(
+    runtime: Any,
+    request: SearchRequestV1,
+    candidates: list[RankedCandidateV1],
+    page: list[RankedCandidateV1],
+    current_request_hash: str,
+) -> str | None:
+    """Encode the cursor of the next page, or None when this page is the last."""
+    if not (len(candidates) > len(page) and page):
+        return None
+    last = page[-1]
+    return encode_cursor(
+        SearchCursorV1(
+            seed_bundle_id=runtime.index.manifest.seed_bundle_id,
+            logical_index_digest=runtime.index.manifest.logical_index_digest,
+            ranker_id=RANKER_ID,
+            ranker_manifest_digest=RANKER_MANIFEST_DIGEST,
+            ranker_schema=RANKER_SCHEMA,
+            request_hash=current_request_hash,
+            limit=request.limit,
+            last_score=last.score,
+            last_artifact_id=last.artifact_id,
+        )
+    )
+
+
+def _public_weights(request: SearchRequestV1) -> dict[str, float]:
+    """The ranker weights the response declares for this request."""
+    # The public ranker contract always declares all four named components.
+    public_weights = dict(_WEIGHTS)
+    if not request.required_projection_ids:
+        public_weights = {
+            "text": _NO_PROJECTION_WEIGHTS["text"],
+            "facets": _NO_PROJECTION_WEIGHTS["facets"],
+            "features": _NO_PROJECTION_WEIGHTS["features"],
+        }
+    return public_weights
 
 
 __all__ = [
