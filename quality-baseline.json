@@ -71,68 +71,6 @@
     "ableton_mcp_server/diff.py::diff_snapshots.walk": {
       "complexity": 15
     },
-    "ableton_mcp_server/groove_intelligence/apply.py::_receipt_from_bridge": {
-      "complexity": 22,
-      "function_lines": 70
-    },
-    "ableton_mcp_server/groove_intelligence/apply.py::apply_artifact": {
-      "function_lines": 95
-    },
-    "ableton_mcp_server/groove_intelligence/canonical.py::_normalize": {
-      "complexity": 15
-    },
-    "ableton_mcp_server/groove_intelligence/cards.py::_sanitize_public_value": {
-      "complexity": 19
-    },
-    "ableton_mcp_server/groove_intelligence/cards.py::artifact_card_from_artifact": {
-      "complexity": 18,
-      "function_lines": 71
-    },
-    "ableton_mcp_server/groove_intelligence/evidence.py::_generated_projection": {
-      "complexity": 11
-    },
-    "ableton_mcp_server/groove_intelligence/evidence.py::compare": {
-      "complexity": 20,
-      "function_lines": 91
-    },
-    "ableton_mcp_server/groove_intelligence/lab.py::run_provider_gates": {
-      "complexity": 14,
-      "function_lines": 74
-    },
-    "ableton_mcp_server/groove_intelligence/neural_subprocess.py::NeuralSubprocessProvider.generate": {
-      "complexity": 24,
-      "function_lines": 105
-    },
-    "ableton_mcp_server/groove_intelligence/promotion.py::promotion_allowed": {
-      "complexity": 12
-    },
-    "ableton_mcp_server/groove_intelligence/runtime.py::GrooveRuntime.card": {
-      "complexity": 18,
-      "function_lines": 83
-    },
-    "ableton_mcp_server/groove_intelligence/runtime.py::GrooveRuntime.card_from_search_row": {
-      "complexity": 24,
-      "function_lines": 74
-    },
-    "ableton_mcp_server/groove_intelligence/search.py::_constraint_matches": {
-      "complexity": 13
-    },
-    "ableton_mcp_server/groove_intelligence/search.py::_matches": {
-      "complexity": 17
-    },
-    "ableton_mcp_server/groove_intelligence/search.py::decode_cursor": {
-      "complexity": 12
-    },
-    "ableton_mcp_server/groove_intelligence/search.py::rank_candidate": {
-      "complexity": 11
-    },
-    "ableton_mcp_server/groove_intelligence/search.py::search": {
-      "complexity": 24,
-      "function_lines": 91
-    },
-    "ableton_mcp_server/groove_intelligence/similarity.py::feature_distance": {
-      "complexity": 18
-    },
     "ableton_mcp_server/protocol.py::decode_response": {
       "complexity": 12
     },
