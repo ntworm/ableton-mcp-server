@@ -113,6 +113,21 @@ def truncate_response_value(
     return bounded
 
 
+def _compact_json_value(item: object, max_items: int, budget: ResponseBudget) -> object:
+    """Cut lists to MAX_ITEMS and strings to a quarter of the budget, recursively."""
+    if isinstance(item, Mapping):
+        return {str(key): _compact_json_value(val, max_items, budget) for key, val in item.items()}
+    if isinstance(item, (list, tuple)):
+        return [_compact_json_value(val, max_items, budget) for val in item[:max_items]]
+    if isinstance(item, str):
+        max_string_bytes = max(0, budget.max_bytes // 4)
+        encoded = item.encode("utf-8")
+        if len(encoded) <= max_string_bytes:
+            return item
+        return encoded[:max_string_bytes].decode("utf-8", errors="ignore")
+    return item
+
+
 def _explicit_json_result(
     value: Mapping[str, object] | Any,
     *,
@@ -128,19 +143,7 @@ def _explicit_json_result(
         raise GrooveResponseBudgetExceeded("response item cannot fit response budget")
 
     def compact(item: object, max_items: int) -> object:
-        if isinstance(item, Mapping):
-            return {str(key): compact(val, max_items) for key, val in item.items()}
-        if isinstance(item, list):
-            return [compact(val, max_items) for val in item[:max_items]]
-        if isinstance(item, tuple):
-            return [compact(val, max_items) for val in item[:max_items]]
-        if isinstance(item, str):
-            max_string_bytes = max(0, budget.max_bytes // 4)
-            encoded = item.encode("utf-8")
-            if len(encoded) <= max_string_bytes:
-                return item
-            return encoded[:max_string_bytes].decode("utf-8", errors="ignore")
-        return item
+        return _compact_json_value(item, max_items, budget)
 
     meta = {"fastmcp": {"wrap_result": True}} if unwrap_result else None
     for max_items in (32, 16, 8, 4, 1, 0):
