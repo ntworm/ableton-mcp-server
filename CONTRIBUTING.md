@@ -55,6 +55,10 @@ Recorded debt only goes down. After a change makes code smaller, lower it with
 `python scripts/quality_gate.py --update` and `npm run lint:prune`; never raise a
 value or add an entry by hand.
 
+`scripts/hooks/pre-commit` runs the Python gate and Ruff before each commit, and
+the Extension lint when the commit touches `AbletonMCPServer_Extension/`. Enable
+it once per clone with `git config core.hooksPath scripts/hooks`.
+
 ## Coupled-change rules
 
 These are required by `AGENTS.md` and are enforced by the test suite:
