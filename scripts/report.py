@@ -33,9 +33,15 @@ GATE_THRESHOLD = 0.10
 UNRESOLVED = "other_percussion"
 
 
-def main() -> None:
-    measurement: dict[str, dict[str, Any]] = json.loads(MEASUREMENT.read_text(encoding="utf-8"))
-
+def _collect_rows(
+    measurement: dict[str, dict[str, Any]],
+) -> tuple[
+    Counter[str],
+    Counter[str],
+    Counter[int],
+    list[tuple[str, int, float, float, str]],
+]:
+    """Measure the note mass per role before and after the articulation map."""
     before: Counter[str] = Counter()
     after: Counter[str] = Counter()
     unresolved_pitches: Counter[int] = Counter()
@@ -66,38 +72,60 @@ def main() -> None:
             )
         )
 
-    corpus_total = sum(before.values())
-    hats = ("hat_closed", "hat_open", "hat_pedal")
-    excluded = [row for row in rows if row[3] > GATE_THRESHOLD]
+    return before, after, unresolved_pitches, rows
 
-    lines: list[str] = []
-    lines.append("# Gate G1 — articulation coverage")
-    lines.append("")
-    lines.append(
-        f"Corpus: {len(measurement)} collections, {corpus_total} notes over the byte-unique files."
-    )
-    lines.append("")
-    lines.append("## Note mass per canonical role")
-    lines.append("")
-    lines.append("| Role | Before | After | Change |")
-    lines.append("|---|---|---|---|")
+
+def _hat_mass(
+    before: Counter[str], after: Counter[str], corpus_total: int
+) -> tuple[float, float]:
+    """Return the combined hi-hat note mass before and after the articulation map."""
+    hats = ("hat_closed", "hat_open", "hat_pedal")
+    hat_before = sum(before[r] for r in hats) / corpus_total
+    hat_after = sum(after[r] for r in hats) / corpus_total
+    return hat_before, hat_after
+
+
+def _role_lines(
+    before: Counter[str], after: Counter[str], corpus_total: int
+) -> list[str]:
+    """Return the note mass per canonical role, before and after the map."""
+    lines = [
+        "## Note mass per canonical role",
+        "",
+        "| Role | Before | After | Change |",
+        "|---|---|---|---|",
+    ]
     for role in sorted(set(before) | set(after), key=lambda r: -after[r]):
         b = before[role] / corpus_total
         a = after[role] / corpus_total
         lines.append(f"| `{role}` | {b:.2%} | {a:.2%} | {(a - b) * 100:+.2f} pp |")
-    hat_before = sum(before[r] for r in hats) / corpus_total
-    hat_after = sum(after[r] for r in hats) / corpus_total
-    lines.append("")
-    lines.append(
+    return lines
+
+
+def _hat_lines(
+    before: Counter[str], after: Counter[str], corpus_total: int
+) -> list[str]:
+    """Return the hi-hat mass and the unresolved share of the corpus."""
+    hat_before, hat_after = _hat_mass(before, after, corpus_total)
+    return [
+        "",
         f"Hi-hat lanes combined move from {hat_before:.2%} to {hat_after:.2%} of note mass, "
         f"and `{UNRESOLVED}` from {before[UNRESOLVED] / corpus_total:.2%} to "
-        f"{after[UNRESOLVED] / corpus_total:.2%}."
-    )
-    lines.append("")
-    lines.append("## Largest remaining unresolved pitches")
-    lines.append("")
-    lines.append("| Pitch | Notes | Share of corpus |")
-    lines.append("|---|---|---|")
+        f"{after[UNRESOLVED] / corpus_total:.2%}.",
+    ]
+
+
+def _unresolved_lines(
+    unresolved_pitches: Counter[int], corpus_total: int
+) -> list[str]:
+    """Return the largest unresolved pitches of the corpus."""
+    lines = [
+        "",
+        "## Largest remaining unresolved pitches",
+        "",
+        "| Pitch | Notes | Share of corpus |",
+        "|---|---|---|",
+    ]
     for pitch, count in unresolved_pitches.most_common(15):
         lines.append(f"| {pitch} | {count} | {count / corpus_total:.2%} |")
     lines.append("")
@@ -106,18 +134,51 @@ def main() -> None:
         "different instruments in different libraries, so they stay unresolved until the "
         "vendor maps settle them."
     )
-    lines.append("")
-    lines.append(f"## Gate G1: unresolved above {GATE_THRESHOLD:.0%} excludes a collection")
-    lines.append("")
-    lines.append(f"Excluded: **{len(excluded)}** of {len(rows)} collections.")
-    lines.append("")
-    lines.append("| Collection | Notes | Unresolved before | Unresolved after | Map | Gate |")
-    lines.append("|---|---|---|---|---|---|")
+    return lines
+
+
+def _excluded_lines(
+    rows: list[tuple[str, int, float, float, str]],
+    excluded: list[tuple[str, int, float, float, str]],
+) -> list[str]:
+    """Return the collections the gate excludes, with their unresolved share."""
+    lines = [
+        "",
+        f"## Gate G1: unresolved above {GATE_THRESHOLD:.0%} excludes a collection",
+        "",
+        f"Excluded: **{len(excluded)}** of {len(rows)} collections.",
+        "",
+        "| Collection | Notes | Unresolved before | Unresolved after | Map | Gate |",
+        "|---|---|---|---|---|---|",
+    ]
     for collection, total, raw, mapped, confidence in sorted(rows, key=lambda r: -r[3]):
         verdict = "EXCLUDED" if mapped > GATE_THRESHOLD else "passes"
         lines.append(
             f"| `{collection}` | {total} | {raw:.1%} | {mapped:.1%} | {confidence} | {verdict} |"
         )
+    return lines
+
+
+def main() -> None:
+    measurement: dict[str, dict[str, Any]] = json.loads(MEASUREMENT.read_text(encoding="utf-8"))
+
+    before, after, unresolved_pitches, rows = _collect_rows(measurement)
+
+    corpus_total = sum(before.values())
+    hat_before, hat_after = _hat_mass(before, after, corpus_total)
+    excluded = [row for row in rows if row[3] > GATE_THRESHOLD]
+
+    lines: list[str] = []
+    lines.append("# Gate G1 \N{EM DASH} articulation coverage")
+    lines.append("")
+    lines.append(
+        f"Corpus: {len(measurement)} collections, {corpus_total} notes over the byte-unique files."
+    )
+    lines.append("")
+    lines += _role_lines(before, after, corpus_total)
+    lines += _hat_lines(before, after, corpus_total)
+    lines += _unresolved_lines(unresolved_pitches, corpus_total)
+    lines += _excluded_lines(rows, excluded)
 
     OUTPUT.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"hi-hat mass {hat_before:.2%} -> {hat_after:.2%}")

@@ -1,20 +1,29 @@
+"""The mock Remote Script: it answers the commands of the client over a socket."""
+
 from __future__ import annotations
 
 import argparse
 import copy
 import json
 import socket
+import sys
 import threading
 from contextlib import suppress
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
-from contracts import (
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from contracts import (  # noqa: E402
     CAPABILITY_EVIDENCE,
     DEFAULT_HOST,
     READ_ONLY_COMMANDS,
     UNSUPPORTED_CAPABILITIES,
 )
+from scripts.mock_remote_handlers import MockCommandHandlers  # noqa: E402
 
 # Identity plus hierarchy/colour. Mixer state stays out of ``get_track_list``
 # and is only reachable through ``get_track_state``.
@@ -34,6 +43,59 @@ TRACK_LIST_KEYS: tuple[str, ...] = (
 )
 
 
+def _default_track() -> dict[str, Any]:
+    """Return the single track of the default mock Set."""
+    return {
+        "id": "track:0",
+        "index": 0,
+        "name": "Bass",
+        "type": "midi",
+        "color": 0x336699,
+        "color_index": 3,
+        "is_group_track": False,
+        "is_grouped": False,
+        "group_track_index": None,
+        "group_track_id": None,
+        "is_visible": True,
+        "fold_state": 0,
+        "devices": [
+            {
+                "id": "track:0/device:0",
+                "name": "Operator",
+                "parameters": [
+                    {
+                        "id": "track:0/device:0/param:0",
+                        "name": "Device On",
+                        "value": 1.0,
+                        "min": 0.0,
+                        "max": 1.0,
+                    }
+                ],
+            }
+        ],
+        "clip_slots": [
+            {
+                "id": "track:0/clipslot:0",
+                "clip_id": "track:0/clipslot:0/clip",
+                "index": 0,
+                "has_clip": True,
+                "clip_name": "Bass Loop",
+                "length_beats": 4.0,
+                "is_playing": False,
+                "notes": [
+                    {
+                        "pitch": 36,
+                        "start_time": 0.0,
+                        "duration": 1.0,
+                        "velocity": 100,
+                        "mute": False,
+                    }
+                ],
+            }
+        ],
+    }
+
+
 def default_snapshot() -> dict[str, Any]:
     return {
         "schema_version": 1,
@@ -48,57 +110,7 @@ def default_snapshot() -> dict[str, Any]:
         "loop_start": 0.0,
         "loop_length": 4.0,
         "song_length": 64.25,
-        "tracks": [
-            {
-                "id": "track:0",
-                "index": 0,
-                "name": "Bass",
-                "type": "midi",
-                "color": 0x336699,
-                "color_index": 3,
-                "is_group_track": False,
-                "is_grouped": False,
-                "group_track_index": None,
-                "group_track_id": None,
-                "is_visible": True,
-                "fold_state": 0,
-                "devices": [
-                    {
-                        "id": "track:0/device:0",
-                        "name": "Operator",
-                        "parameters": [
-                            {
-                                "id": "track:0/device:0/param:0",
-                                "name": "Device On",
-                                "value": 1.0,
-                                "min": 0.0,
-                                "max": 1.0,
-                            }
-                        ],
-                    }
-                ],
-                "clip_slots": [
-                    {
-                        "id": "track:0/clipslot:0",
-                        "clip_id": "track:0/clipslot:0/clip",
-                        "index": 0,
-                        "has_clip": True,
-                        "clip_name": "Bass Loop",
-                        "length_beats": 4.0,
-                        "is_playing": False,
-                        "notes": [
-                            {
-                                "pitch": 36,
-                                "start_time": 0.0,
-                                "duration": 1.0,
-                                "velocity": 100,
-                                "mute": False,
-                            }
-                        ],
-                    }
-                ],
-            }
-        ],
+        "tracks": [_default_track()],
         "control_surfaces": [{"name": "MockRemoteScript", "type": "remote_script"}],
         "browser_categories_count": 7,
         "locators": [],
@@ -110,7 +122,7 @@ def default_snapshot() -> dict[str, Any]:
 
 
 @dataclass
-class MockRemoteScript:
+class MockRemoteScript(MockCommandHandlers):
     snapshot: dict[str, Any] = field(default_factory=default_snapshot)
 
     def ok(self, result: Any) -> dict[str, Any]:
@@ -150,21 +162,23 @@ class MockRemoteScript:
         return self.error("UNKNOWN_COMMAND", f"Command {command!r} is not implemented")
 
     def _handle_read(self, command: str, params: dict[str, Any]) -> dict[str, Any] | None:
-        if command == "take_snapshot":
-            return self.ok(copy.deepcopy(self.snapshot))
-        if command == "get_session_info":
-            return self.ok(
-                {
-                    key: self.snapshot[key]
-                    for key in (
-                        "tempo",
-                        "signature_numerator",
-                        "signature_denominator",
-                        "is_playing",
-                        "current_song_time",
-                    )
-                }
-            )
+        """Answer a read command with the group handler that owns it."""
+        for handler in (
+            self._read_track_list,
+            self._read_session,
+            self._read_tracks,
+            self._read_devices,
+            self._read_diagnostics,
+            self._read_project,
+            self._read_queries,
+        ):
+            response = handler(command, params)
+            if response is not None:
+                return response
+        return None
+
+    def _read_track_list(self, command: str, params: dict[str, Any]) -> dict[str, Any] | None:
+        """Answer the track list read command."""
         if command == "get_track_list":
             return self.ok(
                 [
@@ -172,375 +186,24 @@ class MockRemoteScript:
                     for track in self.snapshot["tracks"]
                 ]
             )
-        if command == "get_track_state":
-            track = self._track(params.get("track_index"))
-            return self.ok(copy.deepcopy(track)) if track else self._missing("track")
-        if command == "diagnose_clip_targets":
-            requested = params.get("track_index")
-            targets = (
-                [t for t in self.snapshot["tracks"] if t["index"] == requested]
-                if isinstance(requested, int)
-                else self.snapshot["tracks"]
-            )
-            tracks = []
-            session_total = 0
-            for track in targets:
-                session = [
-                    {
-                        "id": slot["clip_id"],
-                        "scope": "session",
-                        "track_index": track["index"],
-                        "clip_index": slot["index"],
-                        "name": slot.get("clip_name", ""),
-                        "is_midi_clip": True,
-                        "color": slot.get("color", 0),
-                        "color_index": slot.get("color_index", 0),
-                        "colorable": True,
-                    }
-                    for slot in track["clip_slots"]
-                    if slot.get("has_clip")
-                ]
-                session_total += len(session)
-                tracks.append(
-                    {
-                        "track_index": track["index"],
-                        "track_id": track["id"],
-                        "name": track["name"],
-                        "type": track["type"],
-                        "session_clips": session,
-                        "arrangement_clips": [],
-                        "arrangement_supported": False,
-                    }
-                )
-            return self.ok(
-                {
-                    "tracks": tracks,
-                    "session_clip_count": session_total,
-                    "arrangement_clip_count": 0,
-                    "inaccessible": [
-                        {
-                            "track_index": track["track_index"],
-                            "scope": "arrangement",
-                            "reason": "The mock Remote Script exposes no Arrangement lane.",
-                        }
-                        for track in tracks
-                    ],
-                }
-            )
-        if command == "get_device_list":
-            track = self._track(params.get("track_index"))
-            return self.ok(copy.deepcopy(track["devices"])) if track else self._missing("track")
-        if command == "get_parameter_value":
-            track = self._track(params.get("track_index"))
-            if not track:
-                return self._missing("track")
-            device_index = params.get("device_index")
-            if not isinstance(device_index, int) or device_index >= len(track["devices"]):
-                return self._missing("device")
-            name = params.get("parameter_name")
-            parameter = next(
-                (
-                    item
-                    for item in track["devices"][device_index]["parameters"]
-                    if item["name"] == name
-                ),
-                None,
-            )
-            return self.ok(copy.deepcopy(parameter)) if parameter else self._missing("parameter")
-        if command == "get_clip_summary":
-            track = self._track(params.get("track_index"))
-            return self.ok(copy.deepcopy(track["clip_slots"])) if track else self._missing("track")
-        if command == "get_clip_notes":
-            slot = self._slot(params)
-            return self.ok(copy.deepcopy(slot.get("notes", []))) if slot else self._missing("clip")
-        if command == "get_control_surfaces":
-            return self.ok(copy.deepcopy(self.snapshot["control_surfaces"]))
-        if command == "get_browser_categories":
-            return self.ok(
-                [
-                    "Sounds",
-                    "Drums",
-                    "Instruments",
-                    "Audio Effects",
-                    "MIDI Effects",
-                    "Plugins",
-                    "Samples",
-                ]
-            )
-        if command == "get_routing":
-            return self.ok(
-                {
-                    "input_routing": "Ext. In",
-                    "input_sub_routing": "1/2",
-                    "output_routing": "Master",
-                    "output_sub_routing": "1/2",
-                }
-            )
-        if command == "get_locators":
-            return self.ok(copy.deepcopy(self.snapshot["locators"]))
-        if command == "get_scenes":
-            return self.ok(copy.deepcopy(self.snapshot["scenes"]))
-        if command == "get_scene_state":
-            index = params.get("scene_index")
-            scenes = self.snapshot["scenes"]
-            return (
-                self.ok(copy.deepcopy(scenes[index]))
-                if isinstance(index, int) and index < len(scenes)
-                else self._missing("scene")
-            )
-        if command == "get_project_metadata":
-            return self.ok(copy.deepcopy(self.snapshot["project_metadata"]))
-        if command == "get_loop_settings":
-            return self.ok(copy.deepcopy(self.snapshot["loop_settings"]))
-        if command == "get_selected_context":
-            return self.ok(copy.deepcopy(self.snapshot["selected_context"]))
-        if command == "get_song_length":
-            return self.ok({"song_length": self.snapshot["song_length"]})
-        if command == "live_find_track":
-            query = str(params.get("query", "")).casefold()
-            tracks = [
-                {key: track[key] for key in ("id", "index", "name", "type")}
-                for track in self.snapshot["tracks"]
-                if query in track["name"].casefold()
-            ]
-            return self.ok(tracks)
-        if command == "list_device_params":
-            track = next(
-                (
-                    track
-                    for track in self.snapshot["tracks"]
-                    if track["id"] == params.get("track_id")
-                ),
-                None,
-            )
-            if not track:
-                return self.error("STALE_REFERENCE", "Track path no longer resolves")
-            return self.ok(
-                [
-                    {
-                        "device_id": device["id"],
-                        "device_name": device["name"],
-                        "parameters": copy.deepcopy(device["parameters"]),
-                    }
-                    for device in track["devices"]
-                ]
-            )
         return None
 
     def _handle_mutation(self, command: str, params: dict[str, Any]) -> dict[str, Any] | None:
-        if command == "set_tempo":
-            self.snapshot["tempo"] = float(params["tempo"])
-            return self.ok(
-                {
-                    "tempo": self.snapshot["tempo"],
-                    "resolved": {"kind": "tempo", "tempo": self.snapshot["tempo"]},
-                }
-            )
-        if command == "set_parameter_value":
-            track = self._track(params.get("track_index"))
-            if not track:
-                return self._missing("track")
-            device_index = params.get("device_index")
-            if not isinstance(device_index, int) or device_index >= len(track["devices"]):
-                return self._missing("device")
-            device = track["devices"][device_index]
-            parameter_name = params.get("parameter_name")
-            parameter = next(
-                (item for item in device["parameters"] if item["name"] == parameter_name),
-                None,
-            )
-            if parameter is None:
-                return self._missing("parameter")
-            requested = float(params["value"])
-            parameter["value"] = requested
-            return self.ok(
-                {
-                    "target": requested,
-                    "value": parameter["value"],
-                    "is_quantized": parameter["is_quantized"],
-                    "resolved": {
-                        "kind": "device",
-                        "track_index": track["index"],
-                        "device_index": device_index,
-                        "parameter_name": parameter_name,
-                        "track_name": track["name"],
-                        "device_name": device["name"],
-                    },
-                }
-            )
-        if command == "set_clip_color":
-            track = self._track(params.get("track_index"))
-            if not track:
-                return self._missing("track")
-            if params.get("scope", "session") != "session":
-                return self.error(
-                    "CAPABILITY_UNAVAILABLE",
-                    "The mock Set has no Arrangement clips.",
-                )
-            slot = self._slot(params)
-            if slot is None:
-                return self._missing("clip")
-            provided = [name for name in ("color_index", "color") if name in params]
-            if len(provided) != 1:
-                return self.error(
-                    "INVALID_PARAMS",
-                    "Provide exactly one of color_index or color.",
-                )
-            slot[provided[0]] = int(params[provided[0]])
-            return self.ok(
-                {
-                    "clip_id": slot.get("clip_id"),
-                    "scope": "session",
-                    "track_index": track["index"],
-                    "clip_index": params["clip_index"],
-                    "property": provided[0],
-                    "color": slot.get("color", 0),
-                    "color_index": slot.get("color_index", 0),
-                    "resolved": {
-                        "kind": "clip",
-                        "track_index": track["index"],
-                        "clip_index": params["clip_index"],
-                        "scope": "session",
-                        "clip_id": slot.get("clip_id"),
-                    },
-                }
-            )
-        if command == "set_track_color":
-            track = self._track(params.get("track_index"))
-            if not track:
-                return self._missing("track")
-            provided = [name for name in ("color_index", "color") if name in params]
-            if len(provided) != 1:
-                return self.error(
-                    "INVALID_PARAMS",
-                    "Provide exactly one of color_index or color.",
-                )
-            track[provided[0]] = int(params[provided[0]])
-            return self.ok(
-                {
-                    "track_id": track["id"],
-                    "track_index": track["index"],
-                    "property": provided[0],
-                    "color": track.get("color", 0),
-                    "color_index": track.get("color_index", 0),
-                    "resolved": {
-                        "kind": "track",
-                        "track_index": track["index"],
-                        "track_name": track["name"],
-                    },
-                }
-            )
-        if command == "set_current_song_time":
-            self.snapshot["current_song_time"] = float(params["time"])
-            return self.ok({"current_song_time": self.snapshot["current_song_time"]})
-        if command in ("start_playback", "stop_playback"):
-            self.snapshot["is_playing"] = command == "start_playback"
-            return self.ok({"is_playing": self.snapshot["is_playing"]})
-        if command == "set_loop":
-            self.snapshot["loop"] = bool(params["enabled"])
-            self.snapshot["loop_settings"]["loop"] = self.snapshot["loop"]
-            return self.ok({"loop": self.snapshot["loop"]})
-        if command in ("set_loop_start", "set_loop_length"):
-            key = "loop_start" if command.endswith("start") else "loop_length"
-            param = "start_beat" if key == "loop_start" else "length_beats"
-            self.snapshot[key] = float(params[param])
-            self.snapshot["loop_settings"][key] = self.snapshot[key]
-            return self.ok({key: self.snapshot[key]})
-        if command == "create_cue_point":
-            target = float(params["time"])
-            cue = next(
-                (item for item in self.snapshot["locators"] if abs(item["time"] - target) < 0.01),
-                None,
-            )
-            action = "renamed" if cue else "created"
-            if cue is None:
-                cue = {"name": str(params["name"]), "time": target}
-                self.snapshot["locators"].append(cue)
-            else:
-                cue["name"] = str(params["name"])
-            return self.ok({**cue, "action": action})
-        if command == "bulk_create_cue_points":
-            results = []
-            for index, item in enumerate(params["items"]):
-                response = self._handle_mutation("create_cue_point", item)
-                assert response is not None
-                results.append({"index": index, "status": "ok", "result": response["result"]})
-            return self.ok({"results": results})
-        if command == "delete_cue_point":
-            target = float(params["time"])
-            cue = next(
-                (item for item in self.snapshot["locators"] if abs(item["time"] - target) < 0.01),
-                None,
-            )
-            if cue:
-                self.snapshot["locators"].remove(cue)
-            return self.ok({"deleted": cue is not None, "time": target})
-        if command == "fire_clip":
-            slot = self._slot(params)
-            if not slot:
-                return self._missing("clip")
-            slot["is_playing"] = True
-            return self.ok({"fired": True, "clip_id": slot["clip_id"]})
-        if command == "add_notes_to_clip":
-            slot = self._slot(params)
-            if not slot:
-                return self._missing("clip")
-            slot.setdefault("notes", []).extend(copy.deepcopy(params["notes"]))
-            return self.ok({"added": len(params["notes"]), "clip_id": slot["clip_id"]})
-        if command == "create_clip":
-            track = self._track(params.get("track_index"))
-            clip_index = params.get("clip_index")
-            if (
-                not track
-                or not isinstance(clip_index, int)
-                or clip_index >= len(track["clip_slots"])
-            ):
-                return self._missing("clip slot")
-            slot = track["clip_slots"][clip_index]
-            if slot["has_clip"]:
-                return self.error("BAD_INPUT", "Clip slot is not empty")
-            slot.update(
-                {
-                    "clip_id": f"track:{track['index']}/clipslot:{clip_index}/clip",
-                    "has_clip": True,
-                    "length_beats": float(params["length_beats"]),
-                    "notes": [],
-                }
-            )
-            return self.ok(
-                {
-                    "created": True,
-                    "clip_id": slot["clip_id"],
-                    "length_beats": slot["length_beats"],
-                    "resolved": {
-                        "kind": "clip",
-                        "track_index": track["index"],
-                        "clip_index": clip_index,
-                        "track_name": track["name"],
-                        "clip_id": slot["clip_id"],
-                    },
-                }
-            )
-        if command == "run_batch":
-            results = []
-            completed = 0
-            aborted_at = None
-            for index, subcommand in enumerate(params["commands"]):
-                response = self.handle(subcommand["type"], subcommand.get("params", {}))
-                if response["status"] == "error":
-                    results.append({"index": index, **response})
-                    aborted_at = index
-                    break
-                results.append({"index": index, "status": "ok", "result": response["result"]})
-                completed += 1
-            return self.ok(
-                {
-                    "results": results,
-                    "completed": completed,
-                    "aborted_at": aborted_at,
-                    "rolled_back": False,
-                }
-            )
+        """Answer a mutation command with the group handler that owns it."""
+        for handler in (
+            self._mutate_transport,
+            self._mutate_device,
+            self._mutate_clip_color,
+            self._mutate_track_color,
+            self._mutate_cue_point,
+            self._mutate_cue_points,
+            self._mutate_clips,
+            self._mutate_clip_creation,
+            self._mutate_batch,
+        ):
+            response = handler(command, params)
+            if response is not None:
+                return response
         return None
 
     def _track(self, index: Any) -> dict[str, Any] | None:

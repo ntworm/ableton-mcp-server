@@ -167,6 +167,34 @@ def _pitch_sets(relatives: list[str]) -> dict[str, list[int]]:
     return result
 
 
+def _pitch_and_kit_files(
+    files: dict[str, dict[str, Any]], pitches: dict[str, list[int]]
+) -> tuple[dict[int, set[str]], dict[str, set[str]]]:
+    """Return the files that use each pitch and the files that declare each kit piece."""
+    pitch_files: dict[int, set[str]] = collections.defaultdict(set)
+    kit_files: dict[str, set[str]] = collections.defaultdict(set)
+    for relative, record in files.items():
+        present = pitches.get(relative)
+        if present is None:
+            continue
+        for pitch in present:
+            pitch_files[pitch].add(relative)
+        for kit in record["kits"]:
+            kit_files[kit].add(relative)
+    return pitch_files, kit_files
+
+
+def _certain_kits(
+    holders: set[str], kit_files: dict[str, set[str]], total: int
+) -> list[tuple[float, str]]:
+    """Return the kit pieces every holder of the pitch declares, rarest first."""
+    return [
+        (len(kit_files[kit]) / total, kit)
+        for kit in kit_files
+        if len(holders & kit_files[kit]) / len(holders) >= MIN_COVERAGE
+    ]
+
+
 def _assign_roles(
     files: dict[str, dict[str, Any]], pitches: dict[str, list[int]]
 ) -> tuple[dict[str, str], list[str], list[tuple[int, str, str, str]]]:
@@ -180,16 +208,7 @@ def _assign_roles(
     reported instead of being acted on.
     """
 
-    pitch_files: dict[int, set[str]] = collections.defaultdict(set)
-    kit_files: dict[str, set[str]] = collections.defaultdict(set)
-    for relative, record in files.items():
-        present = pitches.get(relative)
-        if present is None:
-            continue
-        for pitch in present:
-            pitch_files[pitch].add(relative)
-        for kit in record["kits"]:
-            kit_files[kit].add(relative)
+    pitch_files, kit_files = _pitch_and_kit_files(files, pitches)
 
     total = len({r for r in files if r in pitches})
     roles: dict[str, str] = {}
@@ -199,11 +218,7 @@ def _assign_roles(
         holders = pitch_files[pitch]
         if len(holders) < MIN_PITCH_FILES:
             continue
-        certain = [
-            (len(kit_files[kit]) / total, kit)
-            for kit in kit_files
-            if len(holders & kit_files[kit]) / len(holders) >= MIN_COVERAGE
-        ]
+        certain = _certain_kits(holders, kit_files, total)
         if not certain:
             continue
         prevalence, kit = min(certain)
@@ -224,19 +239,16 @@ def _assign_roles(
     return roles, evidence, conflicts
 
 
-def main() -> None:
-    databases = sorted(VENDOR_ROOT.glob("*/midiDB"))
-    print(f"vendor databases found: {len(databases)}", flush=True)
-
-    libraries = [library for library in map(_read_library, databases) if library]
-    print(f"readable libraries:     {len(libraries)}", flush=True)
-
+def _labelled_files(libraries: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Merge the labelled files of every readable library."""
     all_files: dict[str, dict[str, Any]] = {}
     for library in libraries:
         all_files.update(library["files"])
-    print(f"labelled files:         {len(all_files)}", flush=True)
+    return all_files
 
-    relatives = sorted(all_files)
+
+def _parse_pitches(relatives: list[str]) -> dict[str, list[int]]:
+    """Parse the corpus files in parallel and return the pitches each one uses."""
     chunk = max(1, len(relatives) // (WORKERS * 8))
     chunks = [relatives[i : i + chunk] for i in range(0, len(relatives), chunk)]
     pitches: dict[str, list[int]] = {}
@@ -246,8 +258,11 @@ def main() -> None:
             pitches.update(part)
             done += 1
             print(f"parsed chunk {done}/{len(chunks)}", flush=True)
-    print(f"files parsed:           {len(pitches)}", flush=True)
+    return pitches
 
+
+def _by_stratum(all_files: dict[str, dict[str, Any]]) -> dict[str, dict[str, dict[str, Any]]]:
+    """Group the labelled files by the catalog stratum of their corpus path."""
     # The map is keyed by the catalog stratum, which is the first two components of
     # the corpus path.  Grouping by that rather than by LIBRARY.Name keeps the join
     # exact even when a library ships under a differently spelled folder.
@@ -257,8 +272,15 @@ def main() -> None:
         if len(parts) < 3:
             continue
         by_stratum["/".join(parts[:2])][relative] = record
+    return by_stratum
 
-    existing: dict[str, Any] = json.loads(MAP_PATH.read_text(encoding="utf-8"))
+
+def _write_articulation_map(
+    by_stratum: dict[str, dict[str, dict[str, Any]]],
+    pitches: dict[str, list[int]],
+    existing: dict[str, Any],
+) -> tuple[int, int, collections.Counter[tuple[str, str, str]]]:
+    """Merge the vendor articulation entries into the map and count them."""
     vendor_entries = 0
     overrides = 0
     conflicts: collections.Counter[tuple[str, str, str]] = collections.Counter()
@@ -284,7 +306,11 @@ def main() -> None:
         json.dumps(existing, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
+    return vendor_entries, overrides, conflicts
 
+
+def _write_labels(all_files: dict[str, dict[str, Any]], relatives: list[str]) -> None:
+    """Write the per-file labels outside the repository."""
     WORKSPACE.mkdir(parents=True, exist_ok=True)
     with LABELS_PATH.open("w", encoding="utf-8", newline="\n") as handle:
         for relative in relatives:
@@ -292,6 +318,11 @@ def main() -> None:
             record["path"] = relative
             handle.write(json.dumps(record, sort_keys=True, ensure_ascii=False) + "\n")
 
+
+def _genre_and_tag_counts(
+    all_files: dict[str, dict[str, Any]],
+) -> tuple[collections.Counter[str], collections.Counter[str], int]:
+    """Count the vendor genres, the play-style tags and the files carrying a tempo."""
     genres: collections.Counter[str] = collections.Counter()
     tags: collections.Counter[str] = collections.Counter()
     tempos = 0
@@ -302,8 +333,19 @@ def main() -> None:
             tags[tag] += 1
         if record["tempo"]:
             tempos += 1
+    return genres, tags, tempos
 
-    lines = [
+
+def _headline_lines(
+    databases: list[Path],
+    libraries: list[dict[str, Any]],
+    all_files: dict[str, dict[str, Any]],
+    pitches: dict[str, list[int]],
+    vendor_entries: int,
+    overrides: int,
+) -> list[str]:
+    """Return the headline numbers of the vendor label report."""
+    return [
         "# Vendor labels from the Superior Drummer 3 databases",
         "",
         f"Databases read: {len(libraries)} of {len(databases)} found.",
@@ -316,7 +358,15 @@ def main() -> None:
         "| Genre | Files |",
         "|---|---|",
     ]
-    lines += [f"| {name} | {count} |" for name, count in genres.most_common()]
+
+
+def _genre_lines(
+    genres: collections.Counter[str],
+    tempos: int,
+    all_files: dict[str, dict[str, Any]],
+) -> list[str]:
+    """Return the genre table and the tempo coverage of the vendor label report."""
+    lines = [f"| {name} | {count} |" for name, count in genres.most_common()]
     lines += [
         "",
         f"Files carrying a vendor tempo: {tempos} ({tempos / max(1, len(all_files)):.1%}).",
@@ -326,7 +376,12 @@ def main() -> None:
         "| Tag | Files |",
         "|---|---|",
     ]
-    lines += [f"| {name} | {count} |" for name, count in tags.most_common(30)]
+    return lines
+
+
+def _tag_lines(tags: collections.Counter[str]) -> list[str]:
+    """Return the play-style tag table of the vendor label report."""
+    lines = [f"| {name} | {count} |" for name, count in tags.most_common(30)]
     lines += [
         "",
         "## Disagreements left unapplied",
@@ -340,7 +395,12 @@ def main() -> None:
         "| General MIDI | Vendor kit piece | Would become | Collections |",
         "|---|---|---|---|",
     ]
-    lines += [
+    return lines
+
+
+def _conflict_lines(conflicts: collections.Counter[tuple[str, str, str]]) -> list[str]:
+    """Return the disagreements left unapplied and the note about the label file."""
+    lines = [
         f"| `{gm_role}` | {kit} | `{vendor_role}` | {count} |"
         for (gm_role, vendor_role, kit), count in conflicts.most_common()
     ]
@@ -348,6 +408,38 @@ def main() -> None:
         "",
         f"Per-file labels are written outside the repository, to `{LABELS_PATH}`.",
     ]
+    return lines
+
+
+def main() -> None:
+    databases = sorted(VENDOR_ROOT.glob("*/midiDB"))
+    print(f"vendor databases found: {len(databases)}", flush=True)
+
+    libraries = [library for library in map(_read_library, databases) if library]
+    print(f"readable libraries:     {len(libraries)}", flush=True)
+
+    all_files = _labelled_files(libraries)
+    print(f"labelled files:         {len(all_files)}", flush=True)
+
+    relatives = sorted(all_files)
+    pitches = _parse_pitches(relatives)
+    print(f"files parsed:           {len(pitches)}", flush=True)
+
+    by_stratum = _by_stratum(all_files)
+    existing = json.loads(MAP_PATH.read_text(encoding="utf-8"))
+    vendor_entries, overrides, conflicts = _write_articulation_map(
+        by_stratum, pitches, existing
+    )
+
+    _write_labels(all_files, relatives)
+    genres, tags, tempos = _genre_and_tag_counts(all_files)
+
+    lines = _headline_lines(
+        databases, libraries, all_files, pitches, vendor_entries, overrides
+    )
+    lines += _genre_lines(genres, tempos, all_files)
+    lines += _tag_lines(tags)
+    lines += _conflict_lines(conflicts)
     REPORT_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     print(f"vendor articulation entries: {vendor_entries}")
