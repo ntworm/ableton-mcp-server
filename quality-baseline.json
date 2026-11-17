@@ -2,7 +2,6 @@
   "files": {
     "ableton_mcp_server/acceptance/runner.py": 2966,
     "ableton_mcp_server/models.py": 1183,
-    "ableton_mcp_server/server.py": 2597,
     "scripts/build_release_candidates.py": 613,
     "scripts/mock_remote_script.py": 650,
     "tests/_strict_fake.py": 1157,
@@ -139,16 +138,6 @@
     },
     "ableton_mcp_server/server.py::_explicit_json_result": {
       "complexity": 13
-    },
-    "ableton_mcp_server/server.py::_resolve_extension_entrypoint": {
-      "complexity": 11
-    },
-    "ableton_mcp_server/server.py::build_extension": {
-      "complexity": 13,
-      "function_lines": 116
-    },
-    "ableton_mcp_server/server.py::scaffold_extension": {
-      "function_lines": 106
     },
     "contracts.py::_request_work_units": {
       "complexity": 15
