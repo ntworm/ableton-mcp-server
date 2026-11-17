@@ -15,6 +15,7 @@ suite is passing for the wrong reasons.
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 import pytest
 
@@ -134,6 +135,11 @@ def test_runner_against_strict_fake_emits_no_unknown_commands() -> None:
         "runner emitted commands the strict fake did not recognize: "
         f"{[(row['tool'], row['evidence']) for row in unknown]}"
     )
+    _assert_build_row_reports_the_real_outcome(cert)
+
+
+def _assert_build_row_reports_the_real_outcome(cert: dict[str, Any]) -> None:
+    """Assert the build row reports the outcome of the real build."""
     build_row = next(r for r in cert["tools"] if r["tool"] == "build_extension")
     # ``build_extension`` is real now: the strict fake uses the same
     # status ladder as a real Live integration. When the local

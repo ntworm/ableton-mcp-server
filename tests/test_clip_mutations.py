@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -95,6 +96,11 @@ def test_fire_clip_and_add_notes_use_python_remote_script_lom_types() -> None:
     specifications = slot.clip.add_payloads[0]
     assert len(specifications) == 1
     specification = specifications[0]
+    _assert_added_note_specification(specification)
+
+
+def _assert_added_note_specification(specification: Any) -> None:
+    """Assert the note specification the host received for the added note."""
     assert specification.pitch == 64
     assert specification.start_time == 1.0
     assert specification.duration == 0.5

@@ -51,6 +51,11 @@ def test_bridge_status_probes_live_instead_of_tool_discovery() -> None:
     assert result["runtime"]["is_wsl"] is False
     assert result["server_version"] == __version__
     assert result["tool_count"] == len(TOOL_CATALOG)
+    _assert_websocket_surface(result)
+
+
+def _assert_websocket_surface(result: dict[str, Any]) -> None:
+    """Assert the WebSocket endpoint and methods the probe reports."""
     assert result["ws_endpoint"] == {"host": "127.0.0.1", "port": 9889}
     assert result["extension_host_available"] is None
     assert result["ws_methods_registered"] == [

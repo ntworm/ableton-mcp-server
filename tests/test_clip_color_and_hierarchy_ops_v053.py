@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
 from AbletonMCPServer_RemoteScript import RemoteError, execute_command
 from tests.remote_fakes import (
@@ -330,8 +331,6 @@ def test_merge_groups_never_deletes_the_emptied_source() -> None:
 
 
 def test_request_models_reject_malformed_hierarchy_requests() -> None:
-    from pydantic import ValidationError
-
     from ableton_mcp_server import models
 
     with pytest.raises(ValidationError):
@@ -354,8 +353,6 @@ def test_request_models_reject_malformed_hierarchy_requests() -> None:
 
 
 def test_clip_colour_request_model_validates_scope_and_colour() -> None:
-    from pydantic import ValidationError
-
     from ableton_mcp_server import models
 
     with pytest.raises(ValidationError):
@@ -377,16 +374,20 @@ def test_new_tools_are_registered_across_every_source_of_truth() -> None:
     from ableton_mcp_server.server import PUBLIC_TOOL_NAMES
     from contracts import ALLOWED_MUTATIONS, READ_COMMANDS, UNSUPPORTED_CAPABILITIES
 
+    def assert_tool_is_registered(tool: str) -> None:
+        """Assert that one tool is registered in every source of truth."""
+        assert tool in by_name, tool
+        assert tool in TOOL_REQUEST_MODELS, tool
+        assert tool in PUBLIC_TOOL_NAMES, tool
+        assert tool in probe_home, tool
+
     by_name = {spec.name: spec for spec in TOOL_CATALOG}
     probe_home = {tool: group for group, tools in BASELINE_PROBE_GROUPS.items() for tool in tools}
 
     assert "set_clip_color" in ALLOWED_MUTATIONS
     assert "diagnose_clip_targets" in READ_COMMANDS
     for tool in ("set_clip_color", "diagnose_clip_targets", *UNSUPPORTED_CAPABILITIES):
-        assert tool in by_name, tool
-        assert tool in TOOL_REQUEST_MODELS, tool
-        assert tool in PUBLIC_TOOL_NAMES, tool
-        assert tool in probe_home, tool
+        assert_tool_is_registered(tool)
 
     for tool in UNSUPPORTED_CAPABILITIES:
         assert by_name[tool].risk is Risk.UNAVAILABLE
