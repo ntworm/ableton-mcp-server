@@ -137,33 +137,50 @@ def _explicit_json_result(
 ) -> ToolResult:
     """Keep JSON values visible without leaking domain errors into FastMCP."""
     original = value
-    if isinstance(original, Mapping) and any(
-        isinstance(item, str) and len(item) >= budget.max_bytes for item in original.values()
-    ):
-        raise GrooveResponseBudgetExceeded("response item cannot fit response budget")
+    _reject_oversized_item(original, budget)
 
     def compact(item: object, max_items: int) -> object:
         return _compact_json_value(item, max_items, budget)
 
     meta = {"fastmcp": {"wrap_result": True}} if unwrap_result else None
     for max_items in (32, 16, 8, 4, 1, 0):
-        if max_items == 0 and isinstance(original, Mapping) and any(
-            isinstance(item, list) and item for item in original.values()
-        ):
+        if max_items == 0 and _holds_list_item(original):
             raise GrooveResponseBudgetExceeded("no response list item fits the budget")
         compact_value = compact(original, max_items)
         structured = {"result": compact_value} if unwrap_result else compact_value
         text_value = compact_value if unwrap_result else structured
-        text = canonical_json(text_value).decode("utf-8")
-        result = ToolResult(
-            content=[TextContent(type="text", text=text)],
-            structured_content=structured,
-            meta=meta,
-            is_error=is_error,
-        )
+        result = _tool_result(text_value, structured, meta, is_error)
         if len(serialize_tool_result(result)) <= budget.max_bytes:
             return result
     raise GrooveResponseBudgetExceeded("response budget exceeded")
+
+
+def _reject_oversized_item(original: Mapping[str, object] | Any, budget: ResponseBudget) -> None:
+    """Raise when a top level string item cannot fit the response budget."""
+    if isinstance(original, Mapping) and any(
+        isinstance(item, str) and len(item) >= budget.max_bytes for item in original.values()
+    ):
+        raise GrooveResponseBudgetExceeded("response item cannot fit response budget")
+
+
+def _holds_list_item(original: Mapping[str, object] | Any) -> bool:
+    """Return True when a mapping holds a non empty list item."""
+    if not isinstance(original, Mapping):
+        return False
+    return any(isinstance(item, list) and item for item in original.values())
+
+
+def _tool_result(
+    text_value: object, structured: object, meta: dict[str, Any] | None, is_error: bool
+) -> ToolResult:
+    """Build the ToolResult of one compacted response."""
+    text = canonical_json(text_value).decode("utf-8")
+    return ToolResult(
+        content=[TextContent(type="text", text=text)],
+        structured_content=structured,
+        meta=meta,
+        is_error=is_error,
+    )
 
 
 def _remote(

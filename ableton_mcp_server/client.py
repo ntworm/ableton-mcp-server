@@ -202,12 +202,20 @@ class Client:
                     ) from exc
                 except (ConnectionError, OSError) as exc:
                     self._close_locked(increment=True)
-                    if may_retry and self.reconnect and retries < self.max_retries:
+                    if self._retry_allowed(may_retry, retries):
                         retries += 1
-                        if self.backoff_factor:
-                            time.sleep(self.backoff_factor * (2 ** (retries - 1)))
+                        self._wait_before_retry(retries)
                         continue
                     raise self._unavailable_error(command_type, may_retry, exc) from exc
+
+    def _retry_allowed(self, may_retry: bool, retries: int) -> bool:
+        """Return True when a failed connection may be retried."""
+        return may_retry and self.reconnect and retries < self.max_retries
+
+    def _wait_before_retry(self, retries: int) -> None:
+        """Wait for the exponential backoff delay before the next attempt."""
+        if self.backoff_factor:
+            time.sleep(self.backoff_factor * (2 ** (retries - 1)))
 
     def _exchange_locked(
         self, command_type: str, request_params: dict[str, Any], effective_timeout: float
