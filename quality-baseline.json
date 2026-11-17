@@ -26,67 +26,6 @@
     },
     "ableton_mcp_server/acceptance/runner.py::run_offline_probes.groove_phase2": {
       "function_lines": 77
-    },
-    "contracts.py::_request_work_units": {
-      "complexity": 15
-    },
-    "tests/fixtures/groove_bridge.py::NewBridgeFixture.dispatch": {
-      "complexity": 23,
-      "function_lines": 85
-    },
-    "tests/fixtures/groove_mcp_wire.py::assert_client_schema_constraints": {
-      "complexity": 13
-    },
-    "tests/test_acceptance_baseline.py::TestDiscoverBaseline._make_client._FakeClient.call": {
-      "complexity": 12
-    },
-    "tests/test_acceptance_baseline.py::TestDiscoverBaseline.test_happy_path": {
-      "complexity": 12
-    },
-    "tests/test_build_mcpb.py::test_manifest_lists_exactly_the_catalog_and_derives_every_count": {
-      "complexity": 12
-    },
-    "tests/test_build_mcpb.py::test_manifest_stays_inside_the_strict_mcpb_schema": {
-      "complexity": 12
-    },
-    "tests/test_clip_color_and_hierarchy_ops_v053.py::test_new_tools_are_registered_across_every_source_of_truth": {
-      "complexity": 12
-    },
-    "tests/test_clip_mutations.py::test_fire_clip_and_add_notes_use_python_remote_script_lom_types": {
-      "complexity": 12
-    },
-    "tests/test_diagnostics.py::test_bridge_status_probes_live_instead_of_tool_discovery": {
-      "complexity": 12
-    },
-    "tests/test_fake_bridge_strict.py::test_runner_against_strict_fake_emits_no_unknown_commands": {
-      "function_lines": 61
-    },
-    "tests/test_groove_articulation.py::test_v3_is_stamped_and_differs_only_where_the_map_says": {
-      "complexity": 11
-    },
-    "tests/test_groove_corpus_pipeline.py::test_inventory_is_relative_streaming_and_restartable": {
-      "complexity": 11
-    },
-    "tests/test_groove_export.py::test_export_carries_facets_notes_and_timing": {
-      "complexity": 11
-    },
-    "tests/test_groove_provider_fallback.py::test_provider_summary_and_lineage_are_recursively_public": {
-      "function_lines": 71
-    },
-    "tests/test_groove_provider_lab.py::test_threshold_defaults_are_published_and_stable": {
-      "complexity": 12
-    },
-    "tests/test_groove_taxonomy.py::test_relative_path_taxonomy_is_versioned_bounded_and_does_not_guess_unknown_genres": {
-      "complexity": 12
-    },
-    "tests/test_hierarchy_acceptance_scenario_v053.py::test_moving_pads_2_children_into_pads_is_refused_and_changes_nothing": {
-      "complexity": 11
-    },
-    "tests/test_packaging.py::test_baseline_docs_match_current_state": {
-      "complexity": 11
-    },
-    "tests/test_transaction.py::test_batch_advances_deferred_children_with_one_outer_undo": {
-      "complexity": 14
     }
   },
   "limits": {
