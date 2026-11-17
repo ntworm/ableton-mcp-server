@@ -224,6 +224,24 @@ def scaffold_extension(name: str, author: str = "ntworm", output_directory: str 
         name=name, author=author, output_directory=output_directory
     )
     project_dir = Path(request.output_directory) / request.name
+    error_document = _create_extension_project_dir(project_dir)
+    if error_document is not None:
+        return error_document
+    files = _write_extension_scaffold(project_dir, request, tarballs)
+
+    return json.dumps(
+        {
+            "status": "scaffolded",
+            "project_path": str(project_dir),
+            "entrypoint": _EXTENSION_ENTRYPOINT_REL,
+            "files": files,
+        },
+        indent=2,
+    )
+
+
+def _create_extension_project_dir(project_dir: Path) -> str | None:
+    """Create the new project folder; return an error document when it fails."""
     try:
         project_dir.mkdir(parents=True, exist_ok=False)
     except FileExistsError:
@@ -242,6 +260,15 @@ def scaffold_extension(name: str, author: str = "ntworm", output_directory: str 
             },
             indent=2,
         )
+    return None
+
+
+def _write_extension_scaffold(
+    project_dir: Path,
+    request: models.ScaffoldExtensionRequest,
+    tarballs: dict[str, Path],
+) -> list[str]:
+    """Write the scaffold files and vendor tarballs; return their relative paths."""
     src_dir = project_dir / "src"
     src_dir.mkdir(exist_ok=True)
 
@@ -281,16 +308,7 @@ def scaffold_extension(name: str, author: str = "ntworm", output_directory: str 
         "src/extension.ts",
         *copied_vendor_files,
     ]
-
-    return json.dumps(
-        {
-            "status": "scaffolded",
-            "project_path": str(project_dir),
-            "entrypoint": _EXTENSION_ENTRYPOINT_REL,
-            "files": files,
-        },
-        indent=2,
-    )
+    return files
 
 
 @mcp.tool()
@@ -334,15 +352,39 @@ def build_extension(project_path: str) -> str:
     """
     request = models.BuildExtensionRequest(project_path=project_path)
     project = Path(request.project_path)
+    entrypoint_rel, error_document = _extension_build_preflight(project)
+    if entrypoint_rel is None:
+        return error_document
+    steps, step_error = _run_extension_build_steps(project, entrypoint_rel)
+    if step_error is not None:
+        return step_error
+
+    artifacts = _extension_dist_artifacts(project)
+    entrypoint_exists = (project / entrypoint_rel).is_file()
+    status = "built" if entrypoint_exists else "error"
+    return json.dumps(
+        {
+            "status": status,
+            "entrypoint": entrypoint_rel,
+            "entrypoint_exists": entrypoint_exists,
+            "steps": steps,
+            "artifacts": artifacts,
+        },
+        indent=2,
+    )
+
+
+def _extension_build_preflight(project: Path) -> tuple[str | None, str]:
+    """Return (entrypoint, "") or (None, error document) before any build step runs."""
     if not (project / "package.json").is_file():
-        return json.dumps(
+        return None, json.dumps(
             {"status": "error", "message": "no package.json found", "project_path": str(project)},
             indent=2,
         )
 
     entrypoint_rel = _resolve_extension_entrypoint(project)
     if entrypoint_rel is None:
-        return json.dumps(
+        return None, json.dumps(
             {
                 "status": "error",
                 "message": (
@@ -352,7 +394,13 @@ def build_extension(project_path: str) -> str:
             },
             indent=2,
         )
+    return entrypoint_rel, ""
 
+
+def _run_extension_build_steps(
+    project: Path, entrypoint_rel: str
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Run npm install and npm run build; return the steps and an error document on failure."""
     steps: list[dict[str, Any]] = []
     # Use an argument list rather than shell=True so the user-supplied
     # project_path can never be interpreted by a shell. Each step is a
@@ -380,7 +428,7 @@ def build_extension(project_path: str) -> str:
             }
         )
         if result.returncode != 0:
-            return json.dumps(
+            return steps, json.dumps(
                 {
                     "status": "error",
                     "entrypoint": entrypoint_rel,
@@ -390,26 +438,18 @@ def build_extension(project_path: str) -> str:
                 },
                 indent=2,
             )
+    return steps, None
 
+
+def _extension_dist_artifacts(project: Path) -> list[str]:
+    """List every file under ``dist/`` relative to the project root."""
     dist_dir = project / "dist"
     artifacts: list[str] = []
     if dist_dir.is_dir():
         for candidate in sorted(dist_dir.rglob("*")):
             if candidate.is_file():
                 artifacts.append(candidate.relative_to(project).as_posix())
-
-    entrypoint_exists = (project / entrypoint_rel).is_file()
-    status = "built" if entrypoint_exists else "error"
-    return json.dumps(
-        {
-            "status": status,
-            "entrypoint": entrypoint_rel,
-            "entrypoint_exists": entrypoint_exists,
-            "steps": steps,
-            "artifacts": artifacts,
-        },
-        indent=2,
-    )
+    return artifacts
 
 
 def _resolve_extension_entrypoint(project: Path) -> str | None:
@@ -421,23 +461,23 @@ def _resolve_extension_entrypoint(project: Path) -> str | None:
     when neither source is present.
     """
     pkg_path = project / "package.json"
-    if pkg_path.is_file():
-        try:
-            pkg = json.loads(pkg_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            pkg = None
-        if isinstance(pkg, dict):
-            main = pkg.get("main")
-            if isinstance(main, str) and main.strip():
-                return main.strip()
+    main = _json_string_field(pkg_path, "main")
+    if main is not None:
+        return main
     manifest_path = project / "manifest.json"
-    if manifest_path.is_file():
-        try:
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            manifest = None
-        if isinstance(manifest, dict):
-            entry = manifest.get("entry")
-            if isinstance(entry, str) and entry.strip():
-                return entry.strip()
+    return _json_string_field(manifest_path, "entry")
+
+
+def _json_string_field(path: Path, key: str) -> str | None:
+    """Return the stripped, non-empty string at KEY of a JSON object file, or None."""
+    if not path.is_file():
+        return None
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        document = None
+    if isinstance(document, dict):
+        value = document.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
     return None
