@@ -75,47 +75,65 @@ async def run(
     absent from PATH.
     """
     if runtime is not None and requests is not None:
-        from ...groove_intelligence.deterministic import deterministic_generate
-        from ...groove_intelligence.evidence import compare, evidence
-        from ...groove_intelligence.search import search
-        from .groove_apply import preview_probe
-
-        await _record_call(
-            report,
-            "groove_search",
-            lambda: search(runtime, requests["search"]),
-            passed="offline_passed",
-        )
-        await _record_call(
-            report,
-            "groove_evidence",
-            lambda: evidence(runtime, requests["evidence"]),
-            passed="offline_passed",
-        )
-        await _record_call(
-            report,
-            "groove_generate",
-            lambda: deterministic_generate(runtime, requests["generate"]),
-            passed="offline_passed",
-        )
-        await _record_call(
-            report,
-            "groove_compare",
-            lambda: compare(runtime, requests["compare"]),
-            passed="offline_passed",
-        )
-        await _record_call(
-            report,
-            "groove_apply",
-            lambda: preview_probe(
-                confirm_project_name="TESTE_CODEX",
-                expected_empty_slot=True,
-                disposable=True,
-            ),
-            passed="offline_passed",
-        )
+        await _record_groove_probes(report, runtime, requests)
         return
 
+    await _record_analysis_probes(report, workdir)
+    await _record_log_probe(report)
+    await _record_diff_probe(report)
+    await _record_scaffold_probe(report, workdir)
+    await _record_build_probe(report, workdir)
+
+
+async def _record_groove_probes(
+    report: CertificationReport,
+    runtime: Any,
+    requests: Mapping[str, Any],
+) -> None:
+    """Record the five groove rows of the offline probe group."""
+    from ...groove_intelligence.deterministic import deterministic_generate
+    from ...groove_intelligence.evidence import compare, evidence
+    from ...groove_intelligence.search import search
+    from .groove_apply import preview_probe
+
+    await _record_call(
+        report,
+        "groove_search",
+        lambda: search(runtime, requests["search"]),
+        passed="offline_passed",
+    )
+    await _record_call(
+        report,
+        "groove_evidence",
+        lambda: evidence(runtime, requests["evidence"]),
+        passed="offline_passed",
+    )
+    await _record_call(
+        report,
+        "groove_generate",
+        lambda: deterministic_generate(runtime, requests["generate"]),
+        passed="offline_passed",
+    )
+    await _record_call(
+        report,
+        "groove_compare",
+        lambda: compare(runtime, requests["compare"]),
+        passed="offline_passed",
+    )
+    await _record_call(
+        report,
+        "groove_apply",
+        lambda: preview_probe(
+            confirm_project_name="TESTE_CODEX",
+            expected_empty_slot=True,
+            disposable=True,
+        ),
+        passed="offline_passed",
+    )
+
+
+async def _record_analysis_probes(report: CertificationReport, workdir: Path) -> None:
+    """Record the four offline mix analysis rows."""
     # ``_synthesize_offline_inputs`` is the canonical input generator
     # for every offline probe. It lives in ``acceptance.helpers`` because
     # it is reused by the synth-only tests too; we lazy-import it so
@@ -151,6 +169,10 @@ async def run(
     await _record_call(report, "analyze_mix", mix, passed="offline_passed")
     await _record_call(report, "extract_single_cycle", single_cycle, passed="offline_passed")
 
+
+async def _record_log_probe(report: CertificationReport) -> None:
+    """Record the ``get_ableton_logs`` row."""
+
     def logs() -> str:
         """Real ``get_ableton_logs`` impl: read the tail of Log.txt."""
         from ...diagnostics import find_ableton_log_path
@@ -165,6 +187,10 @@ async def run(
             return f"Error reading Ableton Log.txt: {error}"
 
     await _record_call(report, "get_ableton_logs", logs, passed="offline_passed")
+
+
+async def _record_diff_probe(report: CertificationReport) -> None:
+    """Record the ``diff_snapshots_tool`` row."""
 
     def diff_tool() -> dict[str, Any]:
         """Compare two snapshots through the real ``diff_snapshots`` impl."""
@@ -192,6 +218,10 @@ async def run(
 
     await _record_call(report, "diff_snapshots_tool", diff_tool, passed="offline_passed")
 
+
+async def _record_scaffold_probe(report: CertificationReport, workdir: Path) -> None:
+    """Record the ``scaffold_extension`` row."""
+
     def scaffold() -> dict[str, Any]:
         """Real ``scaffold_extension`` impl, validated by file presence."""
         import json
@@ -218,6 +248,9 @@ async def run(
 
     await _record_call(report, "scaffold_extension", scaffold, passed="offline_passed")
 
+
+async def _record_build_probe(report: CertificationReport, workdir: Path) -> None:
+    """Record the ``build_extension`` row against the scaffold we wrote."""
     # ``build_extension`` runs ``npm install`` + ``tsc``. It is only
     # ``environment_unavailable`` when Node is genuinely absent; otherwise
     # we exercise the real implementation against the scaffold we just
@@ -231,15 +264,12 @@ async def run(
         return
 
     def build_ext() -> dict[str, Any]:
+        """Run the real ``build_extension`` impl and check its contract."""
         import json
 
         from ...server import build_extension
 
-        scaffold_dir = workdir / "scaffold"
-        scaffold_dirs = [p for p in scaffold_dir.iterdir() if p.is_dir()]
-        if not scaffold_dirs:
-            raise RuntimeError("scaffold output missing for build_extension")
-        project = scaffold_dirs[0]
+        project = _scaffold_project(workdir)
         result_json = build_extension(str(project))
         parsed = json.loads(result_json)
         # Strict invariant: the build must report ``status == "built"``,
@@ -250,44 +280,86 @@ async def run(
         # "error"`` or a failed returncode cannot be reported as
         # ``offline_passed``. Per-step ``artifact`` is **not** part of
         # the contract — the runner does not require one.
-        status = str(parsed.get("status", "")).strip().lower()
-        if status != "built":
-            raise AssertionError(f"build_extension status={status!r} expected 'built': {parsed}")
-        steps = parsed.get("steps", [])
-        if not isinstance(steps, list) or not steps:
-            raise AssertionError(f"build_extension missing steps list: {parsed}")
-        for index, step in enumerate(steps):
-            if int(step.get("returncode", -1)) != 0:
-                raise AssertionError(
-                    f"build_extension step {index} returncode="
-                    f"{step.get('returncode')!r} expected 0: {step}"
-                )
-        entrypoint = parsed.get("entrypoint")
-        if not isinstance(entrypoint, str) or not entrypoint.strip():
-            raise AssertionError(f"build_extension response missing entrypoint: {parsed}")
-        entrypoint_rel = entrypoint.strip()
-        # Top-level artefacts must include the declared entrypoint.
-        artifacts = parsed.get("artifacts", [])
-        if not isinstance(artifacts, list) or not artifacts:
-            raise AssertionError(f"build_extension produced no artifacts: {parsed}")
-        if entrypoint_rel not in artifacts:
-            raise AssertionError(
-                f"build_extension artifacts missing declared entrypoint "
-                f"{entrypoint_rel!r}: {artifacts}"
-            )
-        canonical = project / entrypoint_rel
-        if not canonical.is_file():
-            raise AssertionError(f"build_extension entrypoint not on disk: {canonical}")
-        # Tag built artefacts for cleanup.
-        for artefact in artifacts:
-            target = project / artefact
-            if target.exists():
-                (target.parent / "MCP_ACCEPTANCE_ARTIFACT").write_text(
-                    "acceptance built artifact", encoding="utf-8"
-                )
+        _assert_build_status(parsed)
+        _assert_build_steps(parsed)
+        entrypoint_rel = _assert_build_entrypoint(parsed)
+        artifacts = _assert_build_artifacts(parsed, entrypoint_rel)
+        _assert_entrypoint_on_disk(project, entrypoint_rel)
+        _tag_built_artifacts(project, artifacts)
         return cast(dict[str, Any], parsed)
 
     await _record_call(report, "build_extension", build_ext, passed="offline_passed")
+
+
+def _scaffold_project(workdir: Path) -> Path:
+    """Return the scaffold directory the extension build has to run in."""
+    scaffold_dir = workdir / "scaffold"
+    scaffold_dirs = [p for p in scaffold_dir.iterdir() if p.is_dir()]
+    if not scaffold_dirs:
+        raise RuntimeError("scaffold output missing for build_extension")
+    project = scaffold_dirs[0]
+    return project
+
+
+def _assert_build_status(parsed: dict[str, Any]) -> None:
+    """Refuse a build that did not report the ``built`` status."""
+    status = str(parsed.get("status", "")).strip().lower()
+    if status != "built":
+        raise AssertionError(f"build_extension status={status!r} expected 'built': {parsed}")
+
+
+def _assert_build_steps(parsed: dict[str, Any]) -> None:
+    """Refuse a build that reports a step with a failed return code."""
+    steps = parsed.get("steps", [])
+    if not isinstance(steps, list) or not steps:
+        raise AssertionError(f"build_extension missing steps list: {parsed}")
+    for index, step in enumerate(steps):
+        if int(step.get("returncode", -1)) != 0:
+            raise AssertionError(
+                f"build_extension step {index} returncode="
+                f"{step.get('returncode')!r} expected 0: {step}"
+            )
+
+
+def _assert_build_entrypoint(parsed: dict[str, Any]) -> str:
+    """Return the entrypoint the built extension declares."""
+    entrypoint = parsed.get("entrypoint")
+    if not isinstance(entrypoint, str) or not entrypoint.strip():
+        raise AssertionError(f"build_extension response missing entrypoint: {parsed}")
+    entrypoint_rel = entrypoint.strip()
+    return entrypoint_rel
+
+
+def _assert_build_artifacts(parsed: dict[str, Any], entrypoint_rel: str) -> list[Any]:
+    """Return the artefacts of a built extension, the entrypoint included."""
+    # Top-level artefacts must include the declared entrypoint.
+    artifacts = parsed.get("artifacts", [])
+    if not isinstance(artifacts, list) or not artifacts:
+        raise AssertionError(f"build_extension produced no artifacts: {parsed}")
+    if entrypoint_rel not in artifacts:
+        raise AssertionError(
+            f"build_extension artifacts missing declared entrypoint "
+            f"{entrypoint_rel!r}: {artifacts}"
+        )
+    return artifacts
+
+
+def _assert_entrypoint_on_disk(project: Path, entrypoint_rel: str) -> None:
+    """Refuse a build whose declared entrypoint is missing on disk."""
+    canonical = project / entrypoint_rel
+    if not canonical.is_file():
+        raise AssertionError(f"build_extension entrypoint not on disk: {canonical}")
+
+
+def _tag_built_artifacts(project: Path, artifacts: list[Any]) -> None:
+    """Tag the built artefacts so the cleanup pass removes them."""
+    # Tag built artefacts for cleanup.
+    for artefact in artifacts:
+        target = project / artefact
+        if target.exists():
+            (target.parent / "MCP_ACCEPTANCE_ARTIFACT").write_text(
+                "acceptance built artifact", encoding="utf-8"
+            )
 
 
 __all__ = ["TOOLS", "run"]

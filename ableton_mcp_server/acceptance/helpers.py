@@ -36,6 +36,33 @@ def _test_tempo(original: float, offset: float) -> float:
     return original - offset
 
 
+def _occupied_grid_cells(locators: list[Mapping[str, Any]], grid: float) -> set[float]:
+    """Map the locator times onto the grid cells they occupy."""
+    occupied = set()
+    for item in locators:
+        try:
+            occupied.add(round(float(item.get("time", -1.0)) / grid) * grid)
+        except (TypeError, ValueError):
+            continue
+    return occupied
+
+
+def _grid_cue_candidates(song_length_f: float, grid: float, occupied: set[float]) -> list[float]:
+    """Collect the free grid cells that stay inside the song length."""
+    chosen: list[float] = []
+    step_count = int(song_length_f // grid)
+    for index in range(step_count, -1, -1):
+        candidate = round(float(index) * grid, 6)
+        if candidate > song_length_f + 1e-6:
+            continue
+        if candidate in occupied:
+            continue
+        chosen.append(candidate)
+        if len(chosen) == 2:
+            break
+    return chosen
+
+
 def _acceptance_safe_cue_times(
     song_length: float,
     locators: list[Mapping[str, Any]],
@@ -56,26 +83,11 @@ def _acceptance_safe_cue_times(
     if grid <= 0.0:
         raise AcceptanceSafetyError(f"grid must be positive, got {grid}")
 
-    occupied = set()
-    for item in locators:
-        try:
-            occupied.add(round(float(item.get("time", -1.0)) / grid) * grid)
-        except (TypeError, ValueError):
-            continue
+    occupied = _occupied_grid_cells(locators, grid)
 
     # Walk the grid in descending order so we pick times that are
     # guaranteed to be inside song_length. Two free cells are required.
-    chosen: list[float] = []
-    step_count = int(song_length_f // grid)
-    for index in range(step_count, -1, -1):
-        candidate = round(float(index) * grid, 6)
-        if candidate > song_length_f + 1e-6:
-            continue
-        if candidate in occupied:
-            continue
-        chosen.append(candidate)
-        if len(chosen) == 2:
-            break
+    chosen = _grid_cue_candidates(song_length_f, grid, occupied)
 
     if len(chosen) < 2:
         raise AcceptanceSafetyError(

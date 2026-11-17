@@ -82,6 +82,72 @@ def _discover_first_plugin_device(
     return None, None
 
 
+def _search_track_order(snapshot: BaselineSnapshot, priority_track_index: int) -> list[int]:
+    """Order the tracks to walk, the priority track first."""
+    search_tracks: list[int] = []
+    if priority_track_index in snapshot["track_names"]:
+        search_tracks.append(priority_track_index)
+    for t_idx in sorted(snapshot["track_names"]):
+        if t_idx not in search_tracks:
+            search_tracks.append(t_idx)
+    return search_tracks
+
+
+def _first_enabled_parameter(params_list: Any) -> tuple[str, float, float, bool] | None:
+    """Return the first enabled parameter of a device entry.
+
+    Returns ``(name, min, max, is_quantized)``, or ``None`` when the
+    device holds no enabled parameter with a usable name.
+    """
+    for p in params_list:
+        if not isinstance(p, dict):
+            continue
+        if p.get("is_enabled") is False or p.get("enabled") is False:
+            continue
+        p_name = p.get("name")
+        if not isinstance(p_name, str) or not p_name:
+            continue
+        min_val = float(p.get("min", 0.0))
+        max_val = float(p.get("max", 1.0))
+        is_quant = bool(p.get("is_quantized", False))
+        return p_name, min_val, max_val, is_quant
+    return None
+
+
+def _device_parameter(
+    client: AcceptanceClient,
+    call: Callable[..., Any],
+    t_idx: int,
+) -> tuple[int, str, float, float, bool] | None:
+    """Return the first enabled parameter of the first device of one track.
+
+    Returns ``(device_index, name, min, max, is_quantized)``, or ``None``
+    when the track holds no device with an enabled parameter.
+    """
+    try:
+        dev_list = call("get_device_list", {"track_index": t_idx})
+        if not isinstance(dev_list, list) or not dev_list:
+            return None
+        t_id = _resolve_track_id(client, t_idx)
+        device_params = call("list_device_params", {"track_id": t_id})
+        if not isinstance(device_params, list):
+            return None
+        for dev_idx, dev_entry in enumerate(device_params):
+            if not isinstance(dev_entry, dict) or not dev_entry.get("parameters"):
+                continue
+            params_list = dev_entry.get("parameters")
+            if not isinstance(params_list, list):
+                continue
+            found = _first_enabled_parameter(params_list)
+            if found is None:
+                continue
+            p_name, min_val, max_val, is_quant = found
+            return dev_idx, p_name, min_val, max_val, is_quant
+    except Exception:
+        return None
+    return None
+
+
 def _discover_first_enabled_device_parameter(
     client: AcceptanceClient,
     snapshot: BaselineSnapshot,
@@ -105,49 +171,18 @@ def _discover_first_enabled_device_parameter(
     discovered_max = 1.0
     discovered_is_quantized = False
 
-    search_tracks: list[int] = []
-    if priority_track_index in snapshot["track_names"]:
-        search_tracks.append(priority_track_index)
-    for t_idx in sorted(snapshot["track_names"]):
-        if t_idx not in search_tracks:
-            search_tracks.append(t_idx)
-
-    for t_idx in search_tracks:
-        try:
-            dev_list = call("get_device_list", {"track_index": t_idx})
-            if isinstance(dev_list, list) and dev_list:
-                t_id = _resolve_track_id(client, t_idx)
-                device_params = call("list_device_params", {"track_id": t_id})
-                if isinstance(device_params, list):
-                    for dev_idx, dev_entry in enumerate(device_params):
-                        if isinstance(dev_entry, dict) and dev_entry.get("parameters"):
-                            params_list = dev_entry.get("parameters")
-                            if isinstance(params_list, list):
-                                for p in params_list:
-                                    if not isinstance(p, dict):
-                                        continue
-                                    if p.get("is_enabled") is False or p.get("enabled") is False:
-                                        continue
-                                    p_name = p.get("name")
-                                    if not isinstance(p_name, str) or not p_name:
-                                        continue
-                                    min_val = float(p.get("min", 0.0))
-                                    max_val = float(p.get("max", 1.0))
-                                    is_quant = bool(p.get("is_quantized", False))
-
-                                    discovered_track_index = t_idx
-                                    discovered_device_index = dev_idx
-                                    discovered_name = p_name
-                                    discovered_min = min_val
-                                    discovered_max = max_val
-                                    discovered_is_quantized = is_quant
-                                    break
-                                if discovered_name is not None:
-                                    break
-                    if discovered_name is not None:
-                        break
-        except Exception:
-            pass
+    for t_idx in _search_track_order(snapshot, priority_track_index):
+        found = _device_parameter(client, call, t_idx)
+        if found is None:
+            continue
+        dev_idx, p_name, min_val, max_val, is_quant = found
+        discovered_track_index = t_idx
+        discovered_device_index = dev_idx
+        discovered_name = p_name
+        discovered_min = min_val
+        discovered_max = max_val
+        discovered_is_quantized = is_quant
+        break
 
     return (
         discovered_track_index,
@@ -179,12 +214,7 @@ async def run(
     # ``get_project_metadata`` is the first read; refetching it here
     # matches what the legacy in-place lambdas captured and keeps the
     # row consistent with the live bridge state.
-    await _record_call(
-        report,
-        "get_project_metadata",
-        lambda: call("get_project_metadata"),
-        passed="live_passed",
-    )
+    await _record_project_metadata(report, call)
 
     if snapshot is not None:
         (
@@ -200,6 +230,36 @@ async def run(
         discovered_device_index = None
         discovered_name = None
 
+    await _record_session_reads(report, call, track_index)
+    await _record_clip_reads(report, call, track_index, clip_index)
+    await _record_parameter_value(
+        report,
+        call,
+        discovered_track_index,
+        discovered_device_index,
+        discovered_name,
+    )
+    await _record_routing_reads(report, call, track_index)
+    await _record_project_reads(report, call, track_index)
+    await _record_composition_reads(report, client, call, track_index, clip_index)
+
+
+async def _record_project_metadata(report: CertificationReport, call: Callable[..., Any]) -> None:
+    """Record the ``get_project_metadata`` row of the live bridge."""
+    await _record_call(
+        report,
+        "get_project_metadata",
+        lambda: call("get_project_metadata"),
+        passed="live_passed",
+    )
+
+
+async def _record_session_reads(
+    report: CertificationReport,
+    call: Callable[..., Any],
+    track_index: int,
+) -> None:
+    """Record the session, track and scene read rows."""
     # Session / state reads.
     await _record_call(
         report,
@@ -219,30 +279,24 @@ async def run(
         lambda: call("get_track_state", {"track_index": track_index}),
         passed="live_passed",
     )
-    await _record_call(
-        report,
-        "get_locators",
-        lambda: call("get_locators"),
-        passed="live_passed",
-    )
-    await _record_call(
-        report,
-        "take_snapshot",
-        lambda: call("take_snapshot"),
-        passed="live_passed",
-    )
+    await _record_call(report, "get_locators", lambda: call("get_locators"), passed="live_passed")
+    await _record_call(report, "take_snapshot", lambda: call("take_snapshot"), passed="live_passed")
     await _record_call(
         report,
         "get_control_surfaces",
         lambda: call("get_control_surfaces"),
         passed="live_passed",
     )
-    await _record_call(
-        report,
-        "get_scenes",
-        lambda: call("get_scenes"),
-        passed="live_passed",
-    )
+    await _record_call(report, "get_scenes", lambda: call("get_scenes"), passed="live_passed")
+
+
+async def _record_clip_reads(
+    report: CertificationReport,
+    call: Callable[..., Any],
+    track_index: int,
+    clip_index: int,
+) -> None:
+    """Record the scene, clip and device read rows."""
     await _record_call(
         report,
         "get_scene_state",
@@ -292,6 +346,15 @@ async def run(
         passed="live_passed",
     )
 
+
+async def _record_parameter_value(
+    report: CertificationReport,
+    call: Callable[..., Any],
+    discovered_track_index: int | None,
+    discovered_device_index: int | None,
+    discovered_name: str | None,
+) -> None:
+    """Record the ``get_parameter_value`` row of the discovered parameter."""
     # ``get_parameter_value`` is the only row whose target depends on
     # the live discovery; everything else is a fixed command + args.
     if discovered_track_index is not None:
@@ -317,6 +380,13 @@ async def run(
             )
         )
 
+
+async def _record_routing_reads(
+    report: CertificationReport,
+    call: Callable[..., Any],
+    track_index: int,
+) -> None:
+    """Record the routing and browser read rows."""
     # Routing + browser reads.
     await _record_call(
         report,
@@ -341,6 +411,13 @@ async def run(
         passed="live_passed",
     )
 
+
+async def _record_project_reads(
+    report: CertificationReport,
+    call: Callable[..., Any],
+    track_index: int,
+) -> None:
+    """Record the song length and the live find rows."""
     # Project / composition reads.
     await _record_call(
         report,
@@ -373,6 +450,15 @@ async def run(
         passed="live_passed",
     )
 
+
+async def _record_composition_reads(
+    report: CertificationReport,
+    client: AcceptanceClient,
+    call: Callable[..., Any],
+    track_index: int,
+    clip_index: int,
+) -> None:
+    """Record the device parameter, composition and lifecycle rows."""
     # ``list_device_params`` requires ``track_id``, not
     # ``track_index/device_index``.
     track_id = _resolve_track_id(client, track_index)
