@@ -48,7 +48,7 @@ Detailed boundaries and state ownership: `.agent-context/architecture.md`.
 | Path | Responsibility |
 |---|---|
 | `ableton_mcp_server/server.py` | Registers the 97 public MCP tools: it imports the `tools_*.py` modules that define them, in registration order. |
-| `ableton_mcp_server/models.py` | Pydantic request models and batch validation. |
+| `ableton_mcp_server/models.py` | Pydantic request models and batch validation: the models live in `models_*.py` and are re-exported here with `TOOL_REQUEST_MODELS`. |
 | `ableton_mcp_server/client.py` | Routes commands to TCP or WebSocket clients. |
 | `AbletonMCPServer_RemoteScript/` | `socket_server.py` queues socket requests and `RequestProcessor` advances them from `update_display()` on Live's UI thread; `dispatch.py` routes commands, groups undo steps and runs `run_batch`; one module per LOM area; `__init__.py` keeps `create_instance` and the control surface. |
 | `AbletonMCPServer_Extension/src/index.ts` | WebSocket JSON-RPC handlers for three Extension operations. |
