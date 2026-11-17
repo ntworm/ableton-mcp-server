@@ -1,16 +1,11 @@
 {
   "files": {
-    "ableton_mcp_server/acceptance/runner.py": 2967,
-    "ableton_mcp_server/groove_intelligence/corpus.py": 709,
-    "ableton_mcp_server/groove_intelligence/deterministic.py": 729,
-    "ableton_mcp_server/groove_intelligence/fallback.py": 569,
-    "ableton_mcp_server/groove_intelligence/index.py": 872,
-    "ableton_mcp_server/groove_intelligence/taxonomy.py": 629,
+    "ableton_mcp_server/acceptance/runner.py": 2966,
     "ableton_mcp_server/models.py": 1183,
-    "ableton_mcp_server/server.py": 2606,
+    "ableton_mcp_server/server.py": 2597,
     "scripts/build_release_candidates.py": 613,
     "scripts/mock_remote_script.py": 650,
-    "tests/_strict_fake.py": 1158,
+    "tests/_strict_fake.py": 1157,
     "tests/remote_fakes.py": 630,
     "tests/test_acceptance_audit_p0p1.py": 893,
     "tests/test_acceptance_runner_integration.py": 1355,
@@ -42,8 +37,8 @@
       "function_lines": 244
     },
     "ableton_mcp_server/acceptance/runner.py::run_live_acceptance": {
-      "complexity": 166,
-      "function_lines": 2583
+      "complexity": 165,
+      "function_lines": 2580
     },
     "ableton_mcp_server/acceptance/runner.py::run_live_acceptance._run_track_creation": {
       "complexity": 25,
@@ -84,12 +79,6 @@
     "ableton_mcp_server/groove_intelligence/apply.py::apply_artifact": {
       "function_lines": 95
     },
-    "ableton_mcp_server/groove_intelligence/build.py::build_seed_bundle": {
-      "function_lines": 103
-    },
-    "ableton_mcp_server/groove_intelligence/build.py::compile_parsed_artifact": {
-      "function_lines": 127
-    },
     "ableton_mcp_server/groove_intelligence/canonical.py::_normalize": {
       "complexity": 15
     },
@@ -100,25 +89,6 @@
       "complexity": 18,
       "function_lines": 71
     },
-    "ableton_mcp_server/groove_intelligence/corpus.py::CorpusCatalog.scan": {
-      "complexity": 19,
-      "function_lines": 120
-    },
-    "ableton_mcp_server/groove_intelligence/corpus.py::build_curated_bundle": {
-      "complexity": 17,
-      "function_lines": 93
-    },
-    "ableton_mcp_server/groove_intelligence/corpus.py::curate_representatives": {
-      "complexity": 15
-    },
-    "ableton_mcp_server/groove_intelligence/deterministic.py::_transform_notes": {
-      "complexity": 37,
-      "function_lines": 149
-    },
-    "ableton_mcp_server/groove_intelligence/deterministic.py::deterministic_generate": {
-      "complexity": 23,
-      "function_lines": 199
-    },
     "ableton_mcp_server/groove_intelligence/evidence.py::_generated_projection": {
       "complexity": 11
     },
@@ -126,50 +96,9 @@
       "complexity": 20,
       "function_lines": 91
     },
-    "ableton_mcp_server/groove_intelligence/fallback.py::_sanitize_metadata": {
-      "complexity": 18
-    },
-    "ableton_mcp_server/groove_intelligence/fallback.py::generate_with_provider": {
-      "complexity": 11,
-      "function_lines": 82
-    },
-    "ableton_mcp_server/groove_intelligence/fallback.py::validate_provider_candidate": {
-      "complexity": 34,
-      "function_lines": 116
-    },
-    "ableton_mcp_server/groove_intelligence/index.py::ReadonlyGrooveIndex.load_artifact": {
-      "complexity": 21,
-      "function_lines": 129
-    },
-    "ableton_mcp_server/groove_intelligence/index.py::ReadonlyGrooveIndex.search_rows": {
-      "function_lines": 70
-    },
-    "ableton_mcp_server/groove_intelligence/index.py::open_readonly_index": {
-      "complexity": 32,
-      "function_lines": 121
-    },
-    "ableton_mcp_server/groove_intelligence/index.py::write_index": {
-      "complexity": 11,
-      "function_lines": 160
-    },
     "ableton_mcp_server/groove_intelligence/lab.py::run_provider_gates": {
       "complexity": 14,
       "function_lines": 74
-    },
-    "ableton_mcp_server/groove_intelligence/mapping.py::map_artifact": {
-      "complexity": 27,
-      "function_lines": 115
-    },
-    "ableton_mcp_server/groove_intelligence/midi_lossless.py::decompress_bounded": {
-      "complexity": 15
-    },
-    "ableton_mcp_server/groove_intelligence/midi_lossless.py::parse_smf": {
-      "complexity": 42,
-      "function_lines": 182
-    },
-    "ableton_mcp_server/groove_intelligence/midi_lossless.py::serialize_note_smf": {
-      "complexity": 15,
-      "function_lines": 89
     },
     "ableton_mcp_server/groove_intelligence/neural_subprocess.py::NeuralSubprocessProvider.generate": {
       "complexity": 24,
@@ -204,18 +133,6 @@
     },
     "ableton_mcp_server/groove_intelligence/similarity.py::feature_distance": {
       "complexity": 18
-    },
-    "ableton_mcp_server/groove_intelligence/taxonomy.py::_add_source_category": {
-      "complexity": 11
-    },
-    "ableton_mcp_server/groove_intelligence/taxonomy.py::_component_labels": {
-      "complexity": 12
-    },
-    "ableton_mcp_server/groove_intelligence/taxonomy.py::_path_values": {
-      "complexity": 13
-    },
-    "ableton_mcp_server/groove_intelligence/taxonomy.py::classify_facets": {
-      "complexity": 15
     },
     "ableton_mcp_server/protocol.py::decode_response": {
       "complexity": 12
@@ -291,8 +208,8 @@
       "function_lines": 87
     },
     "tests/_strict_fake.py::_strict_tcp_dispatch": {
-      "complexity": 140,
-      "function_lines": 647
+      "complexity": 139,
+      "function_lines": 644
     },
     "tests/_strict_fake.py::_validate_hierarchy": {
       "complexity": 13
@@ -348,9 +265,6 @@
       "complexity": 12
     },
     "tests/test_diagnostics.py::test_bridge_status_probes_live_instead_of_tool_discovery": {
-      "complexity": 12
-    },
-    "tests/test_documentation_consistency.py::test_current_guidance_and_changelog_name_the_current_surface": {
       "complexity": 12
     },
     "tests/test_fake_bridge_strict.py::test_runner_against_strict_fake_emits_no_unknown_commands": {
