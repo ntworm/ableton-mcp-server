@@ -1,7 +1,6 @@
 {
   "files": {
     "ableton_mcp_server/acceptance/runner.py": 2966,
-    "ableton_mcp_server/models.py": 1183,
     "scripts/build_release_candidates.py": 613,
     "scripts/mock_remote_script.py": 650,
     "tests/_strict_fake.py": 1157,
