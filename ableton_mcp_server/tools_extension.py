@@ -202,6 +202,8 @@ def scaffold_extension(name: str, author: str = "ntworm", output_directory: str 
     Example: ``scaffold_extension("MyEffect", output_directory="/tmp/ext")``
     Edge cases: returns a ``status="error"`` JSON when vendor tarballs are
     missing or output directory is not writable; never raises during disk writes.
+    A name that carries a path separator, ``..`` or a drive letter is refused
+    by the request model before anything is written.
     """
     tarballs = _read_extension_vendor_tarballs()
     if (

@@ -343,6 +343,26 @@ def _set_track_color_steps(
 _MAX_TRACKS = 96
 
 
+def _validated_insert_index(index: Any, track_count: int) -> int:
+    """Return the insert position for a new track, refusing an impossible one.
+
+    ``-1`` appends and ``0..track_count`` inserts at that position; any
+    other value names a track that cannot exist, so it is refused before
+    Live is asked to create anything.
+    """
+
+    if index is None:
+        return -1
+    if isinstance(index, bool) or not isinstance(index, int):
+        raise RemoteError(ERROR_INVALID_PARAMS, "Parameter 'index' must be an integer.")
+    if index < -1 or index > track_count:
+        raise RemoteError(
+            ERROR_INVALID_PARAMS,
+            "Parameter 'index' must be in -1..%s." % track_count,
+        )
+    return index
+
+
 def cmd_create_midi_track(
     song,
     _application,
@@ -359,7 +379,7 @@ def cmd_create_midi_track(
             % (current_count, _MAX_TRACKS),
             "Remove unused tracks before creating new ones.",
         )
-    insert_at = index if index is not None else -1
+    insert_at = _validated_insert_index(index, current_count)
     song.create_midi_track(insert_at)
     new_track = song.tracks[-1] if insert_at == -1 else song.tracks[insert_at]
     if name:

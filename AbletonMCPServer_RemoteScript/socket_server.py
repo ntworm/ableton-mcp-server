@@ -22,7 +22,7 @@ from ._contracts import (
     request_timeout_seconds,
 )
 from .common import RemoteError, logger
-from .dispatch import _request_steps
+from .dispatch import _request_steps, is_error_envelope
 
 _MAX_FRAME_BYTES = 1024 * 1024
 
@@ -38,6 +38,20 @@ class QueuedRequest:
 class ActiveRequest:
     request: QueuedRequest
     steps: Generator[None, None, Any]
+
+
+def _wire_response(result: Any) -> dict[str, Any]:
+    """Build the wire frame of one finished command.
+
+    The wire contract is that ``status`` reports the outcome of the
+    command.  A command that fails its admission returns the error
+    envelope as its result value, so that envelope travels as the response
+    itself instead of being wrapped in a success frame.
+    """
+
+    if is_error_envelope(result):
+        return dict(result)
+    return {"status": "ok", "result": result}
 
 
 class RequestProcessor:
@@ -84,7 +98,7 @@ class RequestProcessor:
                 next(active.steps)
                 break
             except StopIteration as completed:
-                response = {"status": "ok", "result": completed.value}
+                response = _wire_response(completed.value)
             except RemoteError as error:
                 response = error.to_envelope()
             except Exception as error:
