@@ -8,7 +8,8 @@ from contextlib import suppress
 from typing import Any
 
 from ._contracts import ERROR_BAD_INPUT, ERROR_INVALID_PARAMS, ERROR_WRONG_TYPE
-from .common import RemoteError, _required, _safe
+from .common import RemoteError, _integer_param, _safe
+from .lom import _track_at
 
 # v0.5.0 — Set lifecycle. Informational fallback for WSL↔Windows: our transport
 # cannot automate GUI clicks, so ``gui_workflow`` is descriptive only. Steps are
@@ -125,6 +126,23 @@ def quit_ableton_steps(
         "api_available": True,
         "scheduled": True,
     }
+
+
+def _fade_track(song: Any, index: int) -> Any:
+    """Resolve the fade target through the shared track lookup.
+
+    Every other track tool resolves its target with ``_track_at``, which
+    spans the regular, return and master tracks and refuses an index that
+    does not exist.  A host that does not expose the return and master
+    collections at all falls back to the regular track list.
+    """
+
+    if hasattr(song, "return_tracks") and hasattr(song, "master_track"):
+        return _track_at(song, index)
+    tracks = list(song.tracks)
+    if index < 0 or index >= len(tracks):
+        raise RemoteError(ERROR_INVALID_PARAMS, "Track index %s does not exist." % index)
+    return tracks[index]
 
 
 def _fade_volume_param(track: Any) -> Any:
@@ -277,8 +295,8 @@ def live_fade_steps(
     target once and yields until the deadline.
     """
 
-    track_index = _required(params, "track_index")
-    track = song.tracks[int(track_index)]
+    track_index = _integer_param(params, "track_index")
+    track = _fade_track(song, track_index)
     param = _fade_volume_param(track)
     target = _fade_target_value(params)
     minimum = float(getattr(param, "min", 0.0))

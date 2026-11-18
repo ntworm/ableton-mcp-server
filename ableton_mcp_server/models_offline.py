@@ -78,6 +78,30 @@ class ScaffoldExtensionRequest(RequestModel):
     author: Annotated[str, Field(min_length=1, max_length=128)] = "ntworm"
     output_directory: Annotated[str, Field(min_length=1, max_length=1024)]
 
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        """Refuse a name that would leave ``output_directory``.
+
+        The scaffold is written to ``output_directory / name``, so a name
+        carrying a path separator, a drive letter or a whole ``.``/``..``
+        segment would place the project outside the requested directory.
+        A name that merely carries two dots (``my..plugin``) is an ordinary
+        folder name and stays acceptable.
+        """
+        segments = value.replace("\\", "/").split("/")
+        if (
+            "/" in value
+            or "\\" in value
+            or ":" in value
+            or any(segment in (".", "..") for segment in segments)
+        ):
+            raise ValueError(
+                "name must be a plain folder name: path separators, a whole "
+                "'.' or '..' segment and drive letters are not allowed"
+            )
+        return value
+
 
 class BuildExtensionRequest(RequestModel):
     project_path: Annotated[str, Field(min_length=1, max_length=1024)]

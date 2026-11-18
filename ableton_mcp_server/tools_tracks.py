@@ -120,7 +120,9 @@ def create_midi_track(name: str = "MIDI Track", index: int | None = None) -> Any
 
     Side effects: mutates the Set by adding a track in one undo step.
     Example: ``create_midi_track("Bass")`` appends a named MIDI track.
-    Edge cases: fails with ``TRACK_LIMIT_REACHED`` when ≥ 96 tracks exist.
+    Edge cases: fails with ``TRACK_LIMIT_REACHED`` when ≥ 96 tracks exist and
+    refuses an ``index`` outside ``-1..len(tracks)`` with ``INVALID_PARAMS``
+    before it creates anything.
     """
     return _s._remote(
         "create_midi_track",
@@ -136,9 +138,10 @@ def create_audio_track(index: int = -1, name: str | None = None) -> Any:
     Example: ``create_audio_track(name="vocals")`` appends a named audio track;
     ``create_audio_track(index=2)`` inserts at position 2.
     Edge cases: raises ``LIVE_UNAVAILABLE`` when the Live host does not
-    expose ``Song.create_audio_track``. Note: this audio variant does not
-    reuse the 96-track ``TRACK_LIMIT_REACHED`` guard — Live itself enforces
-    the per-host track cap.
+    expose ``Song.create_audio_track`` and refuses an ``index`` outside
+    ``-1..len(tracks)`` with ``INVALID_PARAMS`` before it creates anything.
+    Note: this audio variant does not reuse the 96-track ``TRACK_LIMIT_REACHED``
+    guard — Live itself enforces the per-host track cap.
     """
     return _s._remote(
         "create_audio_track",

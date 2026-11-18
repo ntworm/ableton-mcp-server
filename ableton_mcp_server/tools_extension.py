@@ -7,6 +7,8 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
+
 from . import models
 from . import server as _s
 from .server import (
@@ -184,6 +186,11 @@ await esbuild.build({
 """
 
 
+def _scaffold_error_document(message: str) -> str:
+    """Return the JSON error document every scaffold failure shares."""
+    return json.dumps({"status": "error", "message": message}, indent=2)
+
+
 @mcp.tool()
 def scaffold_extension(name: str, author: str = "ntworm", output_directory: str = ".") -> str:
     """Create a template Ableton Extension project folder.
@@ -201,7 +208,10 @@ def scaffold_extension(name: str, author: str = "ntworm", output_directory: str 
     Side effects: creates files on disk. No Ableton connection required.
     Example: ``scaffold_extension("MyEffect", output_directory="/tmp/ext")``
     Edge cases: returns a ``status="error"`` JSON when vendor tarballs are
-    missing or output directory is not writable; never raises during disk writes.
+    missing, when the request model refuses the name or when the output
+    directory is not writable; never raises during disk writes.
+    A name that carries a path separator, a whole ``.``/``..`` segment or a
+    drive letter is refused by the request model before anything is written.
     """
     tarballs = _read_extension_vendor_tarballs()
     if (
@@ -209,20 +219,20 @@ def scaffold_extension(name: str, author: str = "ntworm", output_directory: str 
         or "@ableton-extensions/sdk" not in tarballs
         or "@ableton-extensions/cli" not in tarballs
     ):
-        return json.dumps(
-            {
-                "status": "error",
-                "message": (
-                    "vendor tarballs for @ableton-extensions/sdk and "
-                    "@ableton-extensions/cli are missing"
-                ),
-            },
-            indent=2,
+        return _scaffold_error_document(
+            "vendor tarballs for @ableton-extensions/sdk and "
+            "@ableton-extensions/cli are missing"
         )
 
-    request = models.ScaffoldExtensionRequest(
-        name=name, author=author, output_directory=output_directory
-    )
+    try:
+        request = models.ScaffoldExtensionRequest(
+            name=name, author=author, output_directory=output_directory
+        )
+    except ValidationError as error:
+        problems = error.errors()
+        first = problems[0] if problems else {}
+        field = ".".join(str(part) for part in first.get("loc", ()))
+        return _scaffold_error_document("%s: %s" % (field, first.get("msg", "")))
     project_dir = Path(request.output_directory) / request.name
     error_document = _create_extension_project_dir(project_dir)
     if error_document is not None:

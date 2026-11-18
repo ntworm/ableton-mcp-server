@@ -327,6 +327,23 @@ def _command_steps(
             _end_undo(undo_target)
 
 
+def is_error_envelope(value: Any) -> bool:
+    """Return whether ``value`` is a Remote Script error envelope.
+
+    ``RemoteError.to_envelope`` builds ``{"status": "error", "code": ...,
+    "message": ...}``.  A ``run_batch`` that fails its admission hands that
+    envelope back as the command's *result*, so the wire layer has to
+    recognise it: reporting the envelope inside a success frame would tell
+    the client that a refused batch succeeded.
+    """
+
+    return (
+        isinstance(value, dict)
+        and value.get("status") == "error"
+        and isinstance(value.get("code"), str)
+    )
+
+
 def _batch_commands_are_dry_run_only(commands: list[Any]) -> bool:
     for command in commands:
         if not isinstance(command, dict):
