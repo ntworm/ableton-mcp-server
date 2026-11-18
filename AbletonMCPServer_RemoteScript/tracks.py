@@ -404,6 +404,9 @@ def cmd_create_audio_track(
     # legitimately exceed 96 tracks on hosts that already grew the midi set past
     # the cap. We rely on Live's per-host track-limit instead.
     #
+    # The insert index is validated by the same helper the MIDI command uses,
+    # so an impossible index is refused before Live creates anything.
+    #
     # Slice 1 Task 4: Live's LOM yields a new proxy wrapper per enumeration, so
     # ``id()`` comparisons collapse to the proxy identity. We now identify the
     # new track by counting the collection before and after the mutation and
@@ -415,9 +418,9 @@ def cmd_create_audio_track(
             "Live Song object does not expose create_audio_track()",
         )
     raw_index = params.get("index")
-    index = int(raw_index) if raw_index is not None else -1
     name = params.get("name")
     before_count = len(list(song.tracks))
+    index = _validated_insert_index(raw_index, before_count)
     fn(index)
     tracks = list(song.tracks)
     if len(tracks) != before_count + 1:

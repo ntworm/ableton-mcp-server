@@ -31,7 +31,7 @@ from AbletonMCPServer_RemoteScript import (
     RequestProcessor,
     execute_command,
 )
-from tests.remote_fakes import FakeApplication, FakeSong
+from tests.remote_fakes import FakeApplication, FakeSong, FakeTrack
 
 
 def _answer(
@@ -106,11 +106,11 @@ def test_failed_batch_admission_reaches_the_wire_as_an_error() -> None:
     [
         "../../evil",
         "..",
+        ".",
         "nested/child",
         "nested\\child",
         "C:\\evil",
         "C:evil",
-        "evil..name",
     ],
 )
 def test_scaffold_extension_request_refuses_a_name_that_escapes(
@@ -121,6 +121,26 @@ def test_scaffold_extension_request_refuses_a_name_that_escapes(
     # outside the requested directory.
     with pytest.raises(ValidationError):
         models.ScaffoldExtensionRequest(name=name, output_directory=str(tmp_path))
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "MyEffect",
+        "my plugin",
+        "my.effect",
+        "evil..name",
+        "v1..2",
+    ],
+)
+def test_scaffold_extension_request_accepts_a_plain_folder_name(
+    name: str, tmp_path: Any
+) -> None:
+    # D1: only a whole '.' or '..' segment escapes ``output_directory``, so a
+    # name that merely carries two dots is an ordinary folder name.
+    request = models.ScaffoldExtensionRequest(name=name, output_directory=str(tmp_path))
+
+    assert request.name == name
 
 
 def test_scaffold_extension_writes_nothing_for_a_traversing_name(tmp_path: Any) -> None:
@@ -136,17 +156,19 @@ def test_scaffold_extension_writes_nothing_for_a_traversing_name(tmp_path: Any) 
         "ableton_mcp_server.tools_extension._read_extension_vendor_tarballs",
         return_value=tarballs,
     ):
-        with pytest.raises(ValidationError):
-            server.scaffold_extension(
-                name="nested/child", output_directory=str(tmp_path)
-            )
+        # D2: the refusal is the tool's own error document, not a raised
+        # ValidationError.
+        document = json.loads(
+            server.scaffold_extension(name="nested/child", output_directory=str(tmp_path))
+        )
+        assert document["status"] == "error"
         assert not (tmp_path / "nested").exists()
 
-        document = json.loads(
+        ok_document = json.loads(
             server.scaffold_extension(name="MyEffect", output_directory=str(tmp_path))
         )
 
-    assert document["status"] == "scaffolded"
+    assert ok_document["status"] == "scaffolded"
     assert (tmp_path / "MyEffect" / "package.json").exists()
 
 
@@ -179,6 +201,29 @@ def test_create_midi_track_refuses_an_index_below_minus_one() -> None:
         execute_command(song, app, "create_midi_track", {"index": -2})
 
     assert error.value.code == "INVALID_PARAMS"
+    assert len(song.tracks) == 1
+
+
+def test_create_audio_track_refuses_an_index_outside_the_track_range() -> None:
+    # D6: the audio sibling of the MIDI command used to create the track
+    # first and refuse afterwards, so an impossible index left a stray track
+    # behind and was reported as VERIFICATION_FAILED.
+    song = FakeSong()
+    app = FakeApplication()
+    created: list[int] = []
+
+    def _create_audio_track(index: int = -1) -> None:
+        created.append(index)
+        song.tracks.append(FakeTrack("Audio", midi=False))
+
+    song.create_audio_track = _create_audio_track  # type: ignore[attr-defined]
+
+    with pytest.raises(RemoteError) as error:
+        execute_command(song, app, "create_audio_track", {"index": 100})
+
+    assert error.value.code == "INVALID_PARAMS"
+    # The refusal happens before the mutation: no track was created.
+    assert created == []
     assert len(song.tracks) == 1
 
 

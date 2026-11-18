@@ -84,13 +84,21 @@ class ScaffoldExtensionRequest(RequestModel):
         """Refuse a name that would leave ``output_directory``.
 
         The scaffold is written to ``output_directory / name``, so a name
-        carrying a path separator, a ``..`` segment or a drive letter would
-        place the project outside the requested directory.
+        carrying a path separator, a drive letter or a whole ``.``/``..``
+        segment would place the project outside the requested directory.
+        A name that merely carries two dots (``my..plugin``) is an ordinary
+        folder name and stays acceptable.
         """
-        if "/" in value or "\\" in value or ".." in value or ":" in value:
+        segments = value.replace("\\", "/").split("/")
+        if (
+            "/" in value
+            or "\\" in value
+            or ":" in value
+            or any(segment in (".", "..") for segment in segments)
+        ):
             raise ValueError(
-                "name must be a plain folder name: path separators, '..' and "
-                "drive letters are not allowed"
+                "name must be a plain folder name: path separators, a whole "
+                "'.' or '..' segment and drive letters are not allowed"
             )
         return value
 
