@@ -230,7 +230,7 @@ def scaffold_extension(name: str, author: str = "ntworm", output_directory: str 
         )
     except ValidationError as error:
         problems = error.errors()
-        first = problems[0] if problems else {}
+        first: dict[str, Any] = dict(problems[0]) if problems else {}
         field = ".".join(str(part) for part in first.get("loc", ()))
         return _scaffold_error_document("%s: %s" % (field, first.get("msg", "")))
     project_dir = Path(request.output_directory) / request.name
