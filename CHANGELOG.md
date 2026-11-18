@@ -8,6 +8,13 @@ The canonical certification policy that governs the promotion decision
 
 ## [Unreleased]
 
+### Added
+
+- `analyze_mix` takes an optional `target_lufs` (-40.0..-6.0) and returns a
+  suggest-only gain staging plan: the trim per stem, the peak that stem would
+  reach after the trim, and a clip-risk flag. The plan is a suggestion for the
+  user to review; nothing is written to Live.
+
 ## [0.8.1] - 2026-11-13
 
 The `v0.8.1-rc1` pre-release of 2026-10-31 packaged the section below without

@@ -23,6 +23,17 @@ MAX_STEMS = 16
 SINGLE_CYCLE_DEFAULT_FRAME = 2048
 SINGLE_CYCLE_PROBE_S = 5.0
 
+# Gain staging is suggest-only: the plan is read by the user and never
+# written to Live. The bounds keep the target inside the range a mix can
+# actually reach.
+TARGET_LUFS_MIN = -40.0
+TARGET_LUFS_MAX = -6.0
+# Below this integrated loudness a stem carries no usable level, so no trim
+# is proposed for it.
+SILENT_LUFS_FLOOR = -70.0
+# A peak above this level risks clipping the master bus.
+CLIP_RISK_DBFS = -1.0
+
 
 def _load_mono(path: str) -> tuple[np.ndarray, int]:
     data, sr = sf.read(path, always_2d=False)
@@ -160,20 +171,70 @@ def find_frequency_masking(
     return {"bands": bands, "score": float(max(excess) if excess else 0.0)}
 
 
-def analyze_mix(stems: Sequence[str]) -> dict[str, Any]:
+def _suggest_trim(metrics: dict[str, Any], target_lufs: float) -> dict[str, Any]:
+    """Return the suggest-only gain staging fields for one analysed stem.
+
+    The trim is the dB the stem would need to reach ``target_lufs``, the peak
+    is where that trim would take the stem, and the clip flag names the case
+    where the resulting peak would ride above ``CLIP_RISK_DBFS``. A stem with
+    no usable level gets no trim at all.
+    """
+    lufs_i = float(metrics["lufs_i"])
+    if lufs_i < SILENT_LUFS_FLOOR:
+        return {
+            "suggested_trim_db": None,
+            "peak_after_trim_dbfs": None,
+            "clip_risk": False,
+            "reason": "silent",
+        }
+    trim_db = round(target_lufs - lufs_i, 1)
+    peak_after_trim = round(float(metrics["peak_dbfs"]) + trim_db, 2)
+    return {
+        "suggested_trim_db": trim_db,
+        "peak_after_trim_dbfs": peak_after_trim,
+        "clip_risk": peak_after_trim > CLIP_RISK_DBFS,
+    }
+
+
+def analyze_mix(
+    stems: Sequence[str],
+    target_lufs: float | None = None,
+) -> dict[str, Any]:
+    """Analyse every stem and, with a target, suggest a gain staging plan.
+
+    Without ``target_lufs`` the result is the per-stem analysis plus the
+    pair-wise masking scores. With one, every stem also carries the trim that
+    would bring it to the target, the peak it would reach after that trim, and
+    a clip-risk flag, and the result gains a ``plan`` list in stem order. The
+    plan is a suggestion for the user to review; nothing is written anywhere.
+    """
     if len(stems) > MAX_STEMS:
         raise ValueError(f"too many stems (>{MAX_STEMS}); split the request")
+    if target_lufs is not None and not TARGET_LUFS_MIN <= target_lufs <= TARGET_LUFS_MAX:
+        raise ValueError(
+            f"target_lufs must be between {TARGET_LUFS_MIN} and {TARGET_LUFS_MAX} LUFS"
+        )
     stem_metrics = [{"name": stem, **analyze_audio(stem)} for stem in stems]
     pairwise = []
     for i, stem_a in enumerate(stems):
         for stem_b in stems[i + 1 :]:
             result = find_frequency_masking(stem_a, stem_b, threshold_db=3.0)
             pairwise.append({"target": stem_a, "reference": stem_b, "score": result["score"]})
-    return {
+    mix: dict[str, Any] = {
         "stems": stem_metrics,
         "pairwise_masking": pairwise,
         "max_stems": MAX_STEMS,
     }
+    if target_lufs is None:
+        return mix
+    plan = []
+    for stem in stem_metrics:
+        suggestion = _suggest_trim(stem, target_lufs)
+        stem.update(suggestion)
+        plan.append({"name": stem["name"], **suggestion})
+    mix["target_lufs"] = target_lufs
+    mix["plan"] = plan
+    return mix
 
 
 # Minimum lag to search for periodicity. Lag 1 of a smooth periodic signal

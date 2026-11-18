@@ -152,3 +152,133 @@ def test_extract_single_cycle_returns_failure_when_aperiodic(tmp_path) -> None:
     assert result["ok"] is False
     assert "reason" in result
     assert result["reason"]
+
+
+def test_analyze_mix_suggests_trim_towards_target_lufs(tmp_path) -> None:
+    """A 0.5 amplitude sine sits near -18.8 LUFS, so -14 LUFS needs +4.8 dB."""
+    stem = tmp_path / "stem.wav"
+    write_sine(stem, frequency_hz=440.0, duration_s=0.5, amplitude=0.5)
+
+    result = analyze_mix([str(stem)], target_lufs=-14.0)
+
+    metrics = result["stems"][0]
+    assert result["target_lufs"] == -14.0
+    assert metrics["suggested_trim_db"] == pytest.approx(4.8, abs=0.1)
+    assert metrics["peak_after_trim_dbfs"] == pytest.approx(-1.22, abs=0.05)
+    assert metrics["clip_risk"] is False
+    assert "reason" not in metrics
+
+
+def test_analyze_mix_plan_lists_the_stems_in_request_order(tmp_path) -> None:
+    stem_a = tmp_path / "a.wav"
+    stem_b = tmp_path / "b.wav"
+    write_sine(stem_a, frequency_hz=440.0, duration_s=0.5, amplitude=0.5)
+    write_sine(stem_b, frequency_hz=1000.0, duration_s=0.5, amplitude=0.25)
+
+    result = analyze_mix([str(stem_a), str(stem_b)], target_lufs=-18.0)
+
+    plan = result["plan"]
+    assert [entry["name"] for entry in plan] == [str(stem_a), str(stem_b)]
+    assert plan[0]["suggested_trim_db"] == pytest.approx(0.8, abs=0.1)
+    assert plan[1]["suggested_trim_db"] == pytest.approx(12.8, abs=0.1)
+    assert plan[0]["clip_risk"] is False
+    assert plan[1]["clip_risk"] is True
+    assert result["stems"][0]["suggested_trim_db"] == plan[0]["suggested_trim_db"]
+    assert result["stems"][1]["suggested_trim_db"] == plan[1]["suggested_trim_db"]
+
+
+def test_analyze_mix_reports_a_silent_stem_without_a_trim(tmp_path) -> None:
+    silent = tmp_path / "silent.wav"
+    write_sine(silent, frequency_hz=440.0, duration_s=0.2, amplitude=0.0)
+    loud = tmp_path / "loud.wav"
+    write_sine(loud, frequency_hz=1000.0, duration_s=0.2, amplitude=0.5)
+
+    result = analyze_mix([str(silent), str(loud)], target_lufs=-18.0)
+
+    metrics = result["stems"][0]
+    assert metrics["suggested_trim_db"] is None
+    assert metrics["peak_after_trim_dbfs"] is None
+    assert metrics["clip_risk"] is False
+    assert metrics["reason"] == "silent"
+    plan_entry = result["plan"][0]
+    assert plan_entry["suggested_trim_db"] is None
+    assert plan_entry["reason"] == "silent"
+
+
+def test_analyze_mix_flags_clip_risk_after_the_suggested_trim(tmp_path) -> None:
+    """A 0.9 amplitude sine peaks near -0.9 dBFS, so any boost risks clipping."""
+    stem = tmp_path / "hot.wav"
+    write_sine(stem, frequency_hz=440.0, duration_s=0.5, amplitude=0.9)
+
+    result = analyze_mix([str(stem)], target_lufs=-6.0)
+
+    metrics = result["stems"][0]
+    assert metrics["suggested_trim_db"] == pytest.approx(2.5, abs=0.1)
+    assert metrics["peak_after_trim_dbfs"] > -1.0
+    assert metrics["clip_risk"] is True
+    assert result["plan"][0]["clip_risk"] is True
+
+
+@pytest.mark.parametrize("target_lufs", [-40.1, -5.9, -100.0, 0.0])
+def test_analyze_mix_rejects_a_target_lufs_outside_the_supported_range(
+    tmp_path, target_lufs
+) -> None:
+    stem = tmp_path / "stem.wav"
+    write_sine(stem, frequency_hz=440.0, duration_s=0.2, amplitude=0.5)
+
+    with pytest.raises(ValueError):
+        analyze_mix([str(stem)], target_lufs=target_lufs)
+
+
+@pytest.mark.parametrize("target_lufs", [-40.0, -6.0])
+def test_analyze_mix_accepts_the_target_lufs_bounds(tmp_path, target_lufs) -> None:
+    stem = tmp_path / "stem.wav"
+    write_sine(stem, frequency_hz=440.0, duration_s=0.2, amplitude=0.5)
+
+    result = analyze_mix([str(stem)], target_lufs=target_lufs)
+
+    assert result["target_lufs"] == target_lufs
+    assert len(result["plan"]) == 1
+
+
+def test_analyze_mix_without_target_lufs_is_unchanged(tmp_path) -> None:
+    stem_a = tmp_path / "a.wav"
+    stem_b = tmp_path / "b.wav"
+    write_sine(stem_a, frequency_hz=440.0, duration_s=0.5, amplitude=0.5)
+    write_sine(stem_b, frequency_hz=2000.0, duration_s=0.5, amplitude=0.25)
+
+    result = analyze_mix([str(stem_a), str(stem_b)])
+
+    assert result == {
+        "stems": [
+            {"name": str(stem_a), **analyze_audio(str(stem_a))},
+            {"name": str(stem_b), **analyze_audio(str(stem_b))},
+        ],
+        "pairwise_masking": [
+            {
+                "target": str(stem_a),
+                "reference": str(stem_b),
+                "score": find_frequency_masking(
+                    str(stem_a), str(stem_b), threshold_db=3.0
+                )["score"],
+            }
+        ],
+        "max_stems": 16,
+    }
+    assert "plan" not in result
+    assert "target_lufs" not in result
+
+
+def test_analyze_mix_tool_passes_target_lufs_through(tmp_path) -> None:
+    """The MCP wrapper forwards the target and never claims a Live write."""
+    from ableton_mcp_server.tools_offline import analyze_mix as analyze_mix_tool
+
+    stem = tmp_path / "stem.wav"
+    write_sine(stem, frequency_hz=440.0, duration_s=0.5, amplitude=0.5)
+
+    result = analyze_mix_tool(stems=[str(stem)], target_lufs=-14.0)
+
+    payload = result.structured_content
+    assert payload["target_lufs"] == -14.0
+    assert payload["plan"][0]["suggested_trim_db"] == pytest.approx(4.8, abs=0.1)
+    assert "never changes the Live set" in (analyze_mix_tool.__doc__ or "")

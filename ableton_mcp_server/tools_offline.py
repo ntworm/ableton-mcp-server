@@ -103,16 +103,22 @@ def find_frequency_masking(
 
 
 @mcp.tool()
-def analyze_mix(stems: list[str]) -> ToolResult:
+def analyze_mix(stems: list[str], target_lufs: float | None = None) -> ToolResult:
     """Run per-stem analysis and pair-wise masking across up to 16 local audio files.
 
     Side effects: reads each stem from disk.
     Example: ``analyze_mix(stems=["/stems/kick.wav", "/stems/bass.wav"])`` returns
     per-stem LUFS plus pair-wise masking scores.
-    Edge cases: more than 16 stems raises a structured error; missing files
-    are reported per-stem via ``{"ok": False, "reason": ...}``.
+    Edge cases: more than 16 stems raises a structured error; a
+    ``target_lufs`` outside -40.0..-6.0 raises a structured error; missing
+    files are reported per-stem via ``{"ok": False, "reason": ...}``.
+
+    The optional ``target_lufs`` adds a gain staging plan: the trim that would
+    bring each stem to that loudness, the peak it would reach after the trim,
+    and a clip-risk flag. The plan is a suggestion for the user to review; it
+    never changes the Live set and nothing is written to Live.
     """
-    return _explicit_json_result(_analyze_mix(stems=stems))
+    return _explicit_json_result(_analyze_mix(stems=stems, target_lufs=target_lufs))
 
 
 @mcp.tool()
